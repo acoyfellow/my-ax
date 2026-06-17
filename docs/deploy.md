@@ -26,7 +26,7 @@ The setup script:
 
 1. creates or resolves D1, KV, and R2 resources;
 2. writes their IDs into the local Wrangler configuration;
-3. generates `BRIDGE_JWT_SECRET` and `MASTER_KEY`;
+3. generates `BRIDGE_JWT_SECRET` and `MASTER_KEY` only when they do not already exist;
 4. applies D1 migrations;
 5. deploys the Worker.
 
@@ -140,7 +140,7 @@ npx wrangler d1 migrations apply my-ax-db --remote
 npm run deploy
 ```
 
-Treat `MASTER_KEY` as durable state. Rotating it currently makes existing encrypted connector grants unreadable and requires users to authorize them again.
+Treat `MASTER_KEY` as durable state. `scripts/setup.sh` preserves an existing value. Manually replacing it makes existing encrypted connector grants unreadable and requires users to authorize them again.
 
 ## Troubleshooting
 

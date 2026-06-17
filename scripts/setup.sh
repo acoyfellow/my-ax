@@ -6,8 +6,8 @@
 #
 # Creates the D1 database, KV namespace, and R2 buckets; writes their ids
 # back into wrangler.jsonc; generates the two required secrets; applies D1
-# migrations; and deploys. Idempotent-ish: re-running re-creates only what's
-# missing (Cloudflare returns the existing id for names that already exist).
+# migrations; and deploys. Re-running resolves existing resources and preserves
+# durable secrets.
 #
 # Models default to Workers AI (no keys). Production requests remain locked
 # until Cloudflare Access issuer/audience values are configured.
@@ -32,9 +32,12 @@ from pathlib import Path
 path = Path(sys.argv[1])
 text = path.read_text()
 placeholder = os.environ["PLACEHOLDER"]
+value = os.environ["VALUE"]
 if placeholder not in text:
-    raise SystemExit(f"placeholder not found: {placeholder}")
-path.write_text(text.replace(placeholder, os.environ["VALUE"], 1))
+    if value in text:
+        raise SystemExit(0)
+    raise SystemExit(f"placeholder not found and current resource id differs: {placeholder}")
+path.write_text(text.replace(placeholder, value, 1))
 PY
 }
 
@@ -64,16 +67,28 @@ $WRANGLER r2 bucket create my-ax-homes   2>&1 | tail -1 || $WRANGLER r2 bucket l
 $WRANGLER r2 bucket create my-ax-uploads 2>&1 | tail -1 || $WRANGLER r2 bucket list | grep -q 'my-ax-uploads'
 
 # --- secrets -----------------------------------------------------------------
-bold "4/5  Core secrets (auto-generated)"
-if command -v openssl >/dev/null 2>&1; then
-  printf '%s' "$(openssl rand -hex 32)" | $WRANGLER secret put BRIDGE_JWT_SECRET
-  printf '%s' "$(openssl rand -hex 32)" | $WRANGLER secret put MASTER_KEY
-  note "BRIDGE_JWT_SECRET + MASTER_KEY set."
-else
-  note "openssl not found — set BRIDGE_JWT_SECRET and MASTER_KEY manually:"
-  note "  npx wrangler secret put BRIDGE_JWT_SECRET"
-  note "  npx wrangler secret put MASTER_KEY"
-fi
+bold "4/5  Core secrets"
+secret_exists() {
+  local name="$1" listing
+  listing="$($WRANGLER secret list --format json 2>/dev/null || printf '[]')"
+  printf '%s' "$listing" \
+    | NAME="$name" python3 -c 'import json,os,sys; data=json.load(sys.stdin); raise SystemExit(0 if any(row.get("name")==os.environ["NAME"] for row in data) else 1)'
+}
+ensure_secret() {
+  local name="$1"
+  if secret_exists "$name"; then
+    note "$name already exists; preserving it."
+    return
+  fi
+  command -v openssl >/dev/null 2>&1 || {
+    note "openssl not found — set $name manually with: npx wrangler secret put $name"
+    return 1
+  }
+  printf '%s' "$(openssl rand -hex 32)" | $WRANGLER secret put "$name"
+  note "$name generated."
+}
+ensure_secret BRIDGE_JWT_SECRET
+ensure_secret MASTER_KEY
 
 # --- migrate + deploy --------------------------------------------------------
 bold "5/5  Migrate D1 + deploy"
