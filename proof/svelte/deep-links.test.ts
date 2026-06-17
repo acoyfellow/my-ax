@@ -27,5 +27,6 @@ test("warm PWA and service-worker launches deliver the target instead of reloadi
   const worker = readFileSync(new URL("../../public/sw.js", import.meta.url), "utf8");
   assert.match(layout, /location\.href=url\.pathname\+url\.search\+url\.hash;return;/);
   assert.match(worker, /postMessage\(\{ type: "my-ax:navigate", href: absolute \}\)/);
+  assert.match(worker, /existing\.navigate\(absolute\)/);
   assert.doesNotMatch(worker, /existing\.navigate\(href\)/);
 });

@@ -4,7 +4,7 @@
 // pages/API/WS always stay on network. Successful same-origin static responses
 // may be cached at runtime; Access redirects and errors are never cached.
 
-const CACHE = "my-ax-static-v9";
+const CACHE = "my-ax-static-v10";
 const MANIFEST_PATH = "/static/brand/manifest.webmanifest";
 
 function offlineManifest() {
@@ -95,6 +95,7 @@ self.addEventListener("notificationclick", (event) => {
       // conversation before the query-string target reaches Chat bootstrap.
       // Let the live app switch sessions explicitly instead.
       existing.postMessage({ type: "my-ax:navigate", href: absolute });
+      await existing.navigate(absolute);
       return existing.focus();
     }
     return clients.openWindow(absolute);
