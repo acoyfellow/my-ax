@@ -1,81 +1,76 @@
-# my-ax smoke proof
+# My AX Deployment Proof
 
-Reusable claim-and-prove harness against a deployed my-ax worker. Vanilla
-TypeScript: `fetch` + assert + a colored summary. No external runtime
-dependencies.
+The scripts in `proof/` check a deployed Worker's routing, Access boundary, binding and secret presence, selected browser behavior, and artifact cleanup. They do not establish model quality, general security, downstream credential validity, or long-term availability.
 
-## Two proof layers
+## Proof Commands
 
-`npm run prove` is the identity-free Access and Worker wiring receipt
-suitable for CI-style reachability checks.
-
-`npm run prove:browser` is the operator dogfood receipt. It drives an
-isolated Chrome For Testing profile against your deployed worker,
-requires an existing Access session in that profile (when you front the
-worker with Access), checks the trimmed product boundary and
-desktop/mobile app-bar geometry, performs one real Think chat roundtrip
-through the UI, then deletes its temporary session. To deliberately
-generate and exercise one live inline Svelte artifact in that temporary
-conversation, opt in with `MY_AX_PROVE_SVELTE_ARTIFACT=1
-npm run prove:browser`. To deliberately send a real phone push and verify
-its durable unread row too, opt in with `MY_AX_PROVE_PUSH=1
-npm run prove:browser`.
-
-`npm run prove:artifacts` is a narrower post-deploy storage/cleanup
-verifier for the durable artifact plumbing. It seeds one owner-scoped
-preview manifest into R2/D1, retrieves it through
-`/api/artifacts/:id/preview`, deletes its temporary conversation, and
-verifies the preview and artifact index row disappear.
-
-`npm run test:run-receipts` is a focused local check for the shared
-owner-scoped append primitive used by `/api/runs/:id/events` and the
-explicit connected-laptop observation paths.
-
-## What `npm run prove` proves
-
-| Gate | Receipt |
-|---|---|
-| `edge-alive` | Hostname routes to the worker. |
-| `service-token-admitted` | When fronted with Access, a Service Auth token is accepted; `/api/health` returns 200. |
-| `health-body-ok` | All required bindings present, zero required secrets missing, the worker reports `ok:true`. |
-| `policy-enforced` | When fronted with Access, anonymous requests are gated upstream of the worker. |
-
-## Run identity-free wiring proof
+### Worker and Access Wiring
 
 ```bash
-export MY_AX_BASE_URL="https://your-host"          # required
-export CF_ACCESS_CLIENT_ID="<service-token id>"    # if you front with Access
+export MY_AX_BASE_URL="https://your-host"
+export CF_ACCESS_CLIENT_ID="<service-token id>"       # when Access is enabled
 export CF_ACCESS_CLIENT_SECRET="<service-token secret>"
-bun proof/plan.ts
-# or
 npm run prove
 ```
 
-Result: a one-screen colored summary (PASS/FAIL per gate, worker version
-and region from the receipt). Exit code 0 → green; 1 → red. Set
-`PROOF_JSON=1` to also emit a structured JSON envelope after the human
-summary.
+`proof/plan.ts` checks:
 
-## Why /api/health is identity-free
+| Gate | Check | Limit |
+|---|---|---|
+| `edge-alive` | The hostname reaches a response. | Does not identify every intermediary serving the response. |
+| `service-token-admitted` | The configured Access service token reaches `/api/health`. | Checks one policy path, not the complete Access policy. |
+| `health-body-ok` | The Worker returns `ok:true`, configured binding names are present, and required secret names are nonempty. | Does not validate secret permissions or downstream service health. |
+| `policy-enforced` | An anonymous request is rejected or redirected before app data is returned. | Does not test every route or identity policy. |
 
-`src/index.tsx` mounts `GET /api/health` **before** `accessMiddleware`.
-It returns a structured envelope reporting:
+The command prints one summary and exits `0` when all configured gates pass. Set `PROOF_JSON=1` to append the structured result.
 
-- worker version (from `CF_VERSION_METADATA`)
-- region (from `request.cf.colo`)
-- presence of every required binding (true/false, no values)
-- list of missing required secrets (names only, no values)
-- current ISO timestamp
+### Browser Path
 
-It never reads user data, never touches identity, never opens a Sandbox.
+```bash
+npm run prove:browser
+```
 
-## Reusing this elsewhere
+`proof/browser-e2e.mjs` uses the approved browser wrapper and an isolated Chrome For Testing profile. The profile must already hold an operator-owned Access session when the deployment is protected.
 
-The pattern is portable. To monitor another app:
+The script checks the app shell, owner API shapes, desktop/mobile geometry, one Think chat turn, session cleanup, and selected result widgets. It calls a configured model and can incur inference cost. The model roundtrip has a bounded timeout in the script; passing once does not establish provider availability.
 
-1. Mint a service token (Zero Trust → Access → Service Auth) — if you
-   front with Access.
-2. Add an Access policy with action `Service Auth`.
-3. Add an identity-free `GET /api/health` endpoint, mounted before any
-   identity middleware.
-4. Copy `proof/plan.ts` and change `MY_AX_BASE_URL`.
+Optional paths:
+
+```bash
+MY_AX_PROVE_SVELTE_ARTIFACT=1 npm run prove:browser
+MY_AX_PROVE_PUSH=1 npm run prove:browser
+```
+
+The first creates and removes a temporary Svelte artifact. The second sends a real push to registered owner devices and checks the durable unread row; push delivery remains dependent on the browser push service.
+
+### Artifact Storage and Cleanup
+
+```bash
+npm run prove:artifacts
+```
+
+This script writes one owner-scoped Svelte manifest to R2/D1, fetches its preview, deletes the temporary conversation, and checks that the preview and artifact index row are gone.
+
+### Local Receipt Primitive
+
+```bash
+npm run test:run-receipts
+```
+
+This test covers the owner-scoped append helper used by `/api/runs/:id/events` and explicit connected-machine observations. The ledger records events callers append; it is not an automatic transcript of every model or tool action.
+
+## Why `/api/health` Is Outside Identity Middleware
+
+`src/index.tsx` mounts `GET /api/health` before `accessMiddleware`. It reports:
+
+- Worker version from `CF_VERSION_METADATA`;
+- Cloudflare colo from `request.cf` when available;
+- required binding names and whether each is present;
+- missing required secret names, never values;
+- an ISO timestamp.
+
+The handler does not read owner data or open a Sandbox. Cloudflare Access can still protect the hostname before the request reaches this route.
+
+## Reuse in Another Worker
+
+The wiring proof assumes a health endpoint with the same response shape. To adapt it, change `MY_AX_BASE_URL` and update the gates in `proof/plan.ts` to match the other Worker's bindings and identity boundary. Do not copy the current required-binding list without reviewing the target Worker.

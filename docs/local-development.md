@@ -1,19 +1,18 @@
-# Local development
+# Local Development
 
-Two modes:
+Both modes require Docker, Colima, or WSL2 for the Sandbox container.
 
-## 1. Fast loopback mode
+## 1. Fast Loopback Mode
 
 ```bash
 npm run dev
 ```
 
-Uses the `ENVIRONMENT=dev` + `DEV_USER_EMAIL=dev@localhost` identity bypass.
-Good for UI/runtime work where you don't need to exercise the connector OAuth
-flow against a real upstream. OAuth callbacks won't work — Managed OAuth
-providers require HTTPS redirect URIs.
+This mode uses the `ENVIRONMENT=dev` and `DEV_USER_EMAIL=dev@localhost`
+identity bypass. Use it for UI and runtime changes that do not require an HTTPS
+OAuth callback. Managed OAuth callbacks do not work on the loopback URL.
 
-## 2. Access-gated tunnel mode
+## 2. Access-Gated Tunnel Mode
 
 For exercising the connector OAuth flow end-to-end, you need an HTTPS
 hostname Access can sit in front of:
@@ -23,9 +22,9 @@ npm run dev:access         # terminal 1 — wrangler dev with Access-on vars
 npm run dev:access:tunnel  # terminal 2 — cloudflared tunnel to the hostname
 ```
 
-Then open the tunnel hostname (NOT `localhost:8788`).
+Open the tunnel hostname. Requests sent directly to `localhost:8788` bypass the Access path under test.
 
-### One-time control-plane setup
+### One-Time Control-Plane Setup
 
 Pick a hostname and reserve a named Tunnel:
 
@@ -42,6 +41,10 @@ Callback: https://my-ax-local.example.com/api/connectors/<id>/callback
 3. If you're testing against an upstream MCP server that uses pre-registered
    OAuth clients (not DCR), add the local callback to its redirect allowlist.
 4. Tunnel credentials stay in `~/.cloudflared/` only.
+
+The tunnel makes the local Worker reachable at the configured hostname. Keep
+Access enabled, and remove the DNS route, Tunnel, and Access application when
+the development hostname is no longer needed.
 
 ### Environment
 

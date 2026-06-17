@@ -1,54 +1,50 @@
 # My Agent Experience
 
-**A personal agent that keeps working when you close the app.**
-
-My Agent Experience (`my-ax`) is a mobile-first agent operating environment you deploy to your own Cloudflare account. Conversations are durable, connected tools use each user's OAuth identity, and the agent can work in the right place for the task without filling its prompt with a large tool catalog.
+My AX stores each conversation in a Cloudflare Think agent. A submitted turn can continue after the PWA disconnects, and D1 keeps a separate transcript projection for search and export. Computer work enters through `work_search` and `work_code`, which route calls to a snapshot-backed workspace, an outbound-connected machine, or a Cloudbox run.
 
 ```text
-Ask from phone or desktop
-          ↓
-My AX chooses where the work belongs
-          ↓
-My AX Workspace · My Machine · Cloudbox
-          ↓
-Return to the conversation or receive a push
+phone or desktop
+       │
+       ▼
+  Think conversation
+       │
+       ▼
+work_search · work_code
+       │
+       ├─ workspace.*  My AX Workspace
+       ├─ machine.*    My Machine
+       └─ cloudbox.*   Cloudbox
 ```
 
-You own the deployment, data, credentials, model routing, and connected tools.
+The deployment, stored data, OAuth grants, model routes, and connected tools stay in the operator's Cloudflare account.
 
-## Five-second demo
+## A Deployed Run
 
-[![My AX kitchen-sink demo showing one Work Code Mode execution across My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-kitchen-sink.png)](./docs/media/my-ax-kitchen-sink.mp4)
+[![A deployed My AX conversation showing one Work Code Mode execution across My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-kitchen-sink.png)](./docs/media/my-ax-kitchen-sink.mp4)
 
-One `work_code` program writes persistent workspace state, invokes the connected physical machine, and creates a bounded Cloudbox run. The linked MP4 is a 5-second accelerated Unsurf trace captured against the deployed app.
+The linked MP4 is an accelerated Unsurf trace from the deployed app. One `work_code` call wrote and read `/home/user`, ran `printf MACHINE_OK` through the connected machine, then created a Cloudbox run and read back `CLOUDBOX_OK`. The original interaction took about six seconds; the checked-in video is 5.2 seconds.
 
-## What ships
+## Current Surface
 
-- **Durable conversations** — Cloudflare Think owns live sessions, streaming, recovery, reasoning, and compaction. D1 mirrors the complete human transcript for search and export.
-- **One programmable work surface** — `work_search` discovers capabilities and `work_code` composes them in an isolated Dynamic Worker.
-- **My AX Workspace** — a persistent `/home/user` workspace restored from Cloudflare Sandbox snapshots.
-- **My Machine** — optional outbound-only `machinectl` access to local shell, screenshots, accessibility, authenticated state, and verified cmux/Pi sessions.
-- **Cloudbox** — optional clean, bounded repository runs for remote execution, continuation, and receipts.
-- **Personal tools** — connect public MCP servers with per-user OAuth; exact read/query subsets can optionally run through MCP Code Mode.
-- **Voice and attention** — voice uses the same durable conversation; installed PWAs can receive completion and decision pushes.
-- **Generated interfaces** — trusted screenshots, browser replays, and sandboxed Svelte artifacts render inline when text is not enough.
+| Capability | Mechanism | Boundary |
+|---|---|---|
+| Conversations | Cloudflare Think owns live messages, streaming, recovery, reasoning, and compaction. D1 stores a transcript projection. | Provider failures can still end a turn. D1 is not the live inference state. |
+| My AX Workspace | Cloudflare Sandbox keeps `/home/user`; turn-end snapshots are stored in R2. | Writes after the last successful snapshot can be lost if the container disappears. |
+| My Machine | `machinectl` opens an outbound connection and publishes its current method catalog. | Optional and terminal-equivalent. It is unavailable when the companion is offline. |
+| Cloudbox | A configured Cloudbox deployment clones a public repository into a live run and returns runner receipts. | Optional. The current adapter supports create, read, write, and exec; it does not publish changes. |
+| Connected MCPs | Users add public HTTPS MCP servers and complete the server's OAuth flow. | Attribution depends on the upstream MCP and its OAuth implementation. |
+| Voice and push | Voice delegates into the same Think conversation. Web Push carries completion and decision attention. | Push needs VAPID configuration and browser support; delivery is not guaranteed. |
+| Browser and artifacts | Browser Run records public-page sessions; Svelte artifacts render in sandboxed same-origin previews. | Browser Run does not inherit the user's logged-in local browser state. |
 
-## Three places to work
+## Work Code Mode
 
-My AX exposes computer work through two model-facing tools:
-
-```text
-work_search   discover methods and choose a place
-work_code     execute one bounded async JavaScript function
-```
-
-The program receives explicit namespaces, never raw credentials, bindings, environment variables, or ambient network access.
+`work_search` returns available methods, their location, and live Machinectl input schemas. `work_code` runs one async JavaScript function in an official `@cloudflare/codemode` Dynamic Worker.
 
 ```js
 async () => {
   await workspace.write({
     path: '/home/user/notes.md',
-    content: 'Persistent in My AX',
+    content: 'Stored in the My AX Workspace',
   });
 
   const local = await machine.shell({
@@ -64,24 +60,23 @@ async () => {
 }
 ```
 
-| Namespace | Place | Use it for |
-|---|---|---|
-| `workspace.*` | **My AX Workspace** | Persistent files, uploads, transforms, background processes, and previews close to the conversation. |
-| `machine.*` | **My Machine** | Current local checkouts, logged-in state, desktop interaction, and cmux/Pi sessions. Requires `machinectl`. |
-| `cloudbox.*` | **Cloudbox** | Clean clones, isolated edits, remote verification, and proof-producing runs. Requires a Cloudbox deployment. |
+| Namespace | Use |
+|---|---|
+| `workspace.*` | Persistent files, transforms, processes, and previews near the conversation. |
+| `machine.*` | Current local checkouts, desktop state, authentication, and cmux/Pi sessions exposed by `machinectl`. |
+| `cloudbox.*` | Public-repository clones and bounded remote commands with runner receipts. |
 
-My Machine is terminal-equivalent authority, not a sandbox. Cloudbox currently supplies bounded live runs; its durable personal-computer path is still evolving. Consequential publication is not available inside `work_code`.
+The Dynamic Worker has no ambient network access and receives no raw credentials, environment variables, or service bindings. Injected methods can still perform network or filesystem effects through their host implementations. `machine.*` therefore carries the connected user's local authority. `cloudbox.*` currently has no push, merge, or publication method.
 
-## Deploy
+## Bootstrap a Deployment
 
 Requirements:
 
-- Node.js 22+
-- npm 11+
+- Node.js 22 and npm 11
 - Docker, Colima, or WSL2
 - Python 3, Bash, and OpenSSL
-- a Cloudflare account with Workers, Containers, D1, KV, R2, Workers AI, Browser, and Worker Loader access
 - Wrangler authentication
+- Cloudflare Workers, Containers, D1, KV, R2, Workers AI, Browser, and Worker Loader access
 
 ```bash
 git clone https://github.com/acoyfellow/my-ax
@@ -92,19 +87,15 @@ npx wrangler login
 bash scripts/setup.sh
 ```
 
-The setup script provisions or resolves the required resources, generates core secrets, applies migrations, and deploys a locked Worker.
+The script creates or resolves D1, KV, and R2 resources, generates the bridge and encryption secrets, applies migrations, and deploys the Worker. That first production deployment rejects app requests until `CF_ACCESS_ISS` and `CF_ACCESS_AUD` identify a Cloudflare Access application.
 
-> **Cloudflare Access is required in production.** Configure a self-hosted Access application, set `CF_ACCESS_ISS` and `CF_ACCESS_AUD`, and redeploy before using the app. Empty production Access configuration fails closed.
+Workspace snapshots need bucket-scoped R2 S3 credentials. Push needs a VAPID key pair. The exact steps and failure modes are in [Deploying My AX](./docs/deploy.md).
 
-Push notifications and durable workspace snapshots need the additional VAPID and R2 credentials described in [the deployment guide](./docs/deploy.md).
-
-## Use it
-
-### Connect an MCP
+## Connect an MCP Server
 
 Open **Settings → Connectors → Add**, enter a public HTTPS MCP endpoint, and complete its authorization flow. My AX discovers OAuth metadata, stores tokens encrypted per user, refreshes them server-side, and rejects embedded credentials plus private, loopback, and metadata destinations.
 
-A deployment can optionally expose an exact read/query subset through official `@cloudflare/codemode`:
+A deployment may expose an exact read/query subset through MCP Code Mode:
 
 ```json
 {
@@ -118,54 +109,39 @@ A deployment can optionally expose an exact read/query subset through official `
 }
 ```
 
-The policy is fail-closed. Native MCP tools remain available for simple calls and consequential operations.
+Absent, invalid, new, and unlisted methods are excluded. Native MCP tools remain visible for simple calls and operations that should not be hidden inside generated code.
 
-### Connect My Machine
+## Optional Work Providers
 
-Run the optional `machinectl` companion on a computer you control. Its connection is outbound-only; no inbound laptop port is opened. The live catalog determines which local methods My AX may use.
+### My Machine
 
-### Connect Cloudbox
+`machinectl` is a separate companion: <https://github.com/acoyfellow/machinectl>. It opens an outbound connection; My AX does not expose an inbound laptop port. The live catalog determines which `machine.*` methods exist.
 
-Set `CLOUDBOX_URL` and the deployment secret `CLOUDBOX_INTERNAL_TOKEN`. My AX then exposes bounded Cloudbox run methods through `work_search` and `work_code`. The current integration supports creating a live run, reading and writing relative files, and executing bounded commands.
+### Cloudbox
 
-### Install the PWA
+Set `CLOUDBOX_URL` and the `CLOUDBOX_INTERNAL_TOKEN` deployment secret. The same token must be configured on Cloudbox. Without both values, `cloudbox.*` is reported as unavailable.
 
-Install My AX from a supporting phone or desktop browser. The PWA supports durable sessions, app badges, push notifications, voice, deep links, and an offline shell.
-
-## Architecture
+## Runtime Map
 
 ```text
-Phone / desktop PWA
-  │  chat · voice · push · artifacts
-  ▼
-Cloudflare Worker + Think agent
-  ├─ Durable Objects  user root, conversation facets, OAuth, machine relay
-  ├─ D1               session index, transcript mirror, jobs, attention
-  ├─ R2               uploads, artifacts, workspace backups
-  ├─ Sandbox          persistent My AX Workspace
-  ├─ Worker Loader    Work Code Mode and optional MCP Code Mode
-  ├─ Browser Run      public-page screenshots and replay
-  ├─ machinectl       optional physical-computer provider
-  ├─ Cloudbox         optional bounded cloud-run provider
-  └─ MCP              user-authorized external tools
+PWA
+ │  chat · voice · push · artifacts
+ ▼
+Worker + Think agent
+ ├─ Durable Objects  user root, conversations, OAuth, machine relay
+ ├─ D1               session index, transcript projection, jobs, attention
+ ├─ R2               uploads, artifacts, workspace backups
+ ├─ Sandbox          My AX Workspace
+ ├─ Worker Loader    Work Code Mode and optional MCP Code Mode
+ ├─ Browser Run      public-page screenshots and rrweb replay
+ ├─ machinectl       optional physical-machine provider
+ ├─ Cloudbox         optional bounded-run provider
+ └─ MCP              user-authorized external tools
 ```
 
-My AX owns identity, conversation, routing, attention, and approval UX. The providers own where work executes.
+[Architecture](./docs/architecture.md) documents the request path, storage ownership, bindings, and identity flow.
 
-## Public engine, private deployment
-
-This repository is the generic engine. The tracked tree is intended to contain no deployment-specific hosts, account resources, MCP names, Access tenant configuration, or secrets.
-
-A private deployment wrapper may:
-
-1. clone a reviewed public revision;
-2. inject private Access, model, MCP, Machinectl, and Cloudbox configuration;
-3. apply migrations and secrets;
-4. deploy and verify the authenticated application path.
-
-Feature work belongs here. Private wrappers should contain configuration, not a divergent fork.
-
-## Develop
+## Development
 
 ```bash
 npm ci
@@ -173,29 +149,30 @@ npm run check
 npm run dev
 ```
 
-`npm run check` builds generated assets, typechecks, and runs the unit/widget smoke suite. See [local development](./docs/local-development.md) for container and Access details.
+`npm run check` rebuilds generated assets, typechecks, and runs the local test suite. Container and Access-backed development modes are documented in [Local Development](./docs/local-development.md).
 
-## Project map
+## Source Map
 
-| Path | Purpose |
+| Path | Responsibility |
 |---|---|
-| `src/agent.ts` | Durable Think runtime, tool assembly, and work routing instructions. |
-| `src/work-tools.ts` | Unified `work_search` and `work_code` surface. |
-| `src/think-workspace.ts` | Maps Think workspace operations to persistent `/home/user`. |
-| `src/routes/machinectl.ts` | Physical-machine relay and dynamic capability adapter. |
-| `src/cloudbox-tools.ts` | Bounded Cloudbox run adapter. |
-| `src/connectors.ts`, `src/oauth-store.ts` | MCP registry and encrypted per-user OAuth. |
-| `src/voice-think-agent.ts` | Voice lifecycle delegated into canonical conversations. |
-| `proof/svelte/` | Svelte PWA and trusted inline result widgets. |
-| `scripts/setup.sh` | Self-hosted provisioning and initial deployment. |
+| `src/agent.ts` | Think runtime, tool assembly, and turn lifecycle. |
+| `src/work-tools.ts` | `work_search`, `work_code`, provider dispatch, and per-call metadata. |
+| `src/think-workspace.ts` | Think workspace operations mapped to `/home/user`. |
+| `src/routes/machinectl.ts` | Physical-machine relay and live capability adapter. |
+| `src/cloudbox-tools.ts` | Cloudbox live-run adapter. |
+| `src/connectors.ts`, `src/oauth-store.ts` | MCP registration and encrypted OAuth storage. |
+| `proof/svelte/` | Svelte PWA and trusted result renderers. |
+| `scripts/setup.sh` | Resource bootstrap and first deployment. |
 
-## Reference
+## Documentation
 
-- [Deployment guide](./docs/deploy.md)
+- [Deploying My AX](./docs/deploy.md)
+- [Local Development](./docs/local-development.md)
 - [Architecture](./docs/architecture.md)
-- [Feature matrix](./docs/feature-matrix.md)
-- [Patterns](./docs/patterns.md)
-- [Security policy](./SECURITY.md)
+- [Feature Status and Limits](./docs/feature-matrix.md)
+- [Implementation Patterns](./docs/patterns.md)
+- [Deployment Proof](./proof/README.md)
+- [Security Policy](./SECURITY.md)
 - [Contributing](./CONTRIBUTING.md)
 
 ## License

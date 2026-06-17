@@ -1,6 +1,6 @@
 # Contributing
 
-My AX is a small self-hosted agent engine. Keep changes generic, owner-scoped, and runnable on Cloudflare.
+Changes to the public engine must not require deployment-specific hosts, account IDs, connector catalogs, model routes, or secrets. Every persisted object and capability must remain scoped to the verified Access identity.
 
 ## Setup
 
@@ -12,7 +12,7 @@ npm run verify:public
 
 Use Node.js 22+ and npm 11+. Local Sandbox work also needs Docker, Colima, or WSL2. See [`docs/local-development.md`](./docs/local-development.md).
 
-## Before opening a pull request
+## Before Opening a Pull Request
 
 Run:
 
@@ -36,13 +36,13 @@ docker build -t my-ax-check .
 - Public URLs, redirects, and connector endpoints must pass the repository's SSRF and destination policies.
 - Consequential actions need explicit server-side authorization; Code Mode isolation does not reduce the authority of an injected capability.
 
-## Pull requests
+## Pull Requests
 
 Keep pull requests focused. Include:
 
 - the user-visible behavior;
 - the trust boundary affected;
-- tests or a repeatable proof;
+- an automated test, or the exact proof command, prerequisites, and expected result;
 - migration and deployment notes when applicable.
 
 Report security issues privately through GitHub's **Report a vulnerability** flow rather than a public issue.

@@ -1,104 +1,123 @@
-# Patterns
+# Implementation Patterns
 
-This repo is a working example of a few patterns that recur in personal
-agent apps on Cloudflare.
+## 1. Forward the User's OAuth Grant
 
-## 1. The agent acts as the user, not as itself
-
-For MCP servers that support user OAuth, My AX preserves the user's identity
-instead of introducing a shared agent credential. The upstream's attribution
-still depends on that server's OAuth and audit implementation; My AX does not
-claim to retrofit user attribution onto arbitrary APIs.
-
-The intended pattern uses **OAuth 2.0 + Managed OAuth** (see
-[Managed OAuth for Access](https://blog.cloudflare.com/managed-oauth-for-access/)).
-The user completes consent, and the resulting token is scoped to them, stored
-encrypted in a per-user Durable Object, and refreshed before expiry.
-
-## 2. The agent's tool catalog is borrowed, not built
-
-The agent doesn't host its own MCP server. It piggybacks on whatever MCP
-servers you connect in Settings → Connectors:
-
-```
-my-ax (this repo)
-   │  Agent.mcp registers each MCP with the user's refreshed OAuth bearer
-   │  Think exposes discovered MCP tools directly to the model
-   ▼
-Your chosen MCP servers (anywhere on the public internet)
-   │  validates token, enforces server-side policy, executes
-   ▼
-Upstream systems (your wiki, your tracker, your code host, your inbox, …)
-```
-
-Cost: ~0 ops on the agent side. Benefit: any MCP catalog you can authorize.
-
-## 3. One work surface, three places
-
-The model does not receive separate eager tools for every filesystem, process,
-laptop, and Cloudbox operation. `work_search` discovers capabilities and
-`work_code` executes one bounded JavaScript program over explicit namespaces:
+My AX stores each connector's OAuth token in a Durable Object keyed by the verified Access identity. When Think calls a connected MCP method, the Worker resolves that user's token, refreshes it when needed, and forwards the call. The model receives the tool result, not the bearer.
 
 ```text
-workspace.*  My AX Workspace — persistent conversation-adjacent files/processes
-machine.*    My Machine — current physical state and authenticated local tools
-cloudbox.*   Cloudbox — clean bounded repository runs and receipts
+Access identity
+      │
+      ▼
+OAuthClientDO ── encrypted token
+      │
+      ▼
+Agent.mcp ── bearer attached by the Worker
+      │
+      ▼
+upstream MCP
 ```
 
-The namespace names describe product ownership rather than infrastructure
-geography: both the My AX Workspace and Cloudbox run on Cloudflare.
+This preserves user attribution only when the MCP server and its upstream OAuth flow preserve it. My AX cannot add per-user attribution to a server that uses a shared credential.
 
-Every user still gets a Cloudflare Sandbox SDK container. Its `/home/user` is
-the fast persistent My AX Workspace, snapshotted to R2 and restored into fresh
-containers. It is useful for uploads, notes, transforms, scripts, and previews;
-it is not presented as the user's physical development machine.
+Relevant code:
 
-`machine.*` is terminal-equivalent authority and only appears when an
-outbound-connected `machinectl` companion is available. `cloudbox.*` is
-optional and currently run-oriented: clean clone, read/write, bounded command,
-and receipts. Code Mode receives no raw credentials, bindings, environment, or
-ambient network access.
+```text
+src/connectors.ts
+src/oauth-store.ts
+src/bridge.ts
+```
 
-## 4. Native agent runtime, product-owned workspace
+## 2. Borrow MCP Tools at Runtime
 
-Production chat runs on **Cloudflare Think** for durable messages, stream
-replay/recovery, reasoning, and programmatic turns. `src/think-workspace.ts`
-adapts native Think workspace tools onto Sandbox-local `/home/user`, while
-`src/work-tools.ts` owns composition across the three work providers.
+Connected MCP servers contribute their catalog to the Think session through `Agent.mcp`. My AX does not reimplement each upstream API, but it still owns connector discovery, destination validation, OAuth storage and refresh, forwarding timeouts, and failure handling.
 
-## 5. It's mobile-first, on purpose
+An operator can expose an exact read/query subset to `mcp_code_mode`. New or unlisted methods remain native-only until the policy changes.
 
-The same PWA, the same OAuth state, and the same Think-era conversation
-list works on a phone. The conversations sidebar slides in from the left.
-The settings drawer slides up from the bottom.
+```text
+connected MCP tools
+       ├─ native tool          one call or explicit side effect
+       └─ mcp_code_mode        reviewed multi-call read/query program
+```
 
-## 6. Conversation state is durable across devices
+## 3. Route Computer Work by State
 
-Think owns live conversation history and recovery. D1 stores an
-owner-scoped registry and an indexed mirror of new Think turns used for
-search, sync feeds, and exports. Open my-ax on your phone, resume a
-conversation, or inject a durable turn from automation.
+`work_search` and `work_code` present three locations without publishing every underlying operation as an eager model tool.
 
-## 7. Push is an agent attention channel
+```text
+workspace.*  snapshot-backed /home/user
+machine.*    outbound-connected physical machine
+cloudbox.*   bounded public-repository run
+```
 
-Installed apps can subscribe to Web Push. The owner-scoped `notify_owner`
-tool allows the Think agent to notify that user's subscribed devices
-without exposing a cross-user delivery parameter.
+The distinction follows state, not geography. My AX Workspace and Cloudbox both run on Cloudflare. My Machine matters because it contains current local checkouts, desktop state, and authentication that do not exist in either remote environment.
 
----
+The Dynamic Worker receives a generated bridge containing only the methods selected by the host. It has no ambient network access. That isolation does not reduce the authority of a method such as `machine.shell`; the host callback still runs with the connected user's terminal permissions.
 
-## How to adopt these patterns in your own project
+Relevant code:
 
-If you want to build a sibling app with the same auth model:
+```text
+src/work-tools.ts
+src/routes/machinectl.ts
+src/cloudbox-tools.ts
+```
 
-1. **Create a Cloudflare Access app** (if you want SSO at the edge) for
-   your hostname. Note its AUD.
-2. **Wire `src/connectors.ts`** in your project with one or more MCP
-   server entries (`upstream`, `auth.kind: "oauth-bearer"`, `resource` per
-   RFC 8707).
-3. **Users do the OAuth dance once** per browser via
-   `/api/connectors/<id>/authorize` → SSO → consent screen → done.
+## 4. Keep the Workspace Local, Snapshot the Boundary
 
-The heavy lifting (token storage, refresh, per-user scoping, RFC 8707
-resource indicator, audit receipts) is in `src/oauth-store.ts` +
-`src/bridge.ts` and is copy-pasteable.
+Each user gets a Cloudflare Sandbox container. Ordinary file operations use container-local `/home/user`. At turn end, My AX writes a Sandbox backup to R2 and stores the latest successful backup pointer in D1.
+
+```text
+turn starts
+   │
+   ├─ restore latest successful backup when needed
+   ▼
+/home/user
+   │
+   ├─ file and process work
+   ▼
+turn ends after a mutating tool
+   │
+   └─ snapshot to R2; update D1 pointer on success
+```
+
+A container failure can lose writes made after the last successful snapshot. Root filesystem changes are not part of the durable contract; user files and user-local tools belong under `/home/user`.
+
+## 5. Separate Live Conversation State From Its Projection
+
+Think owns the active conversation, tool loop, recovery, and compaction. D1 stores an owner-scoped session index plus a projection of new turns for search, incremental feeds, and export.
+
+The projection is useful for human history and external synchronization. It does not replace Think's live inference state.
+
+External automation uses owner-authenticated endpoints:
+
+```text
+POST /api/sessions/:id/inject
+GET  /api/sessions/:id/entries?after=<cursor>
+GET  /api/sessions/:id/export?format=json|markdown
+```
+
+## 6. Use Push as a Hint, Not a Queue
+
+Installed PWAs may subscribe to Web Push. `notify_owner` writes an Attention item before attempting delivery, so the durable inbox remains available when a push is delayed or rejected.
+
+Push requires VAPID configuration and browser support. Delivery is best-effort. Durable jobs and Think submissions, rather than the browser or push service, own scheduled execution.
+
+Notification and Attention links carry the target session. Warm PWA launches send that target to the mounted chat, which switches its active session instead of reloading cached state.
+
+## 7. Render Only Known Result Types
+
+Model-adjacent output cannot choose arbitrary UI components. `tool-result-widgets.ts` recognizes a small set of result shapes:
+
+- owner-scoped raster artifacts;
+- same-origin Browser Run replay URLs;
+- same-origin Svelte artifact previews.
+
+Unknown results render as inert text. Svelte artifacts run in an `allow-scripts` iframe without same-origin authority, and the preview route supplies a restrictive CSP.
+
+Relevant code:
+
+```text
+proof/svelte/tool-result-widgets.ts
+proof/svelte/ToolResultWidget.svelte
+src/artifacts.ts
+src/routes/browser.ts
+```

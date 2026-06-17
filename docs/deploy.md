@@ -1,6 +1,6 @@
 # Deploying My AX
 
-My AX deploys to your Cloudflare account from a Wrangler-authenticated workstation. The supported bootstrap creates a **locked** deployment first; production remains unusable until you configure Cloudflare Access and the required persistence credentials.
+My AX deploys to your Cloudflare account from a Wrangler-authenticated workstation. The bootstrap deploys the Worker before Access is configured. Production app requests are rejected until `CF_ACCESS_ISS` and `CF_ACCESS_AUD` are set; workspace snapshot operations also require R2 S3 credentials.
 
 ## Requirements
 
@@ -11,7 +11,7 @@ My AX deploys to your Cloudflare account from a Wrangler-authenticated workstati
 - Wrangler authentication
 - Cloudflare Workers, Containers, D1, KV, R2, Workers AI, Browser, and Worker Loader access
 
-## 1. Bootstrap resources and a locked Worker
+## 1. Bootstrap Resources and the Worker
 
 ```bash
 git clone https://github.com/acoyfellow/my-ax
@@ -32,7 +32,7 @@ The setup script:
 
 The first production deployment intentionally fails closed because `CF_ACCESS_ISS` and `CF_ACCESS_AUD` are empty.
 
-## 2. Configure the hostname and Cloudflare Access
+## 2. Configure the Hostname and Cloudflare Access
 
 Choose a hostname. For a custom domain, set:
 
@@ -58,7 +58,7 @@ Create a Zero Trust **Self-hosted** Access application for the final hostname. S
 
 Production requests remain rejected if the Access issuer or audience is absent. The `--env dev` configuration is the only local identity bypass.
 
-## 3. Configure durable workspace snapshots
+## 3. Configure Durable Workspace Snapshots
 
 The R2 binding stores backup objects, but Cloudflare Sandbox snapshot transfer also needs bucket-scoped S3 credentials.
 
@@ -69,7 +69,7 @@ npx wrangler secret put R2_ACCESS_KEY_ID
 npx wrangler secret put R2_SECRET_ACCESS_KEY
 ```
 
-My AX fails loudly when either credential is absent rather than pretending workspace persistence is healthy.
+If either credential is absent, workspace snapshot operations return an error.
 
 ## 4. Configure Web Push
 
@@ -83,13 +83,13 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 
 Push is optional for basic chat, but completion attention, background decisions, and app badges need these values.
 
-## 5. Configure model routing
+## 5. Configure Model Routing
 
 Workers AI-backed models use the `AI` binding. Gateway-backed catalog entries require deployment-owned gateway configuration and credentials. Remove or disable routes you do not configure; users never enter provider keys in the product UI.
 
 The exact gateway contract is deployment-specific and should be injected outside the tracked public tree.
 
-## 6. Optional providers
+## 6. Configure Optional Providers
 
 ### My Machine
 
@@ -115,7 +115,7 @@ npx wrangler secret put CLOUDBOX_INTERNAL_TOKEN
 
 The same value must be configured on Cloudbox. Current integration methods create a live run, read and write relative files, and execute bounded commands. Cloudbox is optional; My AX Workspace and connected MCPs work without it.
 
-## 7. Deploy and verify
+## 7. Deploy and Verify
 
 ```bash
 npm run check
@@ -130,7 +130,7 @@ Verify both boundaries:
 
 Applying Access only at the edge is insufficient if the Worker's configured issuer or audience is stale.
 
-## Updates
+## Update a Deployment
 
 ```bash
 git pull --ff-only
@@ -144,7 +144,7 @@ Treat `MASTER_KEY` as durable state. Rotating it currently makes existing encryp
 
 ## Troubleshooting
 
-### Authentication error `10000`
+### Authentication Error `10000`
 
 Wrangler's token expired or targets the wrong account:
 
@@ -153,19 +153,19 @@ npx wrangler whoami
 npx wrangler login
 ```
 
-### Container build failed
+### Container Build Failed
 
 Inspect Docker/Colima health and the Wrangler build output. The Sandbox image is Linux/AMD64.
 
-### Worker returns an auth error after Access succeeds
+### Worker Returns an Auth Error After Access Succeeds
 
 Confirm `CF_ACCESS_ISS` and `CF_ACCESS_AUD` match the Access application protecting the deployed hostname.
 
-### Workspace restore is unavailable
+### Workspace Restore Is Unavailable
 
 Confirm both R2 S3 secrets are set and scoped to the configured backup bucket. An R2 binding by itself is not enough for presigned snapshot transfer.
 
-### Roll back
+### Roll Back
 
 ```bash
 npx wrangler deployments list

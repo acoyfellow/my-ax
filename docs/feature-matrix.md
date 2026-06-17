@@ -1,109 +1,67 @@
-# My Agent Experience — feature matrix
+# My Agent Experience — Feature Status and Limits
 
-A grounded product/status reference for **My AX**: a self-hosted personal agent operating environment on Cloudflare.
+This table describes behavior in the current repository. `npm run check` covers local type, unit, and widget checks; deployment-only behavior names its proof command or source path.
 
-Status legend:
+Status:
 
-- ✅ **Shipped** — implemented and used in production.
-- 🧪 **Proving** — implemented, but still being measured or hardened.
-- ⚠️ **Partial** — useful today with a known product/reliability gap.
-- ⏭ **Next** — planned work, not shipped.
+- ✅ **Shipped** — present in the current tree with a named check or source path.
+- 🧪 **Proving** — implemented, but the boundary or production evidence is still narrow.
+- ⚠️ **Partial** — useful with a known missing path.
+- ⏭ **Planned** — not implemented.
 
-## Product surface
+## Conversation and Client
 
-| Area | Capability | Status | Current behavior / boundary |
-|---|---|---:|---|
-| Chat | Durable typed conversations | ✅ | Per-session `MyAgent` facets extend Cloudflare Think; messages, reasoning, tools, recovery, and compaction are native Think primitives. |
-| Chat | Multi-turn conversation | ✅ | Turns continue in one canonical Think session. User messages persist before model execution so a stalled provider cannot erase the prompt. |
-| Chat | Streaming recovery | ✅ | Think recovery + a 120s parked-stream watchdog; dead streams recover or terminalize visibly instead of spinning forever. |
-| Chat | Type while waiting/offline | ✅ | Composer stays editable while a turn runs or the socket reconnects; only sending is gated. |
-| Chat | Scroll-safe streaming | ✅ | Auto-scroll only while pinned; floating ↓ returns to the latest content. |
-| Chat | Reasoning display | ✅ | Persisted Thinking blocks stream and replay. |
-| Chat | Tool presentation | ✅ | Consecutive tools group together; elapsed timers, terminal historical states, and typed result widgets are supported. |
-| Chat | Fork from message | ✅ | Owner-scoped transcript fork with an immediate progress spinner and redirect into the fork. |
-| Sessions | Latest-session resume | ✅ | The latest durable conversation resumes by default; explicit New Chat starts blank. |
-| Sessions | Full transcript after compaction | ✅ | Think keeps compacted model context; if D1 contains more user turns, the human view reconciles to the complete durable transcript. |
-| Sessions | Fast conversation switching | ✅ | In-place WebSocket/session swap instead of a full page reload. Defensive reload fallback remains. |
-| Sessions | Export and incremental feeds | ✅ | Owner-scoped Markdown/JSON export plus cursor-based D1 entries feed and durable session injection. |
-| Sessions | Resume production battery | ✅ | `npm run prove:resume` covers auth, replay, compaction, interrupted tools, A→B→A switching, continuation, two tabs, artifacts, and reconnect-after-producer loss. |
-| Presence | Socket liveness | ✅ | Client ping/server pong prevents healthy idle sockets from being force-reconnected and shown as permanently red. |
-| Voice | Realtime voice in the same conversation | ✅ | A direct-routed Voice agent owns mic/STT/TTS and delegates turns by RPC into the canonical Think session. Uses Workers AI Flux STT + Aura TTS. |
-| PWA | Mobile/desktop installed app | ✅ | Installable shell, offline fallback, theme support, app badges, deep links, and service-worker update handling. |
-| PWA | iPhone keyboard/safe-area handling | ⚠️ | Keyboard-open footer padding is removed; keyboard-closed state uses safe-area + tuned visual clearance. Proven on current target device, but still device-sensitive. |
-| PWA | Foreground Wake Lock | ✅ | Visible active turns request screen Wake Lock; release on idle/hidden. |
+| Capability | Status | Mechanism and Limit | Evidence |
+|---|---:|---|---|
+| Durable conversations | ✅ | A `MyAgent` Think facet owns each conversation. User messages persist before model execution; provider failure can still end a turn. | `src/agent.ts`, `npm run prove:resume` |
+| Stream recovery | ✅ | Think recovery plus a `120s` parked-stream watchdog. The watchdog terminates or recovers the observed stalled path; it is not a provider availability guarantee. | `src/agent.ts`, `npm run prove:resume` |
+| Conversation switching | ✅ | The Svelte client closes the active socket, clears transient state, and connects to the selected facet without a document reload. | `proof/svelte/Chat.svelte` |
+| Notification deep links | ✅ | Attention clicks and warm service-worker/PWA launches deliver a same-origin target to the mounted chat; session targets switch the active facet. | `npm run test:deep-links` |
+| Transcript export and feed | ✅ | D1 projects new turns into owner-scoped export and cursor endpoints. The projection is separate from Think's live state. | `src/routes/sessions.ts`, `npm run test:session-entries` |
+| Voice in the active conversation | ✅ | A direct-routed Voice agent delegates text turns into the canonical Think facet. Browser microphone and audio policies still apply. | `src/voice-think-agent.ts`, `npm run prove:browser` |
+| Installable PWA | ✅ | Manifest, service worker, offline shell, badges, and deep links are present. Offline mode does not run model turns. | `public/sw.js`, `proof/svelte/` |
 
-## Models and inference
+## Work and Tools
 
-| Capability | Status | Current behavior / boundary |
-|---|---:|---|
-| Curated model picker | ✅ | Kimi K2.6, GLM 5.1, Opus 4.8, GPT-5.5, Kindle Alpha API, and Mercury Alpha. Provider details remain outside product UI. |
-| Workers AI models | ✅ | Kimi and GLM use the Workers AI binding. Kimi K2.7 was tested and removed after repeatable multi-turn stream parking. |
-| Gateway models | ✅ | Opus, GPT, Kindle Alpha API, and Mercury Alpha use the configured model gateway; all current ids were live-probed before registration. |
-| Stale-model self-healing | ✅ | Removed/unknown persisted model ids resolve to the default instead of failing every turn with `model_not_found`. |
-| Full-tool parity | ✅ | Every selectable model receives the same server tool surface. |
-| Vision inputs | ✅ | R2 uploads are rehydrated for vision-capable models; non-vision models receive an explicit omission guardrail. |
-| Durable inference / no duplicate billing | ⏭ | Adopt Cloudflare AI Gateway durable resume / Think `durableBuffer` when publicly available. Do not build a parallel custom inference-buffer DO. |
+| Capability | Status | Mechanism and Limit | Evidence |
+|---|---:|---|---|
+| Unified work surface | ✅ | `work_search` discovers methods; `work_code` dispatches one async program across `workspace.*`, `machine.*`, and `cloudbox.*`. Calls record location, method, status, and duration. | `src/work-tools.ts`; deployed trace in `docs/media/` |
+| My AX Workspace | ✅ | `/home/user` lives in Cloudflare Sandbox and snapshots to R2 after mutating turns. Writes after the last successful snapshot can be lost with the container. | `src/workspace.ts`, `src/think-workspace.ts` |
+| My Machine | 🧪 | An outbound Machinectl connection contributes its live catalog under `machine.*`. Methods run with the connected user's local authority. | `src/routes/machinectl.ts`; deployed trace in `docs/media/` |
+| Cloudbox runs | 🧪 | Optional `cloudbox.*` methods create a public-repository run, read/write relative files, and execute commands. No publication method is exposed. | `src/cloudbox-tools.ts`; deployed trace in `docs/media/` |
+| User-added MCPs | ✅ | Users add public HTTPS servers and complete their OAuth flow. Private, loopback, metadata, and credential-bearing destinations are rejected. | `src/connectors.ts`, `src/public-url.ts`, `npm run test:public-url` |
+| MCP Code Mode | 🧪 | An exact deployment policy exposes reviewed read/query methods. New and unlisted methods remain excluded. | `src/mcp-code-mode.ts`, `npm run test:mcp-code-mode` |
+| Human decisions | ✅ | `ask_user` stores an owner-scoped decision, writes Attention, and injects the validated answer into the source conversation. | `src/routes/decisions.ts` |
 
-## Tools, MCP, and work authority
+No current comparative benchmark is published for native tools versus Code Mode. Code Mode adds Worker Loader startup overhead and reduces eager schema exposure for multi-call programs; the repository does not claim a general latency improvement.
 
-| Capability | Status | Current behavior / boundary |
-|---|---:|---|
-| Unified work surface | ✅ | `work_search` discovers and `work_code` composes `workspace.*`, `machine.*`, and `cloudbox.*` in one bounded Dynamic Worker. Legacy direct computer handlers remain internal during migration, not model-visible. |
-| User-added MCPs | ✅ | Probe/add/remove UI with per-user OAuth, Managed OAuth discovery, and Dynamic Client Registration when advertised. |
-| MCP security | ✅ | Public HTTPS only; embedded credentials, loopback/link-local/private IPv4, and metadata redirects are rejected. Discovery has bounded timeout/retry. |
-| Native MCP tools | ✅ | Connected MCP tools hydrate through the Agents SDK and appear directly to Think. |
-| MCP Code Mode | 🧪 | Official `@cloudflare/codemode` composes only exact deploy-approved MCP read/query methods in a Dynamic Worker. Think retains MCP OAuth/session/call authority, native tools remain available, and an absent/invalid policy disables Code Mode. |
-| Code Mode benchmark | ⚠️ | Simple 1–2 call tasks are faster natively; Code Mode reaches its first tool sooner but pays setup cost. Complex multi-call benchmark needs a clean, bounded rerun. |
-| External coordinator MCP | ✅ | `/api/mcp` provides bounded owner-scoped session listing, inspection, injection, and Attention acknowledgement; no generic arbitrary-tool endpoint. |
-| Human decisions | ✅ | `ask_user` creates an owner-scoped multiple-choice decision, sends a push, records a receipt, and injects the validated answer back into the originating Think session. |
+## Models and Browser
 
-## Cloud workspace and connected laptop
+| Capability | Status | Mechanism and Limit | Evidence |
+|---|---:|---|---|
+| Operator model catalog | ✅ | The deployment chooses from the catalog in `src/models.ts`. Workers AI routes use the binding; gateway routes need deployment-owned configuration. | `src/models.ts`, `src/llm.ts` |
+| Vision attachments | ✅ | Owner-scoped R2 bytes are attached only for models marked vision-capable. Other models receive an omission notice. | `src/agent.ts`, `src/uploads.ts` |
+| Public-page Browser Run | ✅ | `browser_open` captures title, text, screenshot, and an rrweb recording for public HTTP(S) destinations. It has no user's local browser cookies. | `src/browser-tools.ts`, `npm run prove:browser` |
+| Authenticated local browser | ⚠️ | Available only through methods published by a connected Machinectl companion. | `src/routes/machinectl.ts` |
+| Svelte artifacts | ✅ | Self-contained Svelte source is compiled, stored in R2/D1, and rendered through a same-origin `allow-scripts` iframe. | `npm run prove:artifacts`, `npm run test:tool-widgets` |
+| Artifact revision workflow | ⏭ | Existing artifacts can be listed and deleted; edit/fork/version UI is not implemented. | `src/routes/artifacts.ts` |
 
-| Capability | Status | Current behavior / boundary |
-|---|---:|---|
-| My AX Workspace | ✅ | Persistent `/home/user` workspace per owner, exposed through native Think file tools and `workspace.*` Code Mode methods for files, processes, transforms, and previews. |
-| Workspace durability | ✅ | Sandbox snapshots in R2 with a versioned latest pointer; restore failure stays degraded/retryable and cannot bless or snapshot empty state. |
-| Sandbox runtime | ✅ | Cloudflare Sandbox SDK/image aligned on 0.12.1; lean base includes Python, uv/uvx, rg, curl, jq, sqlite3, and archive utilities. |
-| Project toolchains | ⚠️ | Compilers were removed from the global base after registry upload failures. Project-specific toolchains must be installed explicitly/user-locally. |
-| Connected laptop | ✅ | `machinectl` is outbound-only and explicitly user-controlled. It exposes shell, screenshots, mouse/keyboard, accessibility, auth health, and delegated harness sessions when enabled. |
-| My Machine provider | ✅ | The live Machinectl catalog appears under `machine.*` inside `work_code`; no laptop credentials are placed in generated code. Authority remains terminal-equivalent and is not described as sandboxed. |
-| Cloudbox provider | 🧪 | Optional `cloudbox.*` methods create bounded public-repository runs, read/write relative files, and execute commands with runner receipts. Durable owner-scoped Cloudbox Computers are not yet claimed. |
-| Harness portability | ⚠️ | MCP/tool boundary is harness-agnostic; canonical chat runtime is currently Cloudflare Think. Local Pi/editor harnesses are optional delegated targets, not the core runtime. |
+## Attention and Jobs
 
-## Artifacts, browser, and generated UI
+| Capability | Status | Mechanism and Limit | Evidence |
+|---|---:|---|---|
+| Web Push | ✅ | Owner subscriptions receive best-effort VAPID push. Invalid endpoints are pruned; the Attention row remains when delivery fails. | `src/push.ts`, `src/notify.ts` |
+| Attention inbox | ✅ | D1 stores recent owner-scoped items, unread state, href, and source session. | `src/routes/attention.ts`, `proof/svelte/Attention.svelte` |
+| Recurring prompts | ✅ | Think's per-DO schedules run saved prompts; D1 stores the owner-facing index and last result. | `src/jobs.ts`, `src/routes/jobs.ts` |
+| Unified turn state | ⚠️ | Decisions resume durably, but chat, job, decision, cancellation, and failure do not yet share one state record. | `src/agent.ts`, `src/jobs.ts` |
+| Quiet hours | ⏭ | No delivery schedule or category preferences are implemented. | — |
 
-| Capability | Status | Current behavior / boundary |
-|---|---:|---|
-| Inline Svelte artifacts | ✅ | `create_svelte_artifact` compiles self-contained Svelte 5 source, stores owner/session-scoped manifests in R2+D1, and renders a sandboxed inline iframe. |
-| Artifact fullscreen | ✅ | Inline artifacts can launch immersive fullscreen and close with Escape. |
-| Decision widgets from push | ✅ | Push deep-links to a constrained interactive choice page with close/return controls; server validates choices before resuming the agent. |
-| Browser Run | ✅ | `browser_open` uses Cloudflare Browser Run, captures screenshot/replay evidence, and renders an inline playable artifact. |
-| Arbitrary authenticated browser automation | ⚠️ | Cloud Browser Run handles public/isolated browsing; authenticated local browser interaction requires explicit connected-laptop capability. |
-| Reusable artifact editing/library | ⏭ | Artifacts are durable and listable, but there is no polished reusable library or revision workflow yet. |
+## Identity and Storage
 
-## Attention, jobs, and ambient behavior
-
-| Capability | Status | Current behavior / boundary |
-|---|---:|---|
-| Web Push | ✅ | Owner-scoped VAPID push works on installed iOS and desktop PWAs; tests fan out to every registered device. |
-| Completion push while away | ✅ | Successful turn completion pushes only when no visible connection is viewing that session. Title carries prompt context; body carries the actual reply. |
-| Attention inbox | ✅ | Durable owner-scoped activity items, unread count, app badge, and deep links. |
-| Agent notification tool | ✅ | `notify_owner` lets the agent send owner-scoped actionable attention linked to the active session. |
-| Recurring prompts/jobs | ✅ | Native per-DO schedules with run-now, pause/resume, delete, last-run/error state, and optional notification. |
-| Durable `needs_input` lifecycle | ⚠️ | Decision runs are durable and resumable, but there is not yet one unified turn-state record covering `running/completed/needs_input/failed/cancelled` across all chat/jobs surfaces. |
-| Quiet hours/preferences | ⏭ | Delivery works; category policy, quiet hours, and per-channel preferences are intentionally not yet productized. |
-| Release/deploy notifications | ⏭ | Deploy wrapper verifies health but does not yet create a concise release Attention item. |
-
-## Evidence, memory, and security
-
-| Capability | Status | Current behavior / boundary |
-|---|---:|---|
-| D1 transcript mirror + FTS | ✅ | Full durable human transcript, search, exports, and recovery fallback. FTS query construction is sanitized against syntax crashes. |
-| Invisible conversation memory | ✅ | Think Session `memory` context block persists across turns inside one conversation facet. Owner-wide recall comes from the D1 transcript/FTS projection; no false cross-facet claim. |
-| Run Receipts | ✅ | Owner-scoped typed event ledger and read-only receipt pages. Decision responses and external acknowledgements create receipts. |
-| Access identity | ✅ | Cloudflare Access JWT is the only trust principal; convenience headers cannot overwrite verified identity. |
-| OAuth token storage | ✅ | Tokens encrypted at rest with `MASTER_KEY`; refresh keeps DCR client identity and uses bounded timeout/transient retry. |
-| Push resilience | ✅ | Effect-based concurrent fan-out, per-send timeout, transient-only retry, expired endpoint pruning, VAPID relink detection, public-HTTPS endpoint validation, and no cross-owner endpoint reassignment. |
-| Effect I/O substrate | ✅ | Stable `effect` core powers portal RPC, push delivery, MCP discovery, and token-refresh transport. Agents/Think lifecycle remains native rather than wrapped. |
-| Deployment separation | ✅ | The tracked engine is generic; deployment-specific hosts, Access settings, model routes, connector catalogs, and secrets are injected outside the public tree. |
-| Dependency posture | ✅ | npm is canonical; current Cloudflare Think/Agents/Voice/Shell/Sandbox/Worker tooling is intentionally kept near latest and production-probed after bumps. |
+| Capability | Status | Mechanism and Limit | Evidence |
+|---|---:|---|---|
+| Access identity | ✅ | Production verifies the Access JWT issuer, audience, signature, and expiry; routes scope data by the resulting email. | `src/auth.ts`, `npm run prove` |
+| OAuth encryption | ✅ | `OAuthClientDO` encrypts tokens under `MASTER_KEY` and refreshes before expiry. Rotating the key makes existing grants unreadable. | `src/oauth-store.ts` |
+| Transcript search | ✅ | D1 FTS indexes the projected conversation rows. Search does not query unprojected live state. | `src/conversation-log.ts` |
+| Workspace backups | ✅ | R2 stores Sandbox backups; D1 stores the latest successful pointer. R2 S3 credentials are required in addition to the binding. | `src/workspace.ts`, `docs/deploy.md` |
+| Run receipts | 🧪 | The owner-scoped event ledger stores explicitly appended events. It does not automatically capture every tool call. | `src/run-receipts.ts`, `npm run test:run-receipts` |

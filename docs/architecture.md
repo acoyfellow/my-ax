@@ -1,6 +1,6 @@
 # Architecture
 
-The codebase is small enough to read in a sitting. Roughly in dependency order:
+The request path starts in `src/index.tsx`; session state, execution providers, and storage branch from there. Files appear below in dependency order.
 
 | File | What it owns |
 |---|---|
@@ -14,8 +14,8 @@ The codebase is small enough to read in a sitting. Roughly in dependency order:
 | `src/browser-tools.ts` | Cloudflare Browser Run `browser_open` tool and inline replay-receipt payload. |
 | `src/routes/browser.ts` | Replay page and server-side Browser Run recording retrieval for rrweb playback. |
 | `src/routes/mcp.ts` | Direct MCP coordinator: bounded Code Mode orchestration for owner chat sessions plus one explicit Run Receipt connected-laptop observation tool. |
-| `src/llm.ts` + `src/models.ts` | Model/provider routing helpers used by active Think agents. a curated operator-controlled model catalog. |
-| `src/tools.ts` | Product-native tool allowlist and retained internal handlers. Legacy direct computer tools are hidden from the model after Work Code Mode parity. |
+| `src/llm.ts` + `src/models.ts` | Model/provider routing helpers and the operator-controlled catalog used by Think agents. |
+| `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
 | `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, and Cloudbox with location-tagged call receipts. |
 | `src/cloudbox-tools.ts` | Optional bounded Cloudbox live-run adapter used behind `cloudbox.*`. |
 | `src/jobs.ts` + `src/routes/jobs.ts` | Recurring prompts backed by agents' native per-DO `scheduleEvery()` alarms plus a thin D1 owner/session UI index. |
@@ -26,13 +26,13 @@ The codebase is small enough to read in a sitting. Roughly in dependency order:
 | `src/sandbox.ts` | Low-level Sandbox access for direct diagnostics and compatibility paths. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `ChatPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. |
-| `proof/svelte/` | Svelte 5 client components, runes-only. `AppShell` (header + connection pill + compact attention popover), `Chat` (WebSocket runtime, message log, composer), `ToolResultWidget` (trusted inline tool-result dispatch), `Sessions`, `Settings`, `Connectors`, `ComputerHealth`. `tool-result-widgets.ts` is an explicit allowlist registry: safe raster screenshots, same-origin Browser Run replays, and same-origin sandboxed Svelte artifact previews render inline; unknown outputs remain inert raw text. Module-scope `$state` shared via `store.svelte.ts` (exposed as bare specifier `@my-ax/store` through svelte-hono's `sharedModules`). |
+| `proof/svelte/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. |
 | `migrations/` | D1 schema migrations. |
 
 The chat surface has no hand-written `.js` files. Everything in `public/static/` is fonts, generated CSS, and brand assets.
 
 
-## Runtime topology
+## Runtime Topology
 
 ```
 Browser
@@ -44,7 +44,7 @@ Browser
   │            │
   │            ├─→ OAuthClientDO  ── per-user encrypted OAuth bearers used to register native Agent.mcp tools
   │            ├─→ Sandbox DO     ── per-user My AX Workspace
-  │            │      └─ /home/user → fast workspace restored from R2 snapshots
+  │            │      └─ /home/user → container-local workspace restored from R2 snapshots
   │            ├─→ Worker Loader  ── bounded Work Code Mode dispatcher
   │            │      ├─ workspace.* → My AX Workspace
   │            │      ├─ machine.*   → outbound Machinectl relay
@@ -58,7 +58,7 @@ Browser
   └─→ User-added MCP servers    ── native MCP tools forwarded per-user (Settings → Connectors)
 ```
 
-## Bindings reference
+## Bindings Reference
 
 Wrangler bindings (see `wrangler.jsonc`):
 
@@ -77,15 +77,20 @@ Wrangler bindings (see `wrangler.jsonc`):
 | `ASSETS` | Static assets binding | Serves `public/` (CSS, JS, fonts, brand) |
 | `CF_VERSION_METADATA` | Version metadata | Worker version id surfaced in the Settings drawer |
 
-## Storage layout
+`work_code` accepts at most `32 KiB` of generated source and gives the Dynamic
+Worker a `30s` timeout with global outbound networking disabled. Host methods
+can reach their configured providers; for example, `machine.shell` reaches the
+connected laptop and `cloudbox.run_create` reaches Cloudbox.
+
+## Storage Layout
 
 **R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox.
 
 **Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
 
-**KV `AUDIT_KV`** stores 90-day-TTL audit receipts of every cross-user tool call brokered through `bridge.ts` — one record per call with caller, target, method, and timestamp.
+**KV `AUDIT_KV`** stores `bridge.ts` call receipts for 90 days. Each stored record includes caller, target, method, and timestamp; Work Code Mode calls use their own response envelope.
 
-## Identity flow
+## Identity Flow
 
 1. Browser hits the worker's hostname.
 2. Cloudflare Access enforces SSO at the edge (when configured); on success, attaches a JWT.
@@ -93,9 +98,9 @@ Wrangler bindings (see `wrangler.jsonc`):
 4. Every Worker route reads `c.get("identity").email` to scope operations.
 5. The Sandbox container, the OAuthClientDO instance, and the D1 session rows are all keyed by `email`.
 
-No user ID generation, no session cookies, no password. The Access JWT IS the identity. For local dev or non-Access deploys, `DEV_USER_EMAIL` fills in.
+Production uses the verified Access JWT email as the owner key. Local development can supply `DEV_USER_EMAIL` only through the development configuration.
 
-## OAuth flow (user-added MCP server)
+## OAuth Flow for a User-Added MCP Server
 
 1. User visits Settings → Connectors → Add MCP server, pastes the upstream URL, Test, Save.
 2. The Worker probes `/.well-known/oauth-authorization-server` to discover endpoints.
@@ -107,7 +112,7 @@ No user ID generation, no session cookies, no password. The Access JWT IS the id
 8. Every subsequent tool call mints a fresh `bridge.ts` ticket, attaches the bearer, and forwards.
 9. Refresh happens server-side ~5 minutes before expiry; user never re-consents unless they explicitly disconnect.
 
-## Session HTTP surfaces
+## Session HTTP Surfaces
 
 Beyond the WebSocket (`/agents/my-agent/:id`) and the CRUD on `/api/sessions`, two owner-authenticated surfaces are worth calling out because they're how external automation talks to a session:
 
@@ -115,11 +120,11 @@ Beyond the WebSocket (`/agents/my-agent/:id`) and the CRUD on `/api/sessions`, t
 - **`GET /api/sessions/:id/entries?after=<cursor>&limit=<n>`** — incremental outbound sync. Reads `conversation_entries` from D1 by monotonic entry id, returns chronological rows strictly after the cursor, and is safe to poll idempotently.
 - **`GET /api/sessions/:id/export?format=json|markdown`** — durable full transcript download. Reads `conversation_entries` from D1 directly (no Sandbox spin-up), enforces ownership in SQL, and returns a `Content-Disposition: attachment` response.
 
-## Memory boundary
+## Memory Boundary
 
 my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configureSession` declares one writable block (`maxTokens: 2000`), a cached system prompt, and Hermes-style compaction at 100k estimated tokens. The model writes durable facts/decisions/preferences via Session's auto-wired `set_context` tool; each conversation runs as a `MyAgent` facet inside the user's one `UserAgent` root DO. There is no memory UI — the only product surface is talking to the agent.
 
-## Browser and MCP surfaces
+## Browser and MCP Surfaces
 
 - **Trusted inline widget registry** — `proof/svelte/tool-result-widgets.ts` classifies tool output into an explicit allowlisted Svelte renderer. It never accepts arbitrary component names, HTML, or iframe URLs from model-adjacent output. Unknown payloads fall back to inert raw text. For Svelte artifacts it accepts only same-origin `/api/artifacts/:uuid/preview` URLs and mounts them in an `allow-scripts` sandboxed iframe.
 - **`create_svelte_artifact`** — a native Think tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
@@ -127,6 +132,6 @@ my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configure
 - **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the persistent My AX Workspace, the connected physical machine, and optional Cloudbox runs. Child calls carry location, method, status, and duration metadata.
 - **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session orchestration and explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 
-## Durable Object history
+## Durable Object History
 
 Wrangler Durable Object migrations are append-only deployment history. Active bindings include the owner root, conversation facet, OAuth store, machine host, Sandbox, and direct-routed Voice agent. A temporary `LEGACY_MY_AGENT` binding remains solely for lazy migration of pre-facet sessions; access to it is gated by an owner-scoped D1 session row and it should be removed after a measured migration cutoff.
