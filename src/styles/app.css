@@ -1,0 +1,662 @@
+/* My Agent Experience — compiled stylesheet source.
+ *
+ * Built once at deploy time with `npm run build:css`:
+ *   tailwindcss -i src/styles/app.css -o public/static/styles.css --minify
+ *
+ * Outputs ~10 KB of gzipped CSS that ships alongside the worker, replacing
+ * the ~70 KB Tailwind Play CDN script + 3 font CDN requests that previously
+ * loaded on every page.
+ *
+ * Tailwind v4 picks up theme tokens from the @theme block below; class names
+ * are scanned from anywhere in src/ via @source directives.
+ *
+ * ─── Theme model ──────────────────────────────────────────────────────
+ *
+ * Three first-class theme states:
+ *   - dark   : <html class="dark">    (default if user picks dark)
+ *   - light  : <html class="light">   (set when user picks light)
+ *   - system : <html> with no class   (defers to prefers-color-scheme)
+ *
+ * The server reads a `myax-theme` cookie (values: "light" | "dark" | "system",
+ * default "system") and stamps the class on <html> during SSR. For system
+ * mode the synchronous anti-flash script in Layout.tsx adds .dark or .light
+ * to <html> before first paint by reading matchMedia. After paint, the
+ * Settings drawer toggle rewrites the cookie and flips the class.
+ *
+ * Why class-based rather than pure-media-query: lets the user override the
+ * OS preference without messing with their system settings, which is the
+ * thing every "respects your system" theme misses. The opt-in default
+ * (system) covers the no-preference case; the override covers everyone else.
+ */
+
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+
+/* Tell Tailwind v4 where to find classnames. The default scan finds src/
+ * automatically, but we also render JSX strings via Hono so we want to be
+ * explicit about extensions. */
+@source "../**/*.{ts,tsx}";
+@source "../../public/static/*.js";
+
+/* ─── Self-hosted fonts ───────────────────────────────────────────────
+ *
+ * woff2 files live in /static/fonts/ and are served by the Worker's ASSETS
+ * binding. Latin-only subsets — users with non-Latin
+ * names in the chat history will see system font fallback, which is fine.
+ *
+ * font-display: swap — show fallback (system-ui / monospace) immediately;
+ * swap to the webfont once it lands. No FOIT.
+ */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/inter-latin-wght.woff2") format("woff2-variations"),
+       url("/static/fonts/inter-latin-wght.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/static/fonts/jetbrains-mono-latin-wght.woff2") format("woff2-variations"),
+       url("/static/fonts/jetbrains-mono-latin-wght.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Mozilla Headline";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/mozilla-headline.woff2") format("woff2");
+}
+
+/* ─── Design tokens (defaults = dark) ─────────────────────────────────
+ *
+ * Tailwind v4 theme syntax: each `--color-*` becomes a `bg-*` / `text-*`
+ * utility automatically. `--font-*` becomes `font-*`. The values declared
+ * in @theme are the defaults Tailwind ships into utility classes; they are
+ * then overridden at runtime by the :root / .light blocks below.
+ *
+ * Why darks in @theme: Tailwind generates utility-class declarations like
+ * `.bg-bg { background-color: var(--color-bg); }`. The variable resolves
+ * at runtime, so the value bound to `--color-bg` at the matched selector
+ * wins. Putting darks here means `bg-bg` "just works" even when no theme
+ * class is present (worst-case fallback during hydration).
+ */
+@theme {
+  --color-bg: #0b1118;
+  --color-bg-alt: #111a24;
+  --color-line: rgba(181, 198, 211, 0.13);
+  --color-fg: #f7f9fb;
+  --color-fg-mut: #9baaba;
+  --color-brand: #f6821f;
+  --color-good: #4ade80;
+  --color-warn: #fbbf24;
+  --color-bad: #ef4444;
+  /* Surface overlays — three weights of theme-flipped translucent fill.
+   * Use these (`bg-surface-1`, `bg-surface-2`, `bg-surface-3`) instead of
+   * `bg-white/[N]` or `bg-black/[N]` anywhere you want a hover/active
+   * state that survives a theme flip. */
+  --color-surface-1: rgba(255, 255, 255, 0.04);
+  --color-surface-2: rgba(255, 255, 255, 0.06);
+  --color-surface-3: rgba(255, 255, 255, 0.10);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --font-display: "Mozilla Headline", "Inter", system-ui, sans-serif;
+
+  --shadow-raise:
+    0 1px 0 0 var(--color-line) inset,
+    0 8px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* ─── Theme bindings ──────────────────────────────────────────────────
+ *
+ * The three rules below cover all the cases:
+ *
+ *   :root and .dark           → dark tokens (the @theme defaults)
+ *   .light                    → light tokens
+ *   :root @ prefers-light     → light tokens (system mode, light OS)
+ *
+ * Each block also rebinds the legacy `--bg`, `--fg`, `--line`, etc.
+ * aliases so the ~40 inline `var(--bg)` callsites in views/ and
+ * public/static/*.js keep working through whatever theme is active. */
+
+:root,
+.dark {
+  color-scheme: dark;
+  --color-bg: #0b1118;
+  --color-bg-alt: #111a24;
+  --color-line: rgba(181, 198, 211, 0.13);
+  --color-fg: #f7f9fb;
+  --color-fg-mut: #9baaba;
+  --color-brand: #f6821f;
+  --color-good: #4ade80;
+  --color-warn: #fbbf24;
+  --color-bad: #ef4444;
+  /* Surface overlays — semi-transparent fills used for hover, active,
+   * subtle dividers, etc. We declare three tiers (subtle / soft / strong)
+   * so the rest of the codebase can pick the right weight without picking
+   * the wrong color. In dark mode these are white-on-bg; in light mode
+   * they're black-on-bg. */
+  --color-surface-1: rgba(255, 255, 255, 0.04);
+  --color-surface-2: rgba(255, 255, 255, 0.06);
+  --color-surface-3: rgba(255, 255, 255, 0.10);
+  --shadow-raise:
+    0 1px 0 0 var(--color-line) inset,
+    0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  /* Legacy aliases. */
+  --bg: var(--color-bg);
+  --bg-alt: var(--color-bg-alt);
+  --line: var(--color-line);
+  --fg: var(--color-fg);
+  --fg-mut: var(--color-fg-mut);
+  --brand: var(--color-brand);
+  --good: var(--color-good);
+  --warn: var(--color-warn);
+  --bad: var(--color-bad);
+}
+
+.light {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-bg-alt: #f6f6f8;
+  --color-line: rgba(0, 0, 0, 0.10);
+  --color-fg: #0a0a0a;
+  --color-fg-mut: #5a5a62;
+  /* Cloudflare orange #f6821f is ~2.9:1 on white — fails AA for body
+   * text. The darker `#c4640d` variant hits ~4.6:1 and still reads as
+   * "Cloudflare orange" at a glance. Used for any text-brand utility;
+   * the orange middot in the wordmark stays the original brand orange
+   * because dots are not body text and the brand recognizes by hue. */
+  --color-brand: #c4640d;
+  --color-good: #15803d;
+  --color-warn: #b45309;
+  --color-bad: #b91c1c;
+  /* Black-on-bg surface overlays for light mode. Same alpha tiers as
+   * dark; the color flips. */
+  --color-surface-1: rgba(0, 0, 0, 0.04);
+  --color-surface-2: rgba(0, 0, 0, 0.06);
+  --color-surface-3: rgba(0, 0, 0, 0.10);
+  --shadow-raise:
+    0 1px 0 0 var(--color-line) inset,
+    0 8px 24px -12px rgba(0, 0, 0, 0.08);
+  /* Legacy aliases re-bound to light values. */
+  --bg: var(--color-bg);
+  --bg-alt: var(--color-bg-alt);
+  --line: var(--color-line);
+  --fg: var(--color-fg);
+  --fg-mut: var(--color-fg-mut);
+  --brand: var(--color-brand);
+  --good: var(--color-good);
+  --warn: var(--color-warn);
+  --bad: var(--color-bad);
+}
+
+/* System mode (no class on <html>) — defer to OS preference. We only
+ * need a media-query branch for `prefers-color-scheme: light` because
+ * the :root block above already binds dark values; the @media block
+ * overrides them when the OS reports light. The anti-flash script in
+ * Layout.tsx upgrades the bare <html> to .dark or .light before paint
+ * for the same reason: matchMedia resolves slightly earlier than CSS
+ * cascade in some browsers, and we want a single source of truth. */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark):not(.light) {
+    color-scheme: light;
+    --color-bg: #ffffff;
+    --color-bg-alt: #f6f6f8;
+    --color-line: rgba(0, 0, 0, 0.10);
+    --color-fg: #0a0a0a;
+    --color-fg-mut: #5a5a62;
+    --color-brand: #c4640d;
+    --color-good: #15803d;
+    --color-warn: #b45309;
+    --color-bad: #b91c1c;
+    --color-surface-1: rgba(0, 0, 0, 0.04);
+    --color-surface-2: rgba(0, 0, 0, 0.06);
+    --color-surface-3: rgba(0, 0, 0, 0.10);
+    --bg: var(--color-bg);
+    --bg-alt: var(--color-bg-alt);
+    --line: var(--color-line);
+    --fg: var(--color-fg);
+    --fg-mut: var(--color-fg-mut);
+    --brand: var(--color-brand);
+    --good: var(--color-good);
+    --warn: var(--color-warn);
+    --bad: var(--color-bad);
+  }
+}
+
+/* Tailwind variants. We use `.dark` / `.light` selectors so utilities
+ * like `dark:bg-bg-alt` / `light:text-fg-mut` can branch per theme.
+ * Each variant fires when an ancestor carries the class — including the
+ * <html> tag stamped by SSR. */
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant light (&:where(.light, .light *));
+
+/* ─── Base styles ─────────────────────────────────────────────────────
+ *
+ * These are NOT Tailwind utilities — they're page chrome that needs to
+ * exist before JS or first paint. Equivalent to the dangerouslySetInnerHTML
+ * style block we used to inline in Layout.tsx.
+ */
+
+/* Theme-cycle button (Settings drawer footer).
+ *
+ * Three glyphs (system / light / dark) live in the DOM permanently; we
+ * show only the one whose data-glyph matches the button's data-theme
+ * attribute. Stacking + hiding via display rules (rather than swapping
+ * innerHTML in JS) keeps the button width stable across clicks and lets
+ * the optimistic theme flip in chat.js stay a one-line dataset write.
+ */
+#theme-cycle > svg[data-glyph] {
+  display: none;
+}
+#theme-cycle[data-theme="system"] > svg[data-glyph="system"],
+#theme-cycle[data-theme="light"] > svg[data-glyph="light"],
+#theme-cycle[data-theme="dark"] > svg[data-glyph="dark"] {
+  display: inline-block;
+}
+
+.msg-reasoning {
+  margin: 0.25rem 0 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--bg) 90%, var(--brand) 10%);
+  overflow: hidden;
+}
+.msg-reasoning summary {
+  cursor: pointer;
+  padding: 0.55rem 0.75rem;
+  color: var(--fg-mut);
+  font-size: 0.78rem;
+  font-weight: 600;
+  list-style-position: inside;
+}
+.msg-reasoning__body {
+  margin: 0;
+  padding: 0 0.75rem 0.75rem;
+  white-space: pre-wrap;
+  color: var(--fg-mut);
+  font: 0.78rem/1.45 var(--font-mono);
+}
+
+.session-resume-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 3px solid color-mix(in srgb, var(--fg-mut) 22%, transparent);
+  border-top-color: var(--brand);
+  animation: session-resume-spin 700ms linear infinite;
+}
+@keyframes session-resume-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .session-resume-spinner { animation-duration: 1.8s; }
+}
+
+/* Agent-thinking indicator (#agent-thinking).
+ *
+ * Three dots that pulse in sequence (~1.2s cycle). Pinned to the bottom
+ * of the message log, only visible when chat.js flips data-show="1" —
+ * which happens during the gap between user submit and first stream
+ * token, and again between tool-call sequences when there's a perceptible
+ * pause. Hides the moment streaming text arrives.
+ *
+ * Sized small (5px dots) and dimmed (--color-fg-mut) so it reads as
+ * "subtle progress hint", not "loading screen". prefers-reduced-motion
+ * users get a static row at constant opacity (no pulse).
+ */
+.agent-thinking__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-fg-mut);
+  opacity: 0.35;
+  animation: agent-thinking-pulse 1.2s ease-in-out infinite;
+}
+.agent-thinking__dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.agent-thinking__dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes agent-thinking-pulse {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 0.85; transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-thinking__dot { animation: none; opacity: 0.5; }
+}
+
+/* Inline Browser Run replay player.
+ *
+ * Mounted by Chat.svelte's trusted tool-result widget registry into every
+ * browser_open tool card (live + history) as an <iframe> pointing at
+ * /browser/replay/:id?embed=1. Sized to be visible
+ * inside the expanded card without leaking layout — fixed-height with a
+ * thin themed border, matching the rest of the tool-call cards. There is
+ * no separate "open replay" link or button; the player IS the proof.
+ *
+ */
+.tool-call__browser-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: pre-wrap;
+}
+.tool-call__browser-summary strong { color: var(--color-fg); }
+.tool-call__browser-summary span { color: var(--color-fg-mut); }
+
+.browser-replay-frame {
+  display: block;
+  width: 100%;
+  height: 520px;
+  margin-top: 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: #0b0d12;
+}
+.svelte-artifact-stage {
+  position: relative;
+  margin-top: 8px;
+}
+.svelte-artifact-frame {
+  display: block;
+  width: 100%;
+  height: 360px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: #0b0d12;
+}
+.svelte-artifact-fullscreen {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 9px;
+  background: rgba(11, 13, 18, 0.78);
+  color: #e9e9ec;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.svelte-artifact-fullscreen:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(26, 29, 36, 0.92);
+}
+.svelte-artifact-fullscreen svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.svelte-artifact-shell[data-fullscreen="1"] {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  margin: 0;
+  background: #000;
+  overscroll-behavior: contain;
+}
+.svelte-artifact-shell[data-fullscreen="1"] .tool-call__browser-summary {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: calc(max(12px, env(safe-area-inset-right)) + 50px);
+  z-index: 2;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  pointer-events: none;
+}
+.svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-stage {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+}
+.svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-fullscreen {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 3;
+}
+.svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-frame {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+@media (max-width: 639px) {
+  /* Keep the proof useful without making one replay card consume nearly the
+   * entire phone viewport. The embedded route reserves its own control bar. */
+  .browser-replay-frame { height: 420px; }
+}
+
+/* Live voice mode — the single audio surface (replaced read-aloud). */
+.voice-mode-button[data-active="1"] { position: relative; }
+.voice-mode-button__live {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: scale(var(--voice-level, .4));
+  transition: transform 70ms linear;
+  box-shadow: 0 0 0 7px color-mix(in srgb, currentColor 12%, transparent);
+}
+.voice-mode-button[data-status="speaking"] .voice-mode-button__live { border-radius: 3px; }
+.voice-mode-interim {
+  display: flex;
+  gap: 8px;
+  min-height: 20px;
+  padding: 0 2px 5px;
+  color: var(--color-fg-mut);
+  font-size: 12px;
+  line-height: 1.25;
+}
+.voice-mode-interim__state {
+  flex: none;
+  color: var(--color-brand);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 10px;
+  font-weight: 600;
+  padding-top: 1px;
+}
+
+/* Send/Stop/Done button glyph swap.
+ *
+ * The send button is the SINGLE visual indicator of agent status — there
+ * is no longer a separate text status bar. All three glyphs live in the
+ * DOM; CSS reveals only the one matching #send[data-status].
+ *
+ *   data-status=idle     → send (paper-airplane)
+ *   data-status=offline  → send (dimmed via button background utility)
+ *   data-status=thinking → stop (rounded square)
+ *   data-status=running  → stop
+ *   data-status=shell    → stop
+ *   data-status=error    → stop (red bg)
+ *   data-status=done     → done (checkmark)
+ *
+ * Hide all by default; show the matching one. */
+#send > svg[data-glyph] {
+  display: none;
+}
+#send[data-status="idle"] > svg[data-glyph="send"],
+#send[data-status="offline"] > svg[data-glyph="send"],
+#send[data-status="thinking"] > svg[data-glyph="stop"],
+#send[data-status="running"] > svg[data-glyph="stop"],
+#send[data-status="shell"] > svg[data-glyph="stop"],
+#send[data-status="error"] > svg[data-glyph="stop"],
+#send[data-status="done"] > svg[data-glyph="done"] {
+  display: inline-block;
+}
+
+/* ─── Busy-state pulse ──────────────────────────────────────────────────
+ *
+ * Whenever the agent is actively working (thinking / running / shell),
+ * the send button pulses so "the agent is busy" is instantly legible
+ * even from peripheral vision. Two effects on the same 1.4s cadence:
+ *
+ *   1. Expanding box-shadow ring (brand orange, fading out). Uses
+ *      `box-shadow` so it draws OUTSIDE the button's rounded-lg
+ *      clip without affecting layout. The ring radiates ~10px so
+ *      it's visible but doesn't crowd the composer.
+ *   2. Subtle ±5% scale "breathe" on the stop glyph inside. Cues
+ *      "live" without reading as a click animation.
+ *
+ * Three states do NOT pulse:
+ *   error    — terminal/stuck; steady red is the right read.
+ *   done     — flashes briefly, then flips back to idle.
+ *   offline  — nothing to wait on.
+ *
+ * Reduced motion: the @media rule under @layer base zeroes all
+ * animation-duration. The glyph + color shift still convey the state;
+ * we just lose the motion cue. That's the right behavior. */
+@keyframes my-ax-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(246, 130, 31, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(246, 130, 31, 0);
+  }
+}
+@keyframes my-ax-pulse-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(0.92); }
+}
+#send[data-status="thinking"],
+#send[data-status="running"],
+#send[data-status="shell"] {
+  animation: my-ax-pulse-ring 1.4s ease-out infinite;
+  /* Required so the ring's box-shadow draws above neighboring elements
+   * (the textarea sits to the left and would otherwise occlude the
+   * left half of the ring). */
+  position: relative;
+  z-index: 1;
+}
+#send[data-status="thinking"] > svg[data-glyph="stop"],
+#send[data-status="running"] > svg[data-glyph="stop"],
+#send[data-status="shell"] > svg[data-glyph="stop"] {
+  animation: my-ax-pulse-breathe 1.4s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: rgba(246, 130, 31, 0.35);
+    color: var(--color-fg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  /* Slim themed scrollbar, only on hover. Uses --color-line so it adapts
+   * to whichever theme is active. */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-fg-mut);
+    opacity: 0.4;
+  }
+}
+
+
+/* Stable iOS Safari/PWA shell. Keep the app in normal flow on the smallest
+ * viewport so the footer is visible on initial load; focusout resets any iOS
+ * root scroll left behind after keyboard dismissal. */
+.app-viewport {
+  min-height: 100svh;
+  height: 100svh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* apple-mobile-web-app-status-bar-style=black-translucent lets the app draw
+ * underneath the OS status bar. Reserve the top safe area on chrome. */
+.safe-area-appbar {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+  min-height: calc(48px + env(safe-area-inset-top));
+}
+/* macOS installed-app traffic lights sit on native white chrome that web CSS
+ * cannot repaint. Match it in light mode so the title bar reads as one plane. */
+.light .safe-area-appbar {
+  background-color: #ffffff;
+}
+
+.safe-area-composer {
+  /* Clear the iPhone's curved home-indicator area while the keyboard is shut. */
+  padding-bottom: calc(env(safe-area-inset-bottom) + 45px);
+}
+
+/* The keyboard already provides its own inset. Remove the entire footer buffer
+ * while it is visible so the composer sits directly above it like native UI. */
+.keyboard-open .safe-area-composer {
+  padding-bottom: 0;
+}
+
+
+/* Desktop installed PWA: opt into Window Controls Overlay when the browser
+ * supports it. The app bar becomes the draggable titlebar while every
+ * interactive child is explicitly marked no-drag so buttons stay clickable. */
+@media (display-mode: window-controls-overlay) {
+  .safe-area-appbar {
+    -webkit-app-region: drag;
+    min-height: 48px;
+    padding-top: 0.5rem;
+    padding-left: max(0.75rem, env(titlebar-area-x, 0px));
+    padding-right: max(0.75rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 0.75rem));
+  }
+  .safe-area-appbar :is(a, button, input, select, textarea, [role="button"], [role="dialog"]) {
+    -webkit-app-region: no-drag;
+  }
+}

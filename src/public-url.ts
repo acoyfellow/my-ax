@@ -1,0 +1,27 @@
+// Shared server-side destination policy for user/model supplied URLs.
+// This is a fail-closed literal-host check. Redirect consumers must also
+// validate the final URL because a public origin can redirect to a forbidden
+// destination. DNS-level private resolution requires infrastructure support
+// and must not be implied by this helper.
+
+export function isPrivateHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1" || host === "0.0.0.0") return true;
+  if (/^(?:127|10)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return true;
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 0 || a >= 224) return true;
+  }
+  return host.includes(":") && (host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("::ffff:"));
+}
+
+export function safePublicHttpUrl(raw: string, options: { httpsOnly?: boolean } = {}): URL | null {
+  try {
+    const url = new URL(raw);
+    const protocolAllowed = options.httpsOnly ? url.protocol === "https:" : url.protocol === "https:" || url.protocol === "http:";
+    if (!protocolAllowed || url.username || url.password || isPrivateHostname(url.hostname)) return null;
+    return url;
+  } catch { return null; }
+}

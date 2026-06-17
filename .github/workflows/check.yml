@@ -1,0 +1,25 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify:public
+      # Build assets + typecheck + unit/widget smoke tests.
+      - run: npm run check
+      - name: Validate Wrangler bundle/config
+        run: npx wrangler deploy --dry-run --outdir /tmp/my-ax-worker
+      - name: Build Sandbox container
+        run: docker build -t my-ax-ci .

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["@types/node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
+
+    // Hono JSX runtime — renders <X /> components as HTML strings server-side
+    // inside the Worker. No React, no virtual DOM, no client-side hydration:
+    // the JSX returns a string we hand to c.html(). Browser-side interactivity
+    // is plain JS imported via esm.sh (PartySocket, marked, cloudterm, …).
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "dist"]
+}

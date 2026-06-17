@@ -1,0 +1,53 @@
+# .dev.vars.example — copy to `.dev.vars` and fill in.
+#   cp .dev.vars.example .dev.vars
+# `.dev.vars` is gitignored; never commit real secrets. For production use
+# `wrangler secret put <NAME>` instead of this file.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# REQUIRED (core) — the worker refuses to boot without these two.
+# ─────────────────────────────────────────────────────────────────────────
+
+# Signs short-lived connector bridge tickets. Any long random string.
+#   openssl rand -hex 32
+BRIDGE_JWT_SECRET="replace-with-32-bytes-hex"
+
+# Encrypts stored OAuth tokens at rest. Any long random string.
+#   openssl rand -hex 32
+MASTER_KEY="replace-with-32-bytes-hex"
+
+# ─────────────────────────────────────────────────────────────────────────
+# MODELS — the product exposes one curated list. Provider/gateway plumbing is
+# operator configuration, not user-facing UI. Workers AI handles Kimi/GLM;
+# configure a compatible gateway to authorize Opus/GPT/Kindle model ids.
+# LLM_GATEWAY_URL="https://your-gateway.example.com/openai"
+# LLM_GATEWAY_TOKEN="..."
+# LLM_GATEWAY_AUTH_HEADER="authorization"
+
+# ─────────────────────────────────────────────────────────────────────────
+# ACCESS / AUTH — required to gate the app behind Cloudflare Access.
+# Set these to YOUR Zero Trust team + Access application. Local dev can use
+# the dev bypass (DEV_USER_EMAIL) instead; see docs/local-development.md.
+# ─────────────────────────────────────────────────────────────────────────
+
+# Your Access team's issuer, e.g. https://<your-team>.cloudflareaccess.com
+CF_ACCESS_ISS="https://your-team.cloudflareaccess.com"
+# The AUD tag of the Access application protecting this worker's hostname.
+CF_ACCESS_AUD="your-access-application-aud-tag"
+# Local-dev only: short-circuit Access to this identity on `--env dev`.
+DEV_USER_EMAIL="you@example.com"
+ENVIRONMENT="development"
+
+# ─────────────────────────────────────────────────────────────────────────
+# OPTIONAL — only needed for specific features.
+# ─────────────────────────────────────────────────────────────────────────
+
+# Web Push (notify_owner). Generate a VAPID keypair (e.g. `npx web-push
+# generate-vapid-keys`). Omit to disable push.
+# VAPID_SUBJECT="mailto:you@example.com"
+# VAPID_PUBLIC_KEY="..."
+# VAPID_PRIVATE_KEY="..."
+
+# Workspace snapshots to R2 (durable /home/user across container recycles).
+# R2 access keys with the backup bucket scope. Omit to disable snapshots.
+# R2_ACCESS_KEY_ID="..."
+# R2_SECRET_ACCESS_KEY="..."

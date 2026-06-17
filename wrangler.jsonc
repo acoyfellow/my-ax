@@ -1,0 +1,253 @@
+// my-ax — Cloudflare Workers config (public/self-host engine).
+//
+// Deploy: wrangler deploy
+// Local dev: wrangler dev (uses .dev.vars). Local dev requires Docker.
+//
+// Required secrets (provision via `wrangler secret put`):
+//   - BRIDGE_JWT_SECRET     # openssl rand -base64 32 (signs bridge tickets)
+//   - MASTER_KEY            # openssl rand -base64 32 (encrypts OAuth tokens)
+//   - R2_ACCESS_KEY_ID      # R2 S3 creds for sandbox workspace snapshots
+//   - R2_SECRET_ACCESS_KEY  # R2 S3 creds for sandbox workspace snapshots
+//   - VAPID_SUBJECT / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY  # web push
+// Optional model-gateway secret:
+//   - LLM_GATEWAY_TOKEN    # enables the curated gateway-backed models
+//
+// Required at-deploy vars (override below or via `wrangler deploy --var`):
+//   - CLOUDFLARE_ACCOUNT_ID # your Cloudflare account id
+//   - CF_ACCESS_AUD         # Access app AUD if you front this with Access
+//   - CF_ACCESS_ISS         # Access team domain, e.g. https://<team>.example.com
+//   - BRIDGE_BASE_URL       # public origin of this deploy
+//
+// MODELS:
+//   - src/models.ts ships one curated list: Kimi K2.6, GLM 5.1,
+//     Opus 4.8, GPT-5.5, Kindle Alpha API, and Mercury Alpha. Routing stays hidden.
+//
+// CONNECTORS:
+//   - Public engine ships an EMPTY built-in registry. Users add their own
+//     MCP servers via Settings → Connectors; tokens are stored per-user in
+//     OAuthClientDO with auto-DCR when the upstream advertises it.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-ax",
+  "main": "src/index.tsx",
+  // Compatibility date current enough for Containers + Sandbox SDK features.
+  "compatibility_date": "2026-04-21",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Custom domain. wrangler's custom_domain:true auto-creates DNS A/AAAA +
+  // cert. Empty by default — set to your hostname (e.g.
+  //   { "pattern": "ax.example.com", "custom_domain": true }
+  // ) before deploy. The README documents ax.coey.dev as the author's
+  // personal instance; pick your own host.
+  "routes": [],
+
+  // Public template uses the workers.dev URL until an operator configures a custom domain.
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // account_id intentionally not pinned at the file level. Set via
+  // CLOUDFLARE_ACCOUNT_ID env var or `wrangler deploy --account-id ...`.
+
+  "vars": {
+    // Plain (non-secret) vars. Populate at deploy time via `--var` or by
+    // editing this block before deploying. Empty strings mean "must be
+    // provided by the operator" — the auth middleware will reject every
+    // request until CF_ACCESS_AUD/ISS are set if you front with Access.
+    "CF_ACCESS_AUD": "",
+    "CF_ACCESS_ISS": "",
+    "BRIDGE_BASE_URL": "",
+    "ENVIRONMENT": "production",
+    // Optional AI Gateway id (creates one in dash → AI Gateway). Without
+    // it, Workers AI traffic goes direct.
+    "CLOUDFLARE_AI_GATEWAY_ID": "",
+    // Required for R2 sandbox snapshot presigned URLs.
+    "CLOUDFLARE_ACCOUNT_ID": "",
+    "BACKUP_BUCKET_NAME": "my-ax-homes"
+  },
+
+  // Workers AI binding. Account-level. The Worker's deployment identity
+  // is the principal calling Workers AI — no per-user model key.
+  "ai": { "binding": "AI" },
+  // Browser Run: hosted headless Chrome sessions for visual tool calls.
+  "browser": { "binding": "BROWSER" },
+  // Dynamic Worker loader for native Think Agent Skills script execution.
+  // Runner defaults remain bounded: no network/tools and read-only workspace.
+  "worker_loaders": [{ "binding": "LOADER" }],
+
+  // Cloudflare Containers — Sandbox SDK runtime image (per-user shell).
+  // The image is built from ./Dockerfile, which extends
+  // docker.io/cloudflare/sandbox:0.12.1. The Sandbox SDK ships a base
+  // container that already speaks the SDK's HTTP+WS protocol, so we just
+  // FROM it. One Sandbox DO instance per user-email handles the
+  // exec/readFile/writeFile API; workspace restore is orchestrated
+  // in src/workspace.ts.
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "name": "my-ax-sandbox",
+      "max_instances": 50,
+      // Conservative public default for personal deployments. Private wrappers
+      // can opt into larger instance types for heavier workloads.
+      "instance_type": "basic"
+    }
+  ],
+
+  // R2 buckets — Sandbox workspace backups + user upload storage.
+  // Create with:
+  //   wrangler r2 bucket create my-ax-homes
+  //   wrangler r2 bucket create my-ax-uploads
+  "r2_buckets": [
+    {
+      "binding": "BACKUP_BUCKET",
+      "bucket_name": "my-ax-homes"
+    },
+    {
+      "binding": "USER_UPLOADS",
+      "bucket_name": "my-ax-uploads"
+    }
+  ],
+
+  // Static assets. The Worker no longer ships hand-written JS — the chat
+  // surface is Svelte 5 (proof/svelte/, hydrated from /__svelte/<id>.<hash>.js
+  // routes served by the Worker itself). `public/` holds fonts, brand
+  // assets, the generated tailwind output (`styles.css`), the service
+  // worker, manifest.webmanifest, and a few favicons.
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": true
+  },
+
+  // Durable Object bindings
+  "durable_objects": {
+    "bindings": [
+      // Per-user root. Conversation MyAgent Think runtimes run as facets
+      // inside this root, keyed by session id.
+      { "name": "USER_AGENT", "class_name": "UserAgent" },
+      // Read-only migration bridge: direct pre-facet MyAgent namespace.
+      // Remove after all legacy D1 session rows have been opened/imported.
+      { "name": "LEGACY_MY_AGENT", "class_name": "MyAgent" },
+      { "name": "OAUTH_CLIENT", "class_name": "OAuthClientDO" },
+      // One outbound-connected local laptop per authenticated user.
+      { "name": "MACHINE_HOST", "class_name": "MachineHost" },
+      // Sandbox DO from @cloudflare/sandbox — paired with the container
+      // block above. Each instance (idFromName(email)) is one user's
+      // persistent computer.
+      { "name": "SANDBOX", "class_name": "Sandbox" },
+      // Direct-routed voice DO; delegates turns into the MyAgent facet by RPC.
+      { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
+    ]
+  },
+
+  // Active DO classes.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["MyAgent", "OAuthClientDO", "Sandbox"] },
+    { "tag": "v2-machinectl", "new_sqlite_classes": ["MachineHost"] },
+    { "tag": "v3-user-agent", "new_sqlite_classes": ["UserAgent"] },
+    { "tag": "v4-voice-proof", "new_sqlite_classes": ["VoiceProofAgent"] },
+    { "tag": "v5-voice-think", "new_sqlite_classes": ["VoiceThinkAgent"] },
+    { "tag": "v6-fold-voice-into-myagent", "deleted_classes": ["VoiceThinkAgent"] },
+    { "tag": "v7-voice-ladder", "new_sqlite_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
+    { "tag": "v8-remove-voice-ladder", "deleted_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
+    { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
+    { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] }
+  ],
+
+  // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
+  // and paste the id below before your first deploy.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-ax-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+
+  // KV — audit receipts (90d TTL, see bridge.ts writeAuditReceipt).
+  // Create with `wrangler kv namespace create AUDIT_KV`.
+  "kv_namespaces": [
+    { "binding": "AUDIT_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+
+  // Version metadata — gives the worker its own deploy version id at
+  // runtime. Surfaced via GET /api/system so the Settings drawer can
+  // show "Worker version: <id>". Auto-populated by Cloudflare on every
+  // deploy; no manual bumping. See:
+  //   https://developers.cloudflare.com/workers/runtime-apis/bindings/version-metadata/
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+
+  // Local dev — bypasses Access when ENVIRONMENT=dev AND ISS+AUD empty AND DEV_USER_EMAIL set
+  "env": {
+    "dev": {
+      "name": "my-ax-dev",
+      "vars": {
+        "ENVIRONMENT": "dev",
+        "CF_ACCESS_AUD": "",
+        "CF_ACCESS_ISS": "",
+        "DEV_USER_EMAIL": "dev@localhost",
+        "BRIDGE_BASE_URL": "http://localhost:8788",
+        "CLOUDFLARE_AI_GATEWAY_ID": "",
+        "CLOUDFLARE_ACCOUNT_ID": "",
+        "BACKUP_BUCKET_NAME": "my-ax-homes"
+      },
+      "ai": { "binding": "AI" },
+      "browser": { "binding": "BROWSER" },
+      "worker_loaders": [{ "binding": "LOADER" }],
+      "assets": {
+        "directory": "public",
+        "binding": "ASSETS",
+        "not_found_handling": "none",
+        "run_worker_first": true
+      },
+      "containers": [
+        {
+          "class_name": "Sandbox",
+          "image": "./Dockerfile",
+          "name": "my-ax-sandbox-dev",
+          "max_instances": 5,
+          "instance_type": "basic"
+        }
+      ],
+      // Dev env must redeclare ALL DO bindings — wrangler does not inherit
+      // them from the top-level config. Same is true for kv/r2/d1.
+      "durable_objects": {
+        "bindings": [
+          { "name": "USER_AGENT", "class_name": "UserAgent" },
+          { "name": "LEGACY_MY_AGENT", "class_name": "MyAgent" },
+          { "name": "OAUTH_CLIENT", "class_name": "OAuthClientDO" },
+          { "name": "MACHINE_HOST", "class_name": "MachineHost" },
+          { "name": "SANDBOX", "class_name": "Sandbox" },
+          { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["MyAgent", "OAuthClientDO", "Sandbox"] },
+        { "tag": "v2-machinectl", "new_sqlite_classes": ["MachineHost"] },
+        { "tag": "v3-user-agent", "new_sqlite_classes": ["UserAgent"] },
+        { "tag": "v4-voice-proof", "new_sqlite_classes": ["VoiceProofAgent"] },
+        { "tag": "v5-voice-think", "new_sqlite_classes": ["VoiceThinkAgent"] },
+        { "tag": "v6-fold-voice-into-myagent", "deleted_classes": ["VoiceThinkAgent"] },
+        { "tag": "v7-voice-ladder", "new_sqlite_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
+        { "tag": "v8-remove-voice-ladder", "deleted_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
+        { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
+        { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] }
+      ],
+      "kv_namespaces": [
+        { "binding": "AUDIT_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+      ],
+      "r2_buckets": [
+        { "binding": "BACKUP_BUCKET", "bucket_name": "my-ax-homes" },
+        { "binding": "USER_UPLOADS", "bucket_name": "my-ax-uploads" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "my-ax-db",
+          "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+        }
+      ]
+    }
+  }
+}

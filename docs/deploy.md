@@ -1,0 +1,174 @@
+# Deploying My AX
+
+My AX deploys to your Cloudflare account from a Wrangler-authenticated workstation. The supported bootstrap creates a **locked** deployment first; production remains unusable until you configure Cloudflare Access and the required persistence credentials.
+
+## Requirements
+
+- Node.js 22+
+- npm 11+
+- Docker, Colima, or WSL2
+- Python 3, Bash, and OpenSSL
+- Wrangler authentication
+- Cloudflare Workers, Containers, D1, KV, R2, Workers AI, Browser, and Worker Loader access
+
+## 1. Bootstrap resources and a locked Worker
+
+```bash
+git clone https://github.com/acoyfellow/my-ax
+cd my-ax
+npm ci
+
+npx wrangler login
+bash scripts/setup.sh
+```
+
+The setup script:
+
+1. creates or resolves D1, KV, and R2 resources;
+2. writes their IDs into the local Wrangler configuration;
+3. generates `BRIDGE_JWT_SECRET` and `MASTER_KEY`;
+4. applies D1 migrations;
+5. deploys the Worker.
+
+The first production deployment intentionally fails closed because `CF_ACCESS_ISS` and `CF_ACCESS_AUD` are empty.
+
+## 2. Configure the hostname and Cloudflare Access
+
+Choose a hostname. For a custom domain, set:
+
+```jsonc
+"routes": [
+  { "pattern": "ax.example.com", "custom_domain": true }
+]
+```
+
+Wrangler provisions the custom-domain DNS and certificate when the zone is available in the deployment account. Alternatively, keep `workers_dev: true` for an initial Worker URL.
+
+Create a Zero Trust **Self-hosted** Access application for the final hostname. Set these Wrangler variables:
+
+```jsonc
+"vars": {
+  "CF_ACCESS_ISS": "https://YOUR-TEAM.cloudflareaccess.com",
+  "CF_ACCESS_AUD": "YOUR_ACCESS_APPLICATION_AUD",
+  "BRIDGE_BASE_URL": "https://ax.example.com",
+  "CLOUDFLARE_ACCOUNT_ID": "YOUR_ACCOUNT_ID",
+  "BACKUP_BUCKET_NAME": "my-ax-homes"
+}
+```
+
+Production requests remain rejected if the Access issuer or audience is absent. The `--env dev` configuration is the only local identity bypass.
+
+## 3. Configure durable workspace snapshots
+
+The R2 binding stores backup objects, but Cloudflare Sandbox snapshot transfer also needs bucket-scoped S3 credentials.
+
+Create an R2 API token with **Object Read & Write** access limited to the `my-ax-homes` bucket, then set:
+
+```bash
+npx wrangler secret put R2_ACCESS_KEY_ID
+npx wrangler secret put R2_SECRET_ACCESS_KEY
+```
+
+My AX fails loudly when either credential is absent rather than pretending workspace persistence is healthy.
+
+## 4. Configure Web Push
+
+Generate a VAPID P-256 key pair using a trusted Web Push key generator, then set:
+
+```bash
+npx wrangler secret put VAPID_SUBJECT       # mailto:you@example.com
+npx wrangler secret put VAPID_PUBLIC_KEY
+npx wrangler secret put VAPID_PRIVATE_KEY
+```
+
+Push is optional for basic chat, but completion attention, background decisions, and app badges need these values.
+
+## 5. Configure model routing
+
+Workers AI-backed models use the `AI` binding. Gateway-backed catalog entries require deployment-owned gateway configuration and credentials. Remove or disable routes you do not configure; users never enter provider keys in the product UI.
+
+The exact gateway contract is deployment-specific and should be injected outside the tracked public tree.
+
+## 6. Optional providers
+
+### My Machine
+
+`machinectl` is a separate optional companion: <https://github.com/acoyfellow/machinectl>.
+
+It connects outbound to My AX and publishes a live capability catalog. Configure and run it only on a computer whose local authority you intend to expose. My Machine is terminal-equivalent authority, not a sandbox.
+
+### Cloudbox
+
+A compatible Cloudbox deployment adds bounded repository runs to Work Code Mode. Configure:
+
+```jsonc
+"vars": {
+  "CLOUDBOX_URL": "https://your-cloudbox.example.com"
+}
+```
+
+Then set the shared deployment secret:
+
+```bash
+npx wrangler secret put CLOUDBOX_INTERNAL_TOKEN
+```
+
+The same value must be configured on Cloudbox. Current integration methods create a live run, read and write relative files, and execute bounded commands. Cloudbox is optional; My AX Workspace and connected MCPs work without it.
+
+## 7. Deploy and verify
+
+```bash
+npm run check
+npm run verify:public
+npm run deploy
+```
+
+Verify both boundaries:
+
+1. an unauthenticated request is redirected or rejected by Access;
+2. an authenticated `GET /api` returns `{ "ok": true }` from My AX itself.
+
+Applying Access only at the edge is insufficient if the Worker's configured issuer or audience is stale.
+
+## Updates
+
+```bash
+git pull --ff-only
+npm ci
+npm run check
+npx wrangler d1 migrations apply my-ax-db --remote
+npm run deploy
+```
+
+Treat `MASTER_KEY` as durable state. Rotating it currently makes existing encrypted connector grants unreadable and requires users to authorize them again.
+
+## Troubleshooting
+
+### Authentication error `10000`
+
+Wrangler's token expired or targets the wrong account:
+
+```bash
+npx wrangler whoami
+npx wrangler login
+```
+
+### Container build failed
+
+Inspect Docker/Colima health and the Wrangler build output. The Sandbox image is Linux/AMD64.
+
+### Worker returns an auth error after Access succeeds
+
+Confirm `CF_ACCESS_ISS` and `CF_ACCESS_AUD` match the Access application protecting the deployed hostname.
+
+### Workspace restore is unavailable
+
+Confirm both R2 S3 secrets are set and scoped to the configured backup bucket. An R2 binding by itself is not enough for presigned snapshot transfer.
+
+### Roll back
+
+```bash
+npx wrangler deployments list
+```
+
+Use the Cloudflare dashboard's Worker deployment history to select and roll back to a previous version.
