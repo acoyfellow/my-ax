@@ -16,9 +16,9 @@ My AX stores its application state, workspace backups, OAuth grants, and configu
 
 ## A Deployed Run
 
-[![A deployed My AX conversation showing Work Code Mode calls to My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-kitchen-sink.png)](./docs/media/my-ax-kitchen-sink.mp4)
+[![A deployed My AX conversation showing Work Code Mode calls to My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
-[Open the accelerated MP4](./docs/media/my-ax-kitchen-sink.mp4). One `work_code` call wrote and read `/home/user`, ran `printf MACHINE_OK` through the connected machine, then created a Cloudbox run and read back `CLOUDBOX_OK`. The original interaction took about six seconds; the checked-in video is 5.2 seconds. This exercises one configured path, not the complete deployment or recovery surface.
+[Open the accelerated MP4](./docs/media/my-ax-kitchen-sink.mp4). One `work_code` call wrote and read `/home/user`, ran `printf MACHINE_OK` through the connected machine, then created a Cloudbox run and read back `CLOUDBOX_OK`. The original interaction took about six seconds; the checked-in video trims startup and runs for 3.4 seconds. This exercises one configured path, not the complete deployment or recovery surface.
 
 ## Current Surface
 
