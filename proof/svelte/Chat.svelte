@@ -12,6 +12,8 @@
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import { resolveToolResultWidget } from "./tool-result-widgets";
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
+  import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
+  import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import {
     setConn,
     setStatus,
@@ -802,10 +804,15 @@
     } catch {}
   }
 
+  const sessionGeneration = new SessionGenerationGuard();
+  const sessionWorkIsCurrent = (expected: SessionGeneration) =>
+    sessionGeneration.isCurrent(expected, localStorage.getItem(SESSION_KEY));
+
   async function bootstrap() {
     setConn("offline");
     showOAuthCallbackToast();
     const sessionId = await sessionForBootstrap();
+    sessionGeneration.activate(sessionId);
     if (!sessionId) {
       setConn("live");
       return;
@@ -820,6 +827,7 @@
   // history via cf_agent_chat_messages. Avoids the re-download/re-parse jank.
   function switchToSession(id: string) {
     if (!id || id === localStorage.getItem(SESSION_KEY)) return;
+    sessionGeneration.activate(id);
     try { ws?.close(); } catch {}
     ws = null;
     activeRequestId = null;
@@ -1167,50 +1175,42 @@
     }
   }
 
+  const loadSessionEntries = (expected: SessionGeneration, maxPages: number) => loadCurrentSessionEntries<any>({
+    expected, isCurrent: sessionWorkIsCurrent, maxPages,
+    fetchPage: (after) => fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?after=${encodeURIComponent(after)}&limit=200`, { credentials: "include" }),
+  });
+
   async function hydrateHistoryTimestamps() {
-    const sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId) return;
+    const expected = sessionGeneration.capture();
+    if (!expected) return;
+    const result = await loadSessionEntries(expected, 10);
+    if (result.outcome === "stale") return;
     const timestamps = new Map<string, number>();
-    let after = "0";
-    for (let page = 0; page < 10; page++) {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/entries?after=${encodeURIComponent(after)}&limit=200`, { credentials: "include" });
-      if (!response.ok) return;
-      const body = await response.json();
-      const entries = body?.result?.entries ?? [];
-      for (const entry of entries) {
-        const uiMessageId = entry?.meta?.uiMessageId;
-        const timestamp = Date.parse(entry?.createdAt ?? "");
-        if (typeof uiMessageId === "string" && Number.isFinite(timestamp)) timestamps.set(uiMessageId, timestamp);
-      }
-      if (!body?.result?.hasMore || entries.length === 0) break;
-      after = body.result.nextCursor;
+    for (const entry of result.entries) {
+      const uiMessageId = entry?.meta?.uiMessageId;
+      const timestamp = Date.parse(entry?.createdAt ?? "");
+      if (typeof uiMessageId === "string" && Number.isFinite(timestamp)) timestamps.set(uiMessageId, timestamp);
     }
+    if (!sessionWorkIsCurrent(expected)) return;
     messages = messages.map((message) => ({ ...message, timestamp: timestamps.get(message.id) ?? message.timestamp }));
   }
 
-  async function restoreD1History(): Promise<boolean> {
-    const sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId) return false;
+  async function restoreD1History(expected = sessionGeneration.capture()): Promise<RestoreOutcome> {
+    if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
+    const result = await loadSessionEntries(expected, 20);
+    if (result.outcome === "stale") return "stale";
     const restored: Message[] = [];
-    let after = "0";
-    for (let page = 0; page < 20; page++) {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/entries?after=${after}&limit=200`, { credentials: "include" });
-      if (!response.ok) return false;
-      const body = await response.json();
-      const entries = body?.result?.entries ?? [];
-      for (const entry of entries) {
-        const role = entry.role === "tool" ? "system" : entry.role;
-        const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
-        restored.push({ id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false });
-      }
-      if (!body?.result?.hasMore || !entries.length) break;
-      after = body.result.nextCursor;
+    for (const entry of result.entries) {
+      const role = entry.role === "tool" ? "system" : entry.role;
+      const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
+      restored.push({ id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false });
     }
-    if (!restored.length) return false;
+    if (!sessionWorkIsCurrent(expected)) return "stale";
+    if (!restored.length) return "empty";
     messages = restored;
     onboardingHidden = true;
     pushSystem("Conversation restored from the durable transcript.");
-    return true;
+    return "restored";
   }
 
   // When Think compacts a long session it replays fewer messages than the
@@ -1218,23 +1218,16 @@
   // so on resume, if D1 holds more user turns than Think replayed, show the
   // full transcript for display while Think keeps its compacted model context.
   async function reconcileCompactedHistory(thinkUserTurns: number) {
-    const sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId) return;
+    const expected = sessionGeneration.capture();
+    if (!expected) return;
     try {
-      let after = "0"; let d1UserTurns = 0;
-      for (let page = 0; page < 20; page++) {
-        const r = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/entries?after=${after}&limit=200`, { credentials: "include" });
-        if (!r.ok) return;
-        const body = await r.json();
-        const entries = body?.result?.entries ?? [];
-        d1UserTurns += entries.filter((e: any) => e.role === "user").length;
-        if (!body?.result?.hasMore || !entries.length) break;
-        after = body.result.nextCursor;
-      }
+      const result = await loadSessionEntries(expected, 20);
+      if (result.outcome === "stale") return;
+      const d1UserTurns = result.entries.filter((entry: any) => entry.role === "user").length;
       // Only override the view if D1 genuinely has more conversation than Think
       // replayed, and we're still idle on this same session.
-      if (d1UserTurns > thinkUserTurns && !activeRequestId && localStorage.getItem(SESSION_KEY) === sessionId) {
-        await restoreD1History();
+      if (d1UserTurns > thinkUserTurns && !activeRequestId && sessionWorkIsCurrent(expected)) {
+        await restoreD1History(expected);
       }
     } catch {}
   }
@@ -1252,7 +1245,9 @@
         void reconcileCompactedHistory(thinkUserTurns);
       }
     } else if (resumingExistingSession) {
-      void restoreD1History().then((restored) => { if (!restored) pushError("This conversation has no recoverable transcript. Start a new conversation or choose another session."); });
+      void restoreD1History().then((outcome) => {
+        if (shouldReportEmptyRestore(outcome)) pushError("This conversation has no recoverable transcript. Start a new conversation or choose another session.");
+      });
     }
     resumingExistingSession = false;
     const seenViewIds = new Map<string, number>();
