@@ -1345,6 +1345,10 @@
         content: chunk.output ?? chunk.errorText ?? "",
         isError: chunk.type === "tool-output-error",
       });
+      // Tool output can create or resolve owner attention (notably ask_user).
+      // Reconcile from the durable decision index immediately instead of
+      // waiting for a reload/session switch or trusting tool payload shape.
+      void refreshPendingDecision(localStorage.getItem(SESSION_KEY));
     } else if (chunk.type === "finish") {
       finalizeStreaming();
     }
@@ -1680,6 +1684,10 @@
       if (target) followDeepLink(target);
     };
     const onServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === "my-ax:attention") {
+        void refreshPendingDecision(localStorage.getItem(SESSION_KEY));
+        return;
+      }
       if (event.data?.type !== "my-ax:navigate" || typeof event.data.href !== "string") return;
       const target = parseMyAxDeepLink(event.data.href, location.href);
       if (target) followDeepLink(target);
