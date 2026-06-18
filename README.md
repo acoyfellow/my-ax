@@ -14,12 +14,6 @@ work_search · work_code
 
 My AX stores its application state, workspace backups, OAuth grants, and configuration in the operator's Cloudflare account. Connected MCP servers, Cloudbox, model providers, and a physical machine retain their own execution and data boundaries.
 
-## How Work Moves
-
-[![Animated My AX explainer connecting one durable conversation to My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-startup-explainer.gif)](./docs/media/my-ax-startup-explainer.mp4)
-
-[Open the 15.8-second MP4](./docs/media/my-ax-startup-explainer.mp4). The checked-in [D3 scene](./docs/media/startup-explainer.html) drives the same deterministic timeline used for the recording: a turn enters the Think agent, `work_search` and `work_code` select methods, and calls fan out to the three work providers.
-
 ## A Deployed Run
 
 [![A deployed My AX conversation showing Work Code Mode calls to My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
