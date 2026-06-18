@@ -1,6 +1,7 @@
 import { getSandbox, type DirectoryBackup, type Sandbox } from "@cloudflare/sandbox";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
+import { publishWorkspaceSnapshot } from "./workspace-snapshot";
 
 export const WORKSPACE_HOME = "/home/user";
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -81,7 +82,6 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
 }
 
 export async function snapshotUserWorkspace(env: Env, identity: AccessIdentity, name = "auto") {
-  const snapshotVersion = Date.now() * 1000 + crypto.getRandomValues(new Uint16Array(1))[0];
   const { sandbox } = await getUserWorkspace(env, identity, { restoreLatest: false });
   const backup = await sandbox.createBackup({
     dir: WORKSPACE_HOME,
@@ -92,12 +92,7 @@ export async function snapshotUserWorkspace(env: Env, identity: AccessIdentity, 
     compression: { format: "zstd" },
     multipart: true,
   });
-  await env.DB.prepare(
-    `INSERT INTO workspace_snapshots(owner_email, backup_id, backup_dir, snapshot_version, created_at, updated_at)
-     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-     ON CONFLICT(owner_email) DO UPDATE SET backup_id=excluded.backup_id, backup_dir=excluded.backup_dir, snapshot_version=excluded.snapshot_version, updated_at=datetime('now')
-     WHERE workspace_snapshots.snapshot_version < excluded.snapshot_version`,
-  ).bind(key(identity), backup.id, backup.dir, snapshotVersion).run();
+  await publishWorkspaceSnapshot(env.DB, key(identity), backup);
   return backup;
 }
 
