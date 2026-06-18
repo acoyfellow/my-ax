@@ -36,6 +36,7 @@ export interface BridgeTicketClaims {
   scope: string[];
   iat: number;
   exp: number;
+  jti: string;
 }
 
 const TICKET_TTL_SECONDS = 5 * 60;
@@ -68,6 +69,7 @@ export async function mintBridgeTicket(
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt(now)
     .setExpirationTime(now + TICKET_TTL_SECONDS)
+    .setJti(crypto.randomUUID())
     .sign(key);
 }
 
@@ -91,6 +93,9 @@ async function verifyBridgeTicket(
       "InsufficientScope",
       `Ticket scope ${JSON.stringify(claims.scope)} does not include "${REQUIRED_SCOPE}". Plain agent session tickets are not accepted.`,
     );
+  }
+  if (typeof claims.jti !== "string" || !claims.jti) {
+    throw new BridgeError("MissingTicketId", "Bridge ticket has no replay-protection identifier.");
   }
   return claims;
 }
@@ -144,6 +149,17 @@ export async function handleBridgeRequest(
     );
     if (claims.identity.email.toLowerCase() !== callerIdentity.email.toLowerCase() || claims.identity.sub !== callerIdentity.sub) {
       throw new BridgeError("TicketSubjectMismatch", "Bridge ticket subject does not match the authenticated Access caller");
+    }
+    // Consume the ticket before resolving credentials or making an upstream
+    // request. The primary key makes concurrent replays fail atomically.
+    try {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM bridge_ticket_uses WHERE expires_at < ?").bind(Math.floor(Date.now() / 1000)),
+        env.DB.prepare("INSERT INTO bridge_ticket_uses(jti, owner_email, expires_at) VALUES (?, ?, ?)")
+          .bind(claims.jti, claims.identity.email.toLowerCase(), claims.exp),
+      ]);
+    } catch {
+      throw new BridgeError("TicketReplay", "Bridge ticket has already been used");
     }
     // Resolve from built-ins first; if not found, fall back to the user's
     // BYO MCPs. listUserMcps requires the verified identity from the

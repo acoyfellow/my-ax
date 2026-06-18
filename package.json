@@ -29,8 +29,9 @@
     "test:session-entries": "node scripts/test-session-entries.mjs",
     "test:public-url": "node scripts/test-public-url.mjs",
     "test:mcp-code-mode": "tsx --test src/mcp-code-mode-policy.test.ts",
+    "test:bridge-replay": "tsx --test src/bridge-replay.test.ts",
     "test:deep-links": "tsx --test proof/svelte/deep-links.test.ts",
-    "test:unit": "npm run test:tool-widgets && npm run test:run-receipts && npm run test:session-entries && npm run test:public-url && npm run test:mcp-code-mode && npm run test:deep-links",
+    "test:unit": "npm run test:tool-widgets && npm run test:run-receipts && npm run test:session-entries && npm run test:public-url && npm run test:mcp-code-mode && npm run test:bridge-replay && npm run test:deep-links",
     "prove:resume": "node scripts/prove-resume.mjs",
     "verify:public": "node scripts/verify-public-clean.mjs",
     "build:vendor": "node scripts/build-vendor.mjs"
