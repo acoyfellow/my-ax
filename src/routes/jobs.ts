@@ -9,7 +9,8 @@ import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ApiResponse } from "../types";
 import type { AppEnv } from "../app-env";
-import { cancelJobSchedule, computeNextRun, MAX_ACTIVE_JOBS_PER_OWNER, runJobNow, scheduleJob, validateJobInput, type JobRow, type JobStatus } from "../jobs";
+import { cancelJobSchedule, computeNextRun, MAX_ACTIVE_JOBS_PER_OWNER, runJobNow, scheduleJob, validateJobInput, type JobRow } from "../jobs";
+import { transitionJobPaused } from "../job-state-transition";
 
 const JOB_COLS = "id, owner_email, session_id, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at";
 
@@ -99,35 +100,24 @@ export function registerJobRoutes(app: Hono<AppEnv>) {
     const email = c.get("identity").email;
     const body = (await c.req.json().catch(() => ({}))) as { paused?: boolean };
     const paused = body.paused !== false;
-    const newStatus: JobStatus = paused ? "paused" : "active";
-    let next_run_at: string | null = null;
+    let updated: JobRow;
     try {
-      if (!paused) {
-        const row = await c.env.DB.prepare(`SELECT ${JOB_COLS} FROM jobs WHERE id = ? AND owner_email = ?`)
-          .bind(id, email).first<JobRow>();
-        if (!row) return err(c, `POST /api/jobs/${id}/pause`, "NotFound", "job not found or not owned", 404);
-        next_run_at = computeNextRun(new Date(), row.cadence_secs);
-        const scheduleId = await scheduleJob(c.env, row);
-        try {
-          await c.env.DB.prepare("UPDATE jobs SET schedule_id = ? WHERE id = ? AND owner_email = ?").bind(scheduleId, id, email).run();
-        } catch (error) {
-          await cancelJobSchedule(c.env, { ...row, schedule_id: scheduleId }).catch(() => undefined);
-          throw error;
-        }
-      }
-      if (paused) {
-        const row = await c.env.DB.prepare(`SELECT ${JOB_COLS} FROM jobs WHERE id = ? AND owner_email = ?`).bind(id, email).first<JobRow>();
-        if (!row) return err(c, `POST /api/jobs/${id}/pause`, "NotFound", "job not found or not owned", 404);
-        await cancelJobSchedule(c.env, row);
-      }
-      const r = next_run_at
-        ? await c.env.DB.prepare("UPDATE jobs SET status = ?, next_run_at = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(newStatus, next_run_at, id, email).run()
-        : await c.env.DB.prepare("UPDATE jobs SET status = ?, schedule_id = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(newStatus, id, email).run();
-      if (!r.success || (r.meta?.changes ?? 0) === 0) return err(c, `POST /api/jobs/${id}/pause`, "NotFound", "job not found or not owned", 404);
+      const row = await c.env.DB.prepare(`SELECT ${JOB_COLS} FROM jobs WHERE id = ? AND owner_email = ?`).bind(id, email).first<JobRow>();
+      if (!row) return err(c, `POST /api/jobs/${id}/pause`, "NotFound", "job not found or not owned", 404);
+      updated = await transitionJobPaused(row, paused, {
+        schedule: (job) => scheduleJob(c.env, job),
+        cancel: (job) => cancelJobSchedule(c.env, job),
+        nextRun: (job) => computeNextRun(new Date(), job.cadence_secs),
+        persist: async (job) => {
+          const r = await c.env.DB.prepare("UPDATE jobs SET status = ?, schedule_id = ?, next_run_at = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
+            .bind(job.status, job.schedule_id, job.next_run_at, id, email).run();
+          if (!r.success || (r.meta?.changes ?? 0) === 0) throw new Error("job not found or not owned");
+        },
+      });
     } catch (e) {
       return err(c, `POST /api/jobs/${id}/pause`, "DBError", e instanceof Error ? e.message : String(e), 500);
     }
-    return c.json<ApiResponse>({ ok: true, command: `POST /api/jobs/${id}/pause`, result: { id, status: newStatus, next_run_at }, next_actions: [{ command: "GET /api/jobs", description: "Refresh job list" }] });
+    return c.json<ApiResponse>({ ok: true, command: `POST /api/jobs/${id}/pause`, result: { id, status: updated.status, next_run_at: updated.next_run_at }, next_actions: [{ command: "GET /api/jobs", description: "Refresh job list" }] });
   });
 
   // DELETE /api/jobs/:id — owner-scoped hard delete.
