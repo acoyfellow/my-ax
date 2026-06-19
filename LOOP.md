@@ -19,6 +19,18 @@ An iteration is complete only when it leaves either:
 
 A merged or locally verified change with production proof still pending is **not complete**. It is `blocked` until the proof passes or the parent explicitly rolls the change back.
 
+## Tracks
+
+Every iteration declares one track:
+
+- `balanced`: compare at least one correctness opportunity, one product/UX opportunity, and one simplification opportunity, then choose the strongest evidence-backed result;
+- `hardening`: correctness, reliability, privacy, or security defects;
+- `product`: evidence-backed capabilities grounded in current internal work, Cloudflare changelogs/docs, relevant GitHub projects/issues/releases, and direct My AX dogfooding;
+- `ui`: browser-first interaction polish, perceived latency, optimistic state, accessibility, responsive layout, loading/error states, and visual hierarchy;
+- `simplification`: remove custom glue when a current managed primitive provides the same capability.
+
+Do not default to hardening merely because its acceptance criteria are easiest to automate. Product discovery may use parallel read-only investigations, but exactly one child may write after the opportunity is selected.
+
 ## Scope
 
 Repository: this checkout of `acoyfellow/my-ax`.
@@ -67,12 +79,18 @@ Do not broaden an iteration after selecting its experiment.
 3. Read the relevant implementation and tests.
 4. Reproduce a concrete defect or identify a specific simplification with direct evidence.
 5. Freeze the finding before editing:
-   - stable ID;
-   - title and severity;
-   - expected versus actual behavior;
-   - deterministic reproduction or evidence;
+   - stable ID, type, title, and severity/impact;
+   - evidence source and user impact;
+   - current versus desired experience;
+   - deterministic reproduction or research evidence;
    - affected files;
-   - proposed smallest fix.
+   - proposed smallest intervention;
+   - observable acceptance criteria;
+   - production proof plan.
+
+For `product`, answer: Who is doing this? What user problem does it solve? Why does it belong in My AX? What is the smallest useful implementation? How will production use prove value?
+
+For `ui`, reproduce the real deployed journey before editing when practical. Record the visible discontinuity, then require a browser-based production replay after deployment. Component tests or screenshots alone do not complete a UI iteration.
 
 If no finding survives scrutiny, stop with a no-change receipt. Do not invent work to satisfy the loop.
 
@@ -146,3 +164,11 @@ Read LOOP.md completely and execute exactly one child-owned SEARCH → FIX → V
 ```
 
 The parent must verify the child’s claims, inspect the diff, integrate it, deploy through the private wrapper, and complete production proof before the iteration ends.
+
+Example controller requests:
+
+```text
+Run one My AX LOOP.md iteration with track=ui and browser evidence.
+Run one My AX LOOP.md iteration with track=product grounded in internal and GitHub research.
+Run one balanced iteration and compare hardening, product/UX, and simplification before choosing.
+```
