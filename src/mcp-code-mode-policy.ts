@@ -66,13 +66,14 @@ export function selectMcpCodeModeProviders(input: {
   const providers: SelectedMcpProvider[] = [];
   for (const [connector, catalog] of byConnector) {
     const providerName = input.sanitize(connector);
-    if (providerNames.has(providerName)) return null;
+    if (!providerName || providerNames.has(providerName)) return null;
     providerNames.add(providerName);
 
     const methodNames = new Map<string, string>();
     const selected: SelectedMcpProvider["tools"] = [];
     for (const catalogTool of catalog) {
       const methodName = input.sanitize(catalogTool.name);
+      if (!methodName) return null;
       const existing = methodNames.get(methodName);
       if (existing && existing !== catalogTool.name) return null;
       methodNames.set(methodName, catalogTool.name);

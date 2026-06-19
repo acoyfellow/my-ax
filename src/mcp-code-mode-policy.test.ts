@@ -69,6 +69,34 @@ test("sanitized connector and method collisions disable code mode", () => {
   }), null);
 });
 
+test("empty sanitized connector or method names disable code mode", () => {
+  const policy = parseMcpCodeModePolicy(JSON.stringify({
+    version: 1,
+    enabled: true,
+    connectors: { "!!!": { expose: ["read"] } },
+  }));
+  assert.ok(policy);
+  assert.equal(selectMcpCodeModeProviders({
+    policy,
+    servers: { a: { name: "!!!" } },
+    sanitize,
+    catalog: [{ serverId: "a", name: "read" }],
+  }), null);
+
+  const methodPolicy = parseMcpCodeModePolicy(JSON.stringify({
+    version: 1,
+    enabled: true,
+    connectors: { portal: { expose: ["!!!"] } },
+  }));
+  assert.ok(methodPolicy);
+  assert.equal(selectMcpCodeModeProviders({
+    policy: methodPolicy,
+    servers: { a: { name: "portal" } },
+    sanitize,
+    catalog: [{ serverId: "a", name: "!!!" }],
+  }), null);
+});
+
 test("policy caps connectors and exposed tool count", () => {
   const connectors = Object.fromEntries(
     Array.from({ length: 9 }, (_, index) => [`c${index}`, { expose: ["read"] }]),
