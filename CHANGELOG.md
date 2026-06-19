@@ -11,6 +11,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Established this changelog as the durable record for notable changes going forward.
 - Extended `LOOP.md` so an iteration cannot finish until the parent integrates, deploys, and records a production proof.
 - Added balanced, hardening, product, UI, and simplification tracks, including research-grounded product discovery and browser-first UI acceptance criteria.
+- Added bounded architectural refinement, progress tracking, live tests after significant steps, independent autoreview, and coherent parent-owned commits to the improvement protocol.
 
 ### Fixed
 

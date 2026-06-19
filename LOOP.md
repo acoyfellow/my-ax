@@ -94,12 +94,17 @@ For `ui`, reproduce the real deployed journey before editing when practical. Rec
 
 If no finding survives scrutiny, stop with a no-change receipt. Do not invent work to satisfy the loop.
 
-### 2. FIX
+### 2. FIX AND REFINE
 
 1. Make the smallest coherent change that addresses the frozen finding.
 2. Add or strengthen a regression test that fails before the fix and passes after it when practical.
-3. Avoid opportunistic refactors, dependency upgrades, generated-file churn, and unrelated formatting.
-4. Preserve all invariants above.
+3. Refactor the touched architecture until it is clear, cohesive, and maintainable—not merely until the first test passes. Keep this refinement inside the frozen finding and do not turn it into an unrelated rewrite.
+4. After each significant step, run the narrow live or local proof available for that layer, inspect the diff with an independent autoreview, and record the result. The Terrarium child still does not commit; the parent creates reviewable commits only after independently accepting each coherent step.
+5. Avoid unrelated dependency upgrades, generated-file churn, and formatting changes.
+6. Preserve all invariants above.
+7. Track progress in the iteration receipt: completed steps, evidence, review findings, remaining risks, and the next production-proof action.
+
+“Happy with the architecture” means the changed boundary has explicit ownership, minimal duplication, understandable state flow, and tests at the observable seam. It does not authorize scope creep or aesthetic rewrites.
 
 ### 3. VERIFY
 
@@ -121,11 +126,12 @@ Verification is independent of implementation intent: test the observable invari
 After accepting the child diff, the parent must:
 
 1. independently rerun the narrow regression and relevant broader checks;
-2. update `CHANGELOG.md` without changing project version `0.0.1`;
-3. commit and push the reviewed change;
-4. deploy employee production only through `my-ax-private/deploy-employee.sh`;
-5. run a production proof that exercises the changed invariant, plus the wrapper's authenticated post-deploy checks;
-6. record the commit, deployment/version ID, exact proof, and result in workflow state.
+2. perform a final autoreview of architecture, behavior, security, scope, tests, and public/private leakage; resolve material findings before integration;
+3. update `CHANGELOG.md` without changing project version `0.0.1`;
+4. commit and push each accepted coherent step with its verification evidence recorded in workflow state;
+5. deploy employee production only through `my-ax-private/deploy-employee.sh`;
+6. live-test the changed journey or invariant in production, plus the wrapper's authenticated post-deploy checks;
+7. record progress, commit(s), deployment/version ID, autoreview outcome, exact proof, and result in workflow state.
 
 Prefer a dedicated authenticated API or browser proof. If the exact negative case cannot safely be induced in production, prove the deployed revision and its closest observable boundary, while retaining the deterministic regression as evidence. A generic health check alone is insufficient when a specific production proof is available.
 
