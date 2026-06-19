@@ -1,6 +1,6 @@
 {
   "name": "my-ax",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "private": true,
   "description": "A personal AI agent operating environment you self-host on Cloudflare.",
@@ -73,7 +73,7 @@
     "tailwindcss": "4.3.1",
     "tsx": "^4.21.0",
     "typescript": "6.0.3",
-    "wrangler": "4.100.0"
+    "wrangler": "4.102.0"
   },
   "author": "Jordan Coeyman (https://coey.dev)",
   "license": "MIT",

@@ -1,14 +1,19 @@
 # Changelog
 
-All notable changes to My Agent Experience are documented in this file.
+Notable changes to My Agent Experience are recorded chronologically here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). My AX is still pre-1.0, so entries are grouped by the day they landed on `main` rather than by a formal release number.
+My AX remains version `0.0.1` while it is being built. These dated sections are development history, not versioned releases.
 
 ## [Unreleased]
 
 ### Added
 
 - Established this changelog as the durable record for notable changes going forward.
+
+### Fixed
+
+- Restored package metadata to `0.0.1`; development changes do not increment the project version.
+- Updated Wrangler to 4.102.0, removing the current `ws` and `undici` security advisories from the development dependency tree.
 
 ## [2026-06-19]
 
