@@ -29,7 +29,9 @@ export async function storeImageUpload(
   if (!IMAGE_TYPES.has(file.type)) throw new Error("Only PNG, JPEG, WebP, or GIF images are supported");
   if (file.size <= 0 || file.size > MAX_IMAGE_BYTES) throw new Error("Image must be between 1 byte and 10 MB");
   const id = crypto.randomUUID();
-  const safeSession = sessionId || "draft";
+  // Session IDs originate in the client. Keep them a single R2 key segment so
+  // every returned key remains readable through assertOwnedUploadKey.
+  const safeSession = encodeURIComponent(sessionId || "draft").replace(/\./g, "%2E");
   const key = `uploads/${identity.email.toLowerCase()}/${safeSession}/${id}.${extForType(file.type)}`;
   await uploadsBucket(env).put(key, file.stream(), {
     httpMetadata: { contentType: file.type },
