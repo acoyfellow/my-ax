@@ -15,6 +15,10 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Restored package metadata to `0.0.1`; development changes do not increment the project version.
 - Updated Wrangler to 4.102.0, removing the current `ws` and `undici` security advisories from the development dependency tree.
 
+### Security
+
+- Rejected carrier-grade NAT destinations in `100.64.0.0/10` from public URL validation.
+
 ## [2026-06-19]
 
 ### Security

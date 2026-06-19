@@ -11,6 +11,7 @@ export function isPrivateHostname(hostname: string): boolean {
   const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
   if (v4) {
     const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 100 && b >= 64 && b <= 127) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 0 || a >= 224) return true;
   }
