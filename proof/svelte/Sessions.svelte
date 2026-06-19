@@ -334,7 +334,7 @@
     <button
       type="button"
       onclick={newConversation}
-      class="inline-flex items-center gap-1.5 rounded-md bg-brand text-white text-xs font-semibold px-2.5 py-2 min-h-[34px] shadow-sm hover:bg-brand/90 active:bg-brand/80 transition-colors"
+      class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-brand text-white text-sm font-semibold px-3 py-2.5 min-h-[40px] shadow-sm hover:bg-brand/90 active:bg-brand/80 transition-colors"
       aria-label="New conversation"
       title="New conversation"
     >
@@ -342,7 +342,7 @@
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
-      <span>New</span>
+      <span>New conversation</span>
     </button>
   </div>
 
