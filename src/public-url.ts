@@ -6,7 +6,7 @@
 
 export function isPrivateHostname(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (host === "localhost" || host.endsWith(".localhost") || host === "::1" || host === "0.0.0.0") return true;
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::" || host === "::1" || host === "0.0.0.0") return true;
   if (/^(?:127|10)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return true;
   const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
   if (v4) {
