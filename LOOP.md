@@ -9,13 +9,15 @@ Continuously make My AX more reliable, secure, simple, and useful through small,
 One **iteration** is:
 
 ```text
-SEARCH → FIX → VERIFY → HANDOFF
+SEARCH → FIX → VERIFY → INTEGRATE → DEPLOY → PROVE → HANDOFF
 ```
 
 An iteration is complete only when it leaves either:
 
-1. one focused, verified diff for the parent to integrate; or
+1. one focused change that the parent has independently verified, integrated, deployed, and proven in production; or
 2. a no-change receipt explaining what was tested and why no safe improvement was justified.
+
+A merged or locally verified change with production proof still pending is **not complete**. It is `blocked` until the proof passes or the parent explicitly rolls the change back.
 
 ## Scope
 
@@ -96,9 +98,24 @@ Use only commands that exist in `package.json`; do not claim checks that were no
 
 Verification is independent of implementation intent: test the observable invariant, not merely the new branch or helper.
 
-### 4. HANDOFF
+### 4. INTEGRATE, DEPLOY, AND PROVE (parent only)
 
-Do not commit. Return a concise receipt containing:
+After accepting the child diff, the parent must:
+
+1. independently rerun the narrow regression and relevant broader checks;
+2. update `CHANGELOG.md` without changing project version `0.0.1`;
+3. commit and push the reviewed change;
+4. deploy employee production only through `my-ax-private/deploy-employee.sh`;
+5. run a production proof that exercises the changed invariant, plus the wrapper's authenticated post-deploy checks;
+6. record the commit, deployment/version ID, exact proof, and result in workflow state.
+
+Prefer a dedicated authenticated API or browser proof. If the exact negative case cannot safely be induced in production, prove the deployed revision and its closest observable boundary, while retaining the deterministic regression as evidence. A generic health check alone is insufficient when a specific production proof is available.
+
+If deployment or proof fails, mark the iteration `blocked`, keep the loop active for bounded repair, and do not advance to the next iteration. Never report the iteration complete with production proof pending.
+
+### 5. HANDOFF
+
+The Terrarium child must not commit or deploy. It returns a concise receipt containing:
 
 ```text
 start revision
@@ -110,7 +127,7 @@ remaining risks
 recommended parent integration/proof
 ```
 
-A locally verified fix is not production-certified. Mark production proof as pending unless the parent performs it.
+A locally verified fix is not production-certified. The parent must finish deployment and proof before closing the iteration.
 
 ## Failure policy
 
@@ -125,7 +142,7 @@ A locally verified fix is not production-certified. Mark production proof as pen
 A parent can run one iteration with a single writer child using a task equivalent to:
 
 ```text
-Read LOOP.md completely and execute exactly one SEARCH → FIX → VERIFY → HANDOFF iteration. You are the only writer. You may edit files and run local tests. Do not commit, tag, push, migrate, deploy, access production, or expose secrets. Stop after one focused finding and return the required receipt.
+Read LOOP.md completely and execute exactly one child-owned SEARCH → FIX → VERIFY → HANDOFF pass. You are the only writer. You may edit files and run local tests. Do not commit, tag, push, migrate, deploy, access production, or expose secrets. Stop after one focused finding and return the required receipt so the parent can INTEGRATE → DEPLOY → PROVE.
 ```
 
-The parent must verify the child’s claims and inspect the diff before integration.
+The parent must verify the child’s claims, inspect the diff, integrate it, deploy through the private wrapper, and complete production proof before the iteration ends.
