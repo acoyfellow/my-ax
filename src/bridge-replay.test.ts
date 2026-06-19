@@ -5,6 +5,28 @@ import { handleBridgeRequest, mintBridgeTicket } from './bridge';
 const identity = { email: 'owner@example.com', sub: 'owner-sub' } as any;
 const connector = { id:'owned', upstream:'https://upstream.invalid/mcp', description:'test', shape:'mcp', auth:{kind:'oauth-bearer', authorizationEndpoint:'https://auth.invalid/a', tokenEndpoint:'https://auth.invalid/t', resource:'https://upstream.invalid', clientId:'x'} };
 
+test('an audit sink failure does not discard a successful upstream response', async () => {
+  const env:any = {
+    BRIDGE_JWT_SECRET: btoa('01234567890123456789012345678901'),
+    BUILTIN_CONNECTORS_JSON: JSON.stringify({owned: connector}),
+    AUDIT_KV: { put: async () => { throw new Error('audit unavailable'); } },
+    DB: {
+      prepare: (sql:string) => ({ bind: (...values:unknown[]) => ({ sql, values }) }),
+      batch: async () => undefined,
+    },
+  };
+  const oauth:any = { listUserMcps: async()=>[], getValidAccessToken: async()=> 'token' };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('upstream response', {status:200});
+  try {
+    const ticket = await mintBridgeTicket(env, { identity, sessionId:'session-1', connectorId:'owned' });
+    const request = new Request('https://app.invalid/bridge/owned', {method:'POST', headers:{authorization:`Bearer ${ticket}`}, body:'{}'});
+    const response = await handleBridgeRequest(request, env, identity, 'owned', '', oauth);
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'upstream response');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('a bridge ticket is single-use and rejects replay before a second upstream call', async () => {
   const used = new Set<string>();
   const env:any = {

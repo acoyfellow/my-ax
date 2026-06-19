@@ -118,9 +118,15 @@ async function writeAuditReceipt(
 ): Promise<void> {
   if (env.AUDIT_KV) {
     const key = `audit/${r.timestamp}-${r.user}-${r.connectorId}-${crypto.randomUUID()}`;
-    await env.AUDIT_KV.put(key, JSON.stringify(r), {
-      expirationTtl: 60 * 60 * 24 * 90, // 90 days
-    });
+    try {
+      await env.AUDIT_KV.put(key, JSON.stringify(r), {
+        expirationTtl: 60 * 60 * 24 * 90, // 90 days
+      });
+    } catch (err) {
+      // The upstream call has already completed, so an audit storage outage
+      // must not discard its response (the single-use ticket cannot be retried).
+      console.error("audit_receipt_store_failed", err instanceof Error ? err.message : String(err));
+    }
   }
   console.log("audit_receipt", JSON.stringify(r));
 }
