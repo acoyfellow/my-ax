@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { parseMyAxDeepLink } from "./deep-links";
+  import { reconcileSeen } from "./attention-state";
 
   interface Item {
     id: string;
@@ -37,15 +38,25 @@
   async function markSeen() {
     const ids = items.filter((item) => !item.seen_at).map((item) => item.id);
     if (!ids.length) return;
-    await fetch("/api/attention/seen", {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids }),
-    });
-    unread = 0;
-    items = items.map((item) => ({ ...item, seen_at: item.seen_at ?? new Date().toISOString() }));
-    updateBadge();
+    try {
+      const response = await fetch("/api/attention/seen", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!response.ok) throw new Error("Could not mark attention as seen");
+      const body = await response.json();
+      const serverUnread = Number(body?.result?.unread);
+      if (!Number.isFinite(serverUnread)) throw new Error("Could not reconcile attention state");
+      const reconciled = reconcileSeen(items, serverUnread, ids, new Date().toISOString());
+      unread = reconciled.unread;
+      items = reconciled.items;
+      error = null;
+      updateBadge();
+    } catch (err: any) {
+      error = err?.message || "Could not mark attention as seen";
+    }
   }
   async function openPanel() {
     open = true;
