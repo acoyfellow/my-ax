@@ -35,7 +35,7 @@ try {
   const svg = resolve("data:image/svg+xml;base64,PHN2Zz4=", "machinectl_call");
   const arbitrary = resolve({ html: "<script>alert(1)</script>", component: "Anything" }, "tool");
   const delegation = resolve({ results: [
-    { runId: "delegate:one", status: "completed", summary: "Evidence found", attempts: 1, output: { safe: true } },
+    { runId: "delegate:one", taskFingerprint: "a1b2c3d4", label: "Research evidence", status: "completed", summary: "Evidence found", attempts: 1, output: { safe: true } },
     { runId: "delegate:two", status: "interrupted", error: "Worker restarted", attempts: 2 },
     { runId: "delegate:three", status: "error", error: "must be capped" },
   ], synthesisRequired: true }, "delegate_many");
@@ -52,7 +52,7 @@ try {
   if (svg.kind !== "raw-text") throw new Error("SVG must remain inert raw text");
   if (arbitrary.kind !== "raw-text") throw new Error("arbitrary model-adjacent widget payload must remain inert raw text");
   if (delegation.kind !== "delegation-group" || delegation.live !== false || delegation.runs.length !== 2) throw new Error("delegate_many terminal snapshot missing or unbounded");
-  if (delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation status/attempts missing");
+  if (delegation.runs[0].taskFingerprint !== "a1b2c3d4" || delegation.runs[0].label !== "Research evidence" || delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation metadata/status/attempts missing");
 
   console.log("✓ trusted inline tool-result widgets: safe replay + raster + delegation snapshot + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
 } finally {

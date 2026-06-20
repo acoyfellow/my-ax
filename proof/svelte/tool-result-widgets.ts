@@ -19,6 +19,8 @@ export type ToolResultWidget =
       kind: "delegation-group";
       runs: Array<{
         runId?: string;
+        taskFingerprint?: string;
+        label?: string;
         status: "pending" | "completed" | "error" | "interrupted" | "aborted";
         summary?: string;
         error?: string;
@@ -121,6 +123,8 @@ function delegationGroupWidget(value: unknown, toolName: string): ToolResultWidg
     }
     return [{
       runId: boundedText(run.runId, 200),
+      taskFingerprint: boundedText(run.taskFingerprint, 200),
+      label: boundedText(run.label, 80),
       status: run.status as "pending" | "completed" | "error" | "interrupted" | "aborted",
       summary: boundedText(run.summary, 500),
       error: boundedText(run.error, 500),

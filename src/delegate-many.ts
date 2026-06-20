@@ -11,6 +11,7 @@ export const DELEGATE_TTL_MS = 60 * 60 * 1000;
 export const DELEGATE_TIMEOUT_MS = 120_000;
 
 export const delegateTaskSchema = z.object({
+  label: z.string().trim().min(1).max(80).optional(),
   task: z.string().trim().min(1).max(4_000),
 });
 export const delegateManyInputSchema = z.object({
@@ -19,6 +20,7 @@ export const delegateManyInputSchema = z.object({
 export const delegateResultSchema = z.object({
   runId: z.string(),
   taskFingerprint: z.string(),
+  label: z.string().max(80).optional(),
   status: z.enum(["completed", "error", "aborted", "interrupted"]),
   summary: z.string().optional(),
   output: z.unknown().optional(),
@@ -108,7 +110,7 @@ export function createDelegateManyTool(parent: DelegateParent) {
           const failure = asAgentToolFailure(result);
           if (!failure || !shouldRetryDelegate(failure, attempts)) break;
         } while (true);
-        return { runId: result.runId, taskFingerprint: taskFingerprint(task), status: result.status, summary: result.summary, output: result.output, error: result.error, attempts };
+        return { runId: result.runId, taskFingerprint: taskFingerprint(task), status: result.status, summary: result.summary, output: result.output, error: result.error, attempts, label: parsed.tasks[index].label };
       }));
       await parent.clearAgentToolRuns({ olderThan: Date.now() - DELEGATE_TTL_MS, status: ["completed", "error", "aborted", "interrupted"] });
       return { results, synthesisRequired: true as const };

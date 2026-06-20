@@ -34,6 +34,8 @@ npm run prove:browser
 
 The script checks the app shell, owner API shapes, desktop/mobile geometry, one Think chat turn, session cleanup, and selected result widgets. It calls a configured model and can incur inference cost. The model roundtrip has a bounded timeout in the script; passing once does not establish provider availability.
 
+Delegation results keep parsing and allowlisting in `proof/svelte/tool-result-widgets.ts`; `DelegationGroup.svelte` only presents that bounded projection. After deployment, browser proof should delegate two labeled analysis tasks, confirm the card says **Completed snapshot** (not live progress), inspect status/count and child summaries at desktop and narrow-mobile widths, keyboard-open **Run details** then nested **Raw output**, and verify run ID/fingerprint wrapping.
+
 Optional paths:
 
 ```bash
