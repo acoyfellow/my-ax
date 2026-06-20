@@ -20,6 +20,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Fixed
 
+- Removed a stale undefined connector-refresh call that could break terminal chat-response handling after a turn completed.
 - Kept the Attention unread badge authoritative when only the newest page is marked seen, including concurrent arrivals and failed seen requests.
 - Made the expanded conversation drawer’s “New conversation” primary action explicit, full width within its padded container, centered, and at least 40px high.
 - Restored package metadata to `0.0.1`; development changes do not increment the project version.

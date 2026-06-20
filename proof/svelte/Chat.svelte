@@ -1106,7 +1106,7 @@
         finalizeStreaming();
         streamingMsgId = null;
         applyStatus("idle");
-        refreshConnectorBannerStatus();
+        (window as any).__refreshConnectors?.();
       } else if (m.body) {
         applyStatus("running");
         try { handleThinkChunk(JSON.parse(m.body)); } catch {}
@@ -1129,7 +1129,7 @@
       } else if (!m.done) applyStatus("running");
       else {
         applyStatus("idle");
-        refreshConnectorBannerStatus();
+        (window as any).__refreshConnectors?.();
       }
     } else if (m.type === "cf_agent_use_chat_response" && m.id === activeRequestId) {
       if (m.error) {
@@ -1162,7 +1162,7 @@
         restoredActiveTurn = false;
         forgetActiveTurn();
         applyStatus("idle");
-        refreshConnectorBannerStatus();
+        (window as any).__refreshConnectors?.();
       } else if (m.body) {
         try {
           handleThinkChunk(JSON.parse(m.body));
