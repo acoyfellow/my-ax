@@ -88,7 +88,7 @@ No current comparative benchmark is published for native tools versus Code Mode.
 | Completion push while away | ✅ | Successful turns push only when no visible client is watching; title includes prompt context and body includes the actual reply. | `src/agent.ts`, `src/notify.ts` |
 | Interactive decision push | ✅ | Pending decisions reopen from Attention or the source conversation; explicit option selection + Submit resumes the agent and records the answer. | `src/routes/decisions.ts`, `proof/svelte/Chat.svelte` |
 | MCP portal integration | ✅ | A private deployment can inject one portal connector; native MCP discovery and optional reviewed Code Mode operate over the live authenticated catalog. | `src/connectors.ts`, `src/agent.ts`, `src/mcp-code-mode.ts` |
-| Current model registry | ✅ | Kimi K2.6, GLM 5.1, Opus 4.8, GPT-5.5, Kindle Alpha API, and Mercury Alpha. Stale/removed ids heal to the default. Availability of gateway-backed models remains deployment-specific. | `src/models.ts`, `src/llm.ts` |
+| Current model registry | ✅ | Kimi K2.7 Code, GLM 5.2, Opus 4.8, GPT-5.5, Kindle Alpha API, and Mercury Alpha. Stale/removed ids heal to the default. Availability of gateway-backed models remains deployment-specific. | `src/models.ts`, `src/llm.ts` |
 | Effect outbound-I/O substrate | ✅ | Effect handles typed failures, timeout, retry, and bounded concurrency for MCP probing/Code Mode, push fan-out, and OAuth refresh transport. Think/Agents lifecycle remains native. | `src/mcp-probe.ts`, `src/notify.ts`, `src/oauth-store.ts` |
 | Deployment media/proof | 🧪 | A checked-in accelerated video demonstrates one unified Work Code Mode flow. It is evidence for that path, not a claim that every product surface is covered. | `docs/media/`, `README.md` |
 

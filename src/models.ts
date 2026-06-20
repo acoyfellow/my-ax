@@ -20,24 +20,24 @@ export interface ModelEntry {
 
 export const MODELS: ModelEntry[] = [
   {
-    id: "@cf/moonshotai/kimi-k2.6",
+    id: "@cf/moonshotai/kimi-k2.7-code",
     route: "workers-ai",
     owned_by: "moonshotai",
     context: 262_144,
     reasoning: true,
     tools: true,
     vision: true,
-    label: "Kimi K2.6",
+    label: "Kimi K2.7 Code",
   },
   {
-    id: "@cf/zai-org/glm-5.1",
+    id: "@cf/zai-org/glm-5.2",
     route: "workers-ai",
     owned_by: "zai",
-    context: 200_000,
+    context: 262_144,
     reasoning: true,
     tools: true,
     vision: false,
-    label: "GLM 5.1",
+    label: "GLM 5.2",
   },
   {
     id: "claude-opus-4-8",
@@ -81,7 +81,7 @@ export const MODELS: ModelEntry[] = [
   },
 ];
 
-export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.6";
+export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
 
 // Keep the catalog stable and provider-agnostic. The configured gateway is the
 // policy boundary: if an operator has not granted a model, that turn fails with
