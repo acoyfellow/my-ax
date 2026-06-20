@@ -8,6 +8,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Added
 
+- Added owner-scoped recurring-job management for the canonical agent, Code Mode, HTTP, and MCP: list, create, update/reschedule, pause, resume, run, delete, and durable history with idempotent create/run support.
 - Upgraded the curated Workers AI catalog to Kimi K2.7 Code and GLM 5.2, with Kimi K2.7 Code as the default after production canary verification.
 - Established this changelog as the durable record for notable changes going forward.
 - Extended `LOOP.md` so an iteration cannot finish until the parent integrates, deploys, and records a production proof.

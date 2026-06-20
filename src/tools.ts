@@ -2,6 +2,7 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
+import { JobService } from "./job-service";
 
 export const ASK_USER_TOOL: ToolDef = {
   name: "ask_user",
@@ -29,6 +30,27 @@ export const TOOLS: ToolDef[] = [
   ASK_USER_TOOL,
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
+  {
+    name: "manage_jobs",
+    description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs.",
+    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string" }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, idempotencyKey: { type: "string" } }, required: ["action"] },
+    execute: async (args, ctx) => {
+      const jobs = new JobService(ctx.env, ctx.identity.email);
+      const id = typeof args.id === "string" ? args.id : "";
+      const action = args.action;
+      const input = { sessionId: args.sessionId as string | undefined, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
+      const result = action === "list" ? await jobs.list()
+        : action === "create" ? await jobs.create(input, args.idempotencyKey as string | undefined)
+        : action === "update" ? await jobs.update(id, input)
+        : action === "pause" ? await jobs.setPaused(id, true)
+        : action === "resume" ? await jobs.setPaused(id, false)
+        : action === "run" ? await jobs.run(id, args.idempotencyKey as string | undefined)
+        : action === "delete" ? await jobs.delete(id)
+        : action === "history" ? await jobs.history(id)
+        : (() => { throw new Error("unknown job action"); })();
+      return JSON.stringify({ ok: true, result });
+    },
+  },
   {
     name: "shell_exec",
     description: "Execute a quick, bounded shell command and return stdout/stderr. Use for fast commands like curl probes, jq, grep, or small scripts. For installs, builds/tests likely to run for a while, dev servers, watchers, or anything that may keep running, use process_start + process_status/process_logs instead. Commands run in a sandboxed environment. NOTE: For services behind upstream auth, use the connected MCP tools (Settings → Connectors) — shell_exec cannot reach behind access control.",
@@ -368,6 +390,7 @@ const MODEL_TOOL_NAMES = new Set([
   "search_conversations",
   "notify_owner",
   "create_svelte_artifact",
+  "manage_jobs",
 ]);
 
 export function createThinkTools(context: () => ToolContext): ToolSet {

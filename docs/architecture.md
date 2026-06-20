@@ -18,7 +18,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
 | `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, and Cloudbox with location-tagged call receipts. |
 | `src/cloudbox-tools.ts` | Optional bounded Cloudbox live-run adapter used behind `cloudbox.*`. |
-| `src/jobs.ts` + `src/routes/jobs.ts` | Recurring prompts backed by agents' native per-DO `scheduleEvery()` alarms plus a thin D1 owner/session UI index. |
+| `src/jobs.ts` + `src/job-service.ts` + `src/routes/jobs.ts` | Native recurring-prompt scheduling plus the shared owner-scoped CRUD/evidence service used by thin HTTP, canonical Think, Code Mode, and owner-MCP adapters. |
 | `src/run-receipts.ts` + `src/routes/runs.tsx` | Shared owner-scoped Run Receipt event append primitive, v0 CRUD/events, and read-only board; events are explicitly appended, not automatically captured. |
 | `src/connectors.ts` | Connector registry. Public engine ships empty; users add their own MCPs via Settings → Connectors. |
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
@@ -130,7 +130,8 @@ my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configure
 - **`create_svelte_artifact`** — a native Think tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
 - **`browser_open`** — a native Think tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
 - **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the persistent My AX Workspace, the connected physical machine, and optional Cloudbox runs. Child calls carry location, method, status, and duration metadata.
-- **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session orchestration and explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
+- **Recurring jobs** — `JobService` is the sole business boundary for list/create/update/pause/resume/run/delete/history. Every adapter supplies the verified owner; all reads and mutations scope SQL by that owner. Active updates create the replacement native schedule before persistence, cancel it if persistence fails, and retire the old schedule only after the new row is durable. `job_events` retains mutation/run evidence and idempotency keys bound repeated create/run requests.
+- **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration plus explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 
 ## Durable Object History
 

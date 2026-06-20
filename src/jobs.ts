@@ -4,8 +4,14 @@
 // DO. D1 is a thin owner/session UI index (name, prompt, cadence, schedule_id,
 // run receipts). Manual Run now reuses the same `/inject-user-message` path.
 
-import { getSessionAgent } from "./agent-stub";
 import type { Env } from "./types";
+
+async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
+  // Keep the Cloudflare-only agent stub out of module initialization so pure
+  // validation/service tests can run under Node.
+  const { getSessionAgent } = await import("./agent-stub");
+  return getSessionAgent(env, ownerEmail, sessionId);
+}
 
 export const MIN_CADENCE_SECS = 60;
 export const MAX_CADENCE_SECS = 60 * 60 * 24 * 30; // 30 days
@@ -72,7 +78,7 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
   let ok = true;
   let error: string | undefined;
   try {
-    const stub = await getSessionAgent(env, row.owner_email, row.session_id);
+    const stub = await sessionAgent(env, row.owner_email, row.session_id);
     // Scheduled work has no browser connection to seed Access identity.
     await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
     await stub.injectUserMessage({ content: row.prompt, clientMsgId: `job:${row.id}:${now.getTime()}` });
@@ -91,7 +97,7 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
 
 /** Register a native agents scheduleEvery alarm on the target session DO. */
 export async function scheduleJob(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "prompt" | "cadence_secs">): Promise<string> {
-  const stub = await getSessionAgent(env, row.owner_email, row.session_id);
+  const stub = await sessionAgent(env, row.owner_email, row.session_id);
   await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
   const schedule = await stub.scheduleRecurringPrompt({ jobId: row.id, ownerEmail: row.owner_email, prompt: row.prompt, cadenceSecs: row.cadence_secs });
   return schedule.id;
@@ -100,6 +106,6 @@ export async function scheduleJob(env: Env, row: Pick<JobRow, "id" | "owner_emai
 /** Cancel a native agents alarm if one is registered. */
 export async function cancelJobSchedule(env: Env, row: Pick<JobRow, "owner_email" | "session_id" | "schedule_id">): Promise<void> {
   if (!row.schedule_id) return;
-  const stub = await getSessionAgent(env, row.owner_email, row.session_id);
+  const stub = await sessionAgent(env, row.owner_email, row.session_id);
   await stub.cancelRecurringPrompt(row.schedule_id);
 }

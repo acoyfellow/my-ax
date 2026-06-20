@@ -3,8 +3,9 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getSessionAgent } from "../agent-stub";
 import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
+import { JobService } from "../job-service";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history"] as const;
 type Method = typeof METHODS[number];
 
 const TOOLS = [
@@ -54,6 +55,19 @@ async function ownedSession(c: CoordinatorContext, sessionId: string) {
 
 async function coordinatorCall(c: CoordinatorContext, method: Method, args: Record<string, unknown>) {
   const email = c.get("identity").email.toLowerCase();
+  if (method.startsWith("jobs_")) {
+    const jobs = new JobService(c.env, email);
+    const id = typeof args.id === "string" ? args.id : "";
+    const input = { sessionId: args.sessionId as string | undefined, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
+    if (method === "jobs_list") return { jobs: await jobs.list() };
+    if (method === "jobs_create") return jobs.create(input, args.idempotencyKey as string | undefined);
+    if (method === "jobs_update") return jobs.update(id, input);
+    if (method === "jobs_pause") return jobs.setPaused(id, true);
+    if (method === "jobs_resume") return jobs.setPaused(id, false);
+    if (method === "jobs_run") return jobs.run(id, args.idempotencyKey as string | undefined);
+    if (method === "jobs_delete") return jobs.delete(id);
+    return { events: await jobs.history(id) };
+  }
   if (method === "attention_list") {
     const rows = await c.env.DB.prepare("SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT ?").bind(email, clamp(args.limit, 20, 50)).all();
     return { items: rows.results ?? [] };
@@ -125,6 +139,12 @@ const CODE_TYPES = `declare const codemode: {
   inject(args: { sessionId: string; content: string }): Promise<unknown>;
   attentionList(args?: { limit?: number }): Promise<unknown>;
   attentionAcknowledge(args: { id: string }): Promise<unknown>;
+  jobsList(args?: {}): Promise<unknown>;
+  jobsCreate(args: { sessionId: string; name: string; prompt: string; cadenceSecs: number; idempotencyKey?: string }): Promise<unknown>;
+  jobsUpdate(args: { id: string; sessionId?: string; name?: string; prompt?: string; cadenceSecs?: number }): Promise<unknown>;
+  jobsPause(args: { id: string }): Promise<unknown>; jobsResume(args: { id: string }): Promise<unknown>;
+  jobsRun(args: { id: string; idempotencyKey?: string }): Promise<unknown>; jobsDelete(args: { id: string }): Promise<unknown>;
+  jobsHistory(args: { id: string }): Promise<unknown>;
 };`;
 
 /** Owner-scoped coordinator MCP. Cloudflare Access remains the only auth boundary. */
@@ -164,6 +184,14 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
           inject: (input: unknown) => coordinatorCall(c, "inject", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
           attentionList: (input: unknown) => coordinatorCall(c, "attention_list", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
           attentionAcknowledge: (input: unknown) => coordinatorCall(c, "attention_acknowledge", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsList: (input: unknown) => coordinatorCall(c, "jobs_list", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsCreate: (input: unknown) => coordinatorCall(c, "jobs_create", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsUpdate: (input: unknown) => coordinatorCall(c, "jobs_update", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsPause: (input: unknown) => coordinatorCall(c, "jobs_pause", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsResume: (input: unknown) => coordinatorCall(c, "jobs_resume", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsRun: (input: unknown) => coordinatorCall(c, "jobs_run", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsDelete: (input: unknown) => coordinatorCall(c, "jobs_delete", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
+          jobsHistory: (input: unknown) => coordinatorCall(c, "jobs_history", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
         };
         const executor = new DynamicWorkerExecutor({ loader: c.env.LOADER, globalOutbound: null, timeout: 30_000 });
         const execution = await executor.execute(code, [{ name: "codemode", fns }]);

@@ -39,7 +39,7 @@
     "prove:resume": "node scripts/prove-resume.mjs",
     "verify:public": "node scripts/verify-public-clean.mjs",
     "build:vendor": "node scripts/build-vendor.mjs",
-    "test:job-state": "tsx --test src/job-state-transition.test.ts"
+    "test:job-state": "tsx --test src/job-state-transition.test.ts src/job-service.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.84",
