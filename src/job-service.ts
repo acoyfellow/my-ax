@@ -30,9 +30,12 @@ export class JobService {
     return rows.results ?? [];
   }
   async history(id: string) {
-    await this.owned(id);
     const rows = await this.env.DB.prepare("SELECT id, job_id, action, ok, detail_json, created_at FROM job_events WHERE job_id = ? AND owner_email = ? ORDER BY created_at DESC LIMIT 100").bind(id, this.owner).all<Evidence>();
-    return rows.results ?? [];
+    if (rows.results?.length) return rows.results;
+    // Existing jobs with no events are valid legacy rows; deleted jobs are
+    // discoverable only through their retained owner-scoped evidence.
+    await this.owned(id);
+    return [];
   }
   async create(input: Partial<JobInput>, idempotencyKey?: string) {
     const parsed = validateJobInput(input);

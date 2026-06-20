@@ -10,7 +10,7 @@ const row: JobRow = {
   last_error: null, schedule_id: "schedule-1", created_at: "now", updated_at: "now",
 };
 
-function fakeEnv() {
+function fakeEnv(jobExists = true) {
   const events: Array<{ id: string; ok: number; detail_json: string; idempotency_key: string | null }> = [];
   const DB = {
     prepare(sql: string) {
@@ -18,12 +18,16 @@ function fakeEnv() {
       return {
         bind(...next: unknown[]) { values = next; return this; },
         async first() {
-          if (sql.includes("FROM jobs WHERE id")) return values[0] === row.id && values[1] === row.owner_email ? row : null;
+          if (sql.includes("FROM jobs WHERE id")) return jobExists && values[0] === row.id && values[1] === row.owner_email ? row : null;
           if (sql.includes("FROM job_events")) {
             const found = events.find((event) => event.idempotency_key === values[2]);
             return found ? { ok: found.ok, detail_json: found.detail_json } : null;
           }
           return null;
+        },
+        async all() {
+          if (sql.includes("FROM job_events")) return { results: events.filter(() => values[1] === row.owner_email).map((event) => ({ ...event, job_id: row.id, action: "delete", created_at: "now" })) };
+          return { results: [] };
         },
         async run() {
           if (sql.startsWith("INSERT INTO job_events")) {
@@ -62,4 +66,13 @@ test("idempotent run reserves its key before dispatch and replays the result", a
   assert.deepEqual(await service.run(row.id, "same-key"), { ok: true, next_run_at: "next" });
   assert.equal(dispatches, 1);
   assert.equal(events.length, 1);
+});
+
+test("deleted job history remains available through owner-scoped evidence", async () => {
+  const { env, events } = fakeEnv(false);
+  events.push({ id: "event-1", ok: 1, detail_json: "{}", idempotency_key: null });
+  const service = new JobService(env, row.owner_email);
+  const history = await service.history(row.id);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].action, "delete");
 });
