@@ -34,6 +34,11 @@ try {
   const externalSvelteArtifact = resolve({ kind: "svelte-artifact", artifactId: "55555555-5555-4555-8555-555555555555", title: "Bad", src: "https://evil.example/widget" }, "create_svelte_artifact");
   const svg = resolve("data:image/svg+xml;base64,PHN2Zz4=", "machinectl_call");
   const arbitrary = resolve({ html: "<script>alert(1)</script>", component: "Anything" }, "tool");
+  const delegation = resolve({ results: [
+    { runId: "delegate:one", status: "completed", summary: "Evidence found", attempts: 1, output: { safe: true } },
+    { runId: "delegate:two", status: "interrupted", error: "Worker restarted", attempts: 2 },
+    { runId: "delegate:three", status: "error", error: "must be capped" },
+  ], synthesisRequired: true }, "delegate_many");
 
   if (safeReplay.kind !== "browser-run" || safeReplay.replaySrc !== "/browser/replay/abc-123?embed=1" || safeReplay.screenshotSrc !== "/api/artifacts/22222222-2222-4222-8222-222222222222") throw new Error("safe same-origin replay/screenshot missing");
   if (externalReplay.kind !== "browser-run" || externalReplay.replaySrc || externalReplay.screenshotSrc) throw new Error("external replay/screenshot URL was not blocked");
@@ -46,8 +51,10 @@ try {
   if (externalSvelteArtifact.kind !== "raw-text") throw new Error("external Svelte artifact URL must remain inert raw text");
   if (svg.kind !== "raw-text") throw new Error("SVG must remain inert raw text");
   if (arbitrary.kind !== "raw-text") throw new Error("arbitrary model-adjacent widget payload must remain inert raw text");
+  if (delegation.kind !== "delegation-group" || delegation.live !== false || delegation.runs.length !== 2) throw new Error("delegate_many terminal snapshot missing or unbounded");
+  if (delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation status/attempts missing");
 
-  console.log("✓ trusted inline tool-result widgets: safe replay + raster + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
+  console.log("✓ trusted inline tool-result widgets: safe replay + raster + delegation snapshot + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

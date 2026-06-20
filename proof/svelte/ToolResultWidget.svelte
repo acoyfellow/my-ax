@@ -20,7 +20,25 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if widget.kind === "svelte-artifact"}
+{#if widget.kind === "delegation-group"}
+  <section class="tool-call__result" data-tool-widget="delegation-group" aria-label="Delegation results">
+    <strong>Delegated work</strong>
+    <small>Completed snapshot</small>
+    {#each widget.runs as run, index}
+      <article data-delegate-status={run.status}>
+        <div><strong>Child {index + 1}</strong> · <span>{run.status}</span>{#if run.attempts} · <span>{run.attempts} {run.attempts === 1 ? "attempt" : "attempts"}</span>{/if}</div>
+        {#if run.summary}<p>{run.summary}</p>{:else if run.error}<p>{run.error}</p>{/if}
+        {#if run.details || (run.error && run.summary)}
+          <details>
+            <summary>Details</summary>
+            {#if run.error}<p>{run.error}</p>{/if}
+            {#if run.details}<pre>{run.details}</pre>{/if}
+          </details>
+        {/if}
+      </article>
+    {/each}
+  </section>
+{:else if widget.kind === "svelte-artifact"}
   <section class="svelte-artifact-shell" data-fullscreen={fullscreen ? "1" : "0"}>
     <div class="tool-call__result tool-call__browser-summary" data-tool-widget="svelte-artifact">
       <strong>{widget.title}</strong>

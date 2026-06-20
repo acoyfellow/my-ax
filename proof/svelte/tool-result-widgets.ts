@@ -16,6 +16,18 @@ const MAX_BROWSER_TEXT_CHARS = 2_000;
 
 export type ToolResultWidget =
   | {
+      kind: "delegation-group";
+      runs: Array<{
+        runId?: string;
+        status: "pending" | "completed" | "error" | "interrupted" | "aborted";
+        summary?: string;
+        error?: string;
+        attempts?: number;
+        details?: string;
+      }>;
+      live: boolean;
+    }
+  | {
       kind: "browser-run";
       status: "done" | "error";
       heading: string;
@@ -87,6 +99,38 @@ function svelteArtifactWidget(value: unknown): ToolResultWidget | null {
   return { kind: "svelte-artifact", src: result.src as string, title: boundedText(result.title, 120) ?? "Interactive artifact", artifactId: result.artifactId };
 }
 
+function delegationGroupWidget(value: unknown, toolName: string): ToolResultWidget | null {
+  if (toolName !== "delegate_many") return null;
+  const decoded = decodeJsonOnce(value);
+  if (typeof decoded !== "object" || decoded === null) return null;
+  if ("content" in decoded) return delegationGroupWidget((decoded as { content?: unknown }).content, toolName);
+  if ("result" in decoded && !Array.isArray((decoded as { results?: unknown }).results)) {
+    return delegationGroupWidget((decoded as { result?: unknown }).result, toolName);
+  }
+  const results = (decoded as { results?: unknown }).results;
+  if (!Array.isArray(results)) return null;
+  const statuses = new Set(["pending", "completed", "error", "interrupted", "aborted"]);
+  const runs = results.slice(0, 2).flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const run = item as Record<string, unknown>;
+    if (typeof run.status !== "string" || !statuses.has(run.status)) return [];
+    const detailsValue = run.output;
+    let details: string | undefined;
+    if (detailsValue !== undefined) {
+      try { details = JSON.stringify(detailsValue, null, 2).slice(0, 4_000); } catch { details = String(detailsValue).slice(0, 4_000); }
+    }
+    return [{
+      runId: boundedText(run.runId, 200),
+      status: run.status as "pending" | "completed" | "error" | "interrupted" | "aborted",
+      summary: boundedText(run.summary, 500),
+      error: boundedText(run.error, 500),
+      attempts: typeof run.attempts === "number" && Number.isInteger(run.attempts) ? Math.max(1, Math.min(2, run.attempts)) : undefined,
+      details,
+    }];
+  });
+  return runs.length ? { kind: "delegation-group", runs, live: false } : null;
+}
+
 function browserRunWidget(value: unknown): ToolResultWidget | null {
   const decoded = decodeJsonOnce(value);
   if (typeof decoded !== "object" || decoded === null || !("kind" in decoded)) return null;
@@ -127,6 +171,13 @@ function rawText(value: unknown): string {
 /** Resolve a tool output to exactly one allowlisted renderer. Add future
  * widgets here deliberately; unknown payloads remain inert raw text. */
 export function resolveToolResultWidget(value: unknown, toolName = "tool"): ToolResultWidget {
+  // The Svelte chat transport does not currently expose the official
+  // `agent-tool-event` EventTarget consumed by useAgentToolEvents. Render the
+  // retained delegate_many result truthfully as a terminal snapshot; do not
+  // imply live progress. Reconnect/history replay re-resolves the same output.
+  const delegation = delegationGroupWidget(value, toolName);
+  if (delegation) return delegation;
+
   const svelteArtifact = svelteArtifactWidget(value);
   if (svelteArtifact) return svelteArtifact;
 
