@@ -1,78 +1,70 @@
 # My Agent Experience
 
-A My AX conversation can keep running after the PWA disconnects. The deployed trace below sends one code task through a snapshot-backed workspace, a connected physical machine, and a Cloudbox run.
+My AX is an experimental, single-operator personal agent runtime deployed in the operator's Cloudflare account. Each conversation has durable Think state and can use connected capabilities, run recurring work, delegate bounded analysis, request decisions, and retain supported outputs across authenticated devices.
 
-Cloudflare Think owns the live conversation. D1 stores a transcript projection for search and export. Computer work enters through `work_search` and `work_code`:
+The operator controls the deployment configuration and Cloudflare resources it uses. Calls to model providers, MCP servers, Cloudbox, and a connected machine execute outside My AX's storage boundary. Each receives the data and capabilities explicitly sent to it and may retain data under its own configuration or policy.
+
+## What It Does
+
+- **Durable conversations** — Think is authoritative for conversation execution and retained message state. D1 contains a derived transcript index for UI, search, and export. In-flight work may still be interrupted by provider or runtime failure.
+- **Connected capabilities** — the model and generated programs receive callable tools instead of OAuth tokens or deployment secrets. Trusted server-side adapters hold credentials and retain their configured authority.
+- **Execution environments** — use the container-backed owner workspace plus optional Machine, Cloudbox, and public-page Browser capabilities.
+- **Recurring jobs** — authenticated UI routes and agent tools share one owner-scoped service to create, update, pause, resume, run, inspect, and delete scheduled prompts.
+- **Bounded delegation** — a parent can invoke up to two concurrent child agents for model-only analysis, then synthesize their retained results.
+- **Attention and outputs** — decisions and supported output records remain associated with their owner and source conversation; object bytes live in R2 where applicable.
 
 ```text
-work_search · work_code
-       │
-       ├─ workspace.*  My AX Workspace
-       ├─ machine.*    My Machine
-       └─ cloudbox.*   Cloudbox
+Owner through Cloudflare Access
+              │
+              ▼
+       MyAgent · Think
+ authoritative conversation
+   execution and history
+              │
+    ┌─────────┼───────────┬──────────────┐
+    ▼         ▼           ▼              ▼
+ tools/MCP  recurring   delegation    decisions/outputs
+              jobs      (max 2)       Attention + push
+    │
+    ├─ workspace.*  My AX Workspace
+    ├─ machine.*    My Machine
+    ├─ cloudbox.*   Cloudbox
+    └─ browser      public-page Browser Run
 ```
 
-My AX stores its application state, workspace backups, OAuth grants, and configuration in the operator's Cloudflare account. Connected MCP servers, Cloudbox, model providers, and a physical machine retain their own execution and data boundaries.
+D1 stores owner-keyed application records and derived conversation indexes used by the UI, jobs, Attention, and receipts. R2 stores object bytes for uploads, artifacts, recordings, and workspace snapshots; snapshots are not continuous backups. Generated Code Mode programs have no direct database, secret, or network bindings, but their allowlisted host callbacks keep their normal read, write, network, and machine authority.
 
-## A Deployed Run
+## Important Limits
 
-[![A deployed My AX conversation showing Work Code Mode calls to My AX Workspace, My Machine, and Cloudbox](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
+| Surface | Current boundary |
+|---|---|
+| Delegation | At most 2 concurrent children, depth 1, 8 model/tool-loop steps each, and a 120s timeout. Children receive no application, MCP, Browser, Machine, or delegation tools; they still incur model-provider calls and create retained records. The parent retries once only after a stopped platform interruption. Child results have no guaranteed one-hour deletion: a later delegation opportunistically clears older terminal runs. The UI shows a terminal snapshot, not live progress, cancel, or drill-in. |
+| Recurring jobs | At most 10 active jobs per owner. Cadence is 60 seconds to 30 days; names are 200 characters and prompts 4,000. D1 drives the UI while the native scheduler drives execution, and they can disagree. There is no automatic repair; if state drifts, pause/delete and recreate the job. |
+| Work Code Mode | Generated source is limited to 32 KiB and each execution has a 30s wall-clock limit. Confinement does not reduce the authority of an allowlisted callback. |
+| Workspace | All conversations for one owner share `/home/user`. After a workspace mutation capability runs, My AX attempts an R2 snapshot. Recent writes can be lost, and concurrent conversations can edit the same files without a merge coordinator. |
+| Machine | Commands run as the OS account hosting the outbound companion, with that account's filesystem, process, and network permissions. My AX adds no privilege separation. |
+| Cloudbox | The adapter can create a run for a public repository, modify its checkout, and execute commands. My AX provides no repository publishing credential; commands retain whatever network authority Cloudbox permits. |
+| Browser | Browser Run accepts HTTP(S) URLs that pass public-address checks and does not receive local browser cookies. DNS rebinding remains an infrastructure boundary. Authenticated local browsing works only when a connected Machine explicitly exposes it. |
+| Voice and push | Depend on explicit browser permission and provider availability. A failed push does not remove its D1 Attention record. Microphone access begins only from a user action. |
 
-[Open the accelerated MP4](./docs/media/my-ax-kitchen-sink.mp4). One `work_code` call wrote and read `/home/user`, ran `printf MACHINE_OK` through the connected machine, then created a Cloudbox run and read back `CLOUDBOX_OK`. The original interaction took about six seconds; the checked-in video trims startup and runs for 3.4 seconds. This exercises one configured path, not the complete deployment or recovery surface.
+[Feature Status and Limits](./docs/feature-matrix.md) contains the complete shipped/proving/planned matrix.
 
-## Current Surface
+## One Deployed Happy-Path Demonstration
 
-| Status | Capability | Mechanism and Limit |
-|---:|---|---|
-| Shipped | Conversations | Think owns live messages, streaming, recovery, and compaction. Provider failure can still end a turn. |
-| Shipped | My AX Workspace | Sandbox keeps `/home/user`; mutating turns snapshot it to R2. Writes after the last successful snapshot can be lost with the container. |
-| Proving | My Machine | `machinectl` opens an outbound connection and publishes its current catalog. It is optional, terminal-equivalent, and unavailable while the companion is offline. |
-| Proving | Cloudbox | A configured deployment clones a public repository into a live run. The current adapter creates runs, reads, writes, and executes commands; it cannot publish changes. |
-| Shipped | Connected MCPs | Users add public HTTPS MCP servers and complete the server's OAuth flow. Attribution depends on the upstream implementation. |
-| Shipped | Voice and Attention | Voice delegates into the same conversation. Push requires VAPID, browser support, and permission; delivery is best-effort. |
-| Shipped | Browser and Artifacts | Browser Run records public pages. Svelte artifacts render in sandboxed same-origin previews. Browser Run does not inherit local browser cookies. |
+[![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a Cloudbox run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
-[Feature Status and Limits](./docs/feature-matrix.md) names the checks and source paths behind these rows.
+[Open the accelerated MP4](./docs/media/my-ax-kitchen-sink.mp4). The original interaction took about six seconds; the checked-in video trims startup and runs for 3.4 seconds. It demonstrates one configured path. It does not validate recovery, provider availability, isolation, or every production boundary.
 
-## Work Code Mode
-
-`work_search` returns available methods, location, and live Machinectl input schemas. `work_code` runs one async JavaScript function in an official `@cloudflare/codemode` Dynamic Worker.
-
-The following example assumes Machinectl and Cloudbox are already configured; replace the checkout path and repository:
-
-```js
-async () => {
-  await workspace.write({
-    path: '/home/user/notes.md',
-    content: 'Stored in the My AX Workspace',
-  });
-
-  const local = await machine.shell({
-    command: 'git status --short --branch',
-    cwd: '/path/to/current/checkout',
-  });
-
-  const run = await cloudbox.run_create({
-    repo: 'https://github.com/you/project',
-  });
-
-  return { local, runId: run.runId };
-}
-```
-
-The Dynamic Worker accepts at most `32 KiB` of source, has a `30s` timeout, and has no ambient outbound network access. It receives no raw credentials, environment variables, or service bindings. Host callbacks retain their real authority: `machine.shell` still runs with the connected user's terminal permissions.
-
-## First Authenticated Turn
+## Deploy
 
 Requirements:
 
 - Node.js 22 and npm 11
-- Docker, Colima, or WSL2; native Windows shells are not tested
+- Docker with Colima, Docker Desktop, or WSL2; native Windows shells are not tested
 - Python 3, Bash, and OpenSSL
-- Wrangler authentication with permission to create the listed Cloudflare resources
-- Workers, Containers, D1, KV, R2, Workers AI, Browser, and Worker Loader access
+- A Cloudflare account authorized to create Workers, Containers, D1, KV, R2, Workers AI, Browser Rendering, and Dynamic Worker Loader resources; paid usage or product enablement may apply
 
-Bootstrap the resources and Worker:
+`setup.sh` deploys infrastructure, but does **not** produce a production-ready or verified service. Review [Deploying My AX](./docs/deploy.md) before running it against an existing account or exposing the hostname.
 
 ```bash
 git clone https://github.com/acoyfellow/my-ax
@@ -82,37 +74,51 @@ npx wrangler login
 bash scripts/setup.sh
 ```
 
-The script edits the local `wrangler.jsonc`, creates or resolves D1, KV, and R2 resources, generates missing bridge/encryption secrets, applies remote migrations, and deploys. Re-running it preserves existing `BRIDGE_JWT_SECRET` and `MASTER_KEY` values.
+The script creates missing named resources, binds configured existing resources, generates absent bridge/encryption secrets, applies pending remote D1 migrations, and deploys. When the expected secret source remains available, rerunning setup reuses keys rather than rotating them; it cannot recover deleted keys.
 
-The resulting app is not ready yet:
+Before sending a real turn:
 
-1. Create a Cloudflare Access self-hosted application for the deployment hostname.
-2. Set `CF_ACCESS_ISS`, `CF_ACCESS_AUD`, `BRIDGE_BASE_URL`, and `CLOUDFLARE_ACCOUNT_ID`.
-3. Add bucket-scoped R2 S3 credentials if `/home/user` must survive container replacement.
-4. Configure the model routes you intend to expose.
-5. Redeploy with `npm run deploy`.
-6. Verify that an anonymous request is rejected or redirected and an authenticated `GET /api` returns `{"ok":true}`.
-7. Open the app through Access and submit a conversation turn.
+1. Put the hostname behind a Cloudflare Access self-hosted application.
+2. Set `CF_ACCESS_ISS`, `CF_ACCESS_AUD`, `BRIDGE_BASE_URL`, and `CLOUDFLARE_ACCOUNT_ID` as described in the deployment guide.
+3. Add bucket-scoped `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` to make workspace snapshots survive container replacement. Without them, treat workspace files as disposable.
+4. Confirm the default Workers AI model is available to the account; configure gateway-backed routes only if you intend to expose them.
+5. Redeploy, verify anonymous access is rejected, and verify authenticated `/api/health` returns `ok: true`.
+6. Open `BRIDGE_BASE_URL` through Access and complete one model turn. Health proves routing and bindings only; when workspace persistence matters, also run the documented snapshot/restore proof.
 
-Push additionally needs VAPID secrets. Managed OAuth callbacks need an HTTPS hostname; loopback development cannot complete that flow. [Deploying My AX](./docs/deploy.md) contains commands, update behavior, rollback limits, and troubleshooting.
+Push additionally needs VAPID secrets. Managed OAuth callbacks require an Access-gated HTTPS hostname; loopback cannot complete that flow. [Deploying My AX](./docs/deploy.md) contains copy/paste configuration, verification, and troubleshooting commands.
 
-`npm run check` builds generated assets, typechecks, and runs local tests. It does not test Access, a deployed container, model availability, voice, push delivery, or workspace restoration. The [deployment proof](./proof/README.md) covers selected deployed boundaries.
+`npm run check` builds generated assets, typechecks, and runs local tests. It does **not** prove Access, containers, models, voice, push, or workspace restoration. Use the [deployment proof](./proof/README.md) for deployed checks.
 
-## Add a Connector
+## Connect Tools
 
-A signed-in user opens **Settings → Connectors → Add**, enters a public HTTPS MCP endpoint, and completes its authorization flow. My AX discovers OAuth metadata, stores tokens encrypted per user, refreshes them server-side, and rejects embedded credentials plus private, loopback, and metadata destinations.
+Open **Settings → Connectors → Add** and enter an HTTPS MCP endpoint reachable from the Worker and allowed by the destination policy. For supported OAuth-enabled servers, My AX attempts metadata discovery and stores grants encrypted with owner-bound context under the deployment-wide `MASTER_KEY`. Incompatible metadata or callback configuration will not connect. Replacing the key without retaining the old value permanently prevents decryption of existing grants.
 
-The Access identity scopes My AX data. The upstream OAuth grant may represent a different account. Rotating `MASTER_KEY` makes existing encrypted grants unreadable, so users must authorize those connectors again.
+Connector URLs are screened for embedded credentials and disallowed literal destinations. The operator allowlists exact MCP method identifiers for Code Mode; My AX does not prove that an allowlisted method is side-effect-free.
 
-An operator may configure an exact read/query subset for MCP Code Mode. Absent, invalid, new, and unlisted methods stay excluded; native MCP tools remain available for simple calls and explicit side effects. See [Architecture](./docs/architecture.md#browser-and-mcp-surfaces).
+Optional providers:
 
-## Optional Work Providers
+- **My Machine** — run [`machinectl`](https://github.com/acoyfellow/machinectl). This grants terminal-equivalent access as the companion's OS user; use a dedicated least-privilege account.
+- **Cloudbox** — configure a dedicated `CLOUDBOX_INTERNAL_TOKEN` shared only by this My AX deployment and its Cloudbox service.
+- **Web Push** — configure VAPID and grant browser notification permission.
 
-| Provider | Configuration | Unavailable State |
-|---|---|---|
-| My Machine | Run the separate [`machinectl`](https://github.com/acoyfellow/machinectl) companion. | `machine.*` reports disconnected until the outbound companion reconnects. |
-| Cloudbox | Set `CLOUDBOX_URL` and the shared `CLOUDBOX_INTERNAL_TOKEN` secret on both deployments. | `cloudbox.*` reports unavailable when either value is absent. |
-| Web Push | Set VAPID subject, public key, and private key; grant browser notification permission. | Attention remains in D1 when push is unsupported, denied, or rejected. |
+## Repository Map
+
+For contributors, the main entry points are:
+
+```text
+src/agent.ts          canonical Think agent and tool assembly
+src/user-agent.ts     owner root and conversation facets
+src/jobs.ts           native recurring schedules
+src/job-service.ts    owner-scoped job CRUD and evidence
+src/delegate-many.ts  bounded Agents-as-tools delegation
+src/work-tools.ts     Workspace, Machine, and Cloudbox catalog
+src/mcp-code-mode.ts  allowlisted MCP composition
+src/routes/           authenticated HTTP adapters
+proof/svelte/         product UI and allowlisted result widgets
+migrations/           D1 application and projection schemas
+```
+
+State ownership and request flows are in [Architecture](./docs/architecture.md).
 
 ## Development
 
@@ -122,17 +128,19 @@ npm run check
 npm run dev
 ```
 
-[Local Development](./docs/local-development.md) documents loopback mode and the Access-gated HTTPS tunnel needed for OAuth callbacks.
+[Local Development](./docs/local-development.md) documents loopback mode and the Access-gated tunnel needed for OAuth callbacks.
 
 ## Documentation
 
-- [Deploying My AX](./docs/deploy.md)
 - [Architecture](./docs/architecture.md)
 - [Feature Status and Limits](./docs/feature-matrix.md)
-- [Implementation Patterns](./docs/patterns.md)
+- [Deploying My AX](./docs/deploy.md)
 - [Deployment Proof](./proof/README.md)
 - [Security Policy](./SECURITY.md)
 - [Contributing](./CONTRIBUTING.md)
+- [Changelog](./CHANGELOG.md)
+
+Bugs and feature requests belong in [GitHub Issues](https://github.com/acoyfellow/my-ax/issues). Report vulnerabilities through the [Security Policy](./SECURITY.md), not a public issue.
 
 ## License
 
