@@ -21,6 +21,7 @@ import type { Attachment } from "./types";
 import { makeOAuthClientStore } from "./oauth-store";
 import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
+import { createDelegateManyTool, ReadOnlyDelegateAgent } from "./delegate-many";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -120,6 +121,7 @@ const READ_ONLY_TOOLS = new Set<string>([
 
 export class MyAgent extends Think<Env> {
   maxSteps = 25;
+  maxConcurrentAgentTools = 2;
   sendReasoning = true;
   chatRecovery = true;
 
@@ -274,7 +276,16 @@ export class MyAgent extends Think<Env> {
     return {
       ...createThinkTools(() => this.buildToolContext()),
       ...createMyAxBrowserTools(this.env, () => this.identity(), () => this.name),
+      delegate_many: createDelegateManyTool(this),
     };
+  }
+
+  override async onBeforeSubAgent(_request: Request, child: { className: string; name: string }) {
+    // The durable official registry survives parent eviction/deploy. Never gate
+    // retained children with an in-memory allowlist.
+    if (child.className !== ReadOnlyDelegateAgent.name || !this.hasAgentToolRun(child.className, child.name)) {
+      return new Response("Delegate not registered by canonical parent", { status: 404 });
+    }
   }
 
   private async ensureNativeMcp(): Promise<void> {
