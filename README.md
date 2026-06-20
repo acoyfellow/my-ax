@@ -32,7 +32,17 @@ Owner through Cloudflare Access
     └─ browser      public-page Browser Run
 ```
 
-D1 stores owner-keyed application records and derived conversation indexes used by the UI, jobs, Attention, and receipts. R2 stores object bytes for uploads, artifacts, recordings, and workspace snapshots; snapshots are not continuous backups. Generated Code Mode programs have no direct database, secret, or network bindings, but their allowlisted host callbacks keep their normal read, write, network, and machine authority.
+### Who owns what
+
+| Layer | Responsibility |
+|---|---|
+| **Agents SDK** | Durable identity, conversation facets, WebSockets, schedules, MCP, RPC, and child runs. |
+| **Think** | Model/tool turns, message history, recovery, conversation memory, and compaction. |
+| **My AX** | Single-operator authorization, UI, product policy, jobs, Attention, outputs, and work providers. |
+
+Think is authoritative for conversation execution and history. D1 stores application records and derived indexes; R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups.
+
+Code Mode has no direct database, secret, or network bindings. Its allowlisted server-side callbacks retain their normal authority.
 
 ## Important Limits
 
