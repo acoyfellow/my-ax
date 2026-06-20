@@ -29,6 +29,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Security
 
+- Bound direct Voice actors to the authenticated owner and rejected missing or foreign session IDs before seeding or routing Voice state.
 - Rejected carrier-grade NAT destinations in `100.64.0.0/10` from public URL validation.
 
 ## [2026-06-19]

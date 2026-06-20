@@ -21,6 +21,7 @@ import type { AppEnv } from "./app-env";
 import { oauthStoreFor } from "./oauth-store-facade";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
+import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerPushRoutes } from "./routes/push";
 import { registerJobRoutes } from "./routes/jobs";
@@ -422,14 +423,18 @@ app.all("/agents/*", async (c) => {
     const identity = c.get("identity");
     const sessionId = decodeURIComponent(voiceMatch[1]);
     try {
-      // routeAgentRequest resolves the DO by the URL `name` segment (= sessionId)
-      // on the VoiceThinkAgent binding, so seed that exact instance.
-      const stub = await getAgentByName(c.env.VoiceThinkAgent, sessionId);
+      // Resolve ownership and the direct actor name in one fail-closed step.
+      const voiceName = await resolveOwnedVoiceTarget(c.env.DB, identity, sessionId);
+      const stub = await getAgentByName(c.env.VoiceThinkAgent, voiceName);
       await stub.seedSession(identity, sessionId);
+      const routedUrl = new URL(c.req.url);
+      routedUrl.pathname = `/agents/voice-think-agent/${encodeURIComponent(voiceName)}`;
+      const routedRequest = new Request(routedUrl, c.req.raw);
+      return (await routeAgentRequest(routedRequest, c.env)) ?? c.text("voice route not found", 404);
     } catch (err) {
       console.error("voice_session_seed_failed", { sessionId, err: err instanceof Error ? err.message : String(err) });
+      return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Session not found or not owned" } }, 404);
     }
-    return (await routeAgentRequest(c.req.raw, c.env)) ?? c.text("voice route not found", 404);
   }
 
   return c.json<ApiResponse>(

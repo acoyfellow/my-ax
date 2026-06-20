@@ -35,11 +35,12 @@
     "test:deep-links": "tsx --test proof/svelte/deep-links.test.ts",
     "test:attention-state": "tsx --test proof/svelte/attention-state.test.ts",
     "test:session-generation": "tsx --test proof/svelte/session-generation.test.ts",
-    "test:unit": "npm run test:tool-widgets && npm run test:run-receipts && npm run test:session-entries && npm run test:public-url && npm run test:uploads && npm run test:mcp-code-mode && npm run test:bridge-replay && npm run test:workspace-snapshot-ordering && npm run test:deep-links && npm run test:attention-state && npm run test:session-generation && npm run test:job-state",
+    "test:unit": "npm run test:tool-widgets && npm run test:run-receipts && npm run test:session-entries && npm run test:public-url && npm run test:uploads && npm run test:mcp-code-mode && npm run test:bridge-replay && npm run test:workspace-snapshot-ordering && npm run test:deep-links && npm run test:attention-state && npm run test:session-generation && npm run test:voice-session-ownership && npm run test:job-state",
     "prove:resume": "node scripts/prove-resume.mjs",
     "verify:public": "node scripts/verify-public-clean.mjs",
     "build:vendor": "node scripts/build-vendor.mjs",
-    "test:job-state": "tsx --test src/job-state-transition.test.ts src/job-service.test.ts"
+    "test:job-state": "tsx --test src/job-state-transition.test.ts src/job-service.test.ts",
+    "test:voice-session-ownership": "tsx --test src/voice-session-ownership.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.84",
