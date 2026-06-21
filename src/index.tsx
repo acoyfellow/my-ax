@@ -37,6 +37,7 @@ import { registerMachinectlRoutes } from "./routes/machinectl";
 import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerDecisionRoutes } from "./routes/decisions";
+import { registerA2APublicRoutes, registerA2AOwnerRoutes } from "./routes/a2a";
 import { getSessionAgent } from "./agent-stub";
 import { registerSvelteServe } from "../proof/svelte/serve";
 
@@ -100,6 +101,10 @@ app.use("*", async (c, next) => {
 });
 
 app.use("*", cors());
+
+// Public A2A discovery and capability-token endpoints intentionally precede
+// owner Access middleware. They authorize with narrow, revocable grants.
+registerA2APublicRoutes(app);
 
 // GET /api/health — identity-free liveness/wiring probe for the my-ax-smoke-prober
 // service token (and any future external monitoring). Mounted before the
@@ -249,6 +254,7 @@ registerMachinectlRoutes(app);
 registerRunRoutes(app);
 registerArtifactRoutes(app);
 registerDecisionRoutes(app);
+registerA2AOwnerRoutes(app);
 registerSvelteServe(app);
 
 // ─── System / "About This Computer" info ──────────────────────────────────
