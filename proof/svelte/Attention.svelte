@@ -16,6 +16,7 @@
   let unread = $state(0);
   let items = $state<Item[]>([]);
   let loading = $state(false);
+  let clearing = $state(false);
   let error = $state<string | null>(null);
 
   function updateBadge() {
@@ -56,6 +57,27 @@
       updateBadge();
     } catch (err: any) {
       error = err?.message || "Could not mark attention as seen";
+    }
+  }
+  async function clearAll() {
+    if (!items.length || clearing) return;
+    if (!window.confirm(`Clear all ${items.length} recent Attention items? This removes notification receipts, not their source conversations or jobs.`)) return;
+    clearing = true;
+    try {
+      const response = await fetch("/api/attention", { method: "DELETE", credentials: "include" });
+      if (!response.ok) throw new Error("Could not clear Attention");
+      const body = await response.json();
+      const serverItems = body?.result?.items;
+      const serverUnread = Number(body?.result?.unread);
+      if (!Array.isArray(serverItems) || !Number.isFinite(serverUnread)) throw new Error("Could not reconcile Attention state");
+      items = serverItems;
+      unread = serverUnread;
+      error = null;
+      updateBadge();
+    } catch (err: any) {
+      error = err?.message || "Could not clear Attention";
+    } finally {
+      clearing = false;
     }
   }
   async function openPanel() {
@@ -114,7 +136,16 @@
   </button>
   {#if open}
     <section class="absolute z-50 right-0 top-10 w-[min(22rem,calc(100vw-1rem))] max-h-[22rem] overflow-auto rounded-xl border border-line bg-bg-alt shadow-xl p-2" role="dialog" aria-label="Attention">
-      <div class="flex items-center justify-between px-2 py-1.5"><h2 class="text-xs font-semibold text-fg">Attention</h2><span class="text-[10px] text-fg-mut">recent</span></div>
+      <div class="flex items-center justify-between gap-3 px-2 py-1.5">
+        <h2 class="text-xs font-semibold text-fg">Attention</h2>
+        {#if items.length > 0}
+          <button type="button" onclick={clearAll} disabled={clearing} class="rounded px-1.5 py-1 text-[10px] font-medium text-fg-mut hover:bg-surface-2 hover:text-fg disabled:opacity-50">
+            {clearing ? "Clearing…" : "Clear all"}
+          </button>
+        {:else}
+          <span class="text-[10px] text-fg-mut">recent</span>
+        {/if}
+      </div>
       {#if loading}<p class="px-2 py-3 text-xs text-fg-mut">Loading…</p>
       {:else if error}<p class="px-2 py-3 text-xs text-bad">{error}</p>
       {:else if items.length === 0}<p class="px-2 py-3 text-xs text-fg-mut">Nothing needs you.</p>

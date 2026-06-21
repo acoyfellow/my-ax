@@ -1,8 +1,8 @@
 <script lang="ts">
-  // 1:1 port of src/views/SettingsDrawer.tsx + chat.js's Settings/Theme/PWA/
-  // Push/Jobs/Model-mirror blocks.
+  // Settings command modal: model/theme/PWA, capabilities, jobs, push,
+  // health, and connector configuration.
   //
-  // The drawer:
+  // The modal:
   //   - opens/closes via window events 'my-ax:settings-toggle' / -open / -close
   //   - reads model/reasoning from the shared store; writes back via setters
   //   - owns its own /api/jobs CRUD, /api/push/* subscribe/test, install-PWA
@@ -40,12 +40,40 @@
   let dialogEl = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
   let settingsQuery = $state("");
-  let activeSection = $state<"general" | "jobs" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "jobs" | "connections">("general");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
+    { id: "capabilities" as const, label: "Capabilities", hint: "Tools, memory, and boundaries" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled prompts and history" },
     { id: "connections" as const, label: "Connections", hint: "Health, computers, MCP servers" },
+  ];
+
+  const capabilityGroups = [
+    {
+      title: "Every conversation",
+      summary: "Built in and available without another connection.",
+      items: [
+        { name: "Workspace", tools: "work_search · work_code", description: "Find, read, write, search, and run bounded code or processes in the persistent owner workspace." },
+        { name: "Public browser", tools: "browser_open", description: "Open and inspect public web pages in hosted Chrome, including a screenshot and replay. It has no personal browser cookies." },
+        { name: "Conversation recall", tools: "search_conversations", description: "Search the owner’s earlier My AX conversation index. Conversation-local memory is also retained and compacted by Think." },
+        { name: "Human decisions", tools: "ask_user", description: "Pause for one explicit multiple-choice decision and return the answer to the source conversation." },
+        { name: "Recurring work", tools: "manage_jobs", description: "Create, update, pause, resume, run, delete, and inspect scheduled prompts." },
+        { name: "Read-only delegation", tools: "delegate_many", description: "Ask up to two bounded child agents for independent analysis; the parent remains responsible for synthesis." },
+        { name: "Interactive output", tools: "create_svelte_artifact", description: "Create a durable, sandboxed Svelte widget attached to this conversation." },
+        { name: "Owner attention", tools: "notify_owner", description: "Create an owner-scoped Attention item and best-effort push for requested or important background updates." },
+      ],
+    },
+    {
+      title: "Available when connected",
+      summary: "These appear only when the operator configures the provider.",
+      items: [
+        { name: "MCP servers", tools: "server-defined tools · mcp_code_mode", description: "Use tools and resources exposed by servers you add. Credentials stay in the server-side broker; approved read methods can be composed." },
+        { name: "My Machine", tools: "machine.* through work_code", description: "Use methods published by the outbound machine companion, with the authority of its operating-system account." },
+        { name: "Cloudbox", tools: "cloudbox.* through work_code", description: "Create a bounded clean repository run, inspect or modify its checkout, and execute commands with receipts." },
+        { name: "Push notifications", tools: "browser subscription", description: "Deliver Attention updates to subscribed installed apps when VAPID and browser permission are configured." },
+      ],
+    },
   ];
   const visibleSections = $derived.by(() => {
     const query = settingsQuery.trim().toLowerCase();
@@ -426,10 +454,10 @@
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────
-  // Relocate Health + Connectors mounts INTO the drawer body. ChatPage.tsx
-  // renders them as siblings in <div id="settings-drawer-extra-mounts">;
-  // here we move them into <div id="settings-extras-slot"> inside this
-  // drawer. The mounts hydrate normally on their original DOM nodes —
+  // Relocate Health + Connectors mounts into the modal. ChatPage.tsx renders
+  // them as siblings in <div id="settings-drawer-extra-mounts">; here we move
+  // them into <div id="settings-extras-slot">. The mounts hydrate normally
+  // on their original DOM nodes —
   // moving the node post-hydrate is harmless because Svelte tracks the
   // reactive root via the mount element identity, not its parent.
   function relocateExtras() {
@@ -506,7 +534,7 @@
     <button type="button" onclick={closeDrawer} class="rounded border border-line px-2 py-1 text-xs text-fg-mut hover:text-fg" aria-label="Close settings">Esc</button>
   </header>
 
-  <div class="grid min-h-0 grid-rows-[auto_1fr] sm:grid-cols-[190px_1fr] sm:grid-rows-1">
+  <div class="settings-layout grid flex-1 min-h-0 overflow-hidden">
     <nav aria-label="Settings sections" class="flex gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:border-b-0 sm:border-r">
       {#each visibleSections as section}
         <button
@@ -523,7 +551,7 @@
       {#if visibleSections.length === 0}<p class="px-2 py-3 text-xs text-fg-mut">No settings match.</p>{/if}
     </nav>
 
-    <div class="min-h-0 overflow-y-auto [scrollbar-width:thin] p-3 sm:p-4">
+    <div class="min-h-0 max-h-full overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin] p-3 sm:p-4" data-settings-scroll>
       <div class="space-y-4" hidden={activeSection !== "general"}>
     {#if identityEmail}
       <div>
@@ -650,6 +678,42 @@
       <p class="mt-2 text-xs text-fg-mut">{pushStatus}</p>
     </section>
 
+      </div>
+
+      <div hidden={activeSection !== "capabilities"} class="space-y-4">
+        <header>
+          <h3 class="text-sm font-semibold text-fg">Agent capabilities</h3>
+          <p class="mt-1 text-xs leading-relaxed text-fg-mut">The model receives callable capabilities, not your raw credentials. Availability can still depend on deployment configuration and provider health.</p>
+        </header>
+        {#each capabilityGroups as group}
+          <section class="rounded-lg border border-line bg-bg">
+            <div class="border-b border-line px-3 py-2.5">
+              <h4 class="text-xs font-semibold text-fg">{group.title}</h4>
+              <p class="mt-0.5 text-[11px] text-fg-mut">{group.summary}</p>
+            </div>
+            <ul class="divide-y divide-line">
+              {#each group.items as item}
+                <li class="px-3 py-3">
+                  <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <strong class="text-xs font-medium text-fg">{item.name}</strong>
+                    <code class="max-w-full break-all text-[10px] text-brand">{item.tools}</code>
+                  </div>
+                  <p class="mt-1 text-[11px] leading-relaxed text-fg-mut">{item.description}</p>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/each}
+        <section class="rounded-lg border border-line bg-bg px-3 py-3">
+          <h4 class="text-xs font-semibold text-fg">Important boundaries</h4>
+          <ul class="mt-2 grid gap-1.5 text-[11px] leading-relaxed text-fg-mut">
+            <li>• Workspace files are shared across this owner’s conversations; concurrent writes are not automatically merged.</li>
+            <li>• Public Browser has no local cookies. Authenticated browsing requires an explicitly connected Machine capability.</li>
+            <li>• Machine methods run with the companion OS account’s authority. Cloudbox and MCP retain their own configured authority.</li>
+            <li>• Delegated children are model-only, depth one, and cannot use your application tools or connections.</li>
+            <li>• Work Code Mode has no ambient secrets, database, network, or filesystem access; only named callbacks are callable.</li>
+          </ul>
+        </section>
       </div>
 
       <div hidden={activeSection !== "jobs"}>
@@ -783,8 +847,14 @@
   .settings-command {
     position: fixed;
     inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;
+    height: min(760px, calc(100dvh - 1rem));
     margin: 0;
     transform: translateX(-50%);
+  }
+
+  .settings-command[open] {
+    display: flex;
+    flex-direction: column;
   }
 
   .settings-command::backdrop {
@@ -792,13 +862,22 @@
     backdrop-filter: blur(2px);
   }
 
+  .settings-layout {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
   @media (min-width: 640px) {
     .settings-command { top: 8vh; }
+    .settings-layout {
+      grid-template-columns: 190px minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+    }
   }
 
   @media (max-width: 639px) {
     .settings-command {
       width: calc(100vw - 1rem);
+      height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
       max-height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
     }
   }

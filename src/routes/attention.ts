@@ -28,6 +28,17 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { unread: Number(unread?.count ?? 0), items: items.results ?? [] }, next_actions: [] });
   });
 
+  app.delete("/api/attention", async (c) => {
+    const email = owner(c);
+    const result = await c.env.DB.prepare("DELETE FROM attention_items WHERE owner_email = ?").bind(email).run();
+    return c.json<ApiResponse>({
+      ok: true,
+      command: c.req.path,
+      result: { deleted: Number(result.meta?.changes ?? 0), unread: 0, items: [] },
+      next_actions: [],
+    });
+  });
+
   app.post("/api/attention/seen", async (c) => {
     const email = owner(c);
     const body: { ids?: string[] } = await c.req.json<{ ids?: string[] }>().catch(() => ({}));

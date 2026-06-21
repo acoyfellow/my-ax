@@ -1,11 +1,6 @@
 <script lang="ts">
-  // Port of the entire chat surface from src/views/ChatPage.tsx
-  // (ChatColumn + Onboarding) and the old chat.js WebSocket
-  // chat-runtime (reconnect socket, status state machine, message log
-  // rendering, composer + attachments, optimistic user reconcile,
-  // connector banner, OAuth callback toast, scroll-to-bottom).
-  //
-  // Every visible behavior of the JSX+chat.js pair is reproduced here.
+  // Canonical conversation UI and browser runtime: transport recovery,
+  // transcript rendering, composer, attachments, voice, and tool results.
 
   import { onMount, tick } from "svelte";
   import { marked } from "marked";
@@ -447,13 +442,6 @@
       html = wrapper.innerHTML;
     }
     return html;
-  }
-
-  function escapeHtml(s: string) {
-    return String(s).replace(
-      /[&<>"']/g,
-      (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] as string,
-    );
   }
 
   // After markdown HTML is injected via {@html}, attach copy buttons.
@@ -1528,13 +1516,12 @@
     applyStatus("idle");
   }
 
-  // Global Esc → cancel agent (but only if no drawer/sidebar is open).
+  // Global Esc → cancel agent, unless a modal or conversation sidebar is open.
   function onGlobalKeydown(e: KeyboardEvent) {
     if (e.key !== "Escape") return;
-    const drawerOpen =
-      document.querySelector('[data-svelte-hono-mount="settings"] aside[role=dialog]')?.classList.contains("translate-y-0") ?? false;
+    const settingsOpen = document.querySelector<HTMLDialogElement>("dialog#settings-drawer")?.open ?? false;
     const sidebarOpen = document.documentElement.dataset.svelteSessionsOpen === "1";
-    if (drawerOpen || sidebarOpen) return;
+    if (settingsOpen || sidebarOpen) return;
     cancelAgent();
   }
 
@@ -1626,10 +1613,8 @@
   // ── Lifecycle ─────────────────────────────────────────────────────
   onMount(() => {
     ensureMarkedHljs().then(async () => {
-      // A response may have finalized before the lazy Markdown dependencies loaded.
-      // In that case renderMarkdown stored escaped fallback text in rendered. Always
-      // re-render completed assistant text once Markdown is available so the live
-      // view converges with the correctly formatted history shown after refresh.
+      // Re-render completed text once lazy syntax highlighting is ready so
+      // fenced code receives the same finalized styling as restored history.
       messages = messages.map((m) => {
         if (m.role !== "assistant" || m.streaming) return m;
         const parts = m.parts.map((p) =>

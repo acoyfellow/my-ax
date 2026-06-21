@@ -5,10 +5,9 @@
 //   - AppShell.svelte      header (logo, conn pill, hamburger, attention, settings)
 //   - Sessions.svelte      left-slide-in conversations sidebar
 //   - Chat.svelte          the entire chat surface (composer, log, WS, etc)
-//   - Settings.svelte      slide-up settings drawer (model, theme, jobs, …)
-//   - ComputerHealth + Connectors are children of Settings — Settings owns
-//     two more <SvelteEmbed> calls for its 'About This Computer' +
-//     'Connectors' panels.
+//   - Settings.svelte      centered settings modal (capabilities, model, jobs, …)
+//   - ComputerHealth + Connectors hydrate separately, then Settings moves
+//     their mount nodes into its Connections section.
 
 import type { FC } from "hono/jsx";
 import { Layout, type ThemePref } from "./Layout";
@@ -64,20 +63,15 @@ export const ChatPage: FC<ChatPageProps> = (props) => {
         props={{ identityEmail: props.identityEmail ?? null, initialTheme: props.theme ?? "system" }}
         buildId={props.buildId}
       />
-      {/* Health + Connectors are embedded as separate Svelte mounts.
-          They live OUTSIDE the Settings drawer's Svelte tree (because
-          svelte-hono SSR doesn't nest other component bundles), but the
-          drawer is positioned with fixed CSS so they appear inside it
-          visually. */}
+      {/* These panels hydrate as separate mounts because svelte-hono SSR does
+          not nest component bundles. Settings moves the hydrated nodes into
+          its stable Connections slot. */}
       <div id="settings-drawer-extra-mounts" class="hidden" aria-hidden="true">
         <SvelteEmbed component={ComputerHealthComponent} hydrateAs="health" buildId={props.buildId} />
         <SvelteEmbed component={ConnectorsComponent} hydrateAs="connectors" buildId={props.buildId} />
       </div>
 
-      {/* Inline styles — prompt cards, agent-thinking dots, msg bubbles,
-          tool-call collapsibles, connector banner. These were inside the
-          old chat.js inline-style block; preserved here so the Svelte
-          components don't need to repeat them. */}
+      {/* Shared page-scope styles for conversation and tool-result markup. */}
       <style
         dangerouslySetInnerHTML={{
           __html: chatPageStyles,
@@ -87,8 +81,7 @@ export const ChatPage: FC<ChatPageProps> = (props) => {
   );
 };
 
-/** All the page-scope styles the chat surface relies on. Lifted verbatim
- *  from the old chat.js inline style block + ChatPage.tsx's <style>. */
+/** Page-scope styles shared by the server shell and hydrated chat surface. */
 const chatPageStyles = `
   .prompt-card {
     text-align: left;
