@@ -8,6 +8,7 @@
   // Every visible behavior of the JSX+chat.js pair is reproduced here.
 
   import { onMount, tick } from "svelte";
+  import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import { resolveToolResultWidget } from "./tool-result-widgets";
@@ -30,16 +31,13 @@
     setActiveSession,
   } from "@my-ax/store";
 
-  // ── CDN libs (lazy-loaded after mount to keep SSR + first paint cheap) ──
-  // Using dynamic import() so the Svelte bundle never blocks on these.
-  let marked: any = null;
+  // Markdown ships in the application bundle so the first streamed token can
+  // be parsed immediately. Syntax highlighting remains a lazy enhancement.
+  marked.setOptions({ gfm: true, breaks: true });
   let hljs: any = null;
   async function ensureMarkedHljs() {
-    if (marked && hljs) return;
-    const [markedMod, hljsMod] = await Promise.all([
-      import("https://esm.sh/marked@14.1.3"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/core"),
-    ]);
+    if (hljs) return;
+    const hljsMod = await import("https://esm.sh/highlight.js@11.10.0/lib/core");
     const langs = await Promise.all([
       import("https://esm.sh/highlight.js@11.10.0/lib/languages/javascript"),
       import("https://esm.sh/highlight.js@11.10.0/lib/languages/typescript"),
@@ -51,7 +49,6 @@
       import("https://esm.sh/highlight.js@11.10.0/lib/languages/yaml"),
       import("https://esm.sh/highlight.js@11.10.0/lib/languages/markdown"),
     ]);
-    marked = markedMod.marked;
     hljs = hljsMod.default;
     const reg = (name: string, mod: any) => hljs.registerLanguage(name, mod.default);
     reg("javascript", langs[0]);
@@ -68,7 +65,6 @@
     reg("yml", langs[7]);
     reg("md", langs[8]);
     reg("markdown", langs[8]);
-    marked.setOptions({ gfm: true, breaks: true, headerIds: false, mangle: false });
     // hljs github-dark theme stylesheet — Chrome forbids MIME-mismatched CSS
     // ES imports, so we use a <link> tag.
     const link = document.createElement("link");
@@ -424,8 +420,7 @@
 
   // ── Markdown render ────────────────────────────────────────────────
   function renderMarkdown(md: string): string {
-    if (!marked) return escapeHtml(md);
-    let html = marked.parse(md ?? "");
+    let html = marked.parse(md ?? "") as string;
     // post-process <pre><code> for hljs + copy button. We need to do this
     // on the rendered HTML, since we're returning a string for {@html}.
     if (hljs) {
@@ -634,9 +629,10 @@
       const parts = [...m.parts];
       const lastIdx = parts.length - 1;
       if (lastIdx >= 0 && parts[lastIdx].kind === "text") {
-        parts[lastIdx] = { kind: "text", text: (parts[lastIdx] as any).text + delta };
+        const text = (parts[lastIdx] as any).text + delta;
+        parts[lastIdx] = { kind: "text", text, rendered: renderMarkdown(text) };
       } else {
-        parts.push({ kind: "text", text: delta });
+        parts.push({ kind: "text", text: delta, rendered: renderMarkdown(delta) });
       }
       return {
         ...m,
@@ -1757,7 +1753,7 @@
     <div class="flex-1 min-w-0 flex flex-col h-full">
       <main
         bind:this={logEl}
-        class="relative flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 scroll-smooth"
+        class="relative flex-1 min-w-0 overflow-x-hidden overflow-y-auto overscroll-x-none touch-pan-y px-3 sm:px-6 lg:px-8 py-4 sm:py-6 scroll-smooth"
         tabindex={-1}
         aria-live="polite"
         aria-label="Conversation"
@@ -1794,7 +1790,7 @@
         <!-- Messages -->
         {#each messages as m (m.id)}
           <article
-            class={`msg msg-${m.role}` + (m.role === "tool" ? " msg-tool-compact" : "")}
+            class={`msg msg-${m.role} min-w-0 overflow-x-hidden` + (m.role === "tool" ? " msg-tool-compact" : "")}
             data-id={m.id}
             data-pending={m.pending ? "1" : "0"}
             data-streaming={m.streaming ? "1" : "0"}
@@ -1860,7 +1856,7 @@
                     {#if block.kind === "text"}
                       <div class="msg-body">
                         {#if block.rendered}
-                          <div class="prose prose-invert prose-sm max-w-none">{@html block.rendered}</div>
+                          <div class="prose prose-invert prose-sm max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">{@html block.rendered}</div>
                         {:else}
                           {block.text}
                         {/if}

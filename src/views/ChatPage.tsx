@@ -111,7 +111,7 @@ const chatPageStyles = `
   .prompt-card__title { color: var(--fg); font-weight: 500; font-size: 13px; }
   .prompt-card__hint { color: var(--fg-mut); font-size: 11px; line-height: 1.4; }
 
-  .msg { max-width: 48rem; margin: 0 auto 18px; }
+  .msg { width: 100%; max-width: 48rem; min-width: 0; margin: 0 auto 18px; overflow-x: hidden; }
   .msg-head {
     font-size: 11px; font-weight: 500; color: var(--fg-mut);
     margin-bottom: 6px; opacity: 0.85;
@@ -126,8 +126,12 @@ const chatPageStyles = `
     font-size: 10px; font-weight: 400; color: var(--fg-mut);
     opacity: 0.55; font-variant-numeric: tabular-nums;
   }
-  .msg-body { font-size: 14px; line-height: 1.55; color: var(--fg); white-space: pre-wrap; word-wrap: break-word; }
-  .msg-assistant .msg-body { white-space: normal; }
+  .msg-body { min-width: 0; max-width: 100%; font-size: 14px; line-height: 1.55; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  .msg-assistant .msg-body { white-space: normal; overflow-x: hidden; }
+  .msg-assistant .prose { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .msg-assistant .prose img, .msg-assistant .prose video, .msg-assistant .prose iframe { max-width: 100%; }
+  .msg-assistant .prose table { display: block; max-width: 100%; overflow-x: auto; }
+  .msg-assistant .prose pre { max-width: 100%; overscroll-behavior-x: contain; }
   .msg-assistant .msg-body[data-empty="1"] { display: none; }
   .prose, .prose-invert {
     --tw-prose-body: var(--color-fg);
