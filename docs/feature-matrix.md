@@ -1,21 +1,5 @@
 # My Agent Experience — Feature Status and Limits
 
-## A2A deployment links
-
-| Capability | Status |
-|---|---|
-| Public A2A 1.0 agent card | ✅ `/.well-known/agent-card.json` |
-| Directional inbound grants | ✅ Owner create/list/revoke; opaque bearer shown once |
-| Text-only user message send | ✅ `POST /a2a/message:send` |
-| Durable dedupe | ✅ Exact replay; changed payload for a messageId returns 409 |
-| Owner review | ✅ Accept/reject/block; block revokes sender grant |
-| Remote execution | Intentionally absent: no Think, MCP, tools, or workspace |
-
-Only SHA-256 token digests are persisted. Public routes reveal no owner identity,
-tasks are scoped to the presenting grant, and owner controls remain behind
-Cloudflare Access. Treat a grant like a password and revoke it after use.
-Accepted tasks remain inert review records; remote instructions are not executed.
-
 This table describes behavior in the current repository. `npm run check` covers local type, unit, and widget checks; deployment-only behavior names its proof command or source path.
 
 Status:

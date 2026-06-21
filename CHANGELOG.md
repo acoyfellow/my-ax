@@ -8,7 +8,6 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Added
 
-- Added a minimal secure A2A 1.0 deployment-link slice: public agent discovery, owner-managed hash-only directional inbound grants, text-only durable message dedupe, grant-scoped task reads, and owner accept/reject/block review. This path deliberately cannot invoke Think, MCP, tools, or workspaces.
 - Rewrote the README around the current runtime, explicit authority and durability semantics, production-readiness steps, hard limits, and a seven-minute contributor map; incorporated adversarial operational, runtime-contract, and OSS onboarding review, and clarified the boundary between Agents SDK, Think, and My AX.
 - Added bounded `delegate_many` using official Agents-as-tools: up to two concurrent run-scoped read-only Think children, structured retained results, typed failures, idempotent replay, cancellation, owner-gated drill-in, and TTL cleanup.
 - Added a polished, replay-safe grouped delegation card with aggregate progress, task labels, accessible status rows, structured run metadata, mobile-safe details, and nested raw output; it truthfully renders retained terminal output until the Svelte transport exposes official live agent-tool events.

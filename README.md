@@ -12,7 +12,6 @@ The operator controls the deployment configuration and Cloudflare resources it u
 - **Recurring jobs** — authenticated UI routes and agent tools share one owner-scoped service to create, update, pause, resume, run, inspect, and delete scheduled prompts.
 - **Bounded delegation** — a parent can invoke up to two concurrent child agents for model-only analysis, then synthesize their retained results.
 - **Attention and outputs** — decisions and supported output records remain associated with their owner and source conversation; object bytes live in R2 where applicable.
-- **Deployment links** — independent installations can exchange owner-reviewed text through a narrow A2A 1.0 HTTP+JSON subset. Directional grants never expose conversations, memory, MCP, tools, or workspace authority.
 
 ```text
 Owner through Cloudflare Access
@@ -149,7 +148,6 @@ npm run dev
 - [Architecture](./docs/architecture.md)
 - [Feature Status and Limits](./docs/feature-matrix.md)
 - [Deploying My AX](./docs/deploy.md)
-- [A2A Deployment Links](./docs/deployment-links.md)
 - [Deployment Proof](./proof/README.md)
 - [Security Policy](./SECURITY.md)
 - [Contributing](./CONTRIBUTING.md)
