@@ -21,6 +21,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Fixed
 
+- Made fresh browser state select the documented Workers AI default instead of an unconfigured gateway model, and aligned the root API product version with `0.0.1`.
 - Made fresh self-host setup account-explicit and reproducible: multi-account Wrangler sessions can be pinned, new installations receive one current Durable Object baseline instead of replaying an invalid historical add/delete chain, and independent deployment boundaries are documented.
 - Removed a stale undefined connector-refresh call that could break terminal chat-response handling after a turn completed.
 - Kept the Attention unread badge authoritative when only the newest page is marked seen, including concurrent arrivals and failed seen requests.

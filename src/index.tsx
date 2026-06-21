@@ -201,7 +201,7 @@ app.get("/api", async (c) => {
     command: "my-agent",
     result: {
       name: "My Agent Experience",
-      version: "0.1.0",
+      version: "0.0.1",
       identity: c.get("identity").email,
       connectors: connectorStatus,
       endpoints: {

@@ -49,8 +49,8 @@ interface ModelEntry {
 // SSR-rendered initial select option. Each component's onMount syncs to
 // these as needed.
 function initialModel(): string {
-  if (typeof localStorage === "undefined") return "gpt-5.5";
-  return localStorage.getItem("model") || "gpt-5.5";
+  if (typeof localStorage === "undefined") return "@cf/moonshotai/kimi-k2.7-code";
+  return localStorage.getItem("model") || "@cf/moonshotai/kimi-k2.7-code";
 }
 function initialReasoning(): Reasoning {
   if (typeof localStorage === "undefined") return "medium";
