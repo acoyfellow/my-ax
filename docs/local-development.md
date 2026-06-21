@@ -5,12 +5,26 @@ Both modes require Docker, Colima, or WSL2 for the Sandbox container.
 ## 1. Fast Loopback Mode
 
 ```bash
+npm install
+npm run db:migrate:local   # first run, and whenever migrations change
 npm run dev
 ```
 
-This mode uses the `ENVIRONMENT=dev` and `DEV_USER_EMAIL=dev@localhost`
+Open `http://localhost:8787`. This mode builds the browser assets, watches the
+Worker, and uses the `ENVIRONMENT=dev` and `DEV_USER_EMAIL=dev@localhost`
 identity bypass. Use it for UI and runtime changes that do not require an HTTPS
 OAuth callback. Managed OAuth callbacks do not work on the loopback URL.
+
+If port 8787 is already occupied, keep the normal asset build and choose an
+explicit review port:
+
+```bash
+npm run build:assets
+npx wrangler dev --env dev --port 8790
+```
+
+Settings can be opened with the gear button or `Cmd+K` / `Ctrl+K`, which makes
+responsive settings work easy to review without a deployed environment.
 
 ## 2. Access-Gated Tunnel Mode
 

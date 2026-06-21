@@ -8,7 +8,7 @@
   //   - owns its own /api/jobs CRUD, /api/push/* subscribe/test, install-PWA
   //     prompt capture, theme cycle, model-catalog search
 
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import {
     modelState,
     setModel,
@@ -37,27 +37,64 @@
 
   // ── open/close ──────────────────────────────────────────────────────
   let open = $state(false);
-  let drawerEl = $state<HTMLElement | null>(null);
+  let dialogEl = $state<HTMLDialogElement | null>(null);
+  let searchInput = $state<HTMLInputElement | null>(null);
+  let settingsQuery = $state("");
+  let activeSection = $state<"general" | "jobs" | "connections">("general");
+  let lastActiveElement: HTMLElement | null = null;
+  const sections = [
+    { id: "general" as const, label: "General", hint: "Model, app, notifications" },
+    { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled prompts and history" },
+    { id: "connections" as const, label: "Connections", hint: "Health, computers, MCP servers" },
+  ];
+  const visibleSections = $derived.by(() => {
+    const query = settingsQuery.trim().toLowerCase();
+    return query ? sections.filter((section) => `${section.label} ${section.hint}`.toLowerCase().includes(query)) : sections;
+  });
+  $effect(() => {
+    if (settingsQuery && visibleSections.length && !visibleSections.some((section) => section.id === activeSection)) {
+      activeSection = visibleSections[0].id;
+    }
+  });
   function openDrawer() {
+    lastActiveElement = document.activeElement as HTMLElement | null;
     open = true;
     refreshJobs();
+    tick().then(() => {
+      if (dialogEl && !dialogEl.open) dialogEl.showModal();
+      searchInput?.focus();
+    });
   }
   function closeDrawer() {
     open = false;
-    document.getElementById("settings-button")?.focus();
+    settingsQuery = "";
+    if (dialogEl?.open) dialogEl.close();
+    (lastActiveElement ?? document.getElementById("settings-button"))?.focus?.();
+    lastActiveElement = null;
   }
   function toggleDrawer() {
     if (open) closeDrawer();
     else openDrawer();
   }
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && open) closeDrawer();
-  }
-  function handleOutsidePointerDown(e: PointerEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      toggleDrawer();
+      return;
+    }
     if (!open) return;
-    const target = e.target as Node | null;
-    if (!target || drawerEl?.contains(target) || document.getElementById("settings-button")?.contains(target)) return;
-    closeDrawer();
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeDrawer();
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const options = visibleSections;
+      if (!options.length) return;
+      e.preventDefault();
+      const current = Math.max(0, options.findIndex((section) => section.id === activeSection));
+      const delta = e.key === "ArrowDown" ? 1 : -1;
+      activeSection = options[(current + delta + options.length) % options.length].id;
+    }
   }
 
   // ── PWA install ─────────────────────────────────────────────────────
@@ -411,16 +448,14 @@
     window.addEventListener("my-ax:settings-open", openDrawer);
     window.addEventListener("my-ax:settings-close", closeDrawer);
     window.addEventListener("my-ax:settings-toggle", toggleDrawer);
-    document.addEventListener("keydown", handleKeydown);
-    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    window.addEventListener("keydown", handleKeydown);
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     mq.addEventListener("change", onSystemThemeChange);
     return () => {
       window.removeEventListener("my-ax:settings-open", openDrawer);
       window.removeEventListener("my-ax:settings-close", closeDrawer);
       window.removeEventListener("my-ax:settings-toggle", toggleDrawer);
-      document.removeEventListener("keydown", handleKeydown);
-      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+      window.removeEventListener("keydown", handleKeydown);
       mq.removeEventListener("change", onSystemThemeChange);
     };
   });
@@ -444,55 +479,52 @@
   });
 </script>
 
-<!-- Backdrop -->
-<div
-  class="fixed inset-0 z-40 bg-black/60 transition-opacity duration-150"
-  class:opacity-100={open}
-  class:opacity-0={!open}
-  class:pointer-events-auto={open}
-  class:pointer-events-none={!open}
-  aria-hidden="true"
-  onclick={closeDrawer}
-></div>
-
-<!-- Drawer.
-     Tagged with id=settings-drawer + data-open so the JSX-injected
-     Health + Connectors panels (siblings in the DOM via the trailing
-     <div id="settings-drawer-extra-mounts">) can be relocated INTO the
-     drawer body on mount via a tiny script. The mount script lives in
-     this same component's onMount block. -->
-<aside
-  bind:this={drawerEl}
+<dialog
+  bind:this={dialogEl}
   id="settings-drawer"
   data-open={open ? "1" : "0"}
-  role="dialog"
-  aria-modal="true"
-  aria-label="Settings"
-  tabindex={-1}
-  class="fixed z-50 top-0 bottom-0 right-0 w-[88vw] max-w-[360px] md:w-80 bg-bg-alt border-l border-line shadow-2xl transition-all duration-200 flex flex-col"
-  class:translate-x-0={open}
-  class:translate-x-full={!open}
-  class:opacity-100={open}
-  class:opacity-0={!open}
-  class:pointer-events-auto={open}
-  class:pointer-events-none={!open}
+  aria-labelledby="settings-title"
+  class="settings-command z-50 w-[min(760px,calc(100vw-1rem))] max-h-[min(760px,calc(100dvh-1rem))] overflow-hidden rounded-xl border border-line bg-bg-alt p-0 text-fg shadow-2xl"
+  onclick={(event) => event.target === event.currentTarget && closeDrawer()}
+  oncancel={(event) => { event.preventDefault(); closeDrawer(); }}
+  onclose={() => { if (open) closeDrawer(); }}
 >
-  <header class="safe-area-appbar flex-none flex items-center justify-between px-4 py-3 border-b border-line min-h-[48px]">
-      <h2 class="text-sm font-semibold text-fg">Settings</h2>
-      <button
-        type="button"
-        onclick={closeDrawer}
-        class="w-8 h-8 rounded-md flex items-center justify-center text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
-        aria-label="Close settings"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
+  <header class="safe-area-appbar flex items-center gap-3 border-b border-line px-3 py-2.5 sm:px-4">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" class="shrink-0 text-fg-mut">
+      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+    </svg>
+    <h2 id="settings-title" class="sr-only">Settings</h2>
+    <input
+      bind:this={searchInput}
+      bind:value={settingsQuery}
+      type="search"
+      placeholder="Search settings…"
+      aria-label="Search settings"
+      class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-fg-mut/70"
+    />
+    <kbd class="hidden rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-fg-mut sm:inline">⌘K</kbd>
+    <button type="button" onclick={closeDrawer} class="rounded border border-line px-2 py-1 text-xs text-fg-mut hover:text-fg" aria-label="Close settings">Esc</button>
   </header>
 
-  <div class="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] px-4 py-3 sm:py-4 space-y-4">
+  <div class="grid min-h-0 grid-rows-[auto_1fr] sm:grid-cols-[190px_1fr] sm:grid-rows-1">
+    <nav aria-label="Settings sections" class="flex gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:border-b-0 sm:border-r">
+      {#each visibleSections as section}
+        <button
+          type="button"
+          onclick={() => (activeSection = section.id)}
+          aria-current={activeSection === section.id ? "page" : undefined}
+          class="min-w-max rounded-lg px-3 py-2 text-left hover:bg-surface-2 sm:min-w-0"
+          class:bg-surface-2={activeSection === section.id}
+        >
+          <span class="block text-sm font-medium">{section.label}</span>
+          <span class="hidden text-[11px] text-fg-mut sm:block">{section.hint}</span>
+        </button>
+      {/each}
+      {#if visibleSections.length === 0}<p class="px-2 py-3 text-xs text-fg-mut">No settings match.</p>{/if}
+    </nav>
+
+    <div class="min-h-0 overflow-y-auto [scrollbar-width:thin] p-3 sm:p-4">
+      <div class="space-y-4" hidden={activeSection !== "general"}>
     {#if identityEmail}
       <div>
         <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Signed in</span>
@@ -618,7 +650,10 @@
       <p class="mt-2 text-xs text-fg-mut">{pushStatus}</p>
     </section>
 
-    <section id="jobs" class="rounded-md border border-line bg-bg px-3 py-3">
+      </div>
+
+      <div hidden={activeSection !== "jobs"}>
+    <section id="jobs" class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
       <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Recurring jobs</span>
       <p class="mb-3 text-xs text-fg-mut">
         Run a saved prompt in this conversation later. Prompts can ask the agent to notify you when attention is needed.
@@ -632,24 +667,24 @@
             {@const nextRun = job.status === "paused" ? "paused" : jobTimeLabel(job.next_run_at, "not scheduled")}
             {@const result = job.last_error ? `failed · ${job.last_error}` : job.last_run_at ? "ok" : "waiting"}
             {@const state = job.status === "paused" ? "paused" : "active"}
-            <div class="rounded-md border border-line px-2.5 py-2 text-xs">
-              <div class="flex items-center justify-between gap-2">
-                <strong class="text-fg">{job.name}</strong>
-                <span class="text-fg-mut">{cadenceLabel(job.cadence_secs)}</span>
+            <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
+              <div class="flex min-w-0 items-start justify-between gap-3">
+                <strong class="min-w-0 break-words text-sm text-fg">{job.name}</strong>
+                <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{cadenceLabel(job.cadence_secs)}</span>
               </div>
               <div class="mt-1 text-fg-mut line-clamp-2">{job.prompt}</div>
               <div class="mt-2 grid gap-0.5 font-mono text-[11px] text-fg-mut">
                 <div>{state} · next {nextRun}</div>
                 <div data-job-result={job.last_error ? "error" : "ok"}>last {lastRun} · {result}</div>
               </div>
-              <div class="mt-2 flex gap-2">
-                <button type="button" onclick={() => runJob(job.id)} class="rounded border border-line px-2 py-1">Run now</button>
-                <button type="button" onclick={() => pauseJob(job)} class="rounded border border-line px-2 py-1">
+              <div class="mt-3 grid grid-cols-3 gap-2">
+                <button type="button" onclick={() => runJob(job.id)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">Run</button>
+                <button type="button" onclick={() => pauseJob(job)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">
                   {job.status === "paused" ? "Resume" : "Pause"}
                 </button>
-                <button type="button" onclick={() => deleteJob(job.id)} class="rounded border border-line px-2 py-1">Delete</button>
+                <button type="button" onclick={() => deleteJob(job.id)} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500">Delete</button>
               </div>
-            </div>
+            </article>
           {/each}
         {/if}
       </div>
@@ -659,31 +694,34 @@
           maxlength={200}
           placeholder="Job name"
           bind:value={jobName}
-          class="w-full rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"
+          class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60"
         />
         <textarea
           rows={2}
           maxlength={4000}
           placeholder="Prompt to run"
           bind:value={jobPrompt}
-          class="w-full rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"
+          class="w-full min-h-[72px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60"
         ></textarea>
-        <select bind:value={jobCadence} class="w-full rounded-md bg-bg border border-line text-fg text-sm px-3 py-2">
+        <select bind:value={jobCadence} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2">
           <option value="60">Every minute</option>
           <option value="300">Every 5 minutes</option>
           <option value="900">Every 15 minutes</option>
           <option value="3600">Every hour</option>
           <option value="86400">Every day</option>
         </select>
-        <button type="submit" class="rounded-md border border-line px-3 py-2 text-sm hover:border-brand/60">Add job</button>
+        <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">Add recurring job</button>
       </form>
       <p class="mt-2 text-xs text-fg-mut">{jobsStatusText}</p>
     </section>
 
-    <!-- Health + Connectors panels live in OTHER Svelte mounts and are
-         relocated INTO the drawer body by the mount() effect below. They
-         appear in DOM order here so styles flow correctly. -->
-    <div id="settings-extras-slot" class="space-y-4"></div>
+      </div>
+
+      <!-- Health + Connectors panels live in other Svelte mounts and are
+           relocated into this stable slot by the mount effect. -->
+      <div hidden={activeSection !== "connections"}>
+        <div id="settings-extras-slot" class="space-y-4"></div>
+      </div>
 
     <!-- Footer: theme cycle + gitlab link -->
     <footer class="pt-3 mt-1 flex flex-col items-center gap-2">
@@ -737,5 +775,31 @@
         <span>github.com/acoyfellow/my-ax</span>
       </a>
     </footer>
+    </div>
   </div>
-</aside>
+</dialog>
+
+<style>
+  .settings-command {
+    position: fixed;
+    inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;
+    margin: 0;
+    transform: translateX(-50%);
+  }
+
+  .settings-command::backdrop {
+    background: rgb(0 0 0 / 0.58);
+    backdrop-filter: blur(2px);
+  }
+
+  @media (min-width: 640px) {
+    .settings-command { top: 8vh; }
+  }
+
+  @media (max-width: 639px) {
+    .settings-command {
+      width: calc(100vw - 1rem);
+      max-height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+    }
+  }
+</style>
