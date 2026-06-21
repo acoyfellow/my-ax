@@ -96,11 +96,15 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
 }
 
 /** Register a native agents scheduleEvery alarm on the target session DO. */
+export function requireScheduleId(schedule: { id?: string } | null | undefined): string {
+  if (!schedule?.id) throw new Error("recurring job schedule did not return an id");
+  return schedule.id;
+}
+
 export async function scheduleJob(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "prompt" | "cadence_secs">): Promise<string> {
   const stub = await sessionAgent(env, row.owner_email, row.session_id);
   await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
-  const schedule = await stub.scheduleRecurringPrompt({ jobId: row.id, ownerEmail: row.owner_email, prompt: row.prompt, cadenceSecs: row.cadence_secs });
-  return schedule.id;
+  return requireScheduleId(await stub.scheduleRecurringPrompt({ jobId: row.id, ownerEmail: row.owner_email, prompt: row.prompt, cadenceSecs: row.cadence_secs }));
 }
 
 /** Cancel a native agents alarm if one is registered. */

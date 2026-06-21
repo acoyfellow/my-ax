@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JobService, JobServiceError } from "./job-service";
-import type { JobRow } from "./jobs";
+import { requireScheduleId, type JobRow } from "./jobs";
+
+test("native recurring schedules must return a durable id", () => {
+  assert.throws(() => requireScheduleId({}), /did not return an id/);
+  assert.equal(requireScheduleId({ id: "schedule-1" }), "schedule-1");
+});
 
 const row: JobRow = {
   id: "job-1", owner_email: "owner@example.com", session_id: "session-1",
