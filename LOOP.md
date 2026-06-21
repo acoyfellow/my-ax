@@ -9,12 +9,12 @@ Continuously make My AX more reliable, secure, simple, and useful through small,
 One **iteration** is:
 
 ```text
-SEARCH → FIX → VERIFY → INTEGRATE → DEPLOY → PROVE → HANDOFF
+SEARCH → FIX → VERIFY → INTEGRATE → DEPLOY → PROVE → DEMO → HANDOFF
 ```
 
 An iteration is complete only when it leaves either:
 
-1. one focused change that the parent has independently verified, integrated, deployed, and proven in production; or
+1. one focused change that the parent has independently verified, integrated, deployed, and proven in production, with its demo/marketing decision recorded; or
 2. a no-change receipt explaining what was tested and why no safe improvement was justified.
 
 A merged or locally verified change with production proof still pending is **not complete**. It is `blocked` until the proof passes or the parent explicitly rolls the change back.
@@ -133,6 +133,27 @@ After accepting the child diff, the parent must:
 6. live-test the changed journey or invariant in production, plus the wrapper's authenticated post-deploy checks;
 7. record progress, commit(s), deployment/version ID, autoreview outcome, exact proof, and result in workflow state.
 
+### Demo and marketing gate
+
+After production proof, classify the shipped change:
+
+- `marketing-worthy`: a user-visible capability or improvement that can be understood in a short visual flow and is materially useful beyond an internal defect fix;
+- `proof-only`: important but primarily operational, invisible, too sensitive, or too small to market honestly.
+
+Record the classification and one-sentence rationale in the iteration receipt. Do not manufacture a marketing story for every fix.
+
+For `marketing-worthy` changes, the parent must:
+
+1. record a real browser flow to a local `.webm` using the `unsurf-record-video` skill and `openLocalBrowser()` from `unsurf/skills/record`;
+2. capture the deployed product, not a mock, and exclude login codes, credentials, internal-only names, personal data, unrelated conversations, and browser chrome where practical;
+3. keep the flow short, deliberate, and self-explanatory, with waits between actions and a guaranteed `stopRecording()` in `finally`;
+4. verify the resulting video is playable and nontrivial; convert to MP4 only when a concrete publishing surface requires it;
+5. add the durable video under `docs/media/` with a descriptive stable filename;
+6. add a concise link under the relevant `CHANGELOG.md` entry without changing version `0.0.1`; and
+7. rerun public-clean verification before committing the media and changelog update.
+
+The video is marketing evidence, not production proof. A successful recording cannot replace tests or authenticated replay, and a failed recording leaves the iteration blocked only when it was classified `marketing-worthy`.
+
 Prefer a dedicated authenticated API or browser proof. If the exact negative case cannot safely be induced in production, prove the deployed revision and its closest observable boundary, while retaining the deterministic regression as evidence. A generic health check alone is insufficient when a specific production proof is available.
 
 If deployment or proof fails, mark the iteration `blocked`, keep the loop active for bounded repair, and do not advance to the next iteration. Never report the iteration complete with production proof pending.
@@ -147,6 +168,8 @@ iteration result: changed | no-change | blocked
 frozen finding (or search experiment for no-change)
 files changed
 verification commands and outcomes
+marketing classification and rationale
+recommended demo flow when marketing-worthy
 remaining risks
 recommended parent integration/proof
 ```
@@ -169,7 +192,7 @@ A parent can run one iteration with a single writer child using a task equivalen
 Read LOOP.md completely and execute exactly one child-owned SEARCH → FIX → VERIFY → HANDOFF pass. You are the only writer. You may edit files and run local tests. Do not commit, tag, push, migrate, deploy, access production, or expose secrets. Stop after one focused finding and return the required receipt so the parent can INTEGRATE → DEPLOY → PROVE.
 ```
 
-The parent must verify the child’s claims, inspect the diff, integrate it, deploy through the private wrapper, and complete production proof before the iteration ends.
+The parent must verify the child’s claims, inspect the diff, integrate it, deploy through the private wrapper, complete production proof, apply the demo/marketing gate, and only then end the iteration.
 
 Example controller requests:
 
