@@ -8,6 +8,7 @@ import { clampEntriesLimit, pageConversationEntries, parseEntriesCursor, type Co
 import { getSessionAgent } from "../agent-stub";
 import { deleteSessionArtifacts } from "../artifacts";
 import { cancelJobSchedule, type JobRow } from "../jobs";
+import { requireOwnedSession } from "../session-ownership";
 
 export function registerSessionRoutes(app: Hono<AppEnv>) {
   // ─── Session lifecycle ─────────────────────────────────────────────────────
@@ -179,6 +180,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const body = (await c.req.json<{ model?: string; reasoningEffort?: string }>().catch(() => ({}))) as { model?: string; reasoningEffort?: string };
     if (!body.model) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: "model is required" }, next_actions: [] }, 400);
     try {
+      if (!(await requireOwnedSession(c.env, id, identity.email))) {
+        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+      }
       const stub = await getSessionAgent(c.env, identity.email, id);
       await stub.seedIdentity(identity);
       const result = await stub.setSessionModel(body.model, body.reasoningEffort);
