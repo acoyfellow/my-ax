@@ -19,18 +19,24 @@ cd my-ax
 npm ci
 
 npx wrangler login
+npx wrangler whoami
+
+# Required when whoami lists more than one account:
+export MY_AX_ACCOUNT_ID=your_target_account_id
 bash scripts/setup.sh
 ```
 
 The setup script:
 
-1. creates or resolves D1, KV, and R2 resources;
-2. writes their IDs into the local Wrangler configuration;
-3. generates `BRIDGE_JWT_SECRET` and `MASTER_KEY` only when they do not already exist;
-4. applies D1 migrations;
-5. deploys the Worker.
+1. uses the explicitly selected account when `MY_AX_ACCOUNT_ID` is set;
+2. creates or resolves D1, KV, and R2 resources;
+3. writes their IDs into the local Wrangler configuration;
+4. collapses historical Durable Object migrations to one baseline only for a fresh Worker;
+5. generates `BRIDGE_JWT_SECRET` and `MASTER_KEY` only when they do not already exist;
+6. applies D1 migrations; and
+7. deploys the Worker.
 
-The first production deployment intentionally fails closed because `CF_ACCESS_ISS` and `CF_ACCESS_AUD` are empty.
+The first production deployment intentionally fails closed because `CF_ACCESS_ISS` and `CF_ACCESS_AUD` are empty. The custom hostname may resolve at this stage, but the application is not ready until Access is configured and verified.
 
 ## 2. Configure the Hostname and Cloudflare Access
 
@@ -129,6 +135,21 @@ Verify both boundaries:
 2. an authenticated `GET /api` returns `{ "ok": true }` from My AX itself.
 
 Applying Access only at the edge is insufficient if the Worker's configured issuer or audience is stale.
+
+## Independent Installations and Deployment Wrappers
+
+Every My AX installation is one security and state boundary. Two installations—even when owned by the same person—must use distinct:
+
+- Worker and container application names;
+- D1, KV, and R2 resources;
+- Durable Object namespaces;
+- `MASTER_KEY`, bridge, push, and snapshot credentials;
+- Access applications and owner policies; and
+- deployment configuration.
+
+Do not point two installations at one D1 database or copy a configured `wrangler.jsonc` between accounts. Sharing source code is expected; sharing runtime state or credentials is not.
+
+For repeatable production operation, keep a **private deployment wrapper** outside the public engine. A wrapper should clone or check out an exact public revision, inject non-public account/hostname/Access configuration, resolve deployment-owned resources, run checks and migrations, and deploy. It must not patch product behavior or commit secrets. This is also the recommended foundation for future A2A deployment links: independently deployed instances communicate through explicit protocol grants, not shared storage.
 
 ## Update a Deployment
 

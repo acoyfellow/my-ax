@@ -16,11 +16,22 @@ set -euo pipefail
 WRANGLER="npx wrangler"
 CFG="wrangler.jsonc"
 
+# Wrangler OAuth can expose more than one account. Pinning avoids creating
+# resources in one account and deploying the Worker to another.
+if [ -n "${MY_AX_ACCOUNT_ID:-}" ]; then
+  export CLOUDFLARE_ACCOUNT_ID="$MY_AX_ACCOUNT_ID"
+fi
+
 bold() { printf "\033[1m%s\033[0m\n" "$1"; }
 note() { printf "  %s\n" "$1"; }
 
 bold "my-ax setup → your Cloudflare account"
 note "Using your wrangler login (run 'npx wrangler login' first if needed)."
+if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+  note "Pinned account: $CLOUDFLARE_ACCOUNT_ID"
+else
+  note "Account is not pinned. If 'wrangler whoami' lists multiple accounts, stop and rerun with MY_AX_ACCOUNT_ID=<id>."
+fi
 echo
 
 # --- helper: extract an id from wrangler create output -----------------------
@@ -65,6 +76,29 @@ note "id: $KV_ID"; patch_placeholder "REPLACE_WITH_KV_NAMESPACE_ID" "$KV_ID"
 bold "3/5  R2 buckets (my-ax-homes, my-ax-uploads)"
 $WRANGLER r2 bucket create my-ax-homes   2>&1 | tail -1 || $WRANGLER r2 bucket list | grep -q 'my-ax-homes'
 $WRANGLER r2 bucket create my-ax-uploads 2>&1 | tail -1 || $WRANGLER r2 bucket list | grep -q 'my-ax-uploads'
+
+# --- fresh Durable Object baseline -------------------------------------------
+# `wrangler secret put` creates an empty Worker when none exists. Replaying the
+# repository's historical add/delete migration chain against that empty script
+# then fails on classes which never existed there. A fresh installation needs
+# one baseline containing only classes exported by the current source. Existing
+# deployments retain the full append-only migration history.
+if ! $WRANGLER deployments list --name my-ax >/dev/null 2>&1; then
+  bold "Fresh install  Durable Object baseline"
+  python3 - "$CFG" <<'PY'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.index('  "migrations": [')
+end = text.index('\n  ],', start) + 5
+base = '''  "migrations": [
+    { "tag": "fresh-v1", "new_sqlite_classes": ["MyAgent", "OAuthClientDO", "Sandbox", "MachineHost", "UserAgent", "VoiceThinkAgent"] }
+  ],'''
+path.write_text(text[:start] + base + text[end:])
+PY
+  note "Collapsed historical DO migrations to a fresh-install baseline."
+fi
 
 # --- secrets -----------------------------------------------------------------
 bold "4/5  Core secrets"

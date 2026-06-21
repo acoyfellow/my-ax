@@ -81,10 +81,13 @@ git clone https://github.com/acoyfellow/my-ax
 cd my-ax
 npm ci
 npx wrangler login
+npx wrangler whoami
+# If more than one account is listed:
+export MY_AX_ACCOUNT_ID=your_target_account_id
 bash scripts/setup.sh
 ```
 
-The script creates missing named resources, binds configured existing resources, generates absent bridge/encryption secrets, applies pending remote D1 migrations, and deploys. When the expected secret source remains available, rerunning setup reuses keys rather than rotating them; it cannot recover deleted keys.
+The script creates missing named resources, binds configured existing resources, generates absent bridge/encryption secrets, applies pending remote D1 migrations, and deploys. On a fresh Worker it replaces the repository's historical Durable Object migration chain with one current baseline; existing deployments retain their append-only history. When the expected secret source remains available, rerunning setup reuses keys rather than rotating them; it cannot recover deleted keys. Pin `MY_AX_ACCOUNT_ID` whenever Wrangler exposes multiple accounts.
 
 Before sending a real turn:
 
@@ -95,7 +98,7 @@ Before sending a real turn:
 5. Redeploy, verify anonymous access is rejected, and verify authenticated `/api/health` returns `ok: true`.
 6. Open `BRIDGE_BASE_URL` through Access and complete one model turn. Health proves routing and bindings only; when workspace persistence matters, also run the documented snapshot/restore proof.
 
-Push additionally needs VAPID secrets. Managed OAuth callbacks require an Access-gated HTTPS hostname; loopback cannot complete that flow. [Deploying My AX](./docs/deploy.md) contains copy/paste configuration, verification, and troubleshooting commands.
+Push additionally needs VAPID secrets. Managed OAuth callbacks require an Access-gated HTTPS hostname; loopback cannot complete that flow. [Deploying My AX](./docs/deploy.md) contains copy/paste configuration, verification, troubleshooting, and guidance for private deployment wrappers. Each installation must own separate Worker, D1, KV, R2, Durable Object, Access, and secret state; multiple installations may share a source revision but must never share runtime resources.
 
 `npm run check` builds generated assets, typechecks, and runs local tests. It does **not** prove Access, containers, models, voice, push, or workspace restoration. Use the [deployment proof](./proof/README.md) for deployed checks.
 
