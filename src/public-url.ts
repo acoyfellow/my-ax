@@ -10,9 +10,14 @@ export function isPrivateHostname(hostname: string): boolean {
   if (/^(?:127|10)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return true;
   const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
   if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    const [a, b, c] = [Number(v4[1]), Number(v4[2]), Number(v4[3])];
     if (a === 100 && b >= 64 && b <= 127) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 0 && c === 0) return true;
+    if (a === 192 && b === 0 && c === 2) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a === 198 && b === 51 && c === 100) return true;
+    if (a === 203 && b === 0 && c === 113) return true;
     if (a === 0 || a >= 224) return true;
   }
   return host.includes(":") && (host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") || host.startsWith("::ffff:"));
