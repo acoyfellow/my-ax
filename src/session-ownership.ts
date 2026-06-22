@@ -4,15 +4,26 @@
 
 import type { Env } from "./types";
 
+export class SessionOwnershipCheckError extends Error {
+  constructor(cause: unknown) {
+    super("Unable to verify session ownership", { cause });
+    this.name = "SessionOwnershipCheckError";
+  }
+}
+
 export async function requireOwnedSession(
   env: Pick<Env, "DB">,
   sessionId: string,
   ownerEmail: string,
 ): Promise<boolean> {
-  const row = await env.DB.prepare(
-    "SELECT id FROM sessions WHERE id = ? AND owner_email = ?",
-  )
-    .bind(sessionId, ownerEmail.toLowerCase())
-    .first<{ id: string }>();
-  return row !== null;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT id FROM sessions WHERE id = ? AND owner_email = ?",
+    )
+      .bind(sessionId, ownerEmail.toLowerCase())
+      .first<{ id: string }>();
+    return row !== null;
+  } catch (error) {
+    throw new SessionOwnershipCheckError(error);
+  }
 }

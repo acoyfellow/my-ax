@@ -8,7 +8,7 @@ import { clampEntriesLimit, pageConversationEntries, parseEntriesCursor, type Co
 import { getSessionAgent } from "../agent-stub";
 import { deleteSessionArtifacts } from "../artifacts";
 import { cancelJobSchedule, type JobRow } from "../jobs";
-import { requireOwnedSession } from "../session-ownership";
+import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 
 export function registerSessionRoutes(app: Hono<AppEnv>) {
   // ─── Session lifecycle ─────────────────────────────────────────────────────
@@ -613,16 +613,10 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       );
     }
 
-    // Ownership check against D1 — matches the PATCH/DELETE pattern. If D1
-    // is unavailable (dev), we fall through and rely on the DO's own
-    // identity-seeded check; in prod D1 is always present.
+    // Fail closed before resolving the session facet. A D1 failure must not
+    // turn an owner-only route into a best-effort check.
     try {
-      const row = await c.env.DB.prepare(
-        "SELECT id FROM sessions WHERE id = ? AND owner_email = ?",
-      )
-        .bind(id, identity.email)
-        .first<{ id: string }>();
-      if (!row) {
+      if (!(await requireOwnedSession(c.env, id, identity.email))) {
         return c.json(
           {
             ok: false,
@@ -632,9 +626,19 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
           404,
         );
       }
-    } catch {
-      // D1 missing in dev; tolerate and let the DO's identity check be the
-      // backstop. In prod DB is bound; this branch won't fire.
+    } catch (err) {
+      if (!(err instanceof SessionOwnershipCheckError)) throw err;
+      return c.json(
+        {
+          ok: false,
+          command: `POST /api/sessions/${id}/inject`,
+          error: {
+            tag: "OwnershipCheckFailed",
+            message: err.message,
+          },
+        },
+        503,
+      );
     }
 
     try {
