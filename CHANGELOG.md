@@ -23,6 +23,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Fixed
 
+- Rejected conversation-entry pagination cursors outside JavaScript’s exact integer range instead of querying from a precision-lost boundary.
 - Claimed human decision responses with a conditional state transition so concurrent submissions cannot retain conflicting answer events or resume the source conversation twice.
 - Unified the Settings modal’s search, keyboard controls, navigation, borders, radii, spacing, colors, and responsive scrolling into one coherent visual system.
 - Failed recurring-job creation closed when the native scheduler does not return a durable schedule ID, allowing the existing compensation path to remove provisional state.

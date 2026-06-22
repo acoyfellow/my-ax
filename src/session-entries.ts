@@ -15,7 +15,9 @@ export function clampEntriesLimit(raw: string | undefined): number {
 
 export function parseEntriesCursor(raw: string | undefined): number | null {
   const value = raw ?? "0";
-  return /^\d+$/.test(value) ? Number(value) : null;
+  if (!/^\d+$/.test(value)) return null;
+  const cursor = Number(value);
+  return Number.isSafeInteger(cursor) ? cursor : null;
 }
 
 export function pageConversationEntries(rows: ConversationEntryRow[], limit: number, after: number) {

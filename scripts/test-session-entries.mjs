@@ -5,6 +5,7 @@ assert.equal(parseEntriesCursor(undefined), 0);
 assert.equal(parseEntriesCursor('42'), 42);
 assert.equal(parseEntriesCursor('-1'), null);
 assert.equal(parseEntriesCursor('abc'), null);
+assert.equal(parseEntriesCursor('9007199254740992'), null);
 assert.equal(clampEntriesLimit(undefined), 50);
 assert.equal(clampEntriesLimit('0'), 1);
 assert.equal(clampEntriesLimit('999'), 200);
