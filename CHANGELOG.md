@@ -23,6 +23,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Fixed
 
+- Claimed human decision responses with a conditional state transition so concurrent submissions cannot retain conflicting answer events or resume the source conversation twice.
 - Unified the Settings modal’s search, keyboard controls, navigation, borders, radii, spacing, colors, and responsive scrolling into one coherent visual system.
 - Failed recurring-job creation closed when the native scheduler does not return a durable schedule ID, allowing the existing compensation path to remove provisional state.
 - Prevented wide conversation content from moving the vertical scroller horizontally, while keeping code blocks and tables locally scrollable, and rendered Markdown during streaming as soon as the parser loads instead of waiting for syntax-highlighting modules and turn completion.

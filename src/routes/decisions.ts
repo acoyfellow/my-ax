@@ -10,6 +10,7 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { getSessionAgent } from "../agent-stub";
+import { recordDecisionResponse, type DecisionResponseStore } from "../decision-response";
 
 const ID_RE = /^run-decision-[0-9a-f-]{36}$/i;
 
@@ -96,9 +97,22 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     if (!bounds.options.includes(choice)) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CHOICE", message: "choice is not an allowed option" }, next_actions: [] }, 400);
     if (row.status !== "open") return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
 
-    await c.env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, 'decision.answered', ?, NULL)")
-      .bind(id, `evt-${crypto.randomUUID()}`, email, new Date().toISOString(), JSON.stringify({ id: email, kind: "human", mode: "live" }), JSON.stringify({ question: bounds.question, choice })).run();
-    await c.env.DB.prepare("UPDATE runs SET status = 'completed', updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(id, email).run();
+    const store: DecisionResponseStore = {
+      insertEvent: async ({ id, eventId, email, question, choice, now }) => {
+        await c.env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, 'decision.answered', ?, NULL)")
+          .bind(id, eventId, email, now, JSON.stringify({ id: email, kind: "human", mode: "live" }), JSON.stringify({ question, choice })).run();
+      },
+      completeRun: async ({ id, email }) => {
+        const result = await c.env.DB.prepare("UPDATE runs SET status = 'completed', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'open'").bind(id, email).run();
+        return (result.meta?.changes ?? 0) === 1;
+      },
+      deleteEvent: async ({ id, eventId, email }) => {
+        await c.env.DB.prepare("DELETE FROM run_events WHERE run_id = ? AND event_id = ? AND owner_email = ? AND type = 'decision.answered'").bind(id, eventId, email).run();
+      },
+    };
+    if (!await recordDecisionResponse(store, { id, email, question: bounds.question, choice })) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
+    }
 
     try {
       const stub = await getSessionAgent(c.env, email, bounds.sessionId);
