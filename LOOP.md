@@ -9,7 +9,7 @@ Continuously make My AX more reliable, secure, simple, and useful through small,
 One **iteration** is:
 
 ```text
-SEARCH → FIX → VERIFY → INTEGRATE → DEPLOY → PROVE → DEMO → HANDOFF
+SEARCH → FIX → CLEANUP → VERIFY → INTEGRATE → DEPLOY → PROVE → DEMO → HANDOFF
 ```
 
 An iteration is complete only when it leaves either:
@@ -30,6 +30,24 @@ Every iteration declares one track:
 - `simplification`: remove custom glue when a current managed primitive provides the same capability.
 
 Do not default to hardening merely because its acceptance criteria are easiest to automate. Product discovery may use parallel read-only investigations, but exactly one child may write after the opportunity is selected.
+
+## Repository usability standard
+
+My AX is a **seven-minute repository**: a below-average engineer should be able to understand what the product does, who owns each state boundary, how a request flows, where a change belongs, and how to verify it within roughly seven minutes.
+
+Every iteration must preserve or improve that property:
+
+- keep canonical entry points and ownership visible; do not hide important behavior behind generic factories or indirection;
+- prefer one obvious implementation over parallel legacy/current paths;
+- use names that describe present behavior, not migration history or internal project phases;
+- keep comments focused on non-obvious invariants and reasons; delete narration, stale provenance, and comments contradicted by current behavior;
+- remove dead code, unused dependencies, obsolete adapters, duplicate helpers, stale feature flags, and generated churn exposed by the change;
+- keep files cohesive and split them only when the new boundary is easier to explain than the old one;
+- update the repository map, architecture, feature matrix, deployment guidance, or operator docs when their claims or entry points changed;
+- reject a new abstraction if it expands the contributor map without replacing equivalent complexity;
+- never preserve misleading code or docs merely to minimize the diff.
+
+Cleanup must remain bounded to code made dead, misleading, or redundant by the selected finding. Broader cleanup discovered along the way belongs in a follow-up or a dedicated `simplification` iteration.
 
 ## Scope
 
@@ -106,7 +124,21 @@ If no finding survives scrutiny, stop with a no-change receipt. Do not invent wo
 
 “Happy with the architecture” means the changed boundary has explicit ownership, minimal duplication, understandable state flow, and tests at the observable seam. It does not authorize scope creep or aesthetic rewrites.
 
-### 3. VERIFY
+### 3. CLEANUP AND REPOSITORY SHAPE
+
+Before verification, inspect the touched neighborhood and final diff:
+
+1. remove code, exports, dependencies, comments, tests, and configuration made obsolete by the change;
+2. search for stale names and docs that describe the replaced behavior;
+3. confirm there is one obvious owner and request path for the changed capability;
+4. check whether new files, helpers, or abstractions reduce total complexity rather than relocate it;
+5. ensure contributor-facing paths and commands still exist and match `package.json`;
+6. run a focused unused-code/dependency search when practical, but verify every result against custom build manifests, dynamic imports, generated modules, and operator scripts before deleting it;
+7. state in the receipt how repository comprehension changed: improved, neutral, or degraded. A degraded result requires further refinement or explicit parent rejection.
+
+Do not turn this step into an unrelated repository-wide rewrite.
+
+### 4. VERIFY
 
 Run the narrow regression first, then the relevant broader checks. At minimum, report exact commands and exit status. Typical checks include:
 
@@ -121,7 +153,7 @@ Use only commands that exist in `package.json`; do not claim checks that were no
 
 Verification is independent of implementation intent: test the observable invariant, not merely the new branch or helper.
 
-### 4. INTEGRATE, DEPLOY, AND PROVE (parent only)
+### 5. INTEGRATE, DEPLOY, AND PROVE (parent only)
 
 After accepting the child diff, the parent must:
 
@@ -158,7 +190,7 @@ Prefer a dedicated authenticated API or browser proof. If the exact negative cas
 
 If deployment or proof fails, mark the iteration `blocked`, keep the loop active for bounded repair, and do not advance to the next iteration. Never report the iteration complete with production proof pending.
 
-### 5. HANDOFF
+### 6. HANDOFF
 
 The Terrarium child must not commit or deploy. It returns a concise receipt containing:
 
@@ -170,11 +202,24 @@ files changed
 verification commands and outcomes
 marketing classification and rationale
 recommended demo flow when marketing-worthy
+cleanup performed and repository-comprehension outcome
+proposed LOOP.md improvement, or `none`
 remaining risks
 recommended parent integration/proof
 ```
 
 A locally verified fix is not production-certified. The parent must finish deployment and proof before closing the iteration.
+
+## Evolving this loop
+
+`LOOP.md` is a maintained product-development interface, not immutable ceremony. An iteration may reveal missing safeguards, wasteful steps, unclear receipts, or a better verification/proof method.
+
+- A child may identify and propose a `LOOP.md` change in its handoff, but must not edit `LOOP.md` while governed by that same iteration unless the parent explicitly scoped the run as a process-document iteration.
+- The parent decides whether the proposal is general, durable, and compatible with the invariants; task-specific prompt tuning does not belong here.
+- Accepted process changes are independently reviewed, verified against the current repository and available tools, and committed separately from the product change that motivated them.
+- Process edits must simplify or strengthen future iterations. Do not add a gate without naming the failure it prevents and the evidence that the gate can produce.
+- Remove or revise loop instructions when repository architecture, tooling, or managed Cloudflare primitives make them stale.
+- Record meaningful process changes in `CHANGELOG.md` only when they alter contributor or release behavior; do not change version `0.0.1`.
 
 ## Failure policy
 
