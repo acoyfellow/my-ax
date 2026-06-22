@@ -61,7 +61,7 @@
     "rrweb-player": "1.0.0-alpha.4",
     "svelte": "5.56.3",
     "svelte-hono": "0.1.2",
-    "workers-ai-provider": "3.1.14",
+    "workers-ai-provider": "3.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -75,7 +75,7 @@
     "tailwindcss": "4.3.1",
     "tsx": "^4.21.0",
     "typescript": "6.0.3",
-    "wrangler": "4.102.0"
+    "wrangler": "4.103.0"
   },
   "author": "Jordan Coeyman (https://coey.dev)",
   "license": "MIT",
