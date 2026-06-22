@@ -37,6 +37,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Security
 
+- Rejected malformed raster artifact identifiers before owner-scoped R2 lookup by requiring an RFC 4122 UUID shape.
 - Failed session message injection closed when D1 ownership verification is unavailable instead of resolving the session facet through a best-effort fallback.
 - Rejected literal special-purpose IPv4 destinations used for protocol assignment, documentation, and benchmarking from the shared fail-closed public URL policy.
 - Required an owner-scoped D1 session row before resolving or mutating a session facet’s model configuration, failing closed on missing, foreign, or unavailable ownership state.

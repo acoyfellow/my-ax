@@ -4,6 +4,7 @@ import type { AccessIdentity } from "./auth";
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const INLINE_RASTER_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=\r\n]+)$/;
+const ARTIFACT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function uploadsBucket(env: Env): R2Bucket {
   const bucket = (env as Env & { USER_UPLOADS?: R2Bucket }).USER_UPLOADS;
@@ -70,7 +71,7 @@ export async function storeInlineRasterArtifact(env: Env, identity: AccessIdenti
 }
 
 export async function getRasterArtifact(env: Env, identity: AccessIdentity, id: string): Promise<R2ObjectBody | null> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("artifact not found");
+  if (!ARTIFACT_ID_RE.test(id)) throw new Error("artifact not found");
   const prefix = `artifacts/${identity.email.toLowerCase()}/${id}.`;
   for (const ext of ["png", "jpeg", "jpg", "webp", "gif"]) {
     const obj = await uploadsBucket(env).get(prefix + ext);
