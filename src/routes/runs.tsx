@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { Layout } from "../views/Layout";
 import type { ApiResponse } from "../types";
 import type { AppEnv } from "../app-env";
-import { appendOwnedRunEvent, runEventId, RunReceiptNotFoundError, type RunActor } from "../run-receipts";
+import { appendOwnedRunEvent, runEventId, RunReceiptNotFoundError, RunReceiptTerminalError, type RunActor } from "../run-receipts";
 import { readThemeCookie } from "./theme";
 
 type RunStatus = "open" | "running" | "completed" | "failed" | "aborted";
@@ -134,24 +134,14 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
       type: "human.command.created",
       data: { task, bounds, source: "my-ax" },
     };
-    const planEvent = {
-      event_id: runEventId("coordinator.plan.created"),
-      ts: createdAt,
-      actor: { id: "agent:coordinator", kind: "coordinator", mode: "live" },
-      type: "coordinator.plan.created",
-      data: { route: [], no_hidden_claims: true, note: "Run Receipt v0 created; tool events append as work happens." },
-    };
-
-    for (const event of [humanEvent, planEvent]) {
-      await c.env.DB.prepare(
-        "INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
-      ).bind(runId, event.event_id, identity.email, event.ts, JSON.stringify(event.actor), event.type, JSON.stringify(event.data)).run();
-    }
+    await c.env.DB.prepare(
+      "INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+    ).bind(runId, humanEvent.event_id, identity.email, humanEvent.ts, JSON.stringify(humanEvent.actor), humanEvent.type, JSON.stringify(humanEvent.data)).run();
 
     return c.json(jsonResponse("POST /api/runs", {
       runId,
       receiptUrl: `/runs/${runId}`,
-      events: [humanEvent.type, planEvent.type],
+      events: [humanEvent.type],
     }, [
       { command: `POST /api/runs/${runId}/events`, description: "Append a live tool/harness/verification event" },
       { command: `GET /runs/${runId}`, description: "Open the Run Board" },
@@ -213,6 +203,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
       ]), 201);
     } catch (error) {
       if (error instanceof RunReceiptNotFoundError) return c.json(errorResponse(c.req.path, "RUN_NOT_FOUND", error.message), 404);
+      if (error instanceof RunReceiptTerminalError) return c.json(errorResponse(c.req.path, "RUN_TERMINAL", error.message), 409);
       throw error;
     }
   });
@@ -222,10 +213,20 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     const runId = c.req.param("id");
     const body = (await c.req.json<{ status?: RunStatus; reason?: string }>().catch(() => ({}))) as { status?: RunStatus; reason?: string };
     const status: RunStatus = body.status && ["completed", "failed", "aborted"].includes(body.status) ? body.status : "completed";
+    const run = await c.env.DB.prepare(
+      "SELECT status FROM runs WHERE id = ? AND owner_email = ?",
+    ).bind(runId, identity.email).first<{ status: RunStatus }>();
+    if (!run) return c.json(errorResponse(c.req.path, "RUN_NOT_FOUND", "run not found or not owned"), 404);
+    if (["completed", "failed", "aborted"].includes(run.status)) {
+      return c.json(errorResponse(c.req.path, "RUN_TERMINAL", "run is already terminal"), 409);
+    }
+
     const result = await c.env.DB.prepare(
-      "UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
+      "UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status NOT IN ('completed', 'failed', 'aborted')",
     ).bind(status, runId, identity.email).run();
-    if (!result.success || (result.meta?.changes ?? 0) === 0) return c.json(errorResponse(c.req.path, "RUN_NOT_FOUND", "run not found or not owned"), 404);
+    if (!result.success || (result.meta?.changes ?? 0) === 0) {
+      return c.json(errorResponse(c.req.path, "RUN_TERMINAL", "run became terminal before this transition"), 409);
+    }
 
     const stopEvent = {
       actor: { id: "agent:coordinator", kind: "coordinator", mode: "live" },

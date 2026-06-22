@@ -26,6 +26,13 @@ export class RunReceiptNotFoundError extends Error {
   }
 }
 
+export class RunReceiptTerminalError extends Error {
+  constructor() {
+    super("run is already terminal");
+    this.name = "RunReceiptTerminalError";
+  }
+}
+
 export function runEventId(type: string): string {
   const safeType = type.replace(/[^a-z0-9_.-]/gi, "-").slice(0, 64) || "event";
   return `evt-${safeType}-${crypto.randomUUID()}`;
@@ -34,13 +41,14 @@ export function runEventId(type: string): string {
 export async function appendOwnedRunEvent(c: RunReceiptContext, runId: string, input: AppendRunEventInput): Promise<AppendRunEventResult> {
   const email = c.get("identity").email;
   const run = await c.env.DB.prepare(
-    "SELECT id FROM runs WHERE id = ? AND owner_email = ?",
-  ).bind(runId, email).first<{ id: string }>();
+    "SELECT id, status FROM runs WHERE id = ? AND owner_email = ?",
+  ).bind(runId, email).first<{ id: string; status: string }>();
   if (!run) throw new RunReceiptNotFoundError();
+  if (["completed", "failed", "aborted"].includes(run.status)) throw new RunReceiptTerminalError();
 
   const type = input.type.trim();
   const id = input.event_id?.trim() || runEventId(type);
-  const ts = input.ts?.trim() || new Date().toISOString();
+  const ts = new Date().toISOString();
   const data = input.data && typeof input.data === "object" ? input.data : {};
   const evidence = input.evidence && typeof input.evidence === "object" ? input.evidence : null;
 

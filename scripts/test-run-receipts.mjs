@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../src/run-receipts.ts";
+import { appendOwnedRunEvent, RunReceiptNotFoundError, RunReceiptTerminalError } from "../src/run-receipts.ts";
 
-function mockContext({ owned = true } = {}) {
+function mockContext({ owned = true, status = "open" } = {}) {
   const calls = [];
   return {
     calls,
@@ -14,7 +14,7 @@ function mockContext({ owned = true } = {}) {
               bind(...values) {
                 calls.push({ sql, values });
                 return {
-                  first: async () => owned ? { id: "run-1" } : null,
+                  first: async () => owned ? { id: "run-1", status } : null,
                   run: async () => ({ success: true }),
                 };
               },
@@ -46,6 +46,8 @@ try {
   assert.deepEqual(calls[0].values, ["run-1", "owner@example.com"]);
   assert.match(calls[1].sql, /INSERT INTO run_events/);
   assert.equal(calls[1].values[2], "owner@example.com");
+  assert.notEqual(calls[1].values[3], "2026-06-04T00:00:00.000Z");
+  assert.match(calls[1].values[3], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.deepEqual(JSON.parse(calls[1].values[6]), { observation: "connected-laptop-session", session: { harness: "pi", id: "session-7" }, explicit: true, noTranscript: true, noAttach: true });
   assert.match(calls[2].sql, /UPDATE runs SET status/);
   assert.deepEqual(calls[2].values, ["run-1", "owner@example.com"]);
@@ -55,7 +57,14 @@ try {
     type: "machinectl.observation.captured",
   }), RunReceiptNotFoundError);
 
-  console.log("run receipt owner-scoped event append: ok");
+  const terminal = mockContext({ status: "completed" });
+  await assert.rejects(() => appendOwnedRunEvent(terminal.ctx, "run-1", {
+    actor: { id: "machinectl:laptop", kind: "machinectl", mode: "live" },
+    type: "machinectl.observation.captured",
+  }), RunReceiptTerminalError);
+  assert.equal(terminal.calls.length, 1);
+
+  console.log("run receipt owner scope, server timestamps, and terminal immutability: ok");
 } finally {
   globalThis.crypto.randomUUID = originalUuid;
 }

@@ -38,6 +38,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Security
 
+- Made run receipts record only observed events: removed the synthetic `coordinator.plan.created` event that asserted a live coordinator plan at run creation, stamped event timestamps with server-observed time instead of trusting caller-supplied values, and rejected event appends and stop transitions against a terminal run with a `RUN_TERMINAL` (409) error.
 - Rejected malformed raster artifact identifiers before owner-scoped R2 lookup by requiring an RFC 4122 UUID shape.
 - Failed session message injection closed when D1 ownership verification is unavailable instead of resolving the session facet through a best-effort fallback.
 - Rejected literal special-purpose IPv4 destinations used for protocol assignment, documentation, and benchmarking from the shared fail-closed public URL policy.
