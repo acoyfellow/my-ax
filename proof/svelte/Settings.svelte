@@ -512,37 +512,38 @@
   id="settings-drawer"
   data-open={open ? "1" : "0"}
   aria-labelledby="settings-title"
-  class="settings-command z-50 w-[min(760px,calc(100vw-1rem))] max-h-[min(760px,calc(100dvh-1rem))] overflow-hidden rounded-xl border border-line bg-bg-alt p-0 text-fg shadow-2xl"
+  class="settings-command z-50 w-[min(760px,calc(100vw-1rem))] max-h-[min(760px,calc(100dvh-1rem))] overflow-hidden border border-line bg-bg-alt p-0 text-fg"
   onclick={(event) => event.target === event.currentTarget && closeDrawer()}
   oncancel={(event) => { event.preventDefault(); closeDrawer(); }}
   onclose={() => { if (open) closeDrawer(); }}
 >
-  <header class="safe-area-appbar flex items-center gap-3 border-b border-line px-3 py-2.5 sm:px-4">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" class="shrink-0 text-fg-mut">
-      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
-    </svg>
+  <header class="settings-header safe-area-appbar">
     <h2 id="settings-title" class="sr-only">Settings</h2>
-    <input
-      bind:this={searchInput}
-      bind:value={settingsQuery}
-      type="search"
-      placeholder="Search settings…"
-      aria-label="Search settings"
-      class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-fg-mut/70"
-    />
-    <kbd class="hidden rounded border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-fg-mut sm:inline">⌘K</kbd>
-    <button type="button" onclick={closeDrawer} class="rounded border border-line px-2 py-1 text-xs text-fg-mut hover:text-fg" aria-label="Close settings">Esc</button>
+    <div class="settings-search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+      </svg>
+      <input
+        bind:this={searchInput}
+        bind:value={settingsQuery}
+        type="search"
+        placeholder="Search settings…"
+        aria-label="Search settings"
+      />
+      <kbd class="hidden sm:inline">⌘K</kbd>
+    </div>
+    <button type="button" onclick={closeDrawer} class="settings-close" aria-label="Close settings">Esc</button>
   </header>
 
   <div class="settings-layout grid flex-1 min-h-0 overflow-hidden">
-    <nav aria-label="Settings sections" class="flex gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:border-b-0 sm:border-r">
+    <nav aria-label="Settings sections" class="settings-nav flex gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:border-b-0 sm:border-r">
       {#each visibleSections as section}
         <button
           type="button"
           onclick={() => (activeSection = section.id)}
           aria-current={activeSection === section.id ? "page" : undefined}
-          class="min-w-max rounded-lg px-3 py-2 text-left hover:bg-surface-2 sm:min-w-0"
-          class:bg-surface-2={activeSection === section.id}
+          class="settings-nav-item min-w-max px-3 py-2 text-left sm:min-w-0"
+          class:is-active={activeSection === section.id}
         >
           <span class="block text-sm font-medium">{section.label}</span>
           <span class="hidden text-[11px] text-fg-mut sm:block">{section.hint}</span>
@@ -551,7 +552,7 @@
       {#if visibleSections.length === 0}<p class="px-2 py-3 text-xs text-fg-mut">No settings match.</p>{/if}
     </nav>
 
-    <div class="min-h-0 max-h-full overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin] p-3 sm:p-4" data-settings-scroll>
+    <div class="settings-content min-h-0 max-h-full overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin] p-4 sm:p-5" data-settings-scroll>
       <div class="space-y-4" hidden={activeSection !== "general"}>
     {#if identityEmail}
       <div>
@@ -850,6 +851,8 @@
     height: min(760px, calc(100dvh - 1rem));
     margin: 0;
     transform: translateX(-50%);
+    border-radius: 18px;
+    box-shadow: 0 28px 80px rgb(0 0 0 / 0.32), 0 2px 10px rgb(0 0 0 / 0.12);
   }
 
   .settings-command[open] {
@@ -858,16 +861,144 @@
   }
 
   .settings-command::backdrop {
-    background: rgb(0 0 0 / 0.58);
-    backdrop-filter: blur(2px);
+    background: rgb(0 0 0 / 0.56);
+    backdrop-filter: blur(3px);
+  }
+
+  .settings-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    min-height: 68px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-alt);
+  }
+
+  .settings-search {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 10px;
+    height: 42px;
+    padding: 0 10px 0 12px;
+    color: var(--fg-mut);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg);
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+  }
+
+  .settings-search:focus-within {
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--brand) 70%, var(--line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
+  }
+
+  .settings-search input {
+    min-width: 0;
+    flex: 1;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: 0;
+    color: var(--fg);
+    background: transparent;
+    font: inherit;
+    font-size: 15px;
+    box-shadow: none;
+    appearance: none;
+  }
+
+  .settings-search input::-webkit-search-cancel-button { display: none; }
+  .settings-search input::placeholder { color: color-mix(in srgb, var(--fg-mut) 78%, transparent); }
+
+  .settings-search kbd,
+  .settings-close {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 8px;
+    color: var(--fg-mut);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg-alt);
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1;
+    box-shadow: 0 1px 1px rgb(0 0 0 / 0.05);
+  }
+
+  .settings-close {
+    min-height: 36px;
+    padding-inline: 11px;
+    background: var(--bg);
+    font-family: inherit;
+    font-size: 12px;
+    transition: color 120ms, border-color 120ms, background 120ms;
+  }
+
+  .settings-close:hover {
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--fg-mut) 55%, var(--line));
+    background: var(--surface-2);
   }
 
   .settings-layout {
     grid-template-rows: auto minmax(0, 1fr);
+    background: var(--bg-alt);
+  }
+
+  .settings-nav {
+    background: color-mix(in srgb, var(--bg) 68%, var(--bg-alt));
+    scrollbar-width: none;
+  }
+
+  .settings-nav::-webkit-scrollbar { display: none; }
+
+  .settings-nav-item {
+    position: relative;
+    color: var(--fg-mut);
+    border: 1px solid transparent;
+    border-radius: 9px;
+    transition: color 120ms, border-color 120ms, background 120ms, box-shadow 120ms;
+  }
+
+  .settings-nav-item:hover {
+    color: var(--fg);
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  }
+
+  .settings-nav-item.is-active {
+    color: var(--fg);
+    border-color: var(--line);
+    background: var(--bg-alt);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  }
+
+  .settings-nav-item.is-active::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    bottom: 9px;
+    left: -1px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--brand);
+  }
+
+  .settings-content {
+    background: var(--bg-alt);
+    scrollbar-gutter: stable;
   }
 
   @media (min-width: 640px) {
-    .settings-command { top: 8vh; }
+    .settings-command { top: 6vh; }
     .settings-layout {
       grid-template-columns: 190px minmax(0, 1fr);
       grid-template-rows: minmax(0, 1fr);
@@ -879,6 +1010,11 @@
       width: calc(100vw - 1rem);
       height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
       max-height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+      border-radius: 14px;
     }
+    .settings-header { min-height: 60px; padding: 9px; gap: 8px; }
+    .settings-search { height: 40px; }
+    .settings-close { min-height: 40px; }
+    .settings-nav-item.is-active::before { display: none; }
   }
 </style>
