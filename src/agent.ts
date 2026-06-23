@@ -14,6 +14,7 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { createMyAxBrowserTools } from "./browser-tools";
+import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact } from "./artifacts";
@@ -705,10 +706,13 @@ export class MyAgent extends Think<Env> {
     return {
       model: resolved.model,
       messages,
-      tools: {
+      // Native MCP and Code Mode tools bypass createThinkTools, so bound their
+      // model-visible output here too — otherwise a connector MCP result is an
+      // unbounded context firehose that can stall a turn.
+      tools: limitToolSetOutput({
         ...nativeMcpTools,
         ...(mcpCodeMode ? { mcp_code_mode: mcpCodeMode } : {}),
-      },
+      }),
       // Terminalize a parked provider stream so the UI cannot remain in a dead
       // "working" state. With chatRecovery on, bounded recovery runs first.
       // Set well above the slowest tool/model time-to-first-token.
