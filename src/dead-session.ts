@@ -10,8 +10,12 @@ type SessionRow = { id: string; owner_email: string; updated_at: string };
 
 export async function scanDeadSessions(env: Env, now = new Date()): Promise<void> {
   const cutoff = new Date(now.getTime() - DEAD_SESSION_STALL_MS).toISOString();
+  // A turn that dies mid-flight is left status='running' (set at turn start and
+  // only settled to 'active' by onChatResponse), so scanning 'active' alone
+  // would miss the exact dead-mid-turn case. Include 'running' past the stall
+  // window; 'interrupted'/'error' are already terminalized and excluded.
   const sessions = await env.DB.prepare(
-    "SELECT id, owner_email, updated_at FROM sessions WHERE status = 'active' AND updated_at < ? ORDER BY updated_at DESC LIMIT 50",
+    "SELECT id, owner_email, updated_at FROM sessions WHERE status IN ('active', 'running') AND updated_at < ? ORDER BY updated_at DESC LIMIT 50",
   ).bind(cutoff).all<SessionRow>();
 
   for (const session of sessions.results ?? []) {
