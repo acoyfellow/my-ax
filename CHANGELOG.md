@@ -36,6 +36,10 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Restored package metadata to `0.0.1`; development changes do not increment the project version.
 - Updated Wrangler to 4.102.0, removing the current `ws` and `undici` security advisories from the development dependency tree.
 
+### Changed
+
+- Removed misleading comments and dead code that degraded the seven-minute repository, with no behavior change: corrected the OAuth-store header to describe the actual AES-GCM-256 encryption-at-rest, deleted the no-op `oauth-store-facade.ts` and the `sandbox.ts` shim in favor of single canonical owners, removed an unreachable duplicate liveness-ping branch and the unused standalone Cloudbox tool exports, and rewrote war-story comments as present-tense invariants.
+
 ### Security
 
 - Made run receipts record only observed events: removed the synthetic `coordinator.plan.created` event that asserted a live coordinator plan at run creation, stamped event timestamps with server-observed time instead of trusting caller-supplied values, and rejected event appends and stop transitions against a terminal run with a `RUN_TERMINAL` (409) error.

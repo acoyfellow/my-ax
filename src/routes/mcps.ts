@@ -7,7 +7,7 @@
 
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
-import { oauthStoreFor } from "../oauth-store-facade";
+import { oauthStoreFor } from "../oauth-store";
 import { probeMcp } from "../mcp-probe";
 import type { ApiResponse } from "../types";
 

@@ -24,7 +24,6 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/connectors.ts` | Connector registry. Public engine ships empty; users add their own MCPs via Settings → Connectors. |
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
 | `src/bridge.ts` | Mints scoped per-call tickets, attaches upstream auth, writes audit receipts. |
-| `src/sandbox.ts` | Low-level Sandbox access for direct diagnostics and compatibility paths. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `ChatPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. |
 | `proof/svelte/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results are grouped into at most two compact child snapshots (status, summary, attempts, bounded details). Agents 0.16.2 emits official `agent-tool-event` frames, but this custom Svelte socket does not expose the EventTarget required by `useAgentToolEvents`; the UI therefore labels and renders retained raw tool output rather than claiming live progress. Reconnect/transcript replay reuses that output. Cancellation and child drill-in are omitted because the current parent route exposes no safe official action/navigation surface. |

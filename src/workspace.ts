@@ -144,11 +144,8 @@ export interface SeedFileResult {
  *       freshly-saved snapshot, which is the real durability validation.
  *    6. readFile() and byte-compare against what we wrote.
  *
- *  Step 1 is the key fix: callers used to hit getUserWorkspace() without the
- *  restoreLatest:false guard, write, snapshot — and the *write* would already
- *  have been overlaid on top of a restore of the previous snapshot, so any
- *  intermediate state from prior turns leaked through. With restoreLatest:false
- *  the seed is the truthful new ground truth.
+ *  Step 1 is required: restoreLatest:false prevents a previous snapshot from
+ *  being overlaid before the write, making the seed the new ground truth.
  */
 export async function seedUserWorkspaceFile(
   env: Env,

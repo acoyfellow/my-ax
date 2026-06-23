@@ -11,7 +11,7 @@ import { SandboxThinkWorkspace } from "./think-workspace";
 import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
-import { USER_HOME } from "./sandbox";
+import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
@@ -310,13 +310,9 @@ export class MyAgent extends Think<Env> {
         // initialize/tools-list discovery.
         await this.mcp.removeServer(existingEntry[0]).catch(() => undefined);
       }
-      // MCP hydration MUST be best-effort. If a server's initialize/tools-list
-      // handshake rejects the token (401/Unauthorized) or otherwise fails,
-      // addMcpServer throws — and because ensureNativeMcp runs in beforeTurn,
-      // an unhandled throw here used to kill EVERY chat turn with
-      // "Unauthorized" (and leave the tools panel empty). Swallow per-server
-      // failures so chat + the LLM call always proceed; a stale connector
-      // surfaces via the reauth banner, not a dead chat.
+      // MCP hydration is best-effort: one server's initialize/tools-list
+      // failure must not block chat or the LLM call. A stale connector surfaces
+      // via the reauth banner instead.
       try {
         await this.addMcpServer(id, upstream, {
           transport: { type: "streamable-http", headers: { Authorization: `Bearer ${token}` } },
@@ -447,19 +443,14 @@ export class MyAgent extends Think<Env> {
   async onMessage(connection: Parameters<Think<Env>["onMessage"]>[0], message: unknown) {
     try {
       const parsed = typeof message === "string" ? JSON.parse(message) as { type?: string; visible?: boolean } : null;
+      // Liveness ping keeps the client's watchdog from treating a healthy, idle
+      // socket as stale and force-reconnecting it.
       if (parsed?.type === "my_ax_ping") {
-        connection.send(JSON.stringify({ type: "my_ax_pong", at: Date.now() }));
+        try { connection.send(JSON.stringify({ type: "my_ax_pong", at: Date.now() })); } catch {}
         return;
       }
       if (parsed?.type === "my_ax_visibility") {
         connection.setState({ ...((connection.state ?? {}) as Record<string, unknown>), chatVisible: parsed.visible === true });
-        return;
-      }
-      // Liveness ping: reply so the client's watchdog sees inbound activity on a
-      // healthy-but-idle socket. Without a pong the watchdog wrongly treated an
-      // idle connection as stale and force-reconnected it (UI stuck "reconnecting").
-      if (parsed?.type === "my_ax_ping") {
-        try { connection.send(JSON.stringify({ type: "my_ax_pong", at: Date.now() })); } catch {}
         return;
       }
     } catch {}
@@ -538,7 +529,7 @@ export class MyAgent extends Think<Env> {
     if (!identity) throw new Error("Think session identity not seeded before tool call.");
     const env = this.env;
     const sessionId = this.name;
-    const workingDirectory = USER_HOME;
+    const workingDirectory = WORKSPACE_HOME;
     return {
       workingDirectory,
       notifyOwner: (input) => notifyOwner(env, identity.email, { ...input, sessionId }),
@@ -597,10 +588,8 @@ export class MyAgent extends Think<Env> {
         return result.files.map((file) => ({ path: file.absolutePath, name: file.name, type: file.type, size: file.size }));
       },
       searchConversations: async (query, limit = 20) => {
-        // Build a crash-proof FTS5 query: extract word tokens and AND them as
-        // quoted terms. Raw passthrough used to throw "fts5: syntax error" on
-        // any query containing backslashes, quotes, or stray operators — common
-        // when searching code or debugging transcripts.
+        // Extract word tokens and AND them as quoted terms so punctuation and
+        // FTS5 operators in code or debugging searches cannot invalidate syntax.
         const tokens = (query.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []).slice(0, 24);
         if (!tokens.length) return [];
         const ftsQuery = tokens.map((token) => `"${token}"`).join(" ");
@@ -624,10 +613,8 @@ export class MyAgent extends Think<Env> {
     // discovered native tools into this first turn too (Think assembled its
     // base tool set immediately before calling beforeTurn).
     await this.ensureNativeMcp();
-    // Persist the inbound user message durably BEFORE the model call. Previously
-    // user turns were only logged after completion, so a stalled/dead turn lost
-    // the message entirely — on resync the client rebuilt from server truth and
-    // the optimistic message disappeared. logAcceptedUsers is idempotent.
+    // Persist the inbound user message before the model call so stalled turns
+    // remain available when the client resyncs. logAcceptedUsers is idempotent.
     await this.logAcceptedUsers().catch((error) => console.error("think_user_log_before_turn_failed", { err: String(error) }));
     const identity = this.identity();
     if (identity) {
@@ -692,10 +679,8 @@ export class MyAgent extends Think<Env> {
         ...nativeMcpTools,
         ...(mcpCodeMode ? { mcp_code_mode: mcpCodeMode } : {}),
       },
-      // Terminalize a parked provider stream instead of hanging silently. A
-      // model that never emits a chunk/error/done used to leave the user
-      // watching a dead "working" state until the socket dropped. With
-      // chatRecovery on, this routes into the bounded recovery path first.
+      // Terminalize a parked provider stream so the UI cannot remain in a dead
+      // "working" state. With chatRecovery on, bounded recovery runs first.
       // Set well above the slowest tool/model time-to-first-token.
       chatStreamStallTimeoutMs: 120_000,
       // Every model presented in my-ax is an agent model: all receive the

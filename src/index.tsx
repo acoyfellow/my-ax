@@ -18,7 +18,7 @@ function isVoiceEnabled(env: Env): boolean {
 import { getUserWorkspace } from "./workspace";
 import { ChatPage } from "./views/ChatPage";
 import type { AppEnv } from "./app-env";
-import { oauthStoreFor } from "./oauth-store-facade";
+import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
 import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
@@ -370,9 +370,8 @@ app.all("/agents/*", async (c) => {
     const ownedSession = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, identity.email.toLowerCase()).first<{ id: string }>();
     if (!ownedSession) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Session not found or not owned" } }, 404);
     const parent = await getAgentByName(c.env.USER_AGENT, identity.email.toLowerCase());
-    // Lazy one-time import: D1 sidebar rows from the pre-facet topology still
-    // point at direct MyAgent DOs. If the new facet is empty, copy its Think
-    // transcript before opening the socket. Never render a silent blank page.
+    // Empty facets import the legacy direct-DO transcript before opening the
+    // socket so migration-era D1 rows never render a silent blank session.
     try {
       const facet = await getSessionAgent(c.env, identity.email, sessionId);
       await facet.seedIdentity(identity);
@@ -382,9 +381,8 @@ app.all("/agents/*", async (c) => {
         try {
           messages = await (legacy as unknown as { getMessages: () => Promise<import("ai").UIMessage[]> }).getMessages();
         } catch {}
-        // Some old direct DOs were already gone, but the D1 transcript mirror
-        // survived. Rehydrate a readable Think history from that mirror so a
-        // phone tap never lands on a silent white session.
+        // The D1 transcript mirror is the fallback when a legacy direct DO is
+        // unavailable, preserving readable history during migration.
         if (!messages.length) {
           const rows = await c.env.DB.prepare(
             "SELECT id, ts, role, content FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id ASC",

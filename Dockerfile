@@ -50,7 +50,7 @@ ENV PATH=/home/user/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 ENV XDG_CONFIG_HOME=/home/user/.config
 
 # Default shell prompt. ENV ACCESS_EMAIL is injected per-session by the Worker
-# (see sandbox.ts) so the shell shows the actual authenticated user, e.g.
+# (see workspace.ts) so the shell shows the actual authenticated user, e.g.
 # "you@my-ax: /home/user $ ". Falls back to "user@my-ax" if unset.
 ENV HOSTNAME=my-ax
 # Append to /root/.bashrc (NOT /etc/bash.bashrc) because the latter is

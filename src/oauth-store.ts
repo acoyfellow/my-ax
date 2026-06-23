@@ -13,12 +13,13 @@
 //   - Audit receipts written to AUDIT_KV alongside bridge.ts receipts
 //
 // SECURITY NOTES:
-//   - Tokens stored unencrypted in DO storage. Production needs MASTER_KEY +
-//     AES-GCM-256 per-user-derived-key encryption (oauth-proxy pattern).
-//   - state is short-lived (5 min) but kept in DO storage. Production should
-//     use a signed cookie or a HMAC over (user, connector, nonce, exp).
-//   - clientId is shared across all users (we reuse codex-cli's). Production
-//     should use Dynamic Client Registration per-Worker.
+//   - Tokens are encrypted at rest with AES-GCM-256 using per-user keys
+//     derived from MASTER_KEY via HKDF. Legacy plaintext records are retained
+//     only for migration and are re-encrypted on their next write.
+//   - PKCE state is bound to the user and connector and expires after 5 minutes
+//     in DO storage.
+//   - Pre-registered connectors may share a configured clientId across users;
+//     connectors advertising Dynamic Client Registration receive per-flow IDs.
 
 import { DurableObject } from "cloudflare:workers";
 import {
@@ -815,4 +816,9 @@ function base64UrlEncode(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
   return btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+/** Build the request-scoped OAuth store used by HTTP routes. */
+export function oauthStoreFor(c: { req: { url: string }; env: Env }) {
+  return makeOAuthClientStore(c.env.OAUTH_CLIENT!, new URL(c.req.url).origin);
 }

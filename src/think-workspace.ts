@@ -2,7 +2,7 @@ import type { WorkspaceLike } from "@cloudflare/think/tools/workspace";
 import type { FileInfo } from "@cloudflare/shell";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
-import { USER_HOME } from "./sandbox";
+import { WORKSPACE_HOME } from "./workspace";
 import { getUserWorkspace } from "./workspace";
 
 /**
@@ -27,8 +27,8 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
   }
 
   private path(path: string): string {
-    if (!path || path === ".") return USER_HOME;
-    return path.startsWith("/") ? path : `${USER_HOME}/${path.replace(/^\.\//, "")}`;
+    if (!path || path === ".") return WORKSPACE_HOME;
+    return path.startsWith("/") ? path : `${WORKSPACE_HOME}/${path.replace(/^\.\//, "")}`;
   }
 
   private async sandbox() {
@@ -92,8 +92,8 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
     // behavior without creating a second storage backend.
     const rootPattern = this.path(pattern);
     const { stdout } = await (await this.sandbox()).exec(
-      `find ${JSON.stringify(USER_HOME)} -path ${JSON.stringify(rootPattern)} -print | head -500`,
-      { cwd: USER_HOME, timeout: 30_000 },
+      `find ${JSON.stringify(WORKSPACE_HOME)} -path ${JSON.stringify(rootPattern)} -print | head -500`,
+      { cwd: WORKSPACE_HOME, timeout: 30_000 },
     );
     const matches = stdout.split("\n").map((value) => value.trim()).filter(Boolean);
     const infos: FileInfo[] = [];
@@ -118,10 +118,10 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
 
   async rm(path: string, opts?: { recursive?: boolean; force?: boolean }): Promise<void> {
     const absolute = this.path(path);
-    if (absolute === USER_HOME) throw new Error("Refusing to delete the workspace root.");
+    if (absolute === WORKSPACE_HOME) throw new Error("Refusing to delete the workspace root.");
     if (opts?.recursive) {
       const flags = opts.force ? "-rf" : "-r";
-      const result = await (await this.sandbox()).exec(`rm ${flags} -- ${JSON.stringify(absolute)}`, { cwd: USER_HOME, timeout: 30_000 });
+      const result = await (await this.sandbox()).exec(`rm ${flags} -- ${JSON.stringify(absolute)}`, { cwd: WORKSPACE_HOME, timeout: 30_000 });
       if (!result.success && !opts.force) throw new Error(result.stderr || `Failed to delete ${absolute}`);
       return;
     }

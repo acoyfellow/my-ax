@@ -7,7 +7,7 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getBuiltinConnectors, type ConnectorId } from "../connectors";
-import { oauthStoreFor } from "../oauth-store-facade";
+import { oauthStoreFor } from "../oauth-store";
 import type { ApiResponse } from "../types";
 
 export function registerConnectorRoutes(app: Hono<AppEnv>) {

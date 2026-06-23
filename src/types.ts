@@ -145,7 +145,7 @@ export interface ToolContext {
   // (no fetch to the public URL — Cloudflare Access at the edge would 302
   // since the Worker can't satisfy its own Access app from inside).
   // env carries the audit-KV + OAUTH_CLIENT DO binding handleBridgeRequest
-  // needs; workerOrigin is used to build the OAuthClientStore facade.
+  // needs; workerOrigin is used to build the OAuthClientStore.
   env: Env;
   workerOrigin: string;
 }
