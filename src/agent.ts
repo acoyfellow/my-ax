@@ -2,7 +2,7 @@ import { Think } from "@cloudflare/think";
 import { Session } from "agents/experimental/memory/session";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { createCompactFunction } from "agents/experimental/memory/utils";
-import type { ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
+import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
 import { DEFAULT_MODEL_ID, findModel } from "./models";
@@ -123,7 +123,12 @@ export class MyAgent extends Think<Env> {
   maxSteps = 25;
   maxConcurrentAgentTools = 2;
   sendReasoning = true;
-  chatRecovery = true;
+  override chatRecovery = {
+    maxAttempts: 6,
+    noProgressTimeoutMs: 300_000,
+    terminalMessage: "This turn was interrupted after recovery was exhausted. Please try again.",
+    onExhausted: (ctx: ChatRecoveryExhaustedContext) => this.terminalizeExhaustedRecovery(ctx),
+  };
 
   /** Per-turn flag: set when a successful tool call may have written under
    *  /home/user. Drives a single snapshotUserWorkspace() in onChatResponse.
@@ -513,6 +518,31 @@ export class MyAgent extends Think<Env> {
       content: ctx.success ? (typeof ctx.output === "string" ? ctx.output : JSON.stringify(ctx.output)) : (ctx.error instanceof Error ? ctx.error.message : String(ctx.error)),
       isError: !ctx.success,
     }, { toolCallId: ctx.toolCallId, durationMs: ctx.durationMs });
+  }
+
+  private async terminalizeExhaustedRecovery(ctx: ChatRecoveryExhaustedContext): Promise<void> {
+    const identity = this.identity();
+    console.error("chat_recovery_exhausted", {
+      sessionId: this.name,
+      incidentId: ctx.incidentId,
+      reason: ctx.reason,
+      attempt: ctx.attempt,
+      recoveryKind: ctx.recoveryKind,
+    });
+    if (!identity) return;
+    await Promise.all([
+      logAssistantMessage(this.env, identity, this.name, ctx.terminalMessage, {
+        status: "interrupted",
+        recoveryIncidentId: ctx.incidentId,
+        recoveryReason: ctx.reason,
+      }),
+      this.env.DB.prepare("UPDATE sessions SET status = 'interrupted', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
+        .bind(this.name, identity.email)
+        .run(),
+    ]).catch((error) => console.error("chat_recovery_terminalization_failed", {
+      sessionId: this.name,
+      err: String(error),
+    }));
   }
 
   onChatError(error: unknown) {
