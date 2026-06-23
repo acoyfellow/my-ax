@@ -3,9 +3,8 @@
  * Built once at deploy time with `npm run build:css`:
  *   tailwindcss -i src/styles/app.css -o public/static/styles.css --minify
  *
- * Outputs ~10 KB of gzipped CSS that ships alongside the worker, replacing
- * the ~70 KB Tailwind Play CDN script + 3 font CDN requests that previously
- * loaded on every page.
+ * Outputs ~10 KB of gzipped CSS that ships alongside the worker. No Tailwind
+ * CDN script or font CDN requests load at runtime.
  *
  * Tailwind v4 picks up theme tokens from the @theme block below; class names
  * are scanned from anywhere in src/ via @source directives.
@@ -241,9 +240,8 @@
 
 /* ─── Base styles ─────────────────────────────────────────────────────
  *
- * These are NOT Tailwind utilities — they're page chrome that needs to
- * exist before JS or first paint. Equivalent to the dangerouslySetInnerHTML
- * style block we used to inline in Layout.tsx.
+ * These are NOT Tailwind utilities — they're page chrome that must exist
+ * before JS or first paint, so they live here rather than inline in Layout.tsx.
  */
 
 /* Theme-cycle button (Settings drawer footer).
