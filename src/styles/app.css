@@ -560,6 +560,19 @@
   transform-origin: center center;
 }
 
+/* iOS Safari auto-zooms when a focused text control's font-size is < 16px.
+ * Enforce a 16px floor for every text-entry control on phone-width screens.
+ * Unlayered + !important so it wins over component styles (e.g. the 15px
+ * settings search) and Tailwind text-sm/text-xs utilities without auditing
+ * each input. Non-text controls (checkbox/radio/range/color) are exempt. */
+@media (max-width: 500px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 @layer base {
   html {
     background: var(--color-bg);
