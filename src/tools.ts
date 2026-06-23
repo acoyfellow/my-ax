@@ -3,6 +3,7 @@ import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { JobService } from "./job-service";
+import { limitModelToolOutput } from "./tool-output-limit";
 
 export const ASK_USER_TOOL: ToolDef = {
   name: "ask_user",
@@ -120,7 +121,8 @@ export function createThinkTools(context: () => ToolContext): ToolSet {
     tools[definition.name] = tool<Record<string, unknown>, string>({
       description: definition.description,
       inputSchema: jsonSchema<Record<string, unknown>>(definition.parameters as Parameters<typeof jsonSchema>[0]),
-      execute: async (input: Record<string, unknown>) => definition.execute(input ?? {}, context()),
+      execute: async (input: Record<string, unknown>) =>
+        limitModelToolOutput(await definition.execute(input ?? {}, context())),
     });
   }
   return tools as ToolSet;

@@ -2,7 +2,7 @@ import { Think } from "@cloudflare/think";
 import { Session } from "agents/experimental/memory/session";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { createCompactFunction } from "agents/experimental/memory/utils";
-import type { ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
+import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
 import { DEFAULT_MODEL_ID, findModel } from "./models";
@@ -14,6 +14,7 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { createMyAxBrowserTools } from "./browser-tools";
+import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact } from "./artifacts";
@@ -123,7 +124,12 @@ export class MyAgent extends Think<Env> {
   maxSteps = 25;
   maxConcurrentAgentTools = 2;
   sendReasoning = true;
-  chatRecovery = true;
+  override chatRecovery = {
+    maxAttempts: 6,
+    noProgressTimeoutMs: 300_000,
+    terminalMessage: "This turn was interrupted after recovery was exhausted. Please try again.",
+    onExhausted: (ctx: ChatRecoveryExhaustedContext) => this.terminalizeExhaustedRecovery(ctx),
+  };
 
   /** Per-turn flag: set when a successful tool call may have written under
    *  /home/user. Drives a single snapshotUserWorkspace() in onChatResponse.
@@ -515,6 +521,31 @@ export class MyAgent extends Think<Env> {
     }, { toolCallId: ctx.toolCallId, durationMs: ctx.durationMs });
   }
 
+  private async terminalizeExhaustedRecovery(ctx: ChatRecoveryExhaustedContext): Promise<void> {
+    const identity = this.identity();
+    console.error("chat_recovery_exhausted", {
+      sessionId: this.name,
+      incidentId: ctx.incidentId,
+      reason: ctx.reason,
+      attempt: ctx.attempt,
+      recoveryKind: ctx.recoveryKind,
+    });
+    if (!identity) return;
+    await Promise.all([
+      logAssistantMessage(this.env, identity, this.name, ctx.terminalMessage, {
+        status: "interrupted",
+        recoveryIncidentId: ctx.incidentId,
+        recoveryReason: ctx.reason,
+      }),
+      this.env.DB.prepare("UPDATE sessions SET status = 'interrupted', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
+        .bind(this.name, identity.email)
+        .run(),
+    ]).catch((error) => console.error("chat_recovery_terminalization_failed", {
+      sessionId: this.name,
+      err: String(error),
+    }));
+  }
+
   onChatError(error: unknown) {
     const identity = this.identity();
     if (identity) {
@@ -675,10 +706,13 @@ export class MyAgent extends Think<Env> {
     return {
       model: resolved.model,
       messages,
-      tools: {
+      // Native MCP and Code Mode tools bypass createThinkTools, so bound their
+      // model-visible output here too — otherwise a connector MCP result is an
+      // unbounded context firehose that can stall a turn.
+      tools: limitToolSetOutput({
         ...nativeMcpTools,
         ...(mcpCodeMode ? { mcp_code_mode: mcpCodeMode } : {}),
-      },
+      }),
       // Terminalize a parked provider stream so the UI cannot remain in a dead
       // "working" state. With chatRecovery on, bounded recovery runs first.
       // Set well above the slowest tool/model time-to-first-token.
