@@ -45,6 +45,9 @@
   "workers_dev": true,
   "preview_urls": false,
 
+  // Periodically recover stale conversation turns after the live watchdog window.
+  "triggers": { "crons": ["*/5 * * * *"] },
+
   // account_id intentionally not pinned at the file level. Set via
   // CLOUDFLARE_ACCOUNT_ID env var or `wrangler deploy --account-id ...`.
 
