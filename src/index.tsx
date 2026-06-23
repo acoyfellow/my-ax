@@ -39,6 +39,7 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerDecisionRoutes } from "./routes/decisions";
 import { getSessionAgent } from "./agent-stub";
 import { registerSvelteServe } from "../proof/svelte/serve";
+import { scanDeadSessions } from "./dead-session";
 
 // Re-export Durable Object classes (required by wrangler).
 // Sandbox comes from @cloudflare/sandbox and pairs with the `containers`
@@ -512,4 +513,9 @@ app.notFound((c) =>
   ),
 );
 
-export default { fetch: app.fetch };
+export default {
+  fetch: app.fetch,
+  scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(scanDeadSessions(env));
+  },
+};
