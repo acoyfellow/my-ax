@@ -17,16 +17,19 @@ const row: JobRow = {
 
 function fakeEnv(jobExists = true) {
   const events: Array<{ id: string; ok: number; detail_json: string; idempotency_key: string | null }> = [];
+  const evidence: Array<{ action: string; ok: number; detail: any }> = [];
+  const mutableRow = { ...row };
   const DB = {
     prepare(sql: string) {
       let values: unknown[] = [];
       return {
         bind(...next: unknown[]) { values = next; return this; },
         async first() {
-          if (sql.includes("FROM jobs WHERE id")) return jobExists && values[0] === row.id && values[1] === row.owner_email ? row : null;
+          if (sql.includes("FROM jobs WHERE id")) return jobExists && values[0] === row.id && values[1] === row.owner_email ? { ...mutableRow } : null;
+          if (sql.includes("FROM sessions")) return { id: row.session_id };
           if (sql.includes("FROM job_events")) {
             const found = events.find((event) => event.idempotency_key === values[2]);
-            return found ? { ok: found.ok, detail_json: found.detail_json } : null;
+            return found ? { id: found.id, ok: found.ok, detail_json: found.detail_json } : null;
           }
           return null;
         },
@@ -35,20 +38,29 @@ function fakeEnv(jobExists = true) {
           return { results: [] };
         },
         async run() {
-          if (sql.startsWith("INSERT INTO job_events")) {
+          if (sql.startsWith("INSERT INTO job_events") && sql.includes("idempotency_key")) {
             const key = String(values[4]);
             if (events.some((event) => event.idempotency_key === key)) throw new Error("unique");
             events.push({ id: String(values[0]), ok: 0, detail_json: String(values[3]), idempotency_key: key });
+          } else if (sql.startsWith("INSERT INTO job_events")) {
+            evidence.push({ action: String(values[3]), ok: Number(values[4]), detail: JSON.parse(String(values[5])) });
+          } else if (sql.includes("last_error=?")) {
+            Object.assign(mutableRow, { last_error: String(values[0]) });
+          } else if (sql.startsWith("UPDATE job_events SET ok=0")) {
+            const event = events.find((item) => item.id === values[1]);
+            if (event) { event.ok = 0; event.detail_json = String(values[0]); }
           } else if (sql.startsWith("UPDATE job_events")) {
             const event = events.find((item) => item.id === values[2]);
             if (event) { event.ok = Number(values[0]); event.detail_json = String(values[1]); }
+          } else if (sql.startsWith("UPDATE jobs SET session_id")) {
+            Object.assign(mutableRow, { session_id: values[0], name: values[1], prompt: values[2], cadence_secs: values[3], next_run_at: values[4], schedule_id: values[5] });
           }
           return { success: true, meta: { changes: 1 } };
         },
       };
     },
   };
-  return { env: { DB } as any, events };
+  return { env: { DB } as any, events, evidence, mutableRow };
 }
 
 test("idempotent run reserves its key before dispatch and replays the result", async () => {
@@ -71,6 +83,51 @@ test("idempotent run reserves its key before dispatch and replays the result", a
   assert.deepEqual(await service.run(row.id, "same-key"), { ok: true, next_run_at: "next" });
   assert.equal(dispatches, 1);
   assert.equal(events.length, 1);
+});
+
+test("expired run lease is reclaimed while a fresh lease remains in progress", async () => {
+  const now = new Date("2026-01-01T00:10:00Z");
+  const { env, events } = fakeEnv();
+  events.push({ id: "expired", ok: 0, detail_json: JSON.stringify({ pending: true, leaseExpiresAt: "2026-01-01T00:09:00Z" }), idempotency_key: "expired" });
+  events.push({ id: "fresh", ok: 0, detail_json: JSON.stringify({ pending: true, leaseExpiresAt: "2026-01-01T00:11:00Z" }), idempotency_key: "fresh" });
+  let dispatches = 0;
+  const runtime = { schedule: async () => "schedule", cancel: async () => undefined, run: async () => { dispatches++; return { ok: true, next_run_at: "next" }; } } as any;
+  const service = new JobService(env, row.owner_email, () => now, runtime);
+
+  assert.deepEqual(await service.run(row.id, "expired"), { ok: true, next_run_at: "next" });
+  await assert.rejects(() => service.run(row.id, "fresh"), (error: unknown) => error instanceof JobServiceError && error.code === "Conflict");
+  assert.equal(dispatches, 1);
+  assert.equal(events.length, 2);
+});
+
+test("completed and failed idempotent runs replay their authoritative outcomes", async () => {
+  const { env, events } = fakeEnv();
+  events.push({ id: "done", ok: 1, detail_json: JSON.stringify({ ok: true, next_run_at: "stored" }), idempotency_key: "done" });
+  events.push({ id: "failed", ok: 0, detail_json: JSON.stringify({ ok: false, error: "stored failure" }), idempotency_key: "failed" });
+  const runtime = { schedule: async () => "schedule", cancel: async () => undefined, run: async () => { throw new Error("must not dispatch"); } } as any;
+  const service = new JobService(env, row.owner_email, () => new Date("2026-01-01T00:00:00Z"), runtime);
+
+  assert.deepEqual(await service.run(row.id, "done"), { ok: true, next_run_at: "stored" });
+  await assert.rejects(() => service.run(row.id, "failed"), (error: unknown) => error instanceof JobServiceError && error.code === "DispatchFailed" && error.message === "stored failure");
+});
+
+test("update retains replacement when retiring the old schedule fails", async () => {
+  const { env, evidence, mutableRow } = fakeEnv();
+  const cancelled: string[] = [];
+  const runtime = {
+    schedule: async () => "replacement",
+    cancel: async (_env: unknown, job: JobRow) => { cancelled.push(job.schedule_id!); if (job.schedule_id === "schedule-1") throw new Error("timeout after cancel"); },
+    run: async () => ({ ok: true }),
+  } as any;
+  const service = new JobService(env, row.owner_email, () => new Date("2026-01-01T00:00:00Z"), runtime);
+
+  const updated = await service.update(row.id, { prompt: "updated" });
+  assert.equal(updated.status, "active");
+  assert.equal(updated.schedule_id, "replacement");
+  assert.match(String(mutableRow.last_error), /orphaned/);
+  assert.deepEqual(cancelled, ["schedule-1", "schedule-1"]);
+  assert.equal(cancelled.includes("replacement"), false);
+  assert.deepEqual(evidence[0], { action: "update", ok: 1, detail: { replacement: "replacement", orphanedOldScheduleId: "schedule-1", oldCancelError: "Error: timeout after cancel" } });
 });
 
 test("deleted job history remains available through owner-scoped evidence", async () => {

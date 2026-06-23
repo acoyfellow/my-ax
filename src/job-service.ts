@@ -12,6 +12,7 @@ export class JobServiceError extends Error { constructor(public code: "InvalidIn
 type Evidence = { id: string; job_id: string; action: JobAction; ok: number; detail_json: string; created_at: string };
 type Runtime = { schedule: typeof scheduleJob; cancel: typeof cancelJobSchedule; run: typeof runJobNow };
 const DEFAULT_RUNTIME: Runtime = { schedule: scheduleJob, cancel: cancelJobSchedule, run: runJobNow };
+const RUN_LEASE_MS = 5 * 60 * 1000;
 
 export class JobService {
   constructor(private env: Env, private owner: string, private now = () => new Date(), private runtime: Runtime = DEFAULT_RUNTIME) { this.owner = owner.toLowerCase(); }
@@ -83,11 +84,13 @@ export class JobService {
     if (old.schedule_id) {
       try { await this.runtime.cancel(this.env, old); }
       catch (error) {
-        await this.env.DB.prepare("UPDATE jobs SET session_id=?, name=?, prompt=?, cadence_secs=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=?")
-          .bind(old.session_id, old.name, old.prompt, old.cadence_secs, old.next_run_at, old.schedule_id, id, this.owner).run();
-        if (replacement) await this.runtime.cancel(this.env, { ...old, owner_email: this.owner, session_id: parsed.sessionId, schedule_id: replacement }).catch(() => undefined);
-        await this.evidence(id, "update", false, { compensated: true, error: String(error) });
-        throw new JobServiceError("Conflict", "could not retire old schedule; update was rolled back");
+        // A possibly orphaned old alarm may double-fire once until reconciliation;
+        // retaining the known-live replacement is safer than restoring a dead id.
+        await this.runtime.cancel(this.env, old).catch(() => undefined);
+        const message = "old alarm may still be orphaned";
+        await this.env.DB.prepare("UPDATE jobs SET last_error=? WHERE id=? AND owner_email=?").bind(message, id, this.owner).run();
+        await this.evidence(id, "update", true, { replacement, orphanedOldScheduleId: old.schedule_id, oldCancelError: String(error) });
+        return this.owned(id);
       }
     }
     await this.evidence(id, "update", true, { replacement });
@@ -117,22 +120,29 @@ export class JobService {
   }
   async run(id: string, idempotencyKey?: string) {
     const row = await this.owned(id);
-    const eventId = crypto.randomUUID();
+    const now = this.now();
+    let eventId: string = crypto.randomUUID();
     if (idempotencyKey) {
-      const prior = await this.env.DB.prepare("SELECT ok, detail_json FROM job_events WHERE job_id=? AND owner_email=? AND action='run' AND idempotency_key=?").bind(id, this.owner, idempotencyKey).first<{ok:number;detail_json:string}>();
+      const prior = await this.env.DB.prepare("SELECT id, ok, detail_json FROM job_events WHERE job_id=? AND owner_email=? AND action='run' AND idempotency_key=?").bind(id, this.owner, idempotencyKey).first<{id:string;ok:number;detail_json:string}>();
       if (prior) {
         const detail = JSON.parse(prior.detail_json);
-        if (detail.pending) throw new JobServiceError("Conflict", "an idempotent run with this key is already in progress");
-        if (!prior.ok) throw new JobServiceError("DispatchFailed", detail.error ?? "dispatch failed");
-        return detail;
-      }
-      // Reserve the key before dispatch so concurrent retries cannot inject the
-      // same prompt twice. The row is updated with the authoritative result.
-      try {
-        await this.env.DB.prepare("INSERT INTO job_events (id, job_id, owner_email, action, ok, detail_json, idempotency_key, created_at) VALUES (?, ?, ?, 'run', 0, ?, ?, ?)")
-          .bind(eventId, id, this.owner, JSON.stringify({ pending: true }), idempotencyKey, this.now().toISOString()).run();
-      } catch {
-        throw new JobServiceError("Conflict", "an idempotent run with this key already exists");
+        if (!detail.pending) {
+          if (!prior.ok) throw new JobServiceError("DispatchFailed", detail.error ?? "dispatch failed");
+          return detail;
+        }
+        if (detail.leaseExpiresAt && now < new Date(detail.leaseExpiresAt)) throw new JobServiceError("Conflict", "an idempotent run with this key is already in progress");
+        eventId = prior.id;
+        await this.env.DB.prepare("UPDATE job_events SET ok=0, detail_json=? WHERE id=? AND owner_email=?")
+          .bind(JSON.stringify({ pending: true, leaseExpiresAt: new Date(now.getTime() + RUN_LEASE_MS).toISOString() }), eventId, this.owner).run();
+      } else {
+        // Reserve the key before dispatch so concurrent retries cannot inject the
+        // same prompt twice. The row is updated with the authoritative result.
+        try {
+          await this.env.DB.prepare("INSERT INTO job_events (id, job_id, owner_email, action, ok, detail_json, idempotency_key, created_at) VALUES (?, ?, ?, 'run', 0, ?, ?, ?)")
+            .bind(eventId, id, this.owner, JSON.stringify({ pending: true, leaseExpiresAt: new Date(now.getTime() + RUN_LEASE_MS).toISOString() }), idempotencyKey, now.toISOString()).run();
+        } catch {
+          throw new JobServiceError("Conflict", "an idempotent run with this key already exists");
+        }
       }
     }
     const result = await this.runtime.run(this.env, row, this.now());
