@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { safePublicHttpUrl } from "../src/public-url.ts";
+import { requirePublicHttpsUrl, safePublicHttpUrl } from "../src/public-url.ts";
 
 for (const url of [
   "http://127.0.0.1/", "http://10.0.0.1/", "https://172.16.0.1/", "https://192.168.1.1/",
@@ -13,4 +13,10 @@ assert.equal(safePublicHttpUrl("https://example.com/path")?.hostname, "example.c
 assert.equal(safePublicHttpUrl("https://fcm.googleapis.com/fcm/send/token", { httpsOnly: true })?.hostname, "fcm.googleapis.com");
 assert.equal(safePublicHttpUrl("http://example.com/")?.protocol, "http:");
 assert.equal(safePublicHttpUrl("http://example.com/", { httpsOnly: true }), null);
+for (const url of [
+  "http://example.com/", "https://localhost/", "https://10.0.0.1/",
+  "https://169.254.169.254/latest/meta-data/", "https://[fe80::1]/",
+  "https://[::ffff:127.0.0.1]/", "https://user:pass@example.com/",
+]) assert.throws(() => requirePublicHttpsUrl(url), /public HTTPS URL/, url);
+assert.equal(requirePublicHttpsUrl("https://example.com/path").pathname, "/path");
 console.log("✓ public URL policy negative cases");

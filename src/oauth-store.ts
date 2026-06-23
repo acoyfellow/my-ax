@@ -33,6 +33,7 @@ import {
 import { Effect, Schedule, Duration } from "effect";
 import type { Env } from "./types";
 import { encryptToken, decryptToken, looksEncrypted } from "./grant-crypto";
+import { requirePublicHttpsUrl } from "./public-url";
 
 // Token-endpoint calls can hit transient network blips; without a retry, a
 // single blip forces an unnecessary full re-authorization. Retry only on a
@@ -306,7 +307,8 @@ export class OAuthClientDO extends DurableObject<Env> {
       if (!regEndpoint) {
         throw new Error(`shouldAutoDcr returned true but dcrRegistrationEndpoint is null for ${connectorId}`);
       }
-      const dcrResp = await fetch(regEndpoint, {
+      const dcrUrl = requirePublicHttpsUrl(regEndpoint);
+      const dcrResp = await fetch(dcrUrl, {
         method: "POST",
         redirect: "manual",
         headers: { "Content-Type": "application/json" },
@@ -396,7 +398,8 @@ export class OAuthClientDO extends DurableObject<Env> {
       resource: auth.resource,
     });
 
-    const tokenResp = await fetch(auth.tokenEndpoint, {
+    const tokenUrl = requirePublicHttpsUrl(auth.tokenEndpoint);
+    const tokenResp = await fetch(tokenUrl, {
       method: "POST",
       redirect: "manual",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -477,7 +480,13 @@ export class OAuthClientDO extends DurableObject<Env> {
       client_id: refreshClientId,
       resource: auth.resource,
     });
-    const refreshResp = await resilientTokenFetch(auth.tokenEndpoint, {
+    let refreshUrl: URL;
+    try {
+      refreshUrl = requirePublicHttpsUrl(auth.tokenEndpoint);
+    } catch {
+      return null;
+    }
+    const refreshResp = await resilientTokenFetch(refreshUrl.toString(), {
       method: "POST",
       redirect: "manual",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },

@@ -38,10 +38,16 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Changed
 
+- De-narrated the stylesheet header comments to describe current behavior instead of past migrations.
 - Removed misleading comments and dead code that degraded the seven-minute repository, with no behavior change: corrected the OAuth-store header to describe the actual AES-GCM-256 encryption-at-rest, deleted the no-op `oauth-store-facade.ts` and the `sandbox.ts` shim in favor of single canonical owners, removed an unreachable duplicate liveness-ping branch and the unused standalone Cloudbox tool exports, and rewrote war-story comments as present-tense invariants.
+
+### Security
+
+- Centralized a fail-closed public-HTTPS destination policy and applied it at every credentialed/server-side outbound use site: OAuth dynamic client registration, token exchange, and refresh now revalidate persisted endpoints immediately before each request, and the connector bridge builds upstream URLs with `new URL()`, requires the resolved request to stay on the registered connector origin before attaching the bearer token, and refuses redirects. (Strict URL/host/origin enforcement; not DNS-resolution pinning.)
 
 ### Fixed
 
+- Stopped recurring-job actions in Settings from reporting false success: Run, Pause, and Delete now check the HTTP response, surface an accessible inline error on failure instead of always claiming success, and disable their button while a request is in flight to prevent duplicate run/pause/delete.
 - Made recurring jobs survive crashes and partial scheduler failures: a manual idempotent run now holds a 5-minute lease so a run interrupted mid-dispatch can be retried instead of being stuck `pending` forever, and a job update whose old-schedule cancellation fails now keeps its live replacement schedule (recording the possibly-orphaned old alarm) instead of rolling back to a cancelled schedule and leaving the job silently inactive.
 
 ### Security

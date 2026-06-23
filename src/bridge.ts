@@ -22,6 +22,7 @@ import {
   type ConnectorId,
   type OAuthClientStore,
 } from "./connectors";
+import { requirePublicHttpsUrl } from "./public-url";
 
 // handleBridgeRequest now needs the full Env so it can call
 // getConnector(env, …), which env-gates the internal built-in registry
@@ -221,17 +222,27 @@ export async function handleBridgeRequest(
     if (!upstreamHeaders.has(k)) upstreamHeaders.set(k, v);
   }
 
-  // Build upstream URL. If the caller passed only "/" (e.g. POST /bridge/<connector>/),
-  // many MCP servers reject "/mcp/" so we strip the bare trailing slash and call /mcp directly.
-  // For non-root paths, preserve them: "/v1/chat/completions" → "<upstream>/v1/chat/completions".
-  let upstreamUrl: string;
-  if (upstreamPath === "/" || upstreamPath === "") {
-    upstreamUrl = connector.upstream;
-  } else {
-    upstreamUrl = `${connector.upstream}${upstreamPath.startsWith("/") ? "" : "/"}${upstreamPath}`;
+  // Resolve relative paths against the registered endpoint, then require the
+  // result to stay on its exact origin before attaching the bearer token.
+  let registeredUpstream: URL;
+  let upstreamUrl: URL;
+  try {
+    registeredUpstream = requirePublicHttpsUrl(connector.upstream);
+    upstreamUrl = upstreamPath === "/" || upstreamPath === ""
+      ? registeredUpstream
+      : requirePublicHttpsUrl(new URL(upstreamPath, registeredUpstream).toString());
+    if (upstreamUrl.origin !== registeredUpstream.origin) {
+      throw new BridgeError("UpstreamOriginMismatch", "Bridge path must remain on the registered connector origin");
+    }
+  } catch (err) {
+    const e = err instanceof BridgeError
+      ? err
+      : new BridgeError("UnsafeUpstream", (err as Error).message);
+    return Response.json({ ok: false, error: { tag: e.tag, message: e.message } }, { status: 400 });
   }
   const upstreamRes = await fetch(upstreamUrl, {
     method: request.method,
+    redirect: "manual",
     headers: upstreamHeaders,
     body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
   });

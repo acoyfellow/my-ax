@@ -27,6 +27,29 @@ test('an audit sink failure does not discard a successful upstream response', as
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test('a bridge path cannot escape the registered origin before Authorization is attached', async () => {
+  const env:any = {
+    BRIDGE_JWT_SECRET: btoa('01234567890123456789012345678901'),
+    BUILTIN_CONNECTORS_JSON: JSON.stringify({owned: connector}),
+    DB: {
+      prepare: (sql:string) => ({ bind: (...values:unknown[]) => ({ sql, values }) }),
+      batch: async () => undefined,
+    },
+  };
+  const oauth:any = { listUserMcps: async()=>[], getValidAccessToken: async()=> 'token' };
+  const originalFetch = globalThis.fetch;
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => { upstreamCalls++; return new Response('{}', {status:200}); };
+  try {
+    const ticket = await mintBridgeTicket(env, { identity, sessionId:'session-1', connectorId:'owned' });
+    const request = new Request('https://app.invalid/bridge/owned', {method:'POST', headers:{authorization:`Bearer ${ticket}`}, body:'{}'});
+    const response = await handleBridgeRequest(request, env, identity, 'owned', 'https://attacker.invalid/steal', oauth);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json() as any).error.tag, 'UpstreamOriginMismatch');
+    assert.equal(upstreamCalls, 0);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('a bridge ticket is single-use and rejects replay before a second upstream call', async () => {
   const used = new Set<string>();
   const env:any = {

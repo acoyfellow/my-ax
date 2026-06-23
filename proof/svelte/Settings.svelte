@@ -296,6 +296,7 @@
   let jobName = $state("");
   let jobPrompt = $state("");
   let jobCadence = $state("60");
+  let jobActionBusy = $state<Record<string, boolean>>({});
 
   function cadenceLabel(seconds: number) {
     return seconds === 60
@@ -331,22 +332,36 @@
       jobsStatusText = err.message || "Jobs unavailable.";
     }
   }
+  async function jobAction(id: string, operation: "run" | "pause" | "delete", request: () => Promise<Response>, success?: string) {
+    const key = `${id}:${operation}`;
+    if (jobActionBusy[key]) return;
+    jobActionBusy[key] = true;
+    try {
+      const response = await request();
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error?.message || body?.error?.code || `Job ${operation} failed (${response.status}).`);
+      }
+      if (success) jobsStatusText = success;
+      await refreshJobs();
+    } catch (err: any) {
+      jobsStatusText = err?.message || `Could not ${operation} job.`;
+    } finally {
+      jobActionBusy[key] = false;
+    }
+  }
   async function runJob(id: string) {
-    await fetch(`/api/jobs/${encodeURIComponent(id)}/run`, { method: "POST" });
-    jobsStatusText = "Job queued.";
-    await refreshJobs();
+    await jobAction(id, "run", () => fetch(`/api/jobs/${encodeURIComponent(id)}/run`, { method: "POST" }), "Job queued.");
   }
   async function pauseJob(job: Job) {
-    await fetch(`/api/jobs/${encodeURIComponent(job.id)}/pause`, {
+    await jobAction(job.id, "pause", () => fetch(`/api/jobs/${encodeURIComponent(job.id)}/pause`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paused: job.status !== "paused" }),
-    });
-    await refreshJobs();
+    }));
   }
   async function deleteJob(id: string) {
-    await fetch(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
-    await refreshJobs();
+    await jobAction(id, "delete", () => fetch(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }));
   }
   async function submitJob(e: SubmitEvent) {
     e.preventDefault();
@@ -743,11 +758,11 @@
                 <div data-job-result={job.last_error ? "error" : "ok"}>last {lastRun} · {result}</div>
               </div>
               <div class="mt-3 grid grid-cols-3 gap-2">
-                <button type="button" onclick={() => runJob(job.id)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">Run</button>
-                <button type="button" onclick={() => pauseJob(job)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">
+                <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">Run</button>
+                <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">
                   {job.status === "paused" ? "Resume" : "Pause"}
                 </button>
-                <button type="button" onclick={() => deleteJob(job.id)} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500">Delete</button>
+                <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-50">Delete</button>
               </div>
             </article>
           {/each}
@@ -777,7 +792,7 @@
         </select>
         <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">Add recurring job</button>
       </form>
-      <p class="mt-2 text-xs text-fg-mut">{jobsStatusText}</p>
+      <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{jobsStatusText}</p>
     </section>
 
       </div>

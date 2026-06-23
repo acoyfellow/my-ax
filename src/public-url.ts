@@ -31,3 +31,10 @@ export function safePublicHttpUrl(raw: string, options: { httpsOnly?: boolean } 
     return url;
   } catch { return null; }
 }
+
+/** Validate a credentialed/server-side outbound destination at its use site. */
+export function requirePublicHttpsUrl(raw: string): URL {
+  const url = safePublicHttpUrl(raw, { httpsOnly: true });
+  if (!url) throw new Error("Outbound destination must be a public HTTPS URL without embedded credentials");
+  return url;
+}
