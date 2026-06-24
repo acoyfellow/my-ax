@@ -5,6 +5,8 @@
 // run receipts). Manual Run now reuses the same `/inject-user-message` path.
 
 import type { Env } from "./types";
+import { notifyOwner } from "./notify";
+import { recurringJobReceipt } from "./recurring-job-receipt";
 
 async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
   // Keep the Cloudflare-only agent stub out of module initialization so pure
@@ -92,6 +94,12 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
       "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
     ).bind(nextRunAt, now.toISOString(), ok ? null : (error ?? "unknown").slice(0, 500), row.id, row.owner_email).run();
   } catch { /* dev D1 missing — tolerate */ }
+  await notifyOwner(env, row.owner_email, recurringJobReceipt({
+    jobId: row.id,
+    jobName: row.name,
+    sessionId: row.session_id,
+    error: ok ? null : error,
+  })).catch((notifyError) => console.error("recurring_job_receipt_failed", { jobId: row.id, err: String(notifyError) }));
   return { next_run_at: nextRunAt, ok, error };
 }
 
