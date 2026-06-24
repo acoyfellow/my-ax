@@ -4,6 +4,7 @@ import type { AppEnv } from "../app-env";
 import { getSessionAgent } from "../agent-stub";
 import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
 import { JobService } from "../job-service";
+import { readOwnerCheckIn } from "./check-in";
 
 const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history"] as const;
 type Method = typeof METHODS[number];
@@ -13,6 +14,11 @@ const TOOLS = [
     name: "my_ax_code",
     description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations. Preferred for multi-step inspection and steering. Available typed methods: listSessions, getSession, entries, inject. No raw fetch or outbound network.",
     inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function using codemode.<method>(args)." } }, required: ["code"] },
+  },
+  {
+    name: "my_ax_check_in",
+    description: "Read one compact owner-scoped check-in composed from unread Attention, active jobs, and recent Run Receipts.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "my_ax_call",
@@ -187,9 +193,12 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
     const name = req.params?.name;
     const args = req.params?.arguments ?? {};
     try {
+      if (name === "my_ax_check_in") {
+        return c.json(rpc(req.id, text(await readOwnerCheckIn(c.env, c.get("identity").email))));
+      }
       if (name === "my_ax_call") {
         const method = args.method;
-        if (method === "catalog") return c.json(rpc(req.id, text({ methods: METHODS, receiptTools: ["my_ax_observe_connected_session"] })));
+        if (method === "catalog") return c.json(rpc(req.id, text({ methods: METHODS, receiptTools: ["my_ax_observe_connected_session"], checkInTool: "my_ax_check_in" })));
         if (typeof method !== "string" || !METHODS.includes(method as Method)) throw new Error("unknown coordinator method");
         return c.json(rpc(req.id, text(await coordinatorCall(c, method as Method, (args.arguments as Record<string, unknown> | undefined) ?? {}))));
       }

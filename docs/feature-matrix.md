@@ -52,6 +52,7 @@ No current comparative benchmark is published for native tools versus Code Mode.
 |---|---:|---|---|
 | Web Push | ✅ | Owner subscriptions receive best-effort VAPID push. Invalid endpoints are pruned; the Attention row remains when delivery fails. | `src/push.ts`, `src/notify.ts` |
 | Attention inbox | ✅ | D1 stores recent owner-scoped items, unread state, href, and source session. | `src/routes/attention.ts`, `proof/svelte/Attention.svelte` |
+| Owner check-in | ✅ | `GET /api/check-in` and MCP `my_ax_check_in` derive a compact owner view from unread Attention, jobs, and Run Receipts; no new state is stored. | `src/check-in.ts`, `npm run test:check-in` |
 | Recurring prompts | ✅ | Think's per-DO schedules run saved prompts; D1 stores the owner-facing index and last result. | `src/jobs.ts`, `src/routes/jobs.ts` |
 | Unified turn state | ⚠️ | Decisions resume durably, but chat, job, decision, cancellation, and failure do not yet share one state record. | `src/agent.ts`, `src/jobs.ts` |
 | Quiet hours | ⏭ | No delivery schedule or category preferences are implemented. | — |
