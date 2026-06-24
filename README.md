@@ -58,7 +58,7 @@ Code Mode has no direct database, secret, or network bindings. Its allowlisted s
 | Browser | Browser Run accepts HTTP(S) URLs that pass public-address checks and does not receive local browser cookies. DNS rebinding remains an infrastructure boundary. Authenticated local browsing works only when a connected Machine explicitly exposes it. |
 | Voice and push | Depend on explicit browser permission and provider availability. A failed push does not remove its D1 Attention record. Microphone access begins only from a user action. |
 
-[Feature Status and Limits](./docs/feature-matrix.md) contains the complete shipped/proving/planned matrix.
+[Feature Status and Limits](./docs/feature-matrix.md) is the current-state inventory: what is real, where it lives, and the known limits.
 
 ## One Deployed Happy-Path Demonstration
 
