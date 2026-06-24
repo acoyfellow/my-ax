@@ -6,10 +6,11 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 |---|---|
 | `src/index.tsx` | Hono app composition plus non-session top-level routes. |
 | `src/routes/sessions.ts` | Session CRUD, export, inbound injection, ticket routes, and conversation-attached artifact cleanup. |
+| `src/check-in.ts` + `src/routes/check-in.ts` | Owner check-in read model over Attention, jobs, and run receipts. |
 | `src/artifacts.ts` + `src/routes/artifacts.ts` | One-off Svelte artifact compile/storage path plus owner-scoped preview/index routes. |
 | `src/auth.ts` | Verifies the Cloudflare Access JWT (when configured); attaches `identity` to the request context. |
 | `src/agent.ts` | Active `MyAgent extends Think` Durable Object — native chat, tools, durable submissions, D1 mirror hooks, invisible Session-backed memory. |
-| `src/delegate-many.ts` | Milestone B static `delegate_many`: the canonical parent runs at most two concurrent, run-scoped read-only `ReadOnlyDelegateAgent` Think facets via official `runAgentTool`; children cannot delegate, retained agent-tool events/runs are evidence, terminal runs expire after one hour, and the parent owns synthesis. |
+| `src/delegate-many.ts` | Static `delegate_many`: the canonical parent runs at most two concurrent, run-scoped read-only `ReadOnlyDelegateAgent` Think facets via official `runAgentTool`; children cannot delegate, retained agent-tool events/runs are evidence, and the parent owns synthesis. Later delegations opportunistically clear older terminal child runs. |
 | `src/think-workspace.ts` | Adapts Think workspace tools to the real Sandbox `/home/user` workspace. |
 | `src/notify.ts` + `src/push.ts` | Owner-scoped Web Push transport and agent-notification delivery. |
 | `src/browser-tools.ts` | Cloudflare Browser Run `browser_open` tool and inline replay-receipt payload. |
@@ -19,7 +20,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
 | `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, and Cloudbox with location-tagged call receipts. |
 | `src/cloudbox-tools.ts` | Optional bounded Cloudbox live-run adapter used behind `cloudbox.*`. |
-| `src/jobs.ts` + `src/job-service.ts` + `src/routes/jobs.ts` | Native recurring-prompt scheduling plus the shared owner-scoped CRUD/evidence service used by thin HTTP, canonical Think, Code Mode, and owner-MCP adapters. |
+| `src/jobs.ts` + `src/job-service.ts` + `src/recurring-job-run.ts` + `src/routes/jobs.ts` | Native recurring-prompt scheduling, shared owner-scoped CRUD/evidence service, and one terminalization path for scheduled/manual runs and owner-visible receipts. |
 | `src/run-receipts.ts` + `src/routes/runs.tsx` | Shared owner-scoped Run Receipt event append primitive, v0 CRUD/events, and read-only board; events are explicitly appended, not automatically captured. |
 | `src/connectors.ts` | Connector registry. Public engine ships empty; users add their own MCPs via Settings → Connectors. |
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
@@ -49,7 +50,7 @@ Browser
   │            │      ├─ workspace.* → My AX Workspace
   │            │      ├─ machine.*   → outbound Machinectl relay
   │            │      └─ cloudbox.*  → bounded Cloudbox live runs
-  │            ├─→ D1 `my-ax-db` ── session registry, Think-turn mirror, snapshots, FTS memory, push subs, artifact index, run receipts
+  │            ├─→ D1 `my-ax-db` ── session registry, Think-turn mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
   │            ├─→ R2 uploads     ── owner-scoped image attachments + screenshot/Svelte artifact objects
   │            ├─→ Browser Run    ── public-page browser sessions + native rrweb recording receipts
   │            └─→ Models         ── curated operator-controlled models
@@ -86,7 +87,7 @@ connected laptop and `cloudbox.run_create` reaches Cloudbox.
 
 **R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox.
 
-**Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
+**Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, Attention, recurring jobs and job evidence, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
 
 **KV `AUDIT_KV`** stores `bridge.ts` call receipts for 90 days. Each stored record includes caller, target, method, and timestamp; Work Code Mode calls use their own response envelope.
 
@@ -112,10 +113,11 @@ Production uses the verified Access JWT email as the owner key. Local developmen
 8. Every subsequent tool call mints a fresh `bridge.ts` ticket, attaches the bearer, and forwards.
 9. Refresh happens server-side ~5 minutes before expiry; user never re-consents unless they explicitly disconnect.
 
-## Session HTTP Surfaces
+## Owner HTTP Surfaces
 
-Beyond the WebSocket (`/agents/my-agent/:id`) and the CRUD on `/api/sessions`, two owner-authenticated surfaces are worth calling out because they're how external automation talks to a session:
+Beyond the WebSocket (`/agents/my-agent/:id`) and the CRUD on `/api/sessions`, these owner-authenticated surfaces are worth calling out because they are the stable automation and check-in paths:
 
+- **`GET /api/check-in`** — owner loop front door. Derives needs-owner, running, completed, and suggested steer groups from Attention, jobs, and run receipts without storing a new projection.
 - **`POST /api/sessions/:id/inject`** — inbound steering. Validates ownership against `sessions.owner_email`, forwards to `MyAgent`, and enqueues a durable Think submission. Connected PWAs repaint the injected user turn and assistant response live.
 - **`GET /api/sessions/:id/entries?after=<cursor>&limit=<n>`** — incremental outbound sync. Reads `conversation_entries` from D1 by monotonic entry id, returns chronological rows strictly after the cursor, and is safe to poll idempotently.
 - **`GET /api/sessions/:id/export?format=json|markdown`** — durable full transcript download. Reads `conversation_entries` from D1 directly (no Sandbox spin-up), enforces ownership in SQL, and returns a `Content-Disposition: attachment` response.
