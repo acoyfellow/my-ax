@@ -1,6 +1,7 @@
 export interface DecisionResponseStore {
   insertEvent(input: { id: string; eventId: string; email: string; question: string; choice: string; now: string }): Promise<void>;
   completeRun(input: { id: string; email: string }): Promise<boolean>;
+  reopenRun(input: { id: string; email: string }): Promise<boolean>;
   deleteEvent(input: { id: string; eventId: string; email: string }): Promise<void>;
 }
 
@@ -11,6 +12,7 @@ export interface DecisionResponseStore {
 export async function recordDecisionResponse(
   store: DecisionResponseStore,
   input: { id: string; email: string; question: string; choice: string; now?: string },
+  resume: () => Promise<void> = async () => undefined,
 ): Promise<boolean> {
   const now = input.now ?? new Date().toISOString();
   const eventId = `evt-${crypto.randomUUID()}`;
@@ -21,6 +23,13 @@ export async function recordDecisionResponse(
     if (!completed) {
       await store.deleteEvent(eventInput);
       return false;
+    }
+    try {
+      await resume();
+    } catch (error) {
+      await store.reopenRun(input);
+      await store.deleteEvent(eventInput);
+      throw error;
     }
     return true;
   } catch (error) {

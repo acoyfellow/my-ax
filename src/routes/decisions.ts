@@ -106,21 +106,27 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
         const result = await c.env.DB.prepare("UPDATE runs SET status = 'completed', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'open'").bind(id, email).run();
         return (result.meta?.changes ?? 0) === 1;
       },
+      reopenRun: async ({ id, email }) => {
+        const result = await c.env.DB.prepare("UPDATE runs SET status = 'open', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'completed'").bind(id, email).run();
+        return (result.meta?.changes ?? 0) === 1;
+      },
       deleteEvent: async ({ id, eventId, email }) => {
         await c.env.DB.prepare("DELETE FROM run_events WHERE run_id = ? AND event_id = ? AND owner_email = ? AND type = 'decision.answered'").bind(id, eventId, email).run();
       },
     };
-    if (!await recordDecisionResponse(store, { id, email, question: bounds.question, choice })) {
-      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
-    }
-
     try {
-      const stub = await getSessionAgent(c.env, email, bounds.sessionId);
-      await stub.seedIdentity(c.get("identity"));
-      await stub.injectUserMessage({ content: `[decision] In response to "${bounds.question}", I chose: ${choice}`, clientMsgId: `decision:${id}` });
-      await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(bounds.sessionId, email).run();
+      const recorded = await recordDecisionResponse(store, { id, email, question: bounds.question, choice }, async () => {
+        const stub = await getSessionAgent(c.env, email, bounds.sessionId);
+        await stub.seedIdentity(c.get("identity"));
+        await stub.injectUserMessage({ content: `[decision] In response to "${bounds.question}", I chose: ${choice}`, clientMsgId: `decision:${id}` });
+        await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(bounds.sessionId, email).run();
+      });
+      if (!recorded) {
+        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
+      }
     } catch (error) {
       console.error("decision_inject_failed", { id, err: error instanceof Error ? error.message : String(error) });
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "DECISION_RESUME_FAILED", message: "The decision could not reach the conversation. Try again." }, next_actions: [] }, 503);
     }
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { id, choice, resumed: true }, next_actions: [] });
   });

@@ -12,6 +12,11 @@ function memoryStore(): DecisionResponseStore & { events: Array<{ eventId: strin
       this.open = false;
       return true;
     },
+    async reopenRun() {
+      if (this.open) return false;
+      this.open = true;
+      return true;
+    },
     async deleteEvent({ eventId }) {
       const index = this.events.findIndex((event) => event.eventId === eventId);
       if (index >= 0) this.events.splice(index, 1);
@@ -37,4 +42,15 @@ test("repeated response is rejected without retaining another event", async () =
   assert.equal(await recordDecisionResponse(store, { ...input, choice: "A" }), true);
   assert.equal(await recordDecisionResponse(store, { ...input, choice: "A" }), false);
   assert.deepEqual(store.events.map((event) => event.choice), ["A"]);
+});
+
+test("failed session resume reopens the decision and removes its answer event", async () => {
+  const store = memoryStore();
+  await assert.rejects(
+    recordDecisionResponse(store, { ...input, choice: "A" }, async () => { throw new Error("session unavailable"); }),
+    /session unavailable/,
+  );
+  assert.equal(store.open, true);
+  assert.deepEqual(store.events, []);
+  assert.equal(await recordDecisionResponse(store, { ...input, choice: "B" }), true);
 });
