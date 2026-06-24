@@ -149,7 +149,7 @@ Every My AX installation is one security and state boundary. Two installationsâ€
 
 Do not point two installations at one D1 database or copy a configured `wrangler.jsonc` between accounts. Sharing source code is expected; sharing runtime state or credentials is not.
 
-For repeatable production operation, keep a **private deployment wrapper** outside the public engine. A wrapper should clone or check out an exact public revision, inject non-public account/hostname/Access configuration, resolve deployment-owned resources, run checks and migrations, and deploy. It must not patch product behavior or commit secrets. This is also the recommended foundation for future A2A deployment links: independently deployed instances communicate through explicit protocol grants, not shared storage.
+For repeatable production operation, keep a **private deployment wrapper** outside the public engine. A wrapper should clone or check out an exact public revision, inject non-public account/hostname/Access configuration, resolve deployment-owned resources, run checks and migrations, and deploy. It must not patch product behavior or commit secrets. Independently deployed instances share source revision only; they must not share runtime storage, credentials, or Access applications.
 
 ## Update a Deployment
 

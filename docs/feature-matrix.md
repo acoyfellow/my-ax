@@ -53,8 +53,9 @@ No current comparative benchmark is published for native tools versus Code Mode.
 | Web Push | ✅ | Owner subscriptions receive best-effort VAPID push. Invalid endpoints are pruned; the Attention row remains when delivery fails. | `src/push.ts`, `src/notify.ts` |
 | Attention inbox | ✅ | D1 stores recent owner-scoped items, unread state, href, and source session. | `src/routes/attention.ts`, `proof/svelte/Attention.svelte` |
 | Owner check-in | ✅ | `GET /api/check-in` and MCP `my_ax_check_in` derive a compact owner view from unread Attention, jobs, and Run Receipts; no new state is stored. | `src/check-in.ts`, `npm run test:check-in` |
-| Recurring prompts | ✅ | Think's per-DO schedules run saved prompts; D1 stores the owner-facing index and last result. | `src/jobs.ts`, `src/routes/jobs.ts` |
-| Unified turn state | ⚠️ | Decisions resume durably, but chat, job, decision, cancellation, and failure do not yet share one state record. | `src/agent.ts`, `src/jobs.ts` |
+| Recurring prompts | ✅ | Native per-session schedules run saved prompts. HTTP routes, Think tools, Code Mode, and the owner MCP share one owner-scoped job service; D1 stores job state and durable history. | `src/jobs.ts`, `src/job-service.ts`, `src/routes/jobs.ts` |
+| Recurring-job terminal receipts | ✅ | Scheduled alarms and manual “Run now” share one terminalization path that updates job state and emits an actionable owner-visible Attention receipt for success or failure. | `src/recurring-job-run.ts`, `npm run test:recurring-job-run` |
+| Unified turn state | ⚠️ | Recurring-job terminalization is shared, but chat, decisions, cancellation, processes, and jobs still do not share one state record. | `src/agent.ts`, `src/jobs.ts` |
 | Quiet hours | ⏭ | No delivery schedule or category preferences are implemented. | — |
 
 ## Identity and Storage
@@ -101,7 +102,7 @@ No current comparative benchmark is published for native tools versus Code Mode.
 | Authenticated GitHub integration | ⚠️ | Public GitHub pages/API can be browsed and a connected machine may have `gh`; there is no built-in owner OAuth GitHub connector in the public engine. Add via user MCP or a private portal. |
 | Durable inference / never waste a token | ⏭ | No `durableBuffer` or AI Gateway run-cursor resume is active. Adopt managed AI Gateway/Think durable resume when the public primitive is available; do not build another custom inference-buffer DO. |
 | Native vs Code Mode benchmark | ⏭ | Simple-call evidence exists informally, but there is no checked-in, repeatable multi-call benchmark with latency, schema/context, failures, and quality scoring. |
-| Unified durable work/turn state | ⚠️ | Chat, jobs, decisions, processes, cancellation, and failure use separate state models. One owner-scoped `running/completed/needs_input/failed/cancelled` contract is not implemented. |
+| Unified durable work/turn state | ⚠️ | Recurring-job scheduled/manual runs share terminalization, but chat turns, decisions, processes, cancellation, and failure still use separate state models. One owner-scoped `running/completed/needs_input/failed/cancelled` contract is not implemented. |
 | Glance ambient control surface | ⚠️ | My AX exposes owner-scoped Attention read/ack primitives and records a Glance receipt, but Glance UI/deployment integration is not part of this repository. |
 | Access branding automation | ⏭ | Product/PWA branding exists; Zero Trust login-page/app branding is still an operator dashboard/configuration task, not setup automation. |
 | Personal reference deployment parity | ⚠️ | Public README names the reference deployment, but there is no repository gate proving it runs the same current commit and full generic capability set as the employee instance. |
@@ -117,11 +118,10 @@ No current comparative benchmark is published for native tools versus Code Mode.
 
 | Priority | Work | Why now / definition of done |
 |---:|---|---|
+| P0 | Check-in proof gate | Keep `GET /api/check-in` and MCP `my_ax_check_in` in the private post-deploy proof so the owner can always see needs-owner, running, and completed state. |
 | P0 | Reliability release gate | Keep Access, normal turn, multi-turn, resume, switching, idle ping/pong, voice, push, model registry, D1 schemas, and workspace restore in one private post-deploy canary. Feature work stops on failure. |
 | P0 | Full organization MCP canary | Private expected-server list, one safe read-only probe per upstream, native-tool count, Code Mode policy check, no payload logging, non-zero exit on drift. |
-| P1 | Cloudflare dependency cohort upgrade | Upgrade Think 0.10.0 + Agents 0.16.2 + Voice 0.3.1 + Code Mode 0.4.1 together in a branch; run typecheck, unit, resume, voice, MCP hydration, Code Mode, and production smoke before merging. |
-| P1 | AI Gateway provider/resume spike | Evaluate `workers-ai-provider` 3.2.0 third-party plugins and experimental resumable streams against the current gateway. Keep current routing until byte-exact resume, tools, reasoning, and auth are proven. |
-| P1 | Unified durable state | Define one state/event contract shared by chat turns, decisions, recurring jobs, long-running work, push, and Attention. Run receipts become the evidence log, not a second scheduler. |
+| P1 | Unified durable state | Define one state/event contract shared by chat turns, decisions, long-running work, push, and Attention. Run receipts become the evidence log, not a second scheduler. |
 | P1 | Job reconciliation | Enumerate D1 jobs versus native schedules, repair orphaned rows/schedules, make retries idempotent, and expose last verified schedule state. |
 | P1 | Workspace owner coordinator | Move mutation/snapshot coordination into the owner root or workspace actor so concurrent facets have an explicit serialization/commit contract. |
 | P2 | Artifact revision workflow | Add fork/edit/rerun/version only after defining ownership, CSP, storage retention, and a minimal non-dashboard UX. |
@@ -132,16 +132,16 @@ No current comparative benchmark is published for native tools versus Code Mode.
 
 | Package | Current | npm latest | Plan |
 |---|---:|---:|---|
-| `@cloudflare/think` | 0.9.0 | 0.10.0 | Upgrade only with Agents/Voice/Code Mode cohort. README API is nearly unchanged; dependency moves to Code Mode `^0.4.1` and `create-think ^0.1.0`. High regression risk around facets/recovery. |
-| `agents` | 0.16.0 | 0.16.2 | Cohort patch candidate; validate sub-agent routing, MCP registration/removal, schedules, and resume. |
-| `@cloudflare/voice` | 0.3.0 | 0.3.1 | Cohort patch candidate. Package explicitly warns that APIs may break; retain exact pin and run live voice lifecycle. |
-| `@cloudflare/codemode` | 0.4.0 | 0.4.1 | Cohort patch candidate; rerun policy/collision tests plus Work and MCP Code Mode. |
+| `@cloudflare/think` | 0.10.0 | 0.10.0 | Current; keep exact and validate facets, recovery, schedules, and MCP hydration on any cohort upgrade. |
+| `agents` | 0.16.2 | 0.16.2 | Current; validate sub-agent routing, MCP registration/removal, schedules, and resume on any cohort upgrade. |
+| `@cloudflare/voice` | 0.3.2 | 0.3.2 | Current; package APIs may break, so retain exact pin and run live voice lifecycle for upgrades. |
+| `@cloudflare/codemode` | 0.4.1 | 0.4.1 | Current; rerun policy/collision tests plus Work and MCP Code Mode on upgrade. |
 | `workers-ai-provider` | 3.1.14 | 3.2.0 | Separate experimental spike. 3.2 adds third-party AI Gateway plugins and resumable streaming; potentially collapses `llm.ts`, but depends on undocumented/new Gateway behavior. Do not silently upgrade production routing. |
 | `@cloudflare/sandbox` | 0.12.1 | 0.12.1 | Current. SDK and `cloudflare/sandbox:0.12.1` image must move atomically. |
 | `@cloudflare/shell` | 0.4.0 | 0.4.0 | Current. Evaluate `stateTools(workspace)` later for deleting compatible custom workspace glue. |
 | `@cloudflare/worker-bundler` | 0.2.1 | 0.2.1 | Current; keep exact. |
 | `@cloudflare/puppeteer` | 1.1.0 | 1.1.0 | Current; change caret to exact during next dependency commit for deterministic Browser behavior. |
-| `wrangler` | 4.100.0 | 4.101.0 | Low-risk patch after dry-run, Docker build, migration, private deploy, and repeated in-app Access checks. |
+| `wrangler` | 4.102.0 | 4.102.0 | Current; patch after dry-run, Docker build, migration, private deploy, and repeated in-app Access checks. |
 | AI SDK (`ai`, OpenAI, Anthropic, compatible) | 6.0.205 / 3.0.71 / 3.0.84 / 2.0.50 | 6.0.208 / 3.0.73 / 3.0.85 / 2.0.51 | Patch as part of the tested runtime cohort, not independently during reliability work. |
 | `hono` | 4.12.25 | 4.12.26 | Routine patch with route/auth negative tests. |
 

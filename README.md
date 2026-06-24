@@ -6,6 +6,7 @@ The operator controls the deployment configuration and Cloudflare resources it u
 
 ## What It Does
 
+- **Check-in** — authenticated HTTP and MCP surfaces summarize what needs the owner, what is running, what recently completed, and the next steer from existing Attention, jobs, and run receipts.
 - **Durable conversations** — Think is authoritative for conversation execution and retained message state. D1 contains a derived transcript index for UI, search, and export. In-flight work may still be interrupted by provider or runtime failure.
 - **Connected capabilities** — the model and generated programs receive callable tools instead of OAuth tokens or deployment secrets. Trusted server-side adapters hold credentials and retain their configured authority.
 - **Execution environments** — use the container-backed owner workspace plus optional Machine, Cloudbox, and public-page Browser capabilities.
@@ -121,8 +122,10 @@ For contributors, the main entry points are:
 ```text
 src/agent.ts          canonical Think agent and tool assembly
 src/user-agent.ts     owner root and conversation facets
+src/check-in.ts       owner-scoped check-in read model
 src/jobs.ts           native recurring schedules
 src/job-service.ts    owner-scoped job CRUD and evidence
+src/recurring-job-run.ts shared job terminal state and owner receipts
 src/delegate-many.ts  bounded Agents-as-tools delegation
 src/work-tools.ts     Workspace, Machine, and Cloudbox catalog
 src/mcp-code-mode.ts  allowlisted MCP composition
