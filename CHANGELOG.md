@@ -8,7 +8,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Added
 
-- Added an owner-visible, actionable Attention receipt when stalled-turn recovery is exhausted, linking back to the interrupted conversation with a truthful retry next action.
+- Added an owner-visible, actionable Attention receipt when stalled-turn recovery is exhausted, linking back to the interrupted conversation with a truthful retry next action. Added an authenticated, self-cleaning operator probe that safely verifies the same terminal transcript, interrupted session state, and owner receipt contract without wedging a real model turn or sending a false incident alert.
 - Added a searchable Capabilities Settings section explaining built-in and connected tools, memory, execution surfaces, and their authority boundaries.
 - Added an owner-scoped “Clear all” action for Attention notification receipts; source conversations, jobs, and decisions are preserved.
 - Rewrote the README around the current runtime, explicit authority and durability semantics, production-readiness steps, hard limits, and a seven-minute contributor map; incorporated adversarial operational, runtime-contract, and OSS onboarding review, and clarified the boundary between Agents SDK, Think, and My AX.
@@ -40,7 +40,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Changed
 
-- Reframed the improvement loop as a durable ten-minute reconciler instead of a new-work generator: added explicit controller states, generation checks, leases/fencing, dirty-checkout ownership, callback validation, weekly product bets, daily evidence ranking, daily search/writer/release budgets, circuit breakers, soak/proof/rollback policy, and separate optional demo work. Added executable `loop:*`, `verify:changed`, and `verify:release` commands with state-machine regression tests.
+- Reframed the improvement loop as a durable ten-minute reconciler instead of a new-work generator: added explicit controller states, generation checks, leases/fencing, dirty-checkout ownership, callback validation, weekly product bets, daily evidence ranking, daily search/writer/release budgets, explicit operator approval for a second same-day release, circuit breakers, soak/proof/rollback policy, and separate optional demo work. Added executable `loop:*`, `verify:changed`, and `verify:release` commands with state-machine regression tests.
 - De-narrated the stylesheet header comments to describe current behavior instead of past migrations.
 - Removed misleading comments and dead code that degraded the seven-minute repository, with no behavior change: corrected the OAuth-store header to describe the actual AES-GCM-256 encryption-at-rest, deleted the no-op `oauth-store-facade.ts` and the `sandbox.ts` shim in favor of single canonical owners, removed an unreachable duplicate liveness-ping branch and the unused standalone Cloudbox tool exports, and rewrote war-story comments as present-tense invariants.
 

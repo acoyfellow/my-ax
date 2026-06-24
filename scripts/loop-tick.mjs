@@ -18,7 +18,7 @@ export function classifyTick({ state, dirty, diffDigest, now = new Date() }) {
   if (state.state !== "idle") return { action: "archive_terminal", mutate: false, reason: `archive terminal iteration in state ${state.state}` };
   if (!state.weeklyBetId) return { action: "needs_direction", mutate: false, reason: "no current weekly bet" };
   const budget = state.budget ?? {};
-  if ((budget.searches ?? 0) >= 4 || (budget.writers ?? 0) >= 3 || (budget.deployments ?? 0) >= 1) {
+  if ((budget.searches ?? 0) >= 4 || (budget.writers ?? 0) >= 3 || (budget.deployments ?? 0) >= (budget.deploymentLimit ?? 1)) {
     return { action: "budget_exhausted", mutate: false, reason: "daily search/writer/release budget reached" };
   }
   return { action: "eligible_to_select", mutate: false, reason: "idle, directed, clean, circuit closed, and within budget" };

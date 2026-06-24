@@ -43,7 +43,7 @@ function initialState() {
     repository: { path: root, startRevision: null, baselineStatusHash: null, ownedFiles: [], patchDigest: null },
     lease: null, child: null, attempt: 0, notBefore: null, blocker: null,
     candidateRevision: null, deployment: null, proof: null, rollback: null,
-    budget: { date: today(), searches: 0, writers: 0, deployments: 0, browserProofs: 0 },
+    budget: { date: today(), searches: 0, writers: 0, deployments: 0, deploymentLimit: 1, browserProofs: 0 },
     circuit: { state: "closed", reason: null }, events: [],
   };
 }
@@ -93,7 +93,8 @@ async function locked(fn) {
   try { return await fn(); } finally { await rm(lockPath, { recursive: true, force: true }); }
 }
 function resetDailyBudget(state) {
-  if (state.budget.date !== today()) state.budget = { date: today(), searches: 0, writers: 0, deployments: 0, browserProofs: 0 };
+  if (state.budget.date !== today()) state.budget = { date: today(), searches: 0, writers: 0, deployments: 0, deploymentLimit: 1, browserProofs: 0 };
+  if (!Number.isSafeInteger(state.budget.deploymentLimit)) state.budget.deploymentLimit = 1;
 }
 function appendEvent(state, actor, reason, from, to) {
   const event = { generation: state.generation, at: now(), actor, reason, from, to };
@@ -107,7 +108,7 @@ function requireLease(state) {
 }
 function consumeBudget(state, to) {
   resetDailyBudget(state);
-  const rules = { selecting: ["searches", 4], child_running: ["writers", 3], deploying: ["deployments", 1] };
+  const rules = { selecting: ["searches", 4], child_running: ["writers", 3], deploying: ["deployments", state.budget.deploymentLimit ?? 1] };
   const rule = rules[to]; if (!rule) return;
   const [field, limit] = rule;
   if ((state.budget[field] ?? 0) >= limit) throw new Error(`${field} daily budget exhausted`);
@@ -184,6 +185,15 @@ try {
       const state = await readState(); requireGeneration(state, expected); requireLease(state);
       const from = state.state; state.generation++; state.circuit = { state: value, reason: value === "open" ? (reason ?? "operator opened circuit") : null }; state.updatedAt = now(); appendEvent(state, actor, `circuit:${value}`, from, from); await atomicWrite(state);
       console.log(JSON.stringify({ generation: state.generation, circuit: state.circuit }));
+    });
+  } else if (command === "approve-release") {
+    const [generationRaw, limitRaw = "2", reason = "explicit operator approval", actor = "operator"] = args;
+    const expected = Number(generationRaw), limit = Number(limitRaw);
+    if (!Number.isSafeInteger(expected) || !Number.isSafeInteger(limit) || limit < 2 || limit > 2) throw new Error("usage: approve-release <expectedGeneration> 2 [reason] [actor]");
+    await locked(async () => {
+      const state = await readState(); requireGeneration(state, expected); requireLease(state); resetDailyBudget(state);
+      const from = state.state; state.generation++; state.budget.deploymentLimit = 2; state.updatedAt = now(); appendEvent(state, actor, `release-budget:2:${reason}`, from, from); await atomicWrite(state);
+      console.log(JSON.stringify({ generation: state.generation, deploymentLimit: 2 }));
     });
   } else if (command === "archive") {
     const [generationRaw, actor = "controller"] = args; const expected = Number(generationRaw);

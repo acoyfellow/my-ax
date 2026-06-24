@@ -39,6 +39,8 @@ test("loop state enforces generation, lease ownership, legal transitions, budget
     assert.equal(second.fencingToken, 2);
     const beforeBet = JSON.parse(run(cwd, "status"));
     assert.equal(JSON.parse(run(cwd, "set-bet", String(beforeBet.generation), "walk-away-completion")).weeklyBetId, "walk-away-completion");
+    const beforeApproval = JSON.parse(run(cwd, "status"));
+    assert.equal(JSON.parse(run(cwd, "approve-release", String(beforeApproval.generation), "2", "operator continue")).deploymentLimit, 2);
   } finally { rmSync(cwd, { recursive: true, force: true }); }
 });
 

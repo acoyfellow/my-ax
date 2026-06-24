@@ -13,6 +13,7 @@ import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
+import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
@@ -531,23 +532,11 @@ export class MyAgent extends Think<Env> {
       recoveryKind: ctx.recoveryKind,
     });
     if (!identity) return;
-    await Promise.all([
-      logAssistantMessage(this.env, identity, this.name, ctx.terminalMessage, {
-        status: "interrupted",
-        recoveryIncidentId: ctx.incidentId,
-        recoveryReason: ctx.reason,
-      }),
-      this.env.DB.prepare("UPDATE sessions SET status = 'interrupted', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
-        .bind(this.name, identity.email)
-        .run(),
-      notifyOwner(this.env, identity.email, {
-        kind: "session.update",
-        sessionId: this.name,
-        title: "My AX turn was interrupted",
-        body: `${ctx.terminalMessage} Next action: open the conversation and try again.`,
-        href: `/?session=${encodeURIComponent(this.name)}`,
-      }),
-    ]).catch((error) => console.error("chat_recovery_terminalization_failed", {
+    await recordRecoveryExhaustion(this.env, identity, this.name, {
+      terminalMessage: ctx.terminalMessage,
+      incidentId: ctx.incidentId,
+      reason: ctx.reason,
+    }).catch((error) => console.error("chat_recovery_terminalization_failed", {
       sessionId: this.name,
       err: String(error),
     }));

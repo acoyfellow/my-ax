@@ -69,6 +69,7 @@ deploying | soaking | proving
     "searches": 0,
     "writers": 0,
     "deployments": 0,
+    "deploymentLimit": 1,
     "browserProofs": 0
   },
   "circuit": { "state": "closed", "reason": null },
@@ -106,6 +107,7 @@ npm run loop:state -- heartbeat <holder> <leaseId> [ttlSeconds]
 npm run loop:state -- transition <generation> <from> <to> [reason] [actor]
 npm run loop:state -- set-bet <generation> <betId> [actor]
 npm run loop:state -- circuit <generation> <open|closed> [reason] [actor]
+npm run loop:state -- approve-release <generation> 2 [reason] [actor]
 npm run loop:state -- archive <generation> [actor]
 npm run loop:state -- release <holder> <leaseId>
 ```
