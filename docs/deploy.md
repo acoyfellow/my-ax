@@ -188,8 +188,10 @@ Confirm both R2 S3 secrets are set and scoped to the configured backup bucket. A
 
 ### Roll Back
 
+Loop-managed releases follow [`docs/loop/release.md`](./loop/release.md). Before deployment, record the prior Worker version ID, prior git revision, candidate revision, migration reversibility, rollback owner, exact rollback surface, and post-rollback proof.
+
 ```bash
 npx wrangler deployments list
 ```
 
-Use the Cloudflare dashboard's Worker deployment history to select and roll back to a previous version.
+Use the Cloudflare dashboard's Worker deployment history to select the recorded prior version. Rollback is complete only after the prior version is active and the changed production journey passes its rollback proof. Autonomous irreversible migrations are prohibited.

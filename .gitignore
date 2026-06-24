@@ -1,5 +1,8 @@
 node_modules/
 dist/
+
+# Local durable controller state for the scheduled improvement reconciler.
+.my-ax-loop/
 .wrangler/
 .dev.vars
 .dev.vars.*
