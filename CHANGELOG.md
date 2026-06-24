@@ -41,6 +41,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Changed
 
+- Collapsed the My AX coordinator MCP Code Mode adapter map into one source of truth so `my_ax_code` bindings cannot drift from the `my_ax_call` method catalog.
 - Collapsed recurring-job terminal persistence and owner receipt emission into one shared path used by both native scheduled alarms and manual “Run now,” removing the drift that previously let one path update job state without producing the owner-visible completion receipt.
 - Made `/loop` a project Pi prompt template and kept orchestration in Pi plus Terrarium MCP/extension rather than a duplicate repository-local scheduler. The repository contract now runs one meaningful user-outcome iteration through parent integration, deployment, proof, repair/rollback, and a plain-language release summary.
 - Made observable user benefit a hard loop eligibility/completion gate: a writer cannot start without a named user journey, observed problem, expected change, production measure, and discovery surface; a changed iteration cannot complete without revision-bound production proof and a plain-language release summary.

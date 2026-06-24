@@ -132,6 +132,33 @@ async function observeConnectedSession(c: CoordinatorContext, args: Record<strin
   });
 }
 
+const CODE_METHODS: Record<string, Method> = {
+  listSessions: "list_sessions",
+  getSession: "get_session",
+  entries: "entries",
+  inject: "inject",
+  attentionList: "attention_list",
+  attentionAcknowledge: "attention_acknowledge",
+  jobsList: "jobs_list",
+  jobsCreate: "jobs_create",
+  jobsUpdate: "jobs_update",
+  jobsPause: "jobs_pause",
+  jobsResume: "jobs_resume",
+  jobsRun: "jobs_run",
+  jobsDelete: "jobs_delete",
+  jobsHistory: "jobs_history",
+};
+
+function objectArgs(input: unknown): Record<string, unknown> {
+  return (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+}
+
+function coordinatorCodeFns(c: CoordinatorContext) {
+  return Object.fromEntries(
+    Object.entries(CODE_METHODS).map(([name, method]) => [name, (input: unknown) => coordinatorCall(c, method, objectArgs(input))]),
+  );
+}
+
 const CODE_TYPES = `declare const codemode: {
   listSessions(args?: { limit?: number }): Promise<unknown>;
   getSession(args: { sessionId: string }): Promise<unknown>;
@@ -177,24 +204,8 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
       if (name === "my_ax_code") {
         const code = typeof args.code === "string" ? args.code : "";
         if (!code) throw new Error("code is required");
-        const fns = {
-          listSessions: (input: unknown) => coordinatorCall(c, "list_sessions", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          getSession: (input: unknown) => coordinatorCall(c, "get_session", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          entries: (input: unknown) => coordinatorCall(c, "entries", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          inject: (input: unknown) => coordinatorCall(c, "inject", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          attentionList: (input: unknown) => coordinatorCall(c, "attention_list", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          attentionAcknowledge: (input: unknown) => coordinatorCall(c, "attention_acknowledge", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsList: (input: unknown) => coordinatorCall(c, "jobs_list", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsCreate: (input: unknown) => coordinatorCall(c, "jobs_create", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsUpdate: (input: unknown) => coordinatorCall(c, "jobs_update", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsPause: (input: unknown) => coordinatorCall(c, "jobs_pause", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsResume: (input: unknown) => coordinatorCall(c, "jobs_resume", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsRun: (input: unknown) => coordinatorCall(c, "jobs_run", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsDelete: (input: unknown) => coordinatorCall(c, "jobs_delete", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-          jobsHistory: (input: unknown) => coordinatorCall(c, "jobs_history", (input && typeof input === "object" ? input : {}) as Record<string, unknown>),
-        };
         const executor = new DynamicWorkerExecutor({ loader: c.env.LOADER, globalOutbound: null, timeout: 30_000 });
-        const execution = await executor.execute(code, [{ name: "codemode", fns }]);
+        const execution = await executor.execute(code, [{ name: "codemode", fns: coordinatorCodeFns(c) }]);
         if (execution.error) return c.json(rpc(req.id, { ...text({ ok: false, error: execution.error, available: CODE_TYPES }), isError: true }));
         return c.json(rpc(req.id, text({ ok: true, result: execution.result, logs: execution.logs ?? [], availableMethods: METHODS })));
       }
