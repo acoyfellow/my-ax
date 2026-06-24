@@ -44,6 +44,8 @@ deploying | soaking | proving
   "iterationId": null,
   "findingId": null,
   "weeklyBetId": null,
+  "userOutcome": null,
+  "releaseSummary": null,
   "state": "idle",
   "resumeState": null,
   "stateEnteredAt": "RFC3339",
@@ -105,12 +107,23 @@ npm run loop:tick
 npm run loop:state -- acquire <holder> <purpose> [ttlSeconds]
 npm run loop:state -- heartbeat <holder> <leaseId> [ttlSeconds]
 npm run loop:state -- transition <generation> <from> <to> [reason] [actor]
+npm run loop:state -- set-outcome <generation> <json> [actor]
+npm run loop:state -- set-proof <generation> <json> [actor]
+npm run loop:state -- set-release-summary <generation> <json> [actor]
 npm run loop:state -- set-bet <generation> <betId> [actor]
 npm run loop:state -- circuit <generation> <open|closed> [reason] [actor]
 npm run loop:state -- approve-release <generation> 2 [reason] [actor]
 npm run loop:state -- archive <generation> [actor]
 npm run loop:state -- release <holder> <leaseId>
 ```
+
+## Completion gates
+
+`selecting → child_running` requires a complete `userOutcome` naming the user, journey, observed problem, expected change, production measure, and discovery surface.
+
+`proving → production_certified` requires an exact proof record bound to the deployed revision.
+
+`production_certified → complete` requires a plain-language `releaseSummary`. A no-change iteration may complete from `selecting` with its rejected evidence and does not require release proof/summary.
 
 ## Child and callback contract
 

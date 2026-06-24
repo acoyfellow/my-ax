@@ -27,16 +27,18 @@ Never infer completion from elapsed time, process exit, a callback, the latest d
 
 ## Direction
 
-- Work must support the current weekly bet in [`docs/loop/direction.md`](docs/loop/direction.md), remove a blocker to it, or address an explicit production/security incident.
+- Every changed iteration must improve an observable user outcome. Reliability, security, and simplification qualify only when they protect a named user journey or remove measured friction.
+- Work must support the current weekly bet in [`docs/loop/direction.md`](docs/loop/direction.md), remove a blocker to it, or address an explicit production/security incident with a named affected journey.
+- Before launching a writer, persist `userOutcome`: user, journey, observed problem, expected change, production measure, and discovery surface.
 - Rank evidence once daily. Do not repeat broad discovery every ten minutes.
 - One child owns one finding in an isolated worktree.
-- If evidence is weak, return no-change.
+- If the honest answer to “what changes for the user?” is weak, return no-change and route the idea to ordinary maintenance.
 
 ## Child: FIND → CHANGE → VERIFY → REPORT
 
 ### FIND
 
-Freeze one finding before edits: stable ID, user impact, reproduction/evidence, scope, acceptance criteria, proof plan, and smallest intervention.
+Freeze one finding before edits: stable ID, structured user outcome, reproduction/evidence, scope, acceptance criteria, proof plan, and smallest intervention. The controller refuses `selecting → child_running` until this gate is complete.
 
 ### CHANGE
 
@@ -65,7 +67,7 @@ Return: finding/evidence, files changed and patch digest, commands/outcomes, rem
 
 The parent validates the exact patch digest, reruns the narrow proof, and runs `npm run verify:release` before integration. Release only inside the budgets and gates in [`docs/loop/release.md`](docs/loop/release.md).
 
-Production completion requires proof bound to the exact revision and deployment ID. Failed proof triggers bounded repair or rollback; it never starts a new finding. Demo/media work is optional after production certification and cannot block operational completion.
+Production completion requires proof bound to the exact revision and deployment ID. A changed iteration also requires a plain-language release summary: title, user benefit, required action, and discovery surface. Failed proof triggers bounded repair or rollback; it never starts a new finding. Demo/media work is optional after production certification and cannot block operational completion.
 
 ## State and recovery
 

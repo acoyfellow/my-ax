@@ -29,7 +29,33 @@ A finding is eligible only when it:
 
 1. improves the weekly outcome;
 2. removes a demonstrated blocker to it; or
-3. addresses a production/security incident with higher urgency.
+3. addresses a production/security incident with higher urgency and a named affected journey.
+
+## Mandatory user-outcome gate
+
+Before a writer starts, persist:
+
+```yaml
+user_outcome:
+  user: required
+  journey: required
+  observed_problem: required
+  expected_change: required
+  production_measure: required
+  discovery: direct | whats-new | attention | no-ui-needed
+```
+
+Reliability, security, and simplification do not bypass this gate. Tests, refactors, deleted code, validation, dependency upgrades, and process work are means—not sufficient outcomes. If the benefit cannot be explained plainly, return no-change and route it to ordinary maintenance.
+
+Before completion, a changed iteration also records:
+
+```yaml
+release_summary:
+  title: plain-language change
+  benefit: what is better for the user
+  action: what the user must do, or "No action required"
+  visibility: whats-new | attention | direct | none
+```
 
 ## Daily evidence ranking
 

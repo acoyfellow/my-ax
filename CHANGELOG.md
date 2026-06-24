@@ -40,6 +40,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Changed
 
+- Made observable user benefit a hard loop eligibility/completion gate: a writer cannot start without a named user journey, observed problem, expected change, production measure, and discovery surface; a changed iteration cannot complete without revision-bound production proof and a plain-language release summary.
 - Reframed the improvement loop as a durable ten-minute reconciler instead of a new-work generator: added explicit controller states, generation checks, leases/fencing, dirty-checkout ownership, callback validation, weekly product bets, daily evidence ranking, daily search/writer/release budgets, explicit operator approval for a second same-day release, circuit breakers, soak/proof/rollback policy, and separate optional demo work. Added executable `loop:*`, `verify:changed`, and `verify:release` commands with state-machine regression tests.
 - De-narrated the stylesheet header comments to describe current behavior instead of past migrations.
 - Removed misleading comments and dead code that degraded the seven-minute repository, with no behavior change: corrected the OAuth-store header to describe the actual AES-GCM-256 encryption-at-rest, deleted the no-op `oauth-store-facade.ts` and the `sandbox.ts` shim in favor of single canonical owners, removed an unreachable duplicate liveness-ping branch and the unused standalone Cloudbox tool exports, and rewrote war-story comments as present-tense invariants.

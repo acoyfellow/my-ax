@@ -39,6 +39,7 @@ function initialState() {
   const at = now();
   return {
     version: 1, generation: 1, fencingToken: 0, iterationId: null, findingId: null, weeklyBetId: null,
+    userOutcome: null, releaseSummary: null,
     state: "idle", resumeState: null, stateEnteredAt: at, updatedAt: at,
     repository: { path: root, startRevision: null, baselineStatusHash: null, ownedFiles: [], patchDigest: null },
     lease: null, child: null, attempt: 0, notBefore: null, blocker: null,
@@ -56,6 +57,8 @@ function validate(state) {
   if (!state.repository || state.repository.path !== root) throw new Error("state belongs to another repository");
   if (!state.budget || typeof state.budget.date !== "string") throw new Error("invalid budget");
   if (!state.circuit || !["closed", "open"].includes(state.circuit.state)) throw new Error("invalid circuit");
+  if (state.userOutcome != null) validateUserOutcome(state.userOutcome);
+  if (state.releaseSummary != null) validateReleaseSummary(state.releaseSummary);
   if (state.lease) {
     if (!state.lease.id || !state.lease.holder || !Number.isSafeInteger(state.lease.fencingToken)) throw new Error("invalid lease");
     if (!Number.isFinite(Date.parse(state.lease.expiresAt))) throw new Error("invalid lease expiry");
@@ -65,6 +68,8 @@ function validate(state) {
 async function readState() {
   const state = JSON.parse(await readFile(statePath, "utf8"));
   if (state.version === 1 && state.fencingToken == null) state.fencingToken = 0;
+  if (state.version === 1 && !("userOutcome" in state)) state.userOutcome = null;
+  if (state.version === 1 && !("releaseSummary" in state)) state.releaseSummary = null;
   return validate(state);
 }
 async function atomicWrite(state) {
@@ -102,6 +107,19 @@ function appendEvent(state, actor, reason, from, to) {
 }
 function requireGeneration(state, expected) {
   if (state.generation !== expected) throw new Error(`stale generation: expected ${expected}, current ${state.generation}`);
+}
+function text(value, label, max = 1000) {
+  if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`invalid ${label}`);
+}
+function validateUserOutcome(value) {
+  if (!value || typeof value !== "object") throw new Error("invalid userOutcome");
+  for (const key of ["user", "journey", "observedProblem", "expectedChange", "productionMeasure", "discovery"]) text(value[key], `userOutcome.${key}`);
+  if (!["direct", "whats-new", "attention", "no-ui-needed"].includes(value.discovery)) throw new Error("invalid userOutcome.discovery");
+}
+function validateReleaseSummary(value) {
+  if (!value || typeof value !== "object") throw new Error("invalid releaseSummary");
+  for (const key of ["title", "benefit", "action", "visibility"]) text(value[key], `releaseSummary.${key}`);
+  if (!["whats-new", "attention", "direct", "none"].includes(value.visibility)) throw new Error("invalid releaseSummary.visibility");
 }
 function requireLease(state) {
   if (!state.lease || Date.parse(state.lease.expiresAt) <= Date.now()) throw new Error("valid lease required");
@@ -165,10 +183,44 @@ try {
       requireGeneration(state, expected);
       if (state.state !== from) throw new Error(`state mismatch: expected ${from}, current ${state.state}`);
       if (!transitions.get(from)?.includes(to)) throw new Error(`illegal transition: ${from} -> ${to}`);
-      requireLease(state); consumeBudget(state, to);
+      requireLease(state);
+      if (to === "child_running" && !state.userOutcome) throw new Error("user outcome gate must pass before writer launch");
+      if (to === "production_certified" && !state.proof) throw new Error("production proof record required before certification");
+      if (to === "complete" && from === "production_certified" && !state.releaseSummary) throw new Error("user-facing release summary required before completion");
+      consumeBudget(state, to);
       const at = now(); state.generation++; state.state = to; state.stateEnteredAt = at; state.updatedAt = at;
       if (to === "selecting" && !state.iterationId) state.iterationId = randomUUID();
       appendEvent(state, actor, reason, from, to); await atomicWrite(state); console.log(JSON.stringify({ generation: state.generation, state: to }));
+    });
+  } else if (command === "set-outcome") {
+    const [generationRaw, json, actor = "controller"] = args; const expected = Number(generationRaw);
+    if (!Number.isSafeInteger(expected) || !json) throw new Error("usage: set-outcome <expectedGeneration> <json> [actor]");
+    const outcome = JSON.parse(json); validateUserOutcome(outcome);
+    await locked(async () => {
+      const state = await readState(); requireGeneration(state, expected); requireLease(state);
+      if (state.state !== "selecting") throw new Error("user outcome can only be frozen while selecting");
+      const from = state.state; state.generation++; state.userOutcome = outcome; state.findingId = outcome.findingId ?? state.findingId; state.updatedAt = now(); appendEvent(state, actor, `user-outcome:${outcome.journey}`, from, from); await atomicWrite(state);
+      console.log(JSON.stringify({ generation: state.generation, userOutcome: outcome }));
+    });
+  } else if (command === "set-release-summary") {
+    const [generationRaw, json, actor = "controller"] = args; const expected = Number(generationRaw);
+    if (!Number.isSafeInteger(expected) || !json) throw new Error("usage: set-release-summary <expectedGeneration> <json> [actor]");
+    const summary = JSON.parse(json); validateReleaseSummary(summary);
+    await locked(async () => {
+      const state = await readState(); requireGeneration(state, expected); requireLease(state);
+      if (!["proving", "production_certified"].includes(state.state)) throw new Error("release summary can only be set after deployment proof begins");
+      const from = state.state; state.generation++; state.releaseSummary = summary; state.updatedAt = now(); appendEvent(state, actor, `release-summary:${summary.title}`, from, from); await atomicWrite(state);
+      console.log(JSON.stringify({ generation: state.generation, releaseSummary: summary }));
+    });
+  } else if (command === "set-proof") {
+    const [generationRaw, json, actor = "controller"] = args; const expected = Number(generationRaw);
+    if (!Number.isSafeInteger(expected) || !json) throw new Error("usage: set-proof <expectedGeneration> <json> [actor]");
+    const proof = JSON.parse(json); text(proof.deploymentRevision, "proof.deploymentRevision"); text(proof.measure, "proof.measure"); text(proof.result, "proof.result");
+    await locked(async () => {
+      const state = await readState(); requireGeneration(state, expected); requireLease(state);
+      if (state.state !== "proving") throw new Error("proof can only be recorded while proving");
+      const from = state.state; state.generation++; state.proof = proof; state.updatedAt = now(); appendEvent(state, actor, `proof:${proof.result}`, from, from); await atomicWrite(state);
+      console.log(JSON.stringify({ generation: state.generation, proof }));
     });
   } else if (command === "set-bet") {
     const [generationRaw, betId, actor = "controller"] = args; const expected = Number(generationRaw);
@@ -202,7 +254,7 @@ try {
       const state = await readState(); requireGeneration(state, expected); requireLease(state);
       if (!["complete", "rolled_back"].includes(state.state)) throw new Error("only terminal iterations can be archived");
       const from = state.state; const at = now(); state.generation++; state.state = "idle"; state.stateEnteredAt = at; state.updatedAt = at;
-      for (const key of ["iterationId", "findingId", "resumeState", "child", "blocker", "candidateRevision", "deployment", "proof", "rollback", "notBefore"]) state[key] = null;
+      for (const key of ["iterationId", "findingId", "userOutcome", "releaseSummary", "resumeState", "child", "blocker", "candidateRevision", "deployment", "proof", "rollback", "notBefore"]) state[key] = null;
       state.attempt = 0; state.repository = { path: root, startRevision: null, baselineStatusHash: null, ownedFiles: [], patchDigest: null };
       appendEvent(state, actor, "archive terminal iteration", from, "idle"); await atomicWrite(state); console.log(JSON.stringify({ generation: state.generation, state: "idle" }));
     });
