@@ -10,6 +10,7 @@
   - [Product direction](./loop/direction.md) — weekly bets, daily evidence ranking, metrics, and stop conditions.
   - [Release and rollback](./loop/release.md) — budgets, soak, proof, circuit breaker, and rollback record.
   - [Repository standard](./loop/repository-standard.md) — seven-minute repository rules for touched boundaries.
+  - [Disagreement review](./loop/disagreement-review.md) — builder/skeptic/historian evidence review without voting.
 - [Deployment Proof](../proof/README.md) — exact checks performed against a deployed Worker.
 - [Security Policy](../SECURITY.md) — reporting and deployment-owner responsibilities.
 - [Contributing](../CONTRIBUTING.md) — local checks and repository invariants.
