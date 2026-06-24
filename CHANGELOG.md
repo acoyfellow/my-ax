@@ -8,6 +8,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Added
 
+- Added an owner-visible, actionable Attention receipt when stalled-turn recovery is exhausted, linking back to the interrupted conversation with a truthful retry next action.
 - Added a searchable Capabilities Settings section explaining built-in and connected tools, memory, execution surfaces, and their authority boundaries.
 - Added an owner-scoped “Clear all” action for Attention notification receipts; source conversations, jobs, and decisions are preserved.
 - Rewrote the README around the current runtime, explicit authority and durability semantics, production-readiness steps, hard limits, and a seven-minute contributor map; incorporated adversarial operational, runtime-contract, and OSS onboarding review, and clarified the boundary between Agents SDK, Think, and My AX.

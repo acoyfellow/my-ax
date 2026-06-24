@@ -540,6 +540,13 @@ export class MyAgent extends Think<Env> {
       this.env.DB.prepare("UPDATE sessions SET status = 'interrupted', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
         .bind(this.name, identity.email)
         .run(),
+      notifyOwner(this.env, identity.email, {
+        kind: "session.update",
+        sessionId: this.name,
+        title: "My AX turn was interrupted",
+        body: `${ctx.terminalMessage} Next action: open the conversation and try again.`,
+        href: `/?session=${encodeURIComponent(this.name)}`,
+      }),
     ]).catch((error) => console.error("chat_recovery_terminalization_failed", {
       sessionId: this.name,
       err: String(error),
