@@ -2,6 +2,8 @@
 
 The loop compounds toward one weekly user outcome. It does not maximize iteration count.
 
+The active committed bet is [`current-bet.yaml`](./current-bet.yaml). The local controller state stores its `id`; the committed file stores the reviewable product contract.
+
 ## Weekly bet
 
 Before write iterations begin, record one bet:
