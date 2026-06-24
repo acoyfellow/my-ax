@@ -13,7 +13,7 @@ import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
-import { recurringJobReceipt } from "./recurring-job-receipt";
+import { completeRecurringJobRun } from "./recurring-job-run";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
@@ -270,17 +270,13 @@ export class MyAgent extends Think<Env> {
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
-    await this.env.DB.prepare(
-      "UPDATE jobs SET last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-    ).bind(now.toISOString(), error, payload.jobId, payload.ownerEmail).run().catch(() => {});
-    const job = await this.env.DB.prepare("SELECT name FROM jobs WHERE id = ? AND owner_email = ?")
-      .bind(payload.jobId, payload.ownerEmail).first<{ name: string }>().catch(() => null);
-    await notifyOwner(this.env, payload.ownerEmail, recurringJobReceipt({
+    await completeRecurringJobRun(this.env, {
       jobId: payload.jobId,
-      jobName: job?.name,
+      ownerEmail: payload.ownerEmail,
       sessionId: this.name,
+      ranAt: now,
       error,
-    })).catch((notifyError) => console.error("recurring_job_receipt_failed", { jobId: payload.jobId, err: String(notifyError) }));
+    });
     if (error) throw new Error(error);
   }
 

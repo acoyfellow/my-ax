@@ -5,8 +5,7 @@
 // run receipts). Manual Run now reuses the same `/inject-user-message` path.
 
 import type { Env } from "./types";
-import { notifyOwner } from "./notify";
-import { recurringJobReceipt } from "./recurring-job-receipt";
+import { completeRecurringJobRun } from "./recurring-job-run";
 
 async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
   // Keep the Cloudflare-only agent stub out of module initialization so pure
@@ -89,17 +88,15 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
     error = e instanceof Error ? e.message : String(e);
   }
   const nextRunAt = computeNextRun(now, row.cadence_secs);
-  try {
-    await env.DB.prepare(
-      "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-    ).bind(nextRunAt, now.toISOString(), ok ? null : (error ?? "unknown").slice(0, 500), row.id, row.owner_email).run();
-  } catch { /* dev D1 missing — tolerate */ }
-  await notifyOwner(env, row.owner_email, recurringJobReceipt({
+  await completeRecurringJobRun(env, {
     jobId: row.id,
-    jobName: row.name,
+    ownerEmail: row.owner_email,
     sessionId: row.session_id,
+    ranAt: now,
+    nextRunAt,
+    jobName: row.name,
     error: ok ? null : error,
-  })).catch((notifyError) => console.error("recurring_job_receipt_failed", { jobId: row.id, err: String(notifyError) }));
+  });
   return { next_run_at: nextRunAt, ok, error };
 }
 
