@@ -8,6 +8,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Added
 
+- Added owner-visible, actionable Attention receipts for terminal recurring-job runs. Successful scheduled work now tells the operator to review the conversation, and failed scheduled work reports the failure and next action instead of requiring transcript inspection.
 - Added an owner-visible, actionable Attention receipt when stalled-turn recovery is exhausted, linking back to the interrupted conversation with a truthful retry next action. Added an authenticated, self-cleaning operator probe that safely verifies the same terminal transcript, interrupted session state, and owner receipt contract without wedging a real model turn or sending a false incident alert.
 - Added a searchable Capabilities Settings section explaining built-in and connected tools, memory, execution surfaces, and their authority boundaries.
 - Added an owner-scoped “Clear all” action for Attention notification receipts; source conversations, jobs, and decisions are preserved.
