@@ -36,16 +36,15 @@ const SCRIPT = String.raw`
   async function run(ev){
     if(ev) ev.preventDefault();
     status.textContent = 'running scoped proof…';
-    out.innerHTML = '';
     const body = { task: task.value, urls: urls.value.split(/\n+/).map(s => s.trim()).filter(Boolean) };
     const response = await fetch('/api/capabilities/demo', { method:'POST', credentials:'include', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
     const json = await response.json();
-    if(!response.ok || !json.ok){ status.textContent = json.error && json.error.message || 'failed'; return; }
+    if(!response.ok || !json.ok){ status.textContent = json.error && json.error.message || 'failed; server-rendered proof below is unchanged'; return; }
     status.textContent = 'pass: granted reads succeeded; adjacent/search/raw cfi denied; ask receipt emitted';
     render(json.result);
   }
+  status.textContent = 'pass: server-rendered scoped proof below';
   form.addEventListener('submit', run);
-  run();
 })();`;
 
 export const CapabilitiesPage: FC<Props> = (props) => {
