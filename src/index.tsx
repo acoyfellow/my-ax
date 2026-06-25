@@ -38,6 +38,8 @@ import { registerMachinectlRoutes } from "./routes/machinectl";
 import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerDecisionRoutes } from "./routes/decisions";
+import { registerCapabilityRoutes } from "./routes/capabilities";
+import { CapabilitiesPage } from "./views/CapabilitiesPage";
 import { getSessionAgent } from "./agent-stub";
 import { registerSvelteServe } from "../proof/svelte/serve";
 import { scanDeadSessions } from "./dead-session";
@@ -158,6 +160,7 @@ app.use("/machinectl/*", accessMiddleware());
 // non-personalized /offline fallback stay anonymous so install metadata,
 // browser JS, and offline recovery don't have to re-auth on every fetch.
 app.use("/", accessMiddleware());
+app.use("/capabilities", accessMiddleware());
 
 // ─── Health / discovery ────────────────────────────────────────────────────
 app.get("/api", async (c) => {
@@ -252,6 +255,7 @@ registerMachinectlRoutes(app);
 registerRunRoutes(app);
 registerArtifactRoutes(app);
 registerDecisionRoutes(app);
+registerCapabilityRoutes(app);
 registerSvelteServe(app);
 
 // ─── System / "About This Computer" info ──────────────────────────────────
@@ -460,6 +464,20 @@ app.get("/", (c) => {
   const theme = readThemeCookie(c);
   return c.html(
     <ChatPage
+      identityEmail={identity?.email ?? null}
+      buildId={buildId}
+      theme={theme}
+      appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+    />,
+  );
+});
+
+app.get("/capabilities", (c) => {
+  const identity = c.get("identity");
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
+  const theme = readThemeCookie(c);
+  return c.html(
+    <CapabilitiesPage
       identityEmail={identity?.email ?? null}
       buildId={buildId}
       theme={theme}
