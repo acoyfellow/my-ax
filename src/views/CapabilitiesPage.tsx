@@ -1,6 +1,7 @@
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import type { ThemePref } from "../routes/theme";
+import { createCapabilityBundle, runCapabilityReviewDemo } from "../capability-review";
 
 interface Props {
   identityEmail?: string | null;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 const demoUrls = `https://jira.cfdata.org/browse/DEVTOOLS-123\nhttps://wiki.cfdata.org/spaces/TEAM/pages/123456/Foo+Spec\nhttps://gitlab.cfdata.org/group/project/-/merge_requests/42`;
+const defaultUrls = demoUrls.split("\n");
 
 const SCRIPT = String.raw`
 (function(){
@@ -46,8 +48,10 @@ const SCRIPT = String.raw`
   run();
 })();`;
 
-export const CapabilitiesPage: FC<Props> = (props) => (
-  <Layout title="Scoped capabilities · my · ax" identityEmail={props.identityEmail} buildId={props.buildId} theme={props.theme} appOrigin={props.appOrigin} bodyClass="min-h-dvh bg-bg text-fg">
+export const CapabilitiesPage: FC<Props> = (props) => {
+  const bundle = createCapabilityBundle({ principal: props.identityEmail || "unknown", urls: defaultUrls, task: "Review these resources without broad internal search" });
+  const proof = runCapabilityReviewDemo(bundle);
+  return <Layout title="Scoped capabilities · my · ax" identityEmail={props.identityEmail} buildId={props.buildId} theme={props.theme} appOrigin={props.appOrigin} bodyClass="min-h-dvh bg-bg text-fg">
     <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <section class="mb-6 rounded-2xl border border-line bg-bg-alt p-5 shadow-sm">
         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -71,9 +75,27 @@ export const CapabilitiesPage: FC<Props> = (props) => (
           </div>
         </form>
       </section>
-      <div data-cap-output class="grid gap-4"></div>
+      <div data-cap-output class="grid gap-4">
+        <section class="cap-card">
+          <h2>Capability bundle</h2>
+          <p><strong>Principal:</strong> {bundle.principal.id}</p>
+          <p><strong>Bundle:</strong> <code>{bundle.hash.slice(0, 24)}…</code></p>
+          <ul>{bundle.capabilities.map((cap) => <li><code>{cap.kind}:{cap.resource.id}</code><span> search {String(cap.constraints.allowSearch)} · adjacent {String(cap.constraints.allowAdjacent)} · write {String(cap.constraints.allowWrite)}</span></li>)}</ul>
+        </section>
+        <section class="cap-card">
+          <h2>Child surface</h2>
+          <p>{proof.childSurface.tools.map((tool) => <code>{tool} </code>)}</p>
+          <p class="muted">Forbidden: {proof.forbiddenTools.join(", ")}</p>
+        </section>
+        <section class="cap-grid">
+          <div class="cap-card"><h2>Allowed reads</h2><ul>{proof.allowed.map((entry) => <li><code>{entry.operation}:{entry.resource}</code><span>success · sha256 {entry.contentHash.slice(0, 12)}… · {entry.contentLength} bytes</span></li>)}</ul></div>
+          <div class="cap-card"><h2>Denied / unavailable</h2><ul>{proof.denied.map((entry) => <li><code>{entry.operation}:{entry.resource}</code><span>{entry.result} · before resolver {String(entry.beforeResolver)}</span></li>)}</ul></div>
+        </section>
+        <section class="cap-card"><h2>Ask receipt</h2><ul>{proof.asks.map((ask) => <li><code>{ask.requestedCapability}</code><span>{ask.reason}</span></li>)}</ul></section>
+        <section class="cap-card"><h2>Receipt JSON</h2><pre>{JSON.stringify(proof, null, 2)}</pre></section>
+      </div>
     </main>
     <style dangerouslySetInnerHTML={{ __html: `.cap-card{border:1px solid var(--color-line);background:var(--color-bg-alt);border-radius:16px;padding:16px}.cap-card h2{font-size:14px;margin:0 0 10px;font-weight:700}.cap-card ul{display:grid;gap:8px;margin:0;padding:0;list-style:none}.cap-card li{display:grid;gap:3px}.cap-card code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--color-brand)}.cap-card span,.muted{font-size:12px;color:var(--color-fg-mut)}.cap-card pre{max-height:360px;overflow:auto;border-radius:12px;background:var(--color-bg);padding:12px;font-size:11px}.cap-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}` }} />
     <script dangerouslySetInnerHTML={{ __html: SCRIPT }} />
-  </Layout>
-);
+  </Layout>;
+};
