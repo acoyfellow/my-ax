@@ -132,6 +132,13 @@ export class MyAgent extends Think<Env> {
     terminalMessage: "This turn was interrupted after recovery was exhausted. Please try again.",
     onExhausted: (ctx: ChatRecoveryExhaustedContext) => this.terminalizeExhaustedRecovery(ctx),
   };
+  // v0.17 stream-stall watchdog. Must exceed our slowest tool execution or it
+  // would abort healthy long turns; my-ax runs slow sandbox/browser/agent-tool
+  // work, so this is set wide (5m) to catch only genuinely hung transports.
+  // With chatRecovery enabled, a stall routes into the same bounded-recovery
+  // machinery a deploy/eviction uses. Raise per-turn via beforeTurn's
+  // TurnConfig.chatStreamStallTimeoutMs for turns with known-slow tools.
+  override chatStreamStallTimeoutMs = 300_000;
 
   /** Per-turn flag: set when a successful tool call may have written under
    *  /home/user. Drives a single snapshotUserWorkspace() in onChatResponse.
@@ -188,19 +195,23 @@ export class MyAgent extends Think<Env> {
     const content = (body.content ?? "").trim();
     if (!content) throw new Error("content must be non-empty");
     const attachments = (body.attachments ?? []).filter((attachment) => attachment.kind === "image");
-    return this.submitMessages([
-      {
-        id: body.clientMsgId ?? crypto.randomUUID(),
-        role: "user",
-        parts: [
-          { type: "text", text: content },
-          ...attachments.flatMap((attachment) => [
-            { type: "data-attachment" as `data-${string}`, data: attachment },
-            { type: "file" as const, url: `/api/uploads/${encodeURIComponent(attachment.key)}`, mediaType: attachment.mime, filename: attachment.name },
-          ]),
-        ],
-      },
-    ], { idempotencyKey: body.clientMsgId });
+    return this.runTurn({
+      mode: "submit",
+      idempotencyKey: body.clientMsgId,
+      input: [
+        {
+          id: body.clientMsgId ?? crypto.randomUUID(),
+          role: "user",
+          parts: [
+            { type: "text", text: content },
+            ...attachments.flatMap((attachment) => [
+              { type: "data-attachment" as `data-${string}`, data: attachment },
+              { type: "file" as const, url: `/api/uploads/${encodeURIComponent(attachment.key)}`, mediaType: attachment.mime, filename: attachment.name },
+            ]),
+          ],
+        },
+      ],
+    });
   }
 
   async scheduleRecurringPrompt(payload: RecurringPromptPayload & { cadenceSecs: number }) {
@@ -264,9 +275,13 @@ export class MyAgent extends Think<Env> {
     const now = new Date();
     let error: string | null = null;
     try {
-      await this.submitMessages([
-        { id: `job:${payload.jobId}:${now.getTime()}`, role: "user", parts: [{ type: "text", text: payload.prompt }] },
-      ], { idempotencyKey: `job:${payload.jobId}:${now.getTime()}` });
+      await this.runTurn({
+        mode: "submit",
+        idempotencyKey: `job:${payload.jobId}:${now.getTime()}`,
+        input: [
+          { id: `job:${payload.jobId}:${now.getTime()}`, role: "user", parts: [{ type: "text", text: payload.prompt }] },
+        ],
+      });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
