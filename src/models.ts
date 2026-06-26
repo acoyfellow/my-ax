@@ -63,12 +63,15 @@ export const MODELS: ModelEntry[] = [
 
 export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
 
-// Keep the catalog stable and provider-agnostic. The configured gateway is the
-// policy boundary for gateway rows: if an operator has not granted a model,
-// that turn fails with the upstream authorization/model error instead of hiding
-// different UI rows.
-export function availableModels(_env: Env): ModelEntry[] {
-  return MODELS;
+function hasModelGateway(env: Env): boolean {
+  return Boolean(env.LLM_GATEWAY_URL?.trim() && env.LLM_GATEWAY_TOKEN?.trim());
+}
+
+// Keep the catalog honest per installation. Workers AI rows are available in
+// the public engine; gateway rows are visible only when the deployment supplied
+// the private gateway URL and token needed to run them.
+export function availableModels(env: Env): ModelEntry[] {
+  return hasModelGateway(env) ? MODELS : MODELS.filter((model) => model.route === "workers-ai");
 }
 
 export function defaultModelId(_env: Env): string {
