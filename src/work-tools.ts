@@ -1,5 +1,6 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { createCloudboxWorkProvider, CLOUDBOX_WORK_METHODS } from "./cloudbox-tools";
+import { CODE_MODE_EXECUTION_TIMEOUT_MS } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import type { ToolContext, ToolDef } from "./types";
 
@@ -39,7 +40,7 @@ function workspaceProvider(ctx: ToolContext) {
     process_status: async (input: any) => ctx.processStatus(String(input?.processId ?? "")),
     process_logs: async (input: any) => ctx.processLogs(String(input?.processId ?? "")),
     process_cancel: async (input: any) => ({ cancelled: await ctx.processCancel(String(input?.processId ?? ""), input?.signal === undefined ? undefined : String(input.signal)) }),
-    run_code: async (input: any) => ctx.runCode(String(input?.code ?? ""), { language: input?.language === "typescript" ? "typescript" : "javascript", timeout: Number(input?.timeoutMs ?? 60_000) }),
+    run_code: async (input: any) => ctx.runCode(String(input?.code ?? ""), { language: input?.language === "typescript" ? "typescript" : "javascript", timeout: Number(input?.timeoutMs ?? CODE_MODE_EXECUTION_TIMEOUT_MS) }),
     preview_open: async (input: any) => ctx.tunnelGet(Number(input?.port)),
     preview_list: async () => ctx.tunnelList(),
     preview_close: async (input: any) => { await ctx.tunnelDestroy(Number(input?.port)); return { closed: true, port: Number(input?.port) }; },
@@ -123,7 +124,7 @@ export const WORK_CODE_TOOL: ToolDef = {
       namespace("machine", Object.keys(machineFns)),
       namespace("cloudbox", Object.keys(cloudboxFns)),
     ].join("\n");
-    const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: 30_000 });
+    const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
     const execution = await executor.execute(code, [{ name: "bridge", fns: bridgeFns, prelude }]);
     return JSON.stringify({ ok: !execution.error, result: execution.result, ...(execution.error ? { error: execution.error } : {}), logs: execution.logs ?? [], calls: calls.sort((a, b) => a.index - b.index) });
   },
