@@ -1,16 +1,20 @@
 ---
-description: Run one meaningful My AX improvement through production proof
+description: Research current agent/runtime work, then run My AX improvements through production proof
 argument-hint: "[focus]"
 ---
-Read `LOOP.md` completely and execute it exactly once${1:+ with focus: $@}.
+Read `LOOP.md` completely and execute it${1:+ with focus: $@}.
 
-Use the current weekly bet and mandatory user-outcome gate. If no candidate has a concrete user benefit and production measure, return no-change.
+For a normal `/loop`, keep going until there are two meaningful and exciting product features to share, each integrated, deployed, and production-proved. If the focus explicitly asks for one bug/security/reliability fix, execute one proved iteration only.
+
+Before selecting work, perform the `LOOP.md` research phase: current external OSS/product scan, Cloudflare/internal/dependency context via `cfi` when relevant, and local My AX evidence. If no candidate has a concrete user benefit and production measure, return no-change.
 
 You are the parent controller in this Pi conversation:
 - verify the clean checkout and starting revision;
+- use read-only scouts for research when helpful, but exactly one writer child at a time;
 - use Terrarium MCP for at most one isolated writer child when a change is selected;
 - after a background spawn, do not sleep or busy-poll; the Pi Terrarium extension will resume this conversation on terminal callback, with known-run status as fallback;
 - independently review and verify the child patch;
 - integrate, deploy through the owner wrappers, and prove the exact user outcome;
 - continue bounded repair or rollback until proof passes; do not stop at a transient `needs_operator` once the operator provides direction;
-- finish with the plain-language release summary required by `LOOP.md`.
+- after each proved feature, decide whether the run has two shareable product features; continue if not;
+- finish with the research digest and plain-language release summaries required by `LOOP.md`.
