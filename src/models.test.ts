@@ -1,14 +1,23 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_MODEL_ID, MODELS, findModel, resolveModelId } from "./models";
+import { availableModels, DEFAULT_MODEL_ID, MODELS, findModel, resolveModelId } from "./models";
+import type { Env } from "./types";
+
+const minimalEnv = {} as Env;
+const gatewayEnv = { LLM_GATEWAY_URL: "https://gateway.example/openai", LLM_GATEWAY_TOKEN: "token" } as Env;
 
 describe("model catalog", () => {
-  it("keeps Workers AI and AI Gateway rows visible", () => {
+  it("keeps Workers AI and AI Gateway rows in the full catalog", () => {
     assert.ok(findModel("@cf/moonshotai/kimi-k2.7-code"));
     assert.ok(findModel("@cf/zai-org/glm-5.2"));
     assert.equal(findModel("gpt-5.5")?.route, "gateway-openai");
     assert.equal(findModel("claude-opus-4-8")?.route, "gateway-anthropic");
     for (const model of MODELS) assert.equal(model.tools, true, model.id);
+  });
+
+  it("shows gateway rows only when the installation has gateway config", () => {
+    assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-4-8", "gpt-5.5"]);
   });
 
   it("removes alpha rows while healing stale alpha ids", () => {

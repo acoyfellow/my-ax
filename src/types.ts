@@ -83,6 +83,11 @@ declare global {
       CLOUDBOX_URL?: string;
       CLOUDBOX_INTERNAL_TOKEN?: string;
 
+      /** Optional model gateway for non-Workers-AI catalog rows. */
+      LLM_GATEWAY_URL?: string;
+      LLM_GATEWAY_TOKEN?: string;
+      LLM_GATEWAY_AUTH_HEADER?: string;
+
     }
   }
 }
