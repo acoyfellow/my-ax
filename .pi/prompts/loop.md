@@ -8,7 +8,7 @@ For a normal `/loop`, keep going until there are two meaningful and exciting pro
 
 You may use candidate batch mode: fan out isolated research/prototype candidates, collect harvest receipts, reconcile adversarially, then land selected features sequentially. Candidate branches are evidence, not merge targets.
 
-When spawning Terrarium candidates, pin an explicit currently working model and include a task contract requiring `task_status` plus `harvest_receipt`; do not rely on stale runner defaults.
+When spawning Terrarium candidates, pin an explicit currently working runner/agent (for example `pi -p --no-session`) and include a task contract requiring `task_status` plus `harvest_receipt`; do not rely on stale runner defaults or assume My AX app models are Terrarium runner models.
 
 Before selecting work, perform the `LOOP.md` research phase: current external OSS/product scan, Cloudflare/internal/dependency context via `cfi` when relevant, and local My AX evidence. If no candidate has a concrete user benefit and production measure, return no-change.
 
