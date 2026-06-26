@@ -20,6 +20,19 @@ For normal `/loop`, stop only when either:
 
 “Product feature” can be a visible capability, a new owner-loop receipt/proof, or a reliability improvement that creates a clearly shareable user-facing promise. It must not be generic cleanup disguised as a feature.
 
+A shareable feature must name:
+
+```yaml
+shareable_feature:
+  one_sentence: what changed
+  owner_visible_surface: check-in | attention | settings | chat | proof | other
+  production_proof: exact command or journey proving it
+  why_exciting: why this is worth telling another builder
+  next_hammer: what this makes cheaper, safer, or possible next
+```
+
+A failed or rejected idea is still useful when it leaves a `verified-disproved` receipt or reusable hammer. No token is wasted when the trace is harvested truthfully.
+
 ## Mandatory user-outcome gate
 
 Before launching a writer, freeze:
@@ -39,6 +52,54 @@ Every track passes this gate. Reliability, security, simplification, tests, refa
 
 Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/current-bet.yaml), remove a demonstrated blocker to it, or address an urgent production/security incident with a named affected journey.
 
+## Candidate batch mode
+
+A normal `/loop` may fan out multiple isolated candidate agents before selecting work. This is the default way to use many headless Pis.
+
+Candidate agents may:
+
+- research external/internal/local evidence;
+- prototype in an isolated workspace or worktree;
+- run local tests and produce a patch or artifact;
+- return a harvest receipt.
+
+Candidate agents must not:
+
+- push, deploy, rotate secrets, mutate production, post comments, or send notifications;
+- assume their branch will land;
+- spawn another writer unless the parent explicitly grants it.
+
+The parent clusters candidate receipts, runs adversarial review, and lands at most two selected features sequentially. Candidate branches are evidence, not merge targets; the parent may rewrite/cherry-pick into clean landing commits.
+
+```yaml
+harvest_receipt:
+  claim: falsifiable claim tested
+  inspiration:
+    external: []
+    internal: []
+    local: []
+  attempted: what changed or was tried
+  observed: what happened
+  result: proven | verified-disproved | projected | blocked
+  reusable_hammer: receipt/schema/proof/primitive others can cite
+  patch: path or summary
+  proof: commands and outcomes
+  risks: []
+```
+
+```yaml
+reconciliation:
+  clusters: []
+  selected_features: []
+  rejected_with_reason: []
+  conflicts: []
+  landing_order: []
+  adversarial_review:
+    builder: why this should land
+    skeptic: why this may be wrong or not worth it
+    historian: whether this duplicates old work or violates repo shape
+```
+
 ## Child: RESEARCH → SELECT → CHANGE → VERIFY → REPORT
 
 ### RESEARCH
@@ -46,7 +107,7 @@ Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/
 Before planning product work, gather current evidence from three directions:
 
 - **External OSS/product scan** — inspect what active agent/runtime/workflow/browser/MCP projects are releasing today or recently. Prefer concrete release notes, commits, issues, demos, or docs over vibes. Look especially for ideas My AX can absorb in one loop: clearer receipts, better check-in, safer delegation, browser proof, capability manifests, model/provider reliability, or durable job UX.
-- **Cloudflare/internal context** — use the `cfi` CLI for internal Cloudflare Wiki/Jira/Backstage/GitLab/dependency context when the topic touches Cloudflare company knowledge, Cloudflare packages, internal gateways, Access, Workers AI, Browser, Think, Agents, Voice, Code Mode, Sandbox, or deployment wrappers. Do not persist credentials or write internally.
+- **Cloudflare/internal context** — use the `cfi` CLI for internal Cloudflare Wiki/Jira/Backstage/GitLab/dependency context when the topic touches Cloudflare company knowledge, Cloudflare packages, internal gateways, Access, Workers AI, Browser, Think, Agents, Voice, Code Mode, Sandbox, or deployment wrappers. Prefer `cfi` over direct cf-portal use. Do not persist credentials or write internally.
 - **Local product evidence** — inspect the current My AX repo, production proof history, active bugs, screenshots, and recently changed surfaces.
 
 Return a short research digest with sources, the absorbable idea or bug, and why it matters for the owner loop. If research finds a current external/internal bug relevant to My AX, try to reproduce or adapt the smallest safe version in this run.
@@ -79,6 +140,7 @@ Return a short research digest with sources, the absorbable idea or bug, and why
 Return:
 
 - research digest with external/internal/local sources;
+- harvest receipt, including `verified-disproved` when applicable;
 - finding and user-outcome evidence;
 - files changed and patch digest;
 - exact commands/outcomes;
@@ -122,6 +184,7 @@ For normal `/loop`, after each proved feature decide whether the run has two mea
 - D1 is the human/search/export projection; Think owns execution/model state.
 - Restore and ownership checks fail closed. Never print, persist, or commit credentials.
 - Preserve the seven-minute repository rules in [`docs/loop/repository-standard.md`](docs/loop/repository-standard.md).
+- Browser/PWA steering uses cmux or owner-authenticated My AX APIs/MCP. Do not use standalone CDP, Chrome For Testing, or browser-specific bypass tools unless the user explicitly overrides this standing rule.
 
 ## Terrarium/Pi behavior
 
