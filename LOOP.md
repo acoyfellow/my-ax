@@ -56,7 +56,7 @@ Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/
 
 A normal `/loop` may fan out multiple isolated candidate agents before selecting work. This is the default way to use many headless Pis.
 
-Candidate agents must be spawned with an explicit currently working **runner** agent/model, not a stale default. My AX app catalog models (`npm run prove:models`) prove the product, not Terrarium/OpenCode runner availability. If using Terrarium, prefer an explicit Pi runner (`agent: "pi -p --no-session"`) or another runner/model proven in the current harness. Each Terrarium task prompt must include a verifiable task contract and require a terminal `task_status` receipt; process exit code is not semantic success.
+Candidate agents must be spawned with an explicit currently working **runner** agent/model, not a stale default. My AX app catalog models (`npm run prove:models`) prove the product, not Terrarium/OpenCode runner availability. Before fanout, run a tiny runner canary or Terrarium dry-run/status check that proves the chosen command does not inherit a stale model such as `kindle-alpha-api`. If using Terrarium, prefer an explicit Pi runner and explicit runner model known to the harness, or another runner/model proven in the current harness. Each Terrarium task prompt must include a verifiable task contract and require a terminal `task_status` receipt; process exit code is not semantic success.
 
 Candidate agents may:
 
@@ -67,6 +67,7 @@ Candidate agents may:
 
 Candidate agents must not:
 
+- start while another unrelated writer is active unless the parent explicitly accepts cross-repo concurrency;
 - push, deploy, rotate secrets, mutate production, post comments, or send notifications;
 - assume their branch will land;
 - spawn another writer unless the parent explicitly grants it.
