@@ -8,6 +8,7 @@
 import { DynamicWorkerExecutor, sanitizeToolName } from "@cloudflare/codemode";
 import { createCodeTool } from "@cloudflare/codemode/ai";
 import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
+import { CODE_MODE_EXECUTION_TIMEOUT_MS } from "./code-mode-runtime";
 import type { Env } from "./types";
 import {
   parseMcpCodeModePolicy,
@@ -85,7 +86,7 @@ export function createOfficialMcpCodeModeTool(input: {
     executor: new DynamicWorkerExecutor({
       loader: input.env.LOADER,
       globalOutbound: null,
-      timeout: 30_000,
+      timeout: CODE_MODE_EXECUTION_TIMEOUT_MS,
     }),
     description: [
       "Compose the operator-approved read/query MCP methods in one isolated JavaScript execution.",

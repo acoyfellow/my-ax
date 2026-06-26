@@ -1,0 +1,1 @@
+export const CODE_MODE_EXECUTION_TIMEOUT_MS = 60_000;

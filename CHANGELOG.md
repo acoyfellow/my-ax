@@ -24,6 +24,11 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Added balanced, hardening, product, UI, and simplification tracks, including research-grounded product discovery and browser-first UI acceptance criteria.
 - Added bounded architectural refinement, progress tracking, live tests after significant steps, independent autoreview, and coherent parent-owned commits to the improvement protocol.
 
+### Changed
+
+- Absorbed the Agents SDK v0.17.0 cohort by exact-pinning `agents@0.17.0`, `@cloudflare/think@0.11.0`, `@cloudflare/voice@0.3.3`, and `@cloudflare/codemode@0.4.2`; My AX keeps using Think's unified `runTurn({ mode: "submit" })` path for owner/API injection and native recurring alarms, and leaves detached/background sub-agent progress as a deliberate future UI/receipt adoption rather than a hidden behavior change.
+- Raised explicit Work Code Mode and MCP Code Mode execution caps from 30s to 60s to match the current Code Mode runtime cohort.
+
 ### Fixed
 
 - Reopened a human decision and removed its provisional answer event when delivery to the canonical Think session fails, returning retryable `DECISION_RESUME_FAILED` instead of falsely reporting that the conversation resumed.
