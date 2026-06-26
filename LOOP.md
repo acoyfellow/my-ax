@@ -56,7 +56,7 @@ Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/
 
 A normal `/loop` may fan out multiple isolated candidate agents before selecting work. This is the default way to use many headless Pis.
 
-Candidate agents must be spawned with an explicit currently working model, not a stale default. For My AX dogfood, prefer a model that has passed `npm run prove:models` in the target deployment. Each Terrarium task prompt must include a verifiable task contract and require a terminal `task_status` receipt; process exit code is not semantic success.
+Candidate agents must be spawned with an explicit currently working **runner** agent/model, not a stale default. My AX app catalog models (`npm run prove:models`) prove the product, not Terrarium/OpenCode runner availability. If using Terrarium, prefer an explicit Pi runner (`agent: "pi -p --no-session"`) or another runner/model proven in the current harness. Each Terrarium task prompt must include a verifiable task contract and require a terminal `task_status` receipt; process exit code is not semantic success.
 
 Candidate agents may:
 
