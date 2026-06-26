@@ -4,14 +4,21 @@ Invoke this contract with `/loop` (or an equivalent Pi prompt/tool invocation) t
 
 ## Goal
 
-Improve one observable user outcome, or return no-change.
+Improve observable user outcomes, or return no-change. A normal `/loop` run aims to finish with **two meaningful and exciting product features to share**. A smaller single-fix run is allowed only when the focus asks for one bug/security/reliability repair.
 
 ```text
-FIND → CHANGE → VERIFY → REPORT
-parent: REVIEW → INTEGRATE → DEPLOY → PROVE → COMPLETE
+RESEARCH → SELECT → CHANGE → VERIFY → REPORT
+parent: REVIEW → INTEGRATE → DEPLOY → PROVE → REPEAT/COMPLETE
 ```
 
 A changed iteration is complete only after the exact deployed revision proves the user outcome and records a plain-language release summary. If proof fails, continue bounded repair or roll back; do not start another finding. A no-change iteration is valid when no candidate passes the user-outcome gate.
+
+For normal `/loop`, stop only when either:
+
+1. two changed, deployed, production-proved product features are ready to share; or
+2. research and verification show there are not two bounded candidates worth doing, and the report explains why.
+
+“Product feature” can be a visible capability, a new owner-loop receipt/proof, or a reliability improvement that creates a clearly shareable user-facing promise. It must not be generic cleanup disguised as a feature.
 
 ## Mandatory user-outcome gate
 
@@ -32,12 +39,23 @@ Every track passes this gate. Reliability, security, simplification, tests, refa
 
 Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/current-bet.yaml), remove a demonstrated blocker to it, or address an urgent production/security incident with a named affected journey.
 
-## Child: FIND → CHANGE → VERIFY → REPORT
+## Child: RESEARCH → SELECT → CHANGE → VERIFY → REPORT
 
-### FIND
+### RESEARCH
+
+Before planning product work, gather current evidence from three directions:
+
+- **External OSS/product scan** — inspect what active agent/runtime/workflow/browser/MCP projects are releasing today or recently. Prefer concrete release notes, commits, issues, demos, or docs over vibes. Look especially for ideas My AX can absorb in one loop: clearer receipts, better check-in, safer delegation, browser proof, capability manifests, model/provider reliability, or durable job UX.
+- **Cloudflare/internal context** — use the `cfi` CLI for internal Cloudflare Wiki/Jira/Backstage/GitLab/dependency context when the topic touches Cloudflare company knowledge, Cloudflare packages, internal gateways, Access, Workers AI, Browser, Think, Agents, Voice, Code Mode, Sandbox, or deployment wrappers. Do not persist credentials or write internally.
+- **Local product evidence** — inspect the current My AX repo, production proof history, active bugs, screenshots, and recently changed surfaces.
+
+Return a short research digest with sources, the absorbable idea or bug, and why it matters for the owner loop. If research finds a current external/internal bug relevant to My AX, try to reproduce or adapt the smallest safe version in this run.
+
+### SELECT
 
 - Confirm the checkout is clean and record the starting revision.
-- Inspect one narrow surface and reproduce one concrete problem.
+- Choose the best bounded candidate from the research digest.
+- Inspect one narrow surface and reproduce one concrete problem or missing owner journey.
 - Do not duplicate a recently completed finding.
 - Freeze the user outcome, scope, acceptance criteria, smallest intervention, and production proof plan before editing.
 - Stop with no-change if evidence is insufficient.
@@ -60,15 +78,17 @@ Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/
 
 Return:
 
+- research digest with external/internal/local sources;
 - finding and user-outcome evidence;
 - files changed and patch digest;
 - exact commands/outcomes;
 - remaining risks;
-- recommended parent integration and production proof.
+- recommended parent integration and production proof;
+- whether this counts as one of the two shareable product features.
 
 The child must not commit, push, migrate, deploy, access production, rotate credentials, or mutate external services.
 
-## Parent: REVIEW → INTEGRATE → DEPLOY → PROVE
+## Parent: REVIEW → INTEGRATE → DEPLOY → PROVE → REPEAT
 
 - Validate the exact child receipt and patch; callbacks are wakeups, not authority.
 - Independently rerun the narrow proof and `npm run verify:release`.
@@ -89,6 +109,8 @@ release_summary:
 ```
 
 Demo/video work is optional after production proof and does not block operational completion.
+
+For normal `/loop`, after each proved feature decide whether the run has two meaningful/exciting features to share. If not, repeat the research/select/change/prove cycle with a new bounded candidate. Maintain one writer at a time throughout; research scouts may run read-only in parallel.
 
 ## Invariants
 
