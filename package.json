@@ -26,6 +26,7 @@
     "prove": "bun proof/plan.ts",
     "prove:artifacts": "node scripts/prove-artifacts.mjs",
     "prove:browser": "node proof/browser-e2e.mjs",
+    "prove:models": "node scripts/prove-all-models-http.mjs",
     "prove:all": "npm run check && npm run prove && npm run prove:browser",
     "test:session-entries": "node scripts/test-session-entries.mjs",
     "test:public-url": "node scripts/test-public-url.mjs",
