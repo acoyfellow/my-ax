@@ -56,6 +56,8 @@ Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/
 
 A normal `/loop` may fan out multiple isolated candidate agents before selecting work. This is the default way to use many headless Pis.
 
+Candidate agents must be spawned with an explicit currently working model, not a stale default. For My AX dogfood, prefer a model that has passed `npm run prove:models` in the target deployment. Each Terrarium task prompt must include a verifiable task contract and require a terminal `task_status` receipt; process exit code is not semantic success.
+
 Candidate agents may:
 
 - research external/internal/local evidence;
@@ -72,6 +74,7 @@ Candidate agents must not:
 The parent clusters candidate receipts, runs adversarial review, and lands at most two selected features sequentially. Candidate branches are evidence, not merge targets; the parent may rewrite/cherry-pick into clean landing commits.
 
 ```yaml
+task_status: success | verified-disproved | blocked
 harvest_receipt:
   claim: falsifiable claim tested
   inspiration:
