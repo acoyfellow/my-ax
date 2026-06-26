@@ -731,9 +731,25 @@ export class MyAgent extends Think<Env> {
           return Boolean(last && last.toolCalls.length === 0);
         }) as StopCondition<ToolSet>,
       ],
-      ...(resolved.meta.reasoning && (effort ?? config.reasoningEffort)
-        ? { providerOptions: { workersai: { reasoning_effort: effort ?? config.reasoningEffort } } }
-        : {}),
+      ...(resolved.meta.route === "gateway-openai"
+        ? { providerOptions: { openai: { store: false } } }
+        : resolved.meta.route === "gateway-anthropic"
+          ? {
+              providerOptions: {
+                anthropic: {
+                  // The system prompt + tool definitions are stable and
+                  // large; cache them between turns to cut input
+                  // cost/latency.
+                  cacheControl: { type: "ephemeral", ttl: "1h" },
+                  ...(resolved.meta.reasoning && (effort ?? config.reasoningEffort)
+                    ? { thinking: { type: "adaptive" } }
+                    : {}),
+                },
+              },
+            }
+          : resolved.meta.reasoning && (effort ?? config.reasoningEffort)
+            ? { providerOptions: { workersai: { reasoning_effort: effort ?? config.reasoningEffort } } }
+            : {}),
     };
   }
 

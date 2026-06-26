@@ -142,7 +142,7 @@ gate("fresh-conversation-load-pinned", () => {
 
 gate("think-chat-roundtrip", () => {
   previousProofModel = evalJson(`(()=>JSON.stringify({model:localStorage.getItem('model')}))()`).model;
-  cmux(["eval", `localStorage.setItem('model','@cf/meta/llama-4-scout-17b-16e-instruct')`]);
+  cmux(["eval", `localStorage.setItem('model','gpt-5.5')`]);
   const created = evalJson(`(async()=>{const r=await fetch('/api/sessions',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({name:'E2E temporary Think proof'})});if(r.status!==201)throw new Error('session create → '+r.status);return JSON.stringify(await r.json())})()`);
   tempSessionId = created.result.sessionId;
   cmux(["eval", `sessionStorage.setItem('my-ax-resume-session-once','1')`]);
