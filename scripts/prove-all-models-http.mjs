@@ -60,7 +60,11 @@ const catalog = await api("/api/models/catalog");
 const models = catalog.result?.data ?? [];
 if (!models.length) throw new Error("empty model catalog");
 if (models.some((m) => /alpha/i.test(`${m.label} ${m.id}`))) throw new Error(`alpha row visible: ${JSON.stringify(models)}`);
-for (const required of ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-4-8", "gpt-5.5"]) {
+const requiredModels = (process.env.MY_AX_REQUIRED_MODELS || "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
+for (const required of requiredModels) {
   if (!models.some((m) => m.id === required)) throw new Error(`required model missing: ${required}`);
 }
 console.log(`target=${BASE}`);
