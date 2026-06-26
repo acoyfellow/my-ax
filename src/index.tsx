@@ -61,8 +61,8 @@ const app = new Hono<AppEnv>();
 // Fail loud on missing CORE secrets only. The two below are required for the
 // worker's own crypto (bridge tickets + at-rest encryption). Everything else
 // is feature-gated and validated at the call site, so a minimal deploy boots:
-//   - Models: Workers AI (env.AI) needs no secret. Curated gateway models
-//     require the configured LLM gateway token.
+//   - Models: the curated catalog uses Workers AI (env.AI) and needs no
+//     private model-gateway secret.
 //   - Web Push (notify_owner): needs VAPID_* — only when you use push.
 //   - Workspace snapshots: need R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY — only
 //     when the Sandbox createBackup path runs.
