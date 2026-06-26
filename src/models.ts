@@ -1,10 +1,11 @@
-// Curated model catalog. Keep this list boring: every row shown in Settings
-// should be a real model route the current public engine can attempt without a
-// private gateway. Stale ids from older sessions heal to the default.
+// Curated model catalog. The UI intentionally shows only the current usable
+// set; provider plumbing is an implementation detail and never appears in the
+// label. Availability is enforced by Workers AI or the configured gateway at
+// call time — operators control which gateway model ids their users may access.
 
 import type { Env } from "./types";
 
-export type ModelRoute = "workers-ai";
+export type ModelRoute = "workers-ai" | "gateway-openai" | "gateway-anthropic";
 
 export interface ModelEntry {
   id: string;
@@ -19,59 +20,53 @@ export interface ModelEntry {
 
 export const MODELS: ModelEntry[] = [
   {
-    id: "@cf/meta/llama-4-scout-17b-16e-instruct",
+    id: "@cf/moonshotai/kimi-k2.7-code",
     route: "workers-ai",
-    owned_by: "meta",
-    context: 131_072,
-    reasoning: false,
+    owned_by: "moonshotai",
+    context: 262_144,
+    reasoning: true,
     tools: true,
     vision: true,
-    label: "Llama 4 Scout",
+    label: "Kimi K2.7 Code",
   },
   {
-    id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    id: "@cf/zai-org/glm-5.2",
     route: "workers-ai",
-    owned_by: "meta",
-    context: 24_000,
-    reasoning: false,
-    tools: true,
-    vision: false,
-    label: "Llama 3.3 70B Fast",
-  },
-  {
-    id: "@cf/meta/llama-3.1-8b-instruct-fast",
-    route: "workers-ai",
-    owned_by: "meta",
-    context: 8_192,
-    reasoning: false,
-    tools: true,
-    vision: false,
-    label: "Llama 3.1 8B Fast",
-  },
-  {
-    id: "@cf/qwen/qwq-32b",
-    route: "workers-ai",
-    owned_by: "qwen",
-    context: 32_768,
+    owned_by: "zai",
+    context: 262_144,
     reasoning: true,
     tools: true,
     vision: false,
-    label: "QwQ 32B",
+    label: "GLM 5.2",
   },
   {
-    id: "@cf/mistralai/mistral-small-3.1-24b-instruct",
-    route: "workers-ai",
-    owned_by: "mistralai",
-    context: 32_768,
-    reasoning: false,
+    id: "claude-opus-4-8",
+    route: "gateway-anthropic",
+    owned_by: "anthropic",
+    context: 1_000_000,
+    reasoning: true,
     tools: true,
     vision: true,
-    label: "Mistral Small 3.1",
+    label: "Opus 4.8",
+  },
+  {
+    id: "gpt-5.5",
+    route: "gateway-openai",
+    owned_by: "openai",
+    context: 400_000,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "GPT-5.5",
   },
 ];
 
-export const DEFAULT_MODEL_ID = "@cf/meta/llama-4-scout-17b-16e-instruct";
+export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
 
+// Keep the catalog stable and provider-agnostic. The configured gateway is the
+// policy boundary for gateway rows: if an operator has not granted a model,
+// that turn fails with the upstream authorization/model error instead of hiding
+// different UI rows.
 export function availableModels(_env: Env): ModelEntry[] {
   return MODELS;
 }
@@ -85,7 +80,8 @@ export function findModel(id: string): ModelEntry | undefined {
 }
 
 /** Resolve a requested model id to a usable catalog entry. A stale or removed
- * id heals to the default instead of hard-failing every turn with model_not_found. */
+ * id (e.g. a churned alpha model still pinned in a session/Settings) heals to
+ * the default instead of hard-failing every turn with model_not_found. */
 export function resolveModelId(id: string | undefined): string {
   return id && findModel(id) ? id : DEFAULT_MODEL_ID;
 }
