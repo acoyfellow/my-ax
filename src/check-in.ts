@@ -4,6 +4,7 @@ export interface CheckInSources {
   runs: Array<{ id: string; title: string | null; task_summary: string; status: string; updated_at: string }>;
   totals?: Partial<Record<"attention" | "activeJobs" | "openRuns" | "completedRuns" | "failedRuns", number>>;
   deployment?: { versionId: string | null; versionTag?: string | null; versionTimestamp: string | null };
+  checkedAt?: string;
 }
 
 type CheckInSteer = { label: string; href: string };
@@ -21,6 +22,7 @@ export interface OwnerCheckIn {
   suggestedSteers: CheckInSteer[];
   buckets: CheckInBucket[];
   deployment: { versionId: string | null; versionTag: string | null; versionTimestamp: string | null };
+  checkedAt: string;
   totals: {
     attention: number;
     activeJobs: number;
@@ -93,5 +95,6 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
     versionTag: sources.deployment?.versionTag ?? null,
     versionTimestamp: sources.deployment?.versionTimestamp ?? null,
   };
-  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, buckets, deployment, totals };
+  const checkedAt = sources.checkedAt ?? new Date().toISOString();
+  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, buckets, deployment, checkedAt, totals };
 }

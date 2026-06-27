@@ -31,6 +31,7 @@ export async function readOwnerCheckIn(env: AppEnv["Bindings"], ownerEmail: stri
       versionTag: env.CF_VERSION_METADATA?.tag ?? null,
       versionTimestamp: env.CF_VERSION_METADATA?.timestamp ?? null,
     },
+    checkedAt: new Date().toISOString(),
   });
 }
 
