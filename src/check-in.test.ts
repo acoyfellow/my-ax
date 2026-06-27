@@ -17,6 +17,15 @@ test("check-in prioritizes unread owner attention", () => {
   assert.deepEqual(result.totals, { attention: 1, activeJobs: 1, openRuns: 1, completedRuns: 0, failedRuns: 0 });
 });
 
+test("check-in steers to filtered attention when the top item has a kind", () => {
+  const result = composeOwnerCheckIn({
+    attention: [{ id: "a", kind: "session.update", title: "Update", body: "Read this", href: "/?session=abc", created_at: "2026-06-24" }],
+    jobs: [job],
+    runs: [run],
+  });
+  assert.deepEqual(result.suggestedSteers, [{ label: "Review session.update attention", href: "/api/attention?kind=session.update" }]);
+});
+
 test("check-in separates completed receipts from running work", () => {
   const completed = { ...run, id: "run-2", status: "completed" };
   const result = composeOwnerCheckIn({ attention: [], jobs: [], runs: [completed] });

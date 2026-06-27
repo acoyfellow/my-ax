@@ -6,7 +6,7 @@ import { composeOwnerCheckIn, type CheckInSources } from "../check-in";
 export async function readOwnerCheckIn(env: AppEnv["Bindings"], ownerEmail: string) {
   const owner = ownerEmail.toLowerCase();
   const [attention, jobs, runs, attentionTotal, activeJobsTotal, openRunsTotal, completedRunsTotal, failedRunsTotal] = await Promise.all([
-    env.DB.prepare("SELECT id, title, body, href, created_at FROM attention_items WHERE owner_email = ? AND seen_at IS NULL ORDER BY created_at DESC LIMIT 10").bind(owner).all<CheckInSources["attention"][number]>(),
+    env.DB.prepare("SELECT id, session_id, kind, title, body, href, created_at FROM attention_items WHERE owner_email = ? AND seen_at IS NULL ORDER BY created_at DESC LIMIT 10").bind(owner).all<CheckInSources["attention"][number]>(),
     env.DB.prepare("SELECT id, name, status, next_run_at, last_error FROM jobs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT 20").bind(owner).all<CheckInSources["jobs"][number]>(),
     env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT 20").bind(owner).all<CheckInSources["runs"][number]>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(owner).first<{ count: number }>(),

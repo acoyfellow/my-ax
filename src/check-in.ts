@@ -1,5 +1,5 @@
 export interface CheckInSources {
-  attention: Array<{ id: string; title: string; body: string; href: string; created_at: string }>;
+  attention: Array<{ id: string; title: string; body: string; href: string; created_at: string; kind?: string | null; session_id?: string | null }>;
   jobs: Array<{ id: string; name: string; status: string; next_run_at: string; last_error: string | null }>;
   runs: Array<{ id: string; title: string | null; task_summary: string; status: string; updated_at: string }>;
   totals?: Partial<Record<"attention" | "activeJobs" | "openRuns" | "completedRuns" | "failedRuns", number>>;
@@ -44,8 +44,12 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
     : totals.failedRuns > 0
       ? `${totals.failedRuns} failed run${totals.failedRuns === 1 ? " needs" : "s need"} review; ${activeTotal} active.`
       : `${activeTotal} active; ${totals.completedRuns} recently completed.`;
+  const attentionKind = needsOwner.find((item) => item.kind)?.kind ?? null;
   const suggestedSteers: OwnerCheckIn["suggestedSteers"] = needsOwner.length
-    ? [{ label: "Review attention", href: needsOwner[0].href || "/" }]
+    ? [{
+      label: attentionKind ? `Review ${attentionKind} attention` : "Review attention",
+      href: attentionKind ? `/api/attention?kind=${encodeURIComponent(attentionKind)}` : (needsOwner[0].href || "/"),
+    }]
     : failed.length
       ? [{ label: "Review failed work", href: "/api/runs?status=failed" }]
       : openRuns.length
