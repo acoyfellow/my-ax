@@ -18,6 +18,7 @@ import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
+import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact } from "./artifacts";
 import type { Attachment } from "./types";
@@ -785,9 +786,15 @@ export class MyAgent extends Think<Env> {
       mcp: this.mcp,
       servers: this.getMcpServers().servers,
     });
+    // Heal tool-call ids that an earlier provider may have stored in a shape a
+    // strict provider (Anthropic) rejects, so resuming or forking a session never
+    // fails with a tool_use.id pattern error. Idempotent for already-valid ids.
+    const safeMessages = sanitizeToolCallIds(messages, (idBefore, idAfter) =>
+      console.warn("tool_call_id_sanitized", { sessionId: this.name, before: idBefore, after: idAfter }),
+    );
     return {
       model: resolved.model,
-      messages,
+      messages: safeMessages,
       // Native MCP and Code Mode tools bypass createThinkTools, so bound their
       // model-visible output here too — otherwise a connector MCP result is an
       // unbounded context firehose that can stall a turn.
