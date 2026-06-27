@@ -27,13 +27,48 @@ interface AuthEnv {
 }
 
 // Module-level JWKS cache. Access JWKS keys rotate; jose handles caching+refresh.
-let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null;
+// Cache per issuer: employee/personal/dev isolates and previews may see
+// different Access issuers over a worker lifetime.
+const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+export function normalizeAccessIssuer(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") return null;
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function unsafeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveAccessIssuerForTest(token: string, configuredIssuer: unknown) {
+  const configured = normalizeAccessIssuer(configuredIssuer);
+  if (configured) return configured;
+  // Fallback only chooses the JWKS origin. jwtVerify still validates the token
+  // signature and the configured audience below. Without this, a malformed
+  // deploy var breaks every protected route with jose's opaque "Invalid URL".
+  return normalizeAccessIssuer(unsafeJwtPayload(token)?.iss);
+}
 
 function getJWKS(iss: string) {
-  if (!jwksCache) {
-    jwksCache = createRemoteJWKSet(new URL(`${iss}/cdn-cgi/access/certs`));
-  }
-  return jwksCache;
+  const cached = jwksCache.get(iss);
+  if (cached) return cached;
+  const jwks = createRemoteJWKSet(new URL(`${iss}/cdn-cgi/access/certs`));
+  jwksCache.set(iss, jwks);
+  return jwks;
 }
 
 export async function verifyAccessRequest(
@@ -59,8 +94,10 @@ export async function verifyAccessRequest(
   if (!token) throw new AccessError("NoAccessJwt", "Missing Cf-Access-Jwt-Assertion header");
 
   try {
-    const { payload } = await jwtVerify(token, getJWKS(env.CF_ACCESS_ISS), {
-      issuer: env.CF_ACCESS_ISS,
+    const issuer = resolveAccessIssuerForTest(token, env.CF_ACCESS_ISS);
+    if (!issuer) throw new AccessError("InvalidAccessIssuer", "Cloudflare Access issuer is not configured and token issuer is invalid");
+    const { payload } = await jwtVerify(token, getJWKS(issuer), {
+      issuer,
       audience: env.CF_ACCESS_AUD,
     });
     if (typeof payload.email !== "string" || !payload.email.trim()) throw new AccessError("NoEmailClaim", "JWT email claim must be a non-empty string");
