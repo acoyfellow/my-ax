@@ -475,6 +475,48 @@
   stroke-width: 2.2;
   stroke-linecap: round;
 }
+.hammer-candidate {
+  display: grid;
+  gap: .55rem;
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
+  background: color-mix(in srgb, var(--brand) 5%, var(--bg));
+}
+.hammer-candidate__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.hammer-candidate__head code,
+.hammer-candidate__caps code {
+  font-size: .72rem;
+  color: var(--fg-mut);
+  overflow-wrap: anywhere;
+}
+.hammer-candidate p {
+  margin: 0;
+  color: var(--fg-mut);
+  font-size: .82rem;
+}
+.hammer-candidate__caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.hammer-candidate__caps code {
+  padding: .15rem .4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.hammer-candidate details pre {
+  max-height: 14rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.hammer-candidate__muted {
+  font-style: italic;
+}
 .svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-frame {
   width: 100vw;
   height: 100dvh;
