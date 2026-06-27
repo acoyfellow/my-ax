@@ -6,6 +6,9 @@ export interface CheckInSources {
   deployment?: { versionId: string | null; versionTag?: string | null; versionTimestamp: string | null };
 }
 
+type CheckInSteer = { label: string; href: string };
+type CheckInBucket = { key: "attention" | "failedRuns" | "openRuns" | "activeJobs" | "completedRuns"; label: string; total: number; sampleCount: number; steer: CheckInSteer | null };
+
 export interface OwnerCheckIn {
   summary: string;
   needsOwner: CheckInSources["attention"];
@@ -15,7 +18,8 @@ export interface OwnerCheckIn {
     jobs: CheckInSources["jobs"];
     runs: CheckInSources["runs"];
   };
-  suggestedSteers: Array<{ label: string; href: string }>;
+  suggestedSteers: CheckInSteer[];
+  buckets: CheckInBucket[];
   deployment: { versionId: string | null; versionTag: string | null; versionTimestamp: string | null };
   totals: {
     attention: number;
@@ -48,26 +52,46 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
       : `${activeTotal} active; ${totals.completedRuns} recently completed.`;
   const attentionKind = needsOwner.find((item) => item.kind)?.kind ?? null;
   const suggestedSteers: OwnerCheckIn["suggestedSteers"] = [];
-  const addSteer = (steer: OwnerCheckIn["suggestedSteers"][number]) => {
+  const steersByKey: Partial<Record<CheckInBucket["key"], CheckInSteer>> = {};
+  const addSteer = (steer: CheckInSteer) => {
     if (!suggestedSteers.some((existing) => existing.href === steer.href)) suggestedSteers.push(steer);
   };
   if (needsOwner.length) {
-    addSteer({
+    const steer = {
       label: attentionKind ? `Review ${attentionKind} attention` : "Review attention",
       href: attentionKind ? `/api/attention?kind=${encodeURIComponent(attentionKind)}` : (needsOwner[0].href || "/"),
-    });
+    };
+    steersByKey.attention = steer;
+    addSteer(steer);
   }
-  if (totals.failedRuns > 0) addSteer({ label: "Review failed work", href: "/api/runs?status=failed" });
+  if (totals.failedRuns > 0) {
+    const steer = { label: "Review failed work", href: "/api/runs?status=failed" };
+    steersByKey.failedRuns = steer;
+    addSteer(steer);
+  }
   if (openRuns.length) {
     const workStatus = openRuns[0].status === "open" ? "open" : "running";
-    addSteer({ label: `Review ${workStatus} work`, href: `/api/runs?status=${workStatus}` });
+    const steer = { label: `Review ${workStatus} work`, href: `/api/runs?status=${workStatus}` };
+    steersByKey.openRuns = steer;
+    addSteer(steer);
   }
-  if (totals.activeJobs > 0) addSteer({ label: "Review active recurring jobs", href: "/api/jobs?status=active" });
+  if (totals.activeJobs > 0) {
+    const steer = { label: "Review active recurring jobs", href: "/api/jobs?status=active" };
+    steersByKey.activeJobs = steer;
+    addSteer(steer);
+  }
   if (!suggestedSteers.length) addSteer({ label: "Start a conversation", href: "/" });
+  const buckets: CheckInBucket[] = [
+    { key: "attention", label: "Attention", total: totals.attention, sampleCount: needsOwner.length, steer: steersByKey.attention ?? null },
+    { key: "failedRuns", label: "Failed runs", total: totals.failedRuns, sampleCount: failed.length, steer: steersByKey.failedRuns ?? null },
+    { key: "openRuns", label: "Open/running runs", total: totals.openRuns, sampleCount: openRuns.length, steer: steersByKey.openRuns ?? null },
+    { key: "activeJobs", label: "Active recurring jobs", total: totals.activeJobs, sampleCount: jobs.length, steer: steersByKey.activeJobs ?? null },
+    { key: "completedRuns", label: "Recently completed runs", total: totals.completedRuns, sampleCount: completed.length, steer: null },
+  ];
   const deployment = {
     versionId: sources.deployment?.versionId ?? null,
     versionTag: sources.deployment?.versionTag ?? null,
     versionTimestamp: sources.deployment?.versionTimestamp ?? null,
   };
-  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, deployment, totals };
+  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, buckets, deployment, totals };
 }
