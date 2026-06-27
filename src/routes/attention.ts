@@ -52,6 +52,13 @@ export function parseAttentionSessionSummaryRows(rows: Array<{ session_id: strin
   return rows.map((row) => ({ session_id: row.session_id ?? null, unread: Number(row.unread ?? 0), latest_at: row.latest_at ?? null }));
 }
 
+export function parseAttentionListQuery(url: URL) {
+  const kind = url.searchParams.get("kind")?.trim() || null;
+  const sessionParam = url.searchParams.get("sessionId")?.trim() || null;
+  const sessionId = sessionParam && /^[0-9a-f-]{36}$/i.test(sessionParam) ? sessionParam : null;
+  return { kind, sessionId, invalidSessionId: sessionParam !== null && sessionId === null ? sessionParam : null };
+}
+
 export function normalizeAttentionSeenIds(ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];
   return [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
@@ -60,21 +67,37 @@ export function normalizeAttentionSeenIds(ids: unknown): string[] {
 export function registerAttentionRoutes(app: Hono<AppEnv>) {
   app.get("/api/attention", async (c) => {
     const email = owner(c);
+    const query = parseAttentionListQuery(new URL(c.req.url));
+    if (query.invalidSessionId) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ATTENTION_SESSION", message: `unsupported sessionId: ${query.invalidSessionId}` }, next_actions: [] }, 400);
+    }
+    const filters: string[] = [];
+    const bindValues: string[] = [email];
+    if (query.kind) {
+      filters.push("kind = ?");
+      bindValues.push(query.kind);
+    }
+    if (query.sessionId) {
+      filters.push("session_id = ?");
+      bindValues.push(query.sessionId);
+    }
+    const filterSql = filters.length ? ` AND ${filters.join(" AND ")}` : "";
     const [items, unread, kindSummary, sessionSummary] = await Promise.all([
       c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at
-        FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 20`).bind(email).all<AttentionRow>(),
-      c.env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>(),
+        FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 20`).bind(...bindValues).all<AttentionRow>(),
+      c.env.DB.prepare(`SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).first<{ count: number }>(),
       c.env.DB.prepare(`SELECT kind, COUNT(*) AS unread, MAX(created_at) AS latest_at
-        FROM attention_items WHERE owner_email = ? AND seen_at IS NULL
-        GROUP BY kind ORDER BY unread DESC, latest_at DESC LIMIT 20`).bind(email).all<{ kind: string | null; unread: number; latest_at: string | null }>(),
+        FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}
+        GROUP BY kind ORDER BY unread DESC, latest_at DESC LIMIT 20`).bind(...bindValues).all<{ kind: string | null; unread: number; latest_at: string | null }>(),
       c.env.DB.prepare(`SELECT session_id, COUNT(*) AS unread, MAX(created_at) AS latest_at
-        FROM attention_items WHERE owner_email = ? AND seen_at IS NULL
-        GROUP BY session_id ORDER BY unread DESC, latest_at DESC LIMIT 10`).bind(email).all<{ session_id: string | null; unread: number; latest_at: string | null }>(),
+        FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}
+        GROUP BY session_id ORDER BY unread DESC, latest_at DESC LIMIT 10`).bind(...bindValues).all<{ session_id: string | null; unread: number; latest_at: string | null }>(),
     ]);
     const rows = items.results ?? [];
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: {
       unread: Number(unread?.count ?? 0),
       items: rows,
+      filter: { kind: query.kind, sessionId: query.sessionId },
       summary: {
         byKind: parseAttentionKindSummaryRows(kindSummary.results ?? []),
         bySession: parseAttentionSessionSummaryRows(sessionSummary.results ?? []),

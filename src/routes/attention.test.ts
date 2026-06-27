@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+
+test("parseAttentionListQuery accepts kind and session filters", () => {
+  const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
+  assert.deepEqual(result, { kind: "session.update", sessionId: "11111111-1111-4111-8111-111111111111", invalidSessionId: null });
+});
+
+test("parseAttentionListQuery rejects malformed session filters without dropping kind", () => {
+  const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=not-a-session"));
+  assert.deepEqual(result, { kind: "session.update", sessionId: null, invalidSessionId: "not-a-session" });
+});
 
 test("normalizeAttentionSeenIds keeps unique UUIDs in request order", () => {
   const one = "11111111-1111-4111-8111-111111111111";
