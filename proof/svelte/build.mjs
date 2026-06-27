@@ -45,6 +45,7 @@ const result = await buildHonoSvelte({
     sessions: here("Sessions.svelte"),
     settings: here("Settings.svelte"),
     appshell: here("AppShell.svelte"),
+    checkin: here("CheckIn.svelte"),
     chat: here("Chat.svelte"),
   },
   // Module imported by multiple components and holding cross-component
@@ -68,7 +69,7 @@ for (const [id, sz] of Object.entries(result.bundleSizes)) {
 // ── 2. Pre-compiled <Name>.ssr.mjs modules for each component, imported ──
 // Wrangler's bundler doesn't know how to load .svelte files; we hand it a
 // plain .mjs that imports svelte/server.
-for (const name of ["ComputerHealth", "Connectors", "Sessions", "Settings", "AppShell", "Chat"]) {
+for (const name of ["ComputerHealth", "Connectors", "Sessions", "Settings", "AppShell", "CheckIn", "Chat"]) {
   await build({
     entryPoints: [here(`${name}.svelte`)],
     bundle: true,
