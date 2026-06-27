@@ -8,6 +8,7 @@
   let checkIn = $state<CheckIn | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
+  let expanded = $state(false);
 
   function formatCheckedAt(value?: string): string | null {
     if (!value) return null;
@@ -57,6 +58,9 @@
       {/if}
     </div>
     <div class="flex items-center gap-2 sm:ml-auto">
+      <button type="button" onclick={() => expanded = !expanded} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
+        {expanded ? "Hide details" : "Details"}
+      </button>
       <button type="button" onclick={refresh} disabled={loading} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg disabled:cursor-wait disabled:opacity-60" aria-label="Refresh Check-in" data-check-in-refresh>
         {loading ? "Refreshing…" : "Refresh"}
       </button>
@@ -78,4 +82,25 @@
     {/if}
     </div>
   </div>
+  {#if expanded && checkIn?.buckets?.length}
+    <div id="check-in-details" class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" data-check-in-details>
+      {#each checkIn.buckets as bucket (bucket.key)}
+        <section class="rounded-xl border border-line bg-bg-alt p-3" data-check-in-detail-bucket={bucket.key}>
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h3 class="text-xs font-semibold text-fg">{bucket.label}</h3>
+              <p class="mt-1 text-[11px] text-fg-mut">{bucket.sampleCount} shown from {bucket.total} total</p>
+            </div>
+            <strong class="text-sm text-fg">{bucket.total}</strong>
+          </div>
+          {#if bucket.sampleIds?.length}
+            <p class="mt-2 truncate font-mono text-[10px] text-fg-mut" title={bucket.sampleIds.join(", ")}>{bucket.sampleIds.slice(0, 2).join(", ")}{bucket.sampleIds.length > 2 ? "…" : ""}</p>
+          {/if}
+          {#if bucket.steer}
+            <a class="mt-2 inline-flex text-[11px] font-semibold text-brand hover:underline" href={bucket.steer.href}>{bucket.steer.label}</a>
+          {/if}
+        </section>
+      {/each}
+    </div>
+  {/if}
 </section>
