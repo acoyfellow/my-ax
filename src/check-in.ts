@@ -58,7 +58,10 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
     });
   }
   if (totals.failedRuns > 0) addSteer({ label: "Review failed work", href: "/api/runs?status=failed" });
-  if (openRuns.length) addSteer({ label: "Review running work", href: `/api/runs/${encodeURIComponent(openRuns[0].id)}` });
+  if (openRuns.length) {
+    const workStatus = openRuns[0].status === "open" ? "open" : "running";
+    addSteer({ label: `Review ${workStatus} work`, href: `/api/runs?status=${workStatus}` });
+  }
   if (totals.activeJobs > 0) addSteer({ label: "Review active recurring jobs", href: "/api/jobs?status=active" });
   if (!suggestedSteers.length) addSteer({ label: "Start a conversation", href: "/" });
   const deployment = {

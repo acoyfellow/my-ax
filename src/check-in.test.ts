@@ -15,7 +15,7 @@ test("check-in prioritizes unread owner attention", () => {
   assert.equal(result.needsOwner[0].id, "a");
   assert.deepEqual(result.suggestedSteers, [
     { label: "Review attention", href: "/api/decisions/a" },
-    { label: "Review running work", href: "/api/runs/run-1" },
+    { label: "Review running work", href: "/api/runs?status=running" },
     { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
   ]);
   assert.deepEqual(result.totals, { attention: 1, activeJobs: 1, openRuns: 1, completedRuns: 0, failedRuns: 0 });
@@ -30,7 +30,7 @@ test("check-in steers to filtered attention when the top item has a kind", () =>
   });
   assert.deepEqual(result.suggestedSteers, [
     { label: "Review session.update attention", href: "/api/attention?kind=session.update" },
-    { label: "Review running work", href: "/api/runs/run-1" },
+    { label: "Review running work", href: "/api/runs?status=running" },
     { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
   ]);
 });
@@ -55,6 +55,11 @@ test("check-in separates completed receipts from running work", () => {
   assert.equal(result.suggestedSteers[0].label, "Start a conversation");
 });
 
+test("check-in steers to filtered open work when the sampled work is open", () => {
+  const result = composeOwnerCheckIn({ attention: [], jobs: [], runs: [{ ...run, status: "open" }] });
+  assert.deepEqual(result.suggestedSteers, [{ label: "Review open work", href: "/api/runs?status=open" }]);
+});
+
 test("check-in steers to filtered active recurring jobs when jobs are the main work", () => {
   const result = composeOwnerCheckIn({ attention: [], jobs: [job], runs: [] });
   assert.deepEqual(result.suggestedSteers, [{ label: "Review active recurring jobs", href: "/api/jobs?status=active" }]);
@@ -68,7 +73,7 @@ test("check-in surfaces failed terminal runs before ordinary active work", () =>
   assert.equal(result.running.runs[0].id, "run-1");
   assert.deepEqual(result.suggestedSteers, [
     { label: "Review failed work", href: "/api/runs?status=failed" },
-    { label: "Review running work", href: "/api/runs/run-1" },
+    { label: "Review running work", href: "/api/runs?status=running" },
     { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
   ]);
 });
