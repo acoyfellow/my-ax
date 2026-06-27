@@ -818,7 +818,6 @@
         <header>
           <h3 class="text-sm font-semibold text-fg">Agent capabilities</h3>
           <p class="mt-1 text-xs leading-relaxed text-fg-mut">The model receives callable capabilities, not your raw credentials. Availability can still depend on deployment configuration and provider health.</p>
-          <a href="/capabilities" class="mt-2 inline-flex rounded-md border border-line px-3 py-2 text-xs font-medium text-fg-mut hover:border-brand/60 hover:text-fg">Open scoped capability lab</a>
         </header>
         {#each capabilityGroups as group}
           <section class="rounded-lg border border-line bg-bg">
@@ -847,7 +846,6 @@
             <li>• Machine methods run with the companion OS account’s authority. Cloudbox and MCP retain their own configured authority.</li>
             <li>• Delegated children are model-only, depth one, and cannot use your application tools or connections.</li>
             <li>• Work Code Mode has no ambient secrets, database, network, or filesystem access; only named callbacks are callable.</li>
-            <li>• The /capabilities lab is a scoped-share proof: pasted URLs become exact read handles; it is not a broad internal search grant.</li>
           </ul>
         </section>
       </div>
