@@ -26,6 +26,8 @@ import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
 import { delegateCompletionNotification } from "./delegate-receipt";
+import { SavedHammerService, hammerRunTitle } from "./saved-hammers";
+import { executeWorkCode } from "./work-tools";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -219,6 +221,37 @@ export class MyAgent extends Think<Env> {
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity?.email || results.length === 0) return;
     await notifyOwner(this.env, identity.email, delegateCompletionNotification({ sessionId: this.name, results }));
+  }
+
+  async runSavedHammer(body: { hammerId?: string; input?: Record<string, unknown> }) {
+    const identity = this.getConfig<MyAgentConfig>()?.identity;
+    if (!identity?.email) throw new Error("session identity not seeded");
+    const hammerId = body.hammerId?.trim();
+    if (!hammerId) throw new Error("hammerId is required");
+    const hammer = await new SavedHammerService(this.env, identity.email).requireEnabled(hammerId);
+    const runId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await this.env.DB.prepare(`INSERT INTO runs (id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at)
+      VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?)`).bind(
+        runId,
+        identity.email.toLowerCase(),
+        this.name,
+        hammerRunTitle(hammer),
+        hammer.description,
+        JSON.stringify({ kind: "saved_hammer", hammerId: hammer.id, capabilities: JSON.parse(hammer.capabilities_json) }),
+        now,
+        now,
+      ).run();
+    const actor = JSON.stringify({ id: "my-ax", kind: "coordinator", mode: "live" });
+    await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-start-${crypto.randomUUID()}`, identity.email.toLowerCase(), now, actor, "hammer.started", JSON.stringify({ hammerId: hammer.id, name: hammer.name, input: body.input ?? {} }), null).run();
+    const code = `async () => { const input = ${JSON.stringify(body.input ?? {})};\n${hammer.code}\n}`;
+    const result = await executeWorkCode(code, this.buildToolContext());
+    const terminal = result.ok ? "completed" : "failed";
+    await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-${terminal}-${crypto.randomUUID()}`, identity.email.toLowerCase(), new Date().toISOString(), actor, `hammer.${terminal}`, JSON.stringify({ hammerId: hammer.id, name: hammer.name, ok: result.ok }), JSON.stringify(result)).run();
+    await this.env.DB.prepare("UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(terminal, runId, identity.email.toLowerCase()).run();
+    return { runId, hammer: { id: hammer.id, name: hammer.name }, execution: result };
   }
 
   async scheduleRecurringPrompt(payload: RecurringPromptPayload & { cadenceSecs: number }) {
