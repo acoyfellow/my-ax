@@ -17,6 +17,11 @@ function owner(c: any): string {
   return c.get("identity").email.toLowerCase();
 }
 
+export function normalizeAttentionSeenIds(ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
+}
+
 export function registerAttentionRoutes(app: Hono<AppEnv>) {
   app.get("/api/attention", async (c) => {
     const email = owner(c);
@@ -43,14 +48,17 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     const email = owner(c);
     const body: { ids?: string[] } = await c.req.json<{ ids?: string[] }>().catch(() => ({}));
     const hasExplicitIds = Array.isArray(body.ids);
-    const ids = [...new Set((body.ids ?? []).filter((id: string) => /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
+    const ids = normalizeAttentionSeenIds(body.ids);
+    let seen = 0;
     if (ids.length) {
       const placeholders = ids.map(() => "?").join(",");
-      await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL AND id IN (${placeholders})`).bind(email, ...ids).run();
+      const result = await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL AND id IN (${placeholders})`).bind(email, ...ids).run();
+      seen = Number(result.meta?.changes ?? 0);
     } else if (!hasExplicitIds) {
-      await c.env.DB.prepare("UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL").bind(email).run();
+      const result = await c.env.DB.prepare("UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL").bind(email).run();
+      seen = Number(result.meta?.changes ?? 0);
     }
     const unread = await c.env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>();
-    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { unread: Number(unread?.count ?? 0) }, next_actions: [] });
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { seen, unread: Number(unread?.count ?? 0) }, next_actions: [] });
   });
 }
