@@ -35,6 +35,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Fixed
 
+- Added a release and CI guard that fails if stale pre-Recipes API or agent-facing surfaces reappear in user/agent-facing source or generated assets, preventing another Recipes rename deploy regression.
 - Reopened a human decision and removed its provisional answer event when delivery to the canonical Think session fails, returning retryable `DECISION_RESUME_FAILED` instead of falsely reporting that the conversation resumed.
 - Rejected conversation-entry pagination cursors outside JavaScript’s exact integer range instead of querying from a precision-lost boundary.
 - Claimed human decision responses with a conditional state transition so concurrent submissions cannot retain conflicting answer events or resume the source conversation twice.

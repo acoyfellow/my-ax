@@ -19,6 +19,8 @@ jobs:
       - run: npm run verify:public
       # Build assets + typecheck + unit/widget smoke tests.
       - run: npm run check
+      # Catch stale generated/source surfaces after product/API renames.
+      - run: npm run verify:legacy-surface
       - name: Validate Wrangler bundle/config
         run: npx wrangler deploy --dry-run --outdir /tmp/my-ax-worker
       - name: Build Sandbox container
