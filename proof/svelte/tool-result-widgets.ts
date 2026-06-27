@@ -41,7 +41,7 @@ export type ToolResultWidget =
     }
   | { kind: "inline-raster-image"; src: string; alt: string }
   | { kind: "svelte-artifact"; src: string; title: string; artifactId: string }
-  | { kind: "saved-hammer-candidate"; ok: boolean; sourceCode: string; capabilities: string[]; resultPreview?: string; saveEndpoint: string }
+  | { kind: "saved-recipe-candidate"; ok: boolean; sourceCode: string; capabilities: string[]; resultPreview?: string; saveEndpoint: string }
   | { kind: "raw-text"; text: string };
 
 function decodeJsonOnce(value: unknown): unknown {
@@ -164,16 +164,16 @@ function browserRunWidget(value: unknown): ToolResultWidget | null {
   };
 }
 
-function savedHammerCandidateWidget(value: unknown, toolName: string): ToolResultWidget | null {
+function savedRecipeCandidateWidget(value: unknown, toolName: string): ToolResultWidget | null {
   if (toolName !== "work_code") return null;
   const decoded = decodeJsonOnce(value);
   if (typeof decoded !== "object" || decoded === null) return null;
   const result = decoded as Record<string, unknown>;
-  if (typeof result.sourceCode !== "string" || !Array.isArray(result.inferredCapabilities) || !("suggestedHammer" in result)) return null;
+  if (typeof result.sourceCode !== "string" || !Array.isArray(result.inferredCapabilities) || !("suggestedRecipe" in result)) return null;
   const capabilities = result.inferredCapabilities.filter((item): item is string => typeof item === "string").slice(0, 24);
   let resultPreview: string | undefined;
   try { resultPreview = JSON.stringify(result.result ?? result.error ?? null, null, 2).slice(0, 1_000); } catch {}
-  return { kind: "saved-hammer-candidate", ok: result.ok !== false, sourceCode: result.sourceCode.slice(0, 32_000), capabilities, resultPreview, saveEndpoint: "/api/hammers" };
+  return { kind: "saved-recipe-candidate", ok: result.ok !== false, sourceCode: result.sourceCode.slice(0, 32_000), capabilities, resultPreview, saveEndpoint: "/api/recipes" };
 }
 
 function rawText(value: unknown): string {
@@ -207,8 +207,8 @@ export function resolveToolResultWidget(value: unknown, toolName = "tool"): Tool
   const imageSrc = inlineRasterImageSrc(value);
   if (imageSrc) return { kind: "inline-raster-image", src: imageSrc, alt: `${toolName} screenshot` };
 
-  const savedHammerCandidate = savedHammerCandidateWidget(value, toolName);
-  if (savedHammerCandidate) return savedHammerCandidate;
+  const savedRecipeCandidate = savedRecipeCandidateWidget(value, toolName);
+  if (savedRecipeCandidate) return savedRecipeCandidate;
 
   return { kind: "raw-text", text: rawText(value) };
 }

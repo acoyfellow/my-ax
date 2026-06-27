@@ -28,10 +28,10 @@ shareable_feature:
   owner_visible_surface: check-in | attention | settings | chat | proof | other
   production_proof: exact command or journey proving it
   why_exciting: why this is worth telling another builder
-  next_hammer: what this makes cheaper, safer, or possible next
+  next_recipe: what this makes cheaper, safer, or possible next
 ```
 
-A failed or rejected idea is still useful when it leaves a `verified-disproved` receipt or reusable hammer. No token is wasted when the trace is harvested truthfully.
+A failed or rejected idea is still useful when it leaves a `verified-disproved` receipt or reusable recipe. No token is wasted when the trace is harvested truthfully.
 
 ## Mandatory user-outcome gate
 
@@ -85,7 +85,7 @@ harvest_receipt:
   attempted: what changed or was tried
   observed: what happened
   result: proven | verified-disproved | projected | blocked
-  reusable_hammer: receipt/schema/proof/primitive others can cite
+  reusable_recipe: receipt/schema/proof/primitive others can cite
   patch: path or summary
   proof: commands and outcomes
   risks: []

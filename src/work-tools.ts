@@ -22,7 +22,7 @@ const WORKSPACE_METHODS = [
 
 type WorkCall = {
   index: number;
-  where: "workspace" | "machine" | "cloudbox" | "hammer";
+  where: "workspace" | "machine" | "cloudbox" | "recipe";
   method: string;
   status: "ok" | "error";
   durationMs: number;
@@ -100,13 +100,13 @@ export const WORK_SEARCH_TOOL: ToolDef = {
   execute: async (args, ctx) => {
     checkedWorkspaceProvider(ctx);
     const machine = await createMachineWorkProvider(ctx);
-    const hammers = ctx.listSavedHammers ? await ctx.listSavedHammers().catch(() => []) : [];
+    const recipes = ctx.listSavedRecipes ? await ctx.listSavedRecipes().catch(() => []) : [];
     const catalog = [
       ...WORKSPACE_METHODS.map((method) => catalogEntry("workspace", method.name, method.description)),
       ...machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema)),
       ...CLOUDBOX_WORK_METHODS.map((method) => catalogEntry("cloudbox", method.name, method.description, Boolean(ctx.env.CLOUDBOX_URL && ctx.env.CLOUDBOX_INTERNAL_TOKEN))),
-      { method: "hammer.list", where: "hammer", description: "List enabled owner-approved saved hammers available in work_code.", available: Boolean(ctx.listSavedHammers) },
-      ...hammers.map((hammer) => ({ method: `hammer.run:${hammer.name}`, where: "hammer", description: hammer.description, available: true, inputSchema: hammer.inputSchema, capabilities: hammer.capabilities })),
+      { method: "recipe.list", where: "recipe", description: "List enabled owner-approved saved recipes available in work_code.", available: Boolean(ctx.listSavedRecipes) },
+      ...recipes.map((recipe) => ({ method: `recipe.run:${recipe.name}`, where: "recipe", description: recipe.description, available: true, inputSchema: recipe.inputSchema, capabilities: recipe.capabilities })),
     ];
     const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
     const filtered = query ? catalog.filter((entry) => `${entry.method} ${entry.description} ${entry.where}`.toLowerCase().includes(query)) : catalog;
@@ -125,9 +125,9 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
   const cloudboxFns = instrument("cloudbox", restrictByCapabilities("cloudbox", cloudbox.fns, ctx.allowedWorkCapabilities), calls);
-  const hammerFns = ctx.exposeSavedHammers !== false && ctx.listSavedHammers && ctx.runSavedHammer ? instrument("hammer", {
-    list: async () => ctx.listSavedHammers!(),
-    run: async (input: any) => ctx.runSavedHammer!({
+  const recipeFns = ctx.exposeSavedRecipes !== false && ctx.listSavedRecipes && ctx.runSavedRecipe ? instrument("recipe", {
+    list: async () => ctx.listSavedRecipes!(),
+    run: async (input: any) => ctx.runSavedRecipe!({
       id: typeof input?.id === "string" ? input.id : undefined,
       name: typeof input?.name === "string" ? input.name : undefined,
       input: typeof input?.input === "object" && input.input ? input.input as Record<string, unknown> : {},
@@ -137,7 +137,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
     ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
     ...Object.fromEntries(Object.entries(cloudboxFns).map(([name, fn]) => [`cloudbox_${name}`, fn])),
-    ...Object.fromEntries(Object.entries(hammerFns).map(([name, fn]) => [`hammer_${name}`, fn])),
+    ...Object.fromEntries(Object.entries(recipeFns).map(([name, fn]) => [`recipe_${name}`, fn])),
   };
   const namespace = (name: string, methods: string[]) =>
     `globalThis.${name}={${methods.map((method) => `${JSON.stringify(method)}:(args)=>bridge[${JSON.stringify(`${name}_${method}`)}](args)`).join(",")}};`;
@@ -145,7 +145,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     namespace("workspace", Object.keys(workspaceFns)),
     namespace("machine", Object.keys(machineFns)),
     namespace("cloudbox", Object.keys(cloudboxFns)),
-    namespace("hammer", Object.keys(hammerFns)),
+    namespace("recipe", Object.keys(recipeFns)),
   ].join("\n");
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
   const execution = await executor.execute(code, [{ name: "bridge", fns: bridgeFns, prelude }]);
@@ -159,7 +159,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     calls: sortedCalls,
     sourceCode: code,
     inferredCapabilities,
-    suggestedHammer: {
+    suggestedRecipe: {
       description: "Promoted from a successful work_code run.",
       inputSchema: { type: "object", properties: {} },
       code,
@@ -170,7 +170,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
-  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). Owner-approved saved hammers are exposed as hammer.list() and hammer.run({id|name,input}); hammer runs create receipts and appear in Check-in. No raw network, credentials, environment, or publication authority is exposed.",
+  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). Owner-approved saved recipes are exposed as recipe.list() and recipe.run({id|name,input}); recipe runs create receipts and appear in Check-in. No raw network, credentials, environment, or publication authority is exposed.",
   parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, and/or cloudbox namespaces." } }, required: ["code"] },
   execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };

@@ -16,7 +16,7 @@ Status:
 | Check-in | ✅ | `GET /api/check-in` and MCP `my_ax_check_in` summarize unread Attention, running jobs, active run receipts, recent completion, and suggested steers without adding storage. | `src/check-in.ts`, `npm run test:check-in` |
 | Attention inbox | ✅ | D1 stores owner-scoped items with unread state, href, and optional source session. Push delivery is best effort; the row remains if push fails. | `src/routes/attention.ts`, `src/notify.ts` |
 | Completion receipts | ✅ | Normal turns can push completion while the owner is away. Recurring scheduled/manual job runs share terminalization and emit an actionable Attention receipt. Delegated child batches now leave an owner-visible Attention receipt when the batch terminalizes. | `src/agent.ts`, `src/recurring-job-run.ts`, `src/delegate-receipt.ts` |
-| Run receipts | 🧪 | Owner-scoped ledger for explicitly appended events. Saved hammer runs append start/terminal events; it still does not automatically capture every tool call or deploy. | `src/run-receipts.ts`, `src/routes/hammers.ts`, `npm run test:run-receipts` |
+| Run receipts | 🧪 | Owner-scoped ledger for explicitly appended events. Saved recipe runs append start/terminal events; it still does not automatically capture every tool call or deploy. | `src/run-receipts.ts`, `src/routes/recipes.ts`, `npm run test:run-receipts` |
 
 ## Conversation and Client
 
@@ -34,7 +34,7 @@ Status:
 
 | Capability | Status | Current shape | Evidence |
 |---|---:|---|---|
-| Unified work surface | ✅ | `work_search` discovers methods; `work_code` dispatches one async program across workspace, Machine, and Cloudbox namespaces. Saved hammers persist owner-approved `work_code` recipes and record each run as a receipt. | `src/work-tools.ts`, `src/saved-hammers.ts`, `npm run test:hammers` |
+| Unified work surface | ✅ | `work_search` discovers methods; `work_code` dispatches one async program across workspace, Machine, and Cloudbox namespaces. Saved recipes persist owner-approved `work_code` recipes and record each run as a receipt. | `src/work-tools.ts`, `src/saved-recipes.ts`, `npm run test:recipes` |
 | Workspace | ✅ | `/home/user` lives in Cloudflare Sandbox; mutating turns snapshot to R2. Writes after the last successful snapshot can be lost with the container. | `src/workspace.ts` |
 | My Machine | 🧪 | An outbound Machinectl companion contributes live `machine.*` methods with the connected user's local authority. | `src/routes/machinectl.ts` |
 | Cloudbox | 🧪 | Optional `cloudbox.*` methods create public-repo runs and operate on relative files. No publication method is exposed. | `src/cloudbox-tools.ts` |

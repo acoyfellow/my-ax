@@ -40,12 +40,12 @@
   let dialogEl = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
   let settingsQuery = $state("");
-  let activeSection = $state<"general" | "capabilities" | "hammers" | "jobs" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "recipes" | "jobs" | "connections">("general");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "Tools, memory, and boundaries" },
-    { id: "hammers" as const, label: "Hammers", hint: "Saved Code Mode recipes" },
+    { id: "recipes" as const, label: "Recipes", hint: "Saved Code Mode recipes" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled prompts and history" },
     { id: "connections" as const, label: "Connections", hint: "Health, computers, MCP servers" },
   ];
@@ -56,7 +56,7 @@
       summary: "Built in and available without another connection.",
       items: [
         { name: "Workspace", tools: "work_search · work_code", description: "Find, read, write, search, and run bounded code or processes in the persistent owner workspace." },
-        { name: "Saved hammers", tools: "hammer.list · hammer.run", description: "Owner-approved work_code recipes are available inside Code Mode and every hammer run creates a receipt." },
+        { name: "Saved recipes", tools: "recipe.list · recipe.run", description: "Owner-approved work_code recipes are available inside Code Mode and every recipe run creates a receipt." },
         { name: "Public browser", tools: "browser_open", description: "Open and inspect public web pages in hosted Chrome, including a screenshot and replay. It has no personal browser cookies." },
         { name: "Conversation recall", tools: "search_conversations", description: "Search the owner’s earlier My AX conversation index. Conversation-local memory is also retained and compacted by Think." },
         { name: "Human decisions", tools: "ask_user", description: "Pause for one explicit multiple-choice decision and return the answer to the source conversation." },
@@ -90,7 +90,7 @@
     lastActiveElement = document.activeElement as HTMLElement | null;
     open = true;
     refreshJobs();
-    refreshHammers();
+    refreshRecipes();
     tick().then(() => {
       if (dialogEl && !dialogEl.open) dialogEl.showModal();
       searchInput?.focus();
@@ -395,8 +395,8 @@
     await refreshJobs();
   }
 
-  // ── Saved hammers ──────────────────────────────────────────────────
-  interface Hammer {
+  // ── Saved recipes ──────────────────────────────────────────────────
+  interface Recipe {
     id: string;
     name: string;
     description: string;
@@ -406,16 +406,16 @@
     status: "enabled" | "disabled";
     updatedAt?: string;
   }
-  let hammers = $state<Hammer[]>([]);
-  let hammerStatusText = $state("");
-  let hammerBusy = $state<Record<string, boolean>>({});
-  let editingHammerId = $state<string | null>(null);
-  let hammerName = $state("");
-  let hammerDescription = $state("");
-  let hammerInputSchema = $state('{"type":"object","properties":{}}');
-  let hammerCode = $state("");
-  let hammerCapabilities = $state("workspace.read");
-  const hammerTemplates = [
+  let recipes = $state<Recipe[]>([]);
+  let recipeStatusText = $state("");
+  let recipeBusy = $state<Record<string, boolean>>({});
+  let editingRecipeId = $state<string | null>(null);
+  let recipeName = $state("");
+  let recipeDescription = $state("");
+  let recipeInputSchema = $state('{"type":"object","properties":{}}');
+  let recipeCode = $state("");
+  let recipeCapabilities = $state("workspace.read");
+  const recipeTemplates = [
     {
       name: "read_workspace_file",
       title: "Read a workspace file",
@@ -450,107 +450,107 @@
     },
   ];
 
-  async function refreshHammers() {
+  async function refreshRecipes() {
     try {
-      const response = await fetch("/api/hammers", { credentials: "include" });
+      const response = await fetch("/api/recipes", { credentials: "include" });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Hammers unavailable.");
-      hammers = body?.result?.hammers ?? [];
+      if (!response.ok) throw new Error(body?.error?.message || "Recipes unavailable.");
+      recipes = body?.result?.recipes ?? [];
     } catch (err: any) {
-      hammerStatusText = err?.message || "Hammers unavailable.";
+      recipeStatusText = err?.message || "Recipes unavailable.";
     }
   }
-  function resetHammerForm() {
-    editingHammerId = null;
-    hammerName = "";
-    hammerDescription = "";
-    hammerInputSchema = '{"type":"object","properties":{}}';
-    hammerCode = "";
-    hammerCapabilities = "workspace.read";
+  function resetRecipeForm() {
+    editingRecipeId = null;
+    recipeName = "";
+    recipeDescription = "";
+    recipeInputSchema = '{"type":"object","properties":{}}';
+    recipeCode = "";
+    recipeCapabilities = "workspace.read";
   }
-  function useHammerTemplate(template: (typeof hammerTemplates)[number]) {
-    editingHammerId = null;
-    hammerName = template.name;
-    hammerDescription = template.description;
-    hammerInputSchema = JSON.stringify(template.inputSchema, null, 2);
-    hammerCode = template.code;
-    hammerCapabilities = template.capabilities.join("\n");
-    hammerStatusText = `Template loaded: ${template.title}. Review it, then save.`;
+  function useRecipeTemplate(template: (typeof recipeTemplates)[number]) {
+    editingRecipeId = null;
+    recipeName = template.name;
+    recipeDescription = template.description;
+    recipeInputSchema = JSON.stringify(template.inputSchema, null, 2);
+    recipeCode = template.code;
+    recipeCapabilities = template.capabilities.join("\n");
+    recipeStatusText = `Template loaded: ${template.title}. Review it, then save.`;
   }
-  async function editHammer(hammer: Hammer) {
-    editingHammerId = hammer.id;
-    hammerName = hammer.name;
-    hammerDescription = hammer.description;
-    hammerInputSchema = JSON.stringify(hammer.inputSchema ?? { type: "object", properties: {} }, null, 2);
-    hammerCode = "Loading…";
-    hammerCapabilities = hammer.capabilities.join("\n");
+  async function editRecipe(recipe: Recipe) {
+    editingRecipeId = recipe.id;
+    recipeName = recipe.name;
+    recipeDescription = recipe.description;
+    recipeInputSchema = JSON.stringify(recipe.inputSchema ?? { type: "object", properties: {} }, null, 2);
+    recipeCode = "Loading…";
+    recipeCapabilities = recipe.capabilities.join("\n");
     try {
-      const response = await fetch(`/api/hammers/${encodeURIComponent(hammer.id)}`, { credentials: "include" });
+      const response = await fetch(`/api/recipes/${encodeURIComponent(recipe.id)}`, { credentials: "include" });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Could not load hammer.");
-      hammerCode = body.result.hammer.code ?? "";
+      if (!response.ok) throw new Error(body?.error?.message || "Could not load recipe.");
+      recipeCode = body.result.recipe.code ?? "";
     } catch (err: any) {
-      hammerStatusText = err?.message || "Could not load hammer.";
+      recipeStatusText = err?.message || "Could not load recipe.";
     }
   }
-  function hammerPayload() {
+  function recipePayload() {
     let inputSchema: Record<string, unknown>;
-    try { inputSchema = JSON.parse(hammerInputSchema); }
+    try { inputSchema = JSON.parse(recipeInputSchema); }
     catch { throw new Error("Input schema must be valid JSON."); }
     return {
-      name: hammerName.trim(),
-      description: hammerDescription.trim(),
+      name: recipeName.trim(),
+      description: recipeDescription.trim(),
       inputSchema,
-      code: hammerCode.trim(),
-      capabilities: hammerCapabilities.split(/[\n,]/).map((cap) => cap.trim()).filter(Boolean),
+      code: recipeCode.trim(),
+      capabilities: recipeCapabilities.split(/[\n,]/).map((cap) => cap.trim()).filter(Boolean),
     };
   }
-  async function submitHammer(e: SubmitEvent) {
+  async function submitRecipe(e: SubmitEvent) {
     e.preventDefault();
     try {
-      const payload = hammerPayload();
-      const url = editingHammerId ? `/api/hammers/${encodeURIComponent(editingHammerId)}` : "/api/hammers";
-      const response = await fetch(url, { method: editingHammerId ? "PATCH" : "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const payload = recipePayload();
+      const url = editingRecipeId ? `/api/recipes/${encodeURIComponent(editingRecipeId)}` : "/api/recipes";
+      const response = await fetch(url, { method: editingRecipeId ? "PATCH" : "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Could not save hammer.");
-      hammerStatusText = editingHammerId ? "Hammer updated." : "Hammer saved.";
-      resetHammerForm();
-      await refreshHammers();
+      if (!response.ok) throw new Error(body?.error?.message || "Could not save recipe.");
+      recipeStatusText = editingRecipeId ? "Recipe updated." : "Recipe saved.";
+      resetRecipeForm();
+      await refreshRecipes();
     } catch (err: any) {
-      hammerStatusText = err?.message || "Could not save hammer.";
+      recipeStatusText = err?.message || "Could not save recipe.";
     }
   }
-  async function hammerAction(id: string, operation: "status" | "delete" | "run", request: () => Promise<Response>, success?: string) {
+  async function recipeAction(id: string, operation: "status" | "delete" | "run", request: () => Promise<Response>, success?: string) {
     const key = `${id}:${operation}`;
-    if (hammerBusy[key]) return;
-    hammerBusy[key] = true;
+    if (recipeBusy[key]) return;
+    recipeBusy[key] = true;
     try {
       const response = await request();
       const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.error?.message || `Hammer ${operation} failed.`);
-      hammerStatusText = success ?? "Hammer updated.";
-      await refreshHammers();
+      if (!response.ok) throw new Error(body?.error?.message || `Recipe ${operation} failed.`);
+      recipeStatusText = success ?? "Recipe updated.";
+      await refreshRecipes();
     } catch (err: any) {
-      hammerStatusText = err?.message || `Could not ${operation} hammer.`;
+      recipeStatusText = err?.message || `Could not ${operation} recipe.`;
     } finally {
-      hammerBusy[key] = false;
+      recipeBusy[key] = false;
     }
   }
-  async function toggleHammer(hammer: Hammer) {
-    await hammerAction(hammer.id, "status", () => fetch(`/api/hammers/${encodeURIComponent(hammer.id)}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: hammer.status === "enabled" ? "disabled" : "enabled" }) }));
+  async function toggleRecipe(recipe: Recipe) {
+    await recipeAction(recipe.id, "status", () => fetch(`/api/recipes/${encodeURIComponent(recipe.id)}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: recipe.status === "enabled" ? "disabled" : "enabled" }) }));
   }
-  async function deleteHammer(id: string) {
-    if (!confirm("Delete this saved hammer? Existing run receipts stay, but Code Mode can no longer use it.")) return;
-    await hammerAction(id, "delete", () => fetch(`/api/hammers/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }), "Hammer deleted.");
-    if (editingHammerId === id) resetHammerForm();
+  async function deleteRecipe(id: string) {
+    if (!confirm("Delete this saved recipe? Existing run receipts stay, but Code Mode can no longer use it.")) return;
+    await recipeAction(id, "delete", () => fetch(`/api/recipes/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }), "Recipe deleted.");
+    if (editingRecipeId === id) resetRecipeForm();
   }
-  async function runHammer(hammer: Hammer) {
+  async function runRecipe(recipe: Recipe) {
     const sessionId = localStorage.getItem(SESSION_KEY);
     if (!sessionId) {
-      hammerStatusText = "Start a conversation before running a hammer.";
+      recipeStatusText = "Start a conversation before running a recipe.";
       return;
     }
-    await hammerAction(hammer.id, "run", () => fetch(`/api/hammers/${encodeURIComponent(hammer.id)}/run`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, input: {} }) }), "Hammer run queued; Check-in will show the receipt.");
+    await recipeAction(recipe.id, "run", () => fetch(`/api/recipes/${encodeURIComponent(recipe.id)}/run`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, input: {} }) }), "Recipe run queued; Check-in will show the receipt.");
   }
 
   // ── Model picker + catalog search ──────────────────────────────────
@@ -893,51 +893,51 @@
         </section>
       </div>
 
-      <div hidden={activeSection !== "hammers"} class="space-y-4">
+      <div hidden={activeSection !== "recipes"} class="space-y-4">
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Saved hammers</span>
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Saved recipes</span>
           <p class="mb-3 text-xs text-fg-mut">
-            Owner-approved Code Mode recipes. Enabled hammers appear inside <code>work_code</code> as <code>hammer.list()</code> and <code>hammer.run(...)</code>; every run creates a receipt.
+            Owner-approved Code Mode recipes. Enabled recipes appear inside <code>work_code</code> as <code>recipe.list()</code> and <code>recipe.run(...)</code>; every run creates a receipt.
           </p>
           <div class="grid gap-2">
-            {#if hammers.length === 0}
-              <p class="text-xs text-fg-mut">No saved hammers yet. Promote a successful work_code run, or create one below.</p>
+            {#if recipes.length === 0}
+              <p class="text-xs text-fg-mut">No saved recipes yet. Promote a successful work_code run, or create one below.</p>
             {:else}
-              {#each hammers as hammer (hammer.id)}
+              {#each recipes as recipe (recipe.id)}
                 <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
                   <div class="flex min-w-0 items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <strong class="break-words text-sm text-fg">{hammer.name}</strong>
-                      <p class="mt-1 text-fg-mut line-clamp-2">{hammer.description}</p>
+                      <strong class="break-words text-sm text-fg">{recipe.name}</strong>
+                      <p class="mt-1 text-fg-mut line-clamp-2">{recipe.description}</p>
                     </div>
-                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{hammer.status}</span>
+                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{recipe.status}</span>
                   </div>
                   <div class="mt-2 flex flex-wrap gap-1">
-                    {#each hammer.capabilities as capability}
+                    {#each recipe.capabilities as capability}
                       <code class="rounded-full bg-bg px-2 py-1 text-[10px] text-brand">{capability}</code>
                     {/each}
                   </div>
                   <div class="mt-3 grid grid-cols-4 gap-2">
-                    <button type="button" onclick={() => runHammer(hammer)} disabled={hammerBusy[`${hammer.id}:run`] || hammer.status !== "enabled"} aria-busy={hammerBusy[`${hammer.id}:run`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">Run</button>
-                    <button type="button" onclick={() => editHammer(hammer)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">Edit</button>
-                    <button type="button" onclick={() => toggleHammer(hammer)} disabled={hammerBusy[`${hammer.id}:status`]} aria-busy={hammerBusy[`${hammer.id}:status`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">
-                      {hammer.status === "enabled" ? "Disable" : "Enable"}
+                    <button type="button" onclick={() => runRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:run`] || recipe.status !== "enabled"} aria-busy={recipeBusy[`${recipe.id}:run`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">Run</button>
+                    <button type="button" onclick={() => editRecipe(recipe)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">Edit</button>
+                    <button type="button" onclick={() => toggleRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:status`]} aria-busy={recipeBusy[`${recipe.id}:status`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">
+                      {recipe.status === "enabled" ? "Disable" : "Enable"}
                     </button>
-                    <button type="button" onclick={() => deleteHammer(hammer.id)} disabled={hammerBusy[`${hammer.id}:delete`]} aria-busy={hammerBusy[`${hammer.id}:delete`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-50">Delete</button>
+                    <button type="button" onclick={() => deleteRecipe(recipe.id)} disabled={recipeBusy[`${recipe.id}:delete`]} aria-busy={recipeBusy[`${recipe.id}:delete`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-50">Delete</button>
                   </div>
                 </article>
               {/each}
             {/if}
           </div>
-          <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{hammerStatusText}</p>
+          <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{recipeStatusText}</p>
         </section>
 
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter hammers</span>
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter recipes</span>
           <p class="mb-3 text-xs text-fg-mut">Pick a generic recipe, review the code and capabilities, then save your own copy. Templates are never enabled automatically.</p>
           <div class="grid gap-2 sm:grid-cols-2">
-            {#each hammerTemplates as template}
-              <button type="button" onclick={() => useHammerTemplate(template)} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-left hover:border-brand/60">
+            {#each recipeTemplates as template}
+              <button type="button" onclick={() => useRecipeTemplate(template)} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-left hover:border-brand/60">
                 <strong class="text-sm text-fg">{template.title}</strong>
                 <p class="mt-1 text-xs leading-relaxed text-fg-mut">{template.description}</p>
                 <div class="mt-2 flex flex-wrap gap-1">
@@ -948,17 +948,17 @@
           </div>
         </section>
 
-        <form onsubmit={submitHammer} class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4 grid gap-2">
+        <form onsubmit={submitRecipe} class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4 grid gap-2">
           <div class="flex items-center justify-between gap-3">
-            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingHammerId ? "Edit hammer" : "Create manually"}</span>
-            {#if editingHammerId}<button type="button" onclick={resetHammerForm} class="text-xs text-fg-mut hover:text-fg">Cancel edit</button>{/if}
+            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingRecipeId ? "Edit recipe" : "Create manually"}</span>
+            {#if editingRecipeId}<button type="button" onclick={resetRecipeForm} class="text-xs text-fg-mut hover:text-fg">Cancel edit</button>{/if}
           </div>
-          <input type="text" maxlength={64} placeholder="name_like_this" bind:value={hammerName} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
-          <textarea rows={2} maxlength={500} placeholder="Description" bind:value={hammerDescription} class="w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
-          <textarea rows={4} placeholder="return input;" bind:value={hammerCode} class="font-mono w-full min-h-[112px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
-          <textarea rows={3} placeholder="Input schema JSON" bind:value={hammerInputSchema} class="font-mono w-full min-h-[88px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
-          <textarea rows={2} placeholder="workspace.read" bind:value={hammerCapabilities} class="font-mono w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
-          <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">{editingHammerId ? "Update hammer" : "Save hammer"}</button>
+          <input type="text" maxlength={64} placeholder="name_like_this" bind:value={recipeName} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
+          <textarea rows={2} maxlength={500} placeholder="Description" bind:value={recipeDescription} class="w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <textarea rows={4} placeholder="return input;" bind:value={recipeCode} class="font-mono w-full min-h-[112px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <textarea rows={3} placeholder="Input schema JSON" bind:value={recipeInputSchema} class="font-mono w-full min-h-[88px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <textarea rows={2} placeholder="workspace.read" bind:value={recipeCapabilities} class="font-mono w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">{editingRecipeId ? "Update recipe" : "Save recipe"}</button>
         </form>
       </div>
 

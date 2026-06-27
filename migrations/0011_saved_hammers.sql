@@ -1,4 +1,5 @@
--- Saved hammers: owner-approved work_code recipes promoted from proven work.
+-- Historical v0.0.1 storage name retained so already-applied D1 migrations and
+-- fresh installs converge through 0012_saved_recipes.sql.
 CREATE TABLE IF NOT EXISTS saved_hammers (
     id TEXT PRIMARY KEY,
     owner_email TEXT NOT NULL,
