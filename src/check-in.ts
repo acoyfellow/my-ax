@@ -2,6 +2,7 @@ export interface CheckInSources {
   attention: Array<{ id: string; title: string; body: string; href: string; created_at: string }>;
   jobs: Array<{ id: string; name: string; status: string; next_run_at: string; last_error: string | null }>;
   runs: Array<{ id: string; title: string | null; task_summary: string; status: string; updated_at: string }>;
+  totals?: Partial<Record<"attention" | "activeJobs" | "openRuns" | "completedRuns" | "failedRuns", number>>;
 }
 
 export interface OwnerCheckIn {
@@ -14,6 +15,13 @@ export interface OwnerCheckIn {
     runs: CheckInSources["runs"];
   };
   suggestedSteers: Array<{ label: string; href: string }>;
+  totals: {
+    attention: number;
+    activeJobs: number;
+    openRuns: number;
+    completedRuns: number;
+    failedRuns: number;
+  };
 }
 
 /** Compose a compact owner read model from existing durable state. */
@@ -23,11 +31,19 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
   const openRuns = sources.runs.filter((run) => run.status === "open" || run.status === "running").slice(0, 10);
   const completed = sources.runs.filter((run) => run.status === "completed").slice(0, 10);
   const failed = sources.runs.filter((run) => run.status === "failed").slice(0, 10);
-  const summary = needsOwner.length
-    ? `${needsOwner.length} item${needsOwner.length === 1 ? " needs" : "s need"} your attention; ${jobs.length + openRuns.length} active.`
-    : failed.length
-      ? `${failed.length} failed run${failed.length === 1 ? " needs" : "s need"} review; ${jobs.length + openRuns.length} active.`
-      : `${jobs.length + openRuns.length} active; ${completed.length} recently completed.`;
+  const totals = {
+    attention: sources.totals?.attention ?? needsOwner.length,
+    activeJobs: sources.totals?.activeJobs ?? jobs.length,
+    openRuns: sources.totals?.openRuns ?? openRuns.length,
+    completedRuns: sources.totals?.completedRuns ?? completed.length,
+    failedRuns: sources.totals?.failedRuns ?? failed.length,
+  };
+  const activeTotal = totals.activeJobs + totals.openRuns;
+  const summary = totals.attention > 0
+    ? `${totals.attention} item${totals.attention === 1 ? " needs" : "s need"} your attention; ${activeTotal} active.`
+    : totals.failedRuns > 0
+      ? `${totals.failedRuns} failed run${totals.failedRuns === 1 ? " needs" : "s need"} review; ${activeTotal} active.`
+      : `${activeTotal} active; ${totals.completedRuns} recently completed.`;
   const suggestedSteers: OwnerCheckIn["suggestedSteers"] = needsOwner.length
     ? [{ label: "Review attention", href: needsOwner[0].href || "/" }]
     : failed.length
@@ -37,5 +53,5 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
         : jobs.length
           ? [{ label: "Review recurring jobs", href: "/api/jobs" }]
           : [{ label: "Start a conversation", href: "/" }];
-  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers };
+  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, totals };
 }
