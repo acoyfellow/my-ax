@@ -47,6 +47,11 @@ test("check-in separates completed receipts from running work", () => {
   assert.equal(result.suggestedSteers[0].label, "Start a conversation");
 });
 
+test("check-in steers to filtered active recurring jobs when jobs are the main work", () => {
+  const result = composeOwnerCheckIn({ attention: [], jobs: [job], runs: [] });
+  assert.deepEqual(result.suggestedSteers, [{ label: "Review active recurring jobs", href: "/api/jobs?status=active" }]);
+});
+
 test("check-in surfaces failed terminal runs before ordinary active work", () => {
   const failed = { ...run, id: "run-failed", status: "failed" };
   const result = composeOwnerCheckIn({ attention: [], jobs: [job], runs: [failed, run] });
