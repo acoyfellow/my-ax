@@ -7,6 +7,16 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { JobService, JobServiceError } from "../job-service";
+import type { JobStatus } from "../jobs";
+
+const JOB_STATUSES = new Set<JobStatus>(["active", "paused"]);
+
+export function parseJobListQuery(url: string): { status?: JobStatus; error?: { code: "BAD_JOB_STATUS"; message: string } } {
+  const status = new URL(url).searchParams.get("status")?.trim();
+  if (!status) return {};
+  if (!JOB_STATUSES.has(status as JobStatus)) return { error: { code: "BAD_JOB_STATUS", message: `Unsupported job status: ${status}` } };
+  return { status: status as JobStatus };
+}
 
 function failure(c: Context<AppEnv>, command: string, error: unknown) {
   const known = error instanceof JobServiceError;
@@ -22,7 +32,12 @@ export function registerJobRoutes(app: Hono<AppEnv>) {
   const key = (c: Context<AppEnv>) => c.req.header("Idempotency-Key")?.trim().slice(0, 200);
   const ok = (c: Context<AppEnv>, command: string, result: unknown, status: ContentfulStatusCode = 200) => c.json<ApiResponse>({ ok: true, command, result, next_actions: [] }, status);
 
-  app.get("/api/jobs", async c => { const command = "GET /api/jobs"; try { return ok(c, command, { jobs: await service(c).list() }); } catch (e) { return failure(c, command, e); } });
+  app.get("/api/jobs", async c => {
+    const parsed = parseJobListQuery(c.req.url);
+    const command = parsed.status ? `GET /api/jobs?status=${parsed.status}` : "GET /api/jobs";
+    if (parsed.error) return c.json<ApiResponse>({ ok: false, command, error: parsed.error, next_actions: [] }, 400);
+    try { return ok(c, command, { jobs: await service(c).list(parsed.status), filter: { status: parsed.status ?? null } }); } catch (e) { return failure(c, command, e); }
+  });
   app.post("/api/jobs", async c => { const command = "POST /api/jobs"; try { return ok(c, command, await service(c).create(input(await body(c)), key(c)), 201); } catch (e) { return failure(c, command, e); } });
   app.patch("/api/jobs/:id", async c => { const command = `PATCH /api/jobs/${c.req.param("id")}`; try { return ok(c, command, await service(c).update(c.req.param("id"), input(await body(c)))); } catch (e) { return failure(c, command, e); } });
   app.post("/api/jobs/:id/pause", async c => { const command = `POST /api/jobs/${c.req.param("id")}/pause`; try { const request = await body(c); return ok(c, command, await service(c).setPaused(c.req.param("id"), request.paused !== false)); } catch (e) { return failure(c, command, e); } });
