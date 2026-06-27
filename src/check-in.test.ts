@@ -15,6 +15,7 @@ test("check-in prioritizes unread owner attention", () => {
   assert.equal(result.needsOwner[0].id, "a");
   assert.deepEqual(result.suggestedSteers, [{ label: "Review attention", href: "/api/decisions/a" }]);
   assert.deepEqual(result.totals, { attention: 1, activeJobs: 1, openRuns: 1, completedRuns: 0, failedRuns: 0 });
+  assert.deepEqual(result.deployment, { versionId: null, versionTag: null, versionTimestamp: null });
 });
 
 test("check-in steers to filtered attention when the top item has a kind", () => {
@@ -24,6 +25,16 @@ test("check-in steers to filtered attention when the top item has a kind", () =>
     runs: [run],
   });
   assert.deepEqual(result.suggestedSteers, [{ label: "Review session.update attention", href: "/api/attention?kind=session.update" }]);
+});
+
+test("check-in includes the deployed worker version receipt when provided", () => {
+  const result = composeOwnerCheckIn({
+    attention: [],
+    jobs: [],
+    runs: [],
+    deployment: { versionId: "version-123", versionTag: "release", versionTimestamp: "2026-06-27T23:40:00Z" },
+  });
+  assert.deepEqual(result.deployment, { versionId: "version-123", versionTag: "release", versionTimestamp: "2026-06-27T23:40:00Z" });
 });
 
 test("check-in separates completed receipts from running work", () => {
