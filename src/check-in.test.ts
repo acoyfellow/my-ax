@@ -13,7 +13,11 @@ test("check-in prioritizes unread owner attention", () => {
   });
   assert.equal(result.summary, "1 item needs your attention; 2 active.");
   assert.equal(result.needsOwner[0].id, "a");
-  assert.deepEqual(result.suggestedSteers, [{ label: "Review attention", href: "/api/decisions/a" }]);
+  assert.deepEqual(result.suggestedSteers, [
+    { label: "Review attention", href: "/api/decisions/a" },
+    { label: "Review running work", href: "/api/runs/run-1" },
+    { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
+  ]);
   assert.deepEqual(result.totals, { attention: 1, activeJobs: 1, openRuns: 1, completedRuns: 0, failedRuns: 0 });
   assert.deepEqual(result.deployment, { versionId: null, versionTag: null, versionTimestamp: null });
 });
@@ -24,7 +28,11 @@ test("check-in steers to filtered attention when the top item has a kind", () =>
     jobs: [job],
     runs: [run],
   });
-  assert.deepEqual(result.suggestedSteers, [{ label: "Review session.update attention", href: "/api/attention?kind=session.update" }]);
+  assert.deepEqual(result.suggestedSteers, [
+    { label: "Review session.update attention", href: "/api/attention?kind=session.update" },
+    { label: "Review running work", href: "/api/runs/run-1" },
+    { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
+  ]);
 });
 
 test("check-in includes the deployed worker version receipt when provided", () => {
@@ -58,7 +66,11 @@ test("check-in surfaces failed terminal runs before ordinary active work", () =>
   assert.equal(result.summary, "1 failed run needs review; 2 active.");
   assert.equal(result.failed[0].id, "run-failed");
   assert.equal(result.running.runs[0].id, "run-1");
-  assert.deepEqual(result.suggestedSteers, [{ label: "Review failed work", href: "/api/runs?status=failed" }]);
+  assert.deepEqual(result.suggestedSteers, [
+    { label: "Review failed work", href: "/api/runs?status=failed" },
+    { label: "Review running work", href: "/api/runs/run-1" },
+    { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
+  ]);
 });
 
 test("unread attention still outranks failed run steering", () => {
@@ -70,7 +82,10 @@ test("unread attention still outranks failed run steering", () => {
   });
   assert.equal(result.summary, "1 item needs your attention; 0 active.");
   assert.equal(result.failed[0].id, "run-failed");
-  assert.deepEqual(result.suggestedSteers, [{ label: "Review attention", href: "/api/decisions/a" }]);
+  assert.deepEqual(result.suggestedSteers, [
+    { label: "Review attention", href: "/api/decisions/a" },
+    { label: "Review failed work", href: "/api/runs?status=failed" },
+  ]);
 });
 
 test("check-in summary uses exact totals when samples are capped", () => {
