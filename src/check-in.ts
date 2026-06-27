@@ -47,7 +47,7 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
   const suggestedSteers: OwnerCheckIn["suggestedSteers"] = needsOwner.length
     ? [{ label: "Review attention", href: needsOwner[0].href || "/" }]
     : failed.length
-      ? [{ label: "Review failed work", href: `/api/runs/${encodeURIComponent(failed[0].id)}` }]
+      ? [{ label: "Review failed work", href: "/api/runs?status=failed" }]
       : openRuns.length
         ? [{ label: "Review running work", href: `/api/runs/${encodeURIComponent(openRuns[0].id)}` }]
         : jobs.length
