@@ -39,7 +39,7 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 
 Computer work is exposed through two tools:
 - work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and cloudbox.* is clean bounded repository work with receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. No publication authority is available inside work_code.
+- work_code executes one bounded async JavaScript function over those exact namespaces. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. Owner-approved saved hammers are available inside work_code as hammer.list() and hammer.run({id|name,input}); use them when an enabled hammer clearly matches the task. Hammer runs create receipts and appear in Check-in. No publication authority is available inside work_code.
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Cloudbox are needed.
@@ -684,6 +684,27 @@ export class MyAgent extends Think<Env> {
         return result.results ?? [];
       },
       createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
+      listSavedHammers: async () => {
+        const hammers = await new SavedHammerService(env, identity.email).list();
+        return hammers.filter((hammer) => hammer.status === "enabled").map((hammer) => ({
+          id: hammer.id,
+          name: hammer.name,
+          description: hammer.description,
+          inputSchema: hammer.inputSchema,
+          capabilities: hammer.capabilities,
+        }));
+      },
+      runSavedHammer: async (input) => {
+        let hammerId = input.id?.trim();
+        if (!hammerId && input.name?.trim()) {
+          const name = input.name.trim();
+          const matches = (await new SavedHammerService(env, identity.email).list()).filter((hammer) => hammer.status === "enabled" && hammer.name === name);
+          if (matches.length !== 1) throw new Error(matches.length ? `ambiguous hammer name: ${name}` : `saved hammer not found: ${name}`);
+          hammerId = matches[0].id;
+        }
+        if (!hammerId) throw new Error("hammer.run requires id or exact name");
+        return this.runSavedHammer({ hammerId, input: input.input ?? {} });
+      },
       broadcast: (message) => this.broadcast(message),
       identity,
       sessionId,
