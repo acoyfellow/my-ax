@@ -87,6 +87,7 @@ export interface DelegateParent {
   name: string;
   runAgentTool<Input, Output>(cls: typeof ReadOnlyDelegateAgent, options: { input: Input; runId: string; displayOrder: number; signal?: AbortSignal; inputPreview?: unknown }): Promise<RunAgentToolResult<Output>>;
   clearAgentToolRuns(options: { olderThan: number; status: Array<"completed" | "error" | "aborted" | "interrupted"> }): Promise<void>;
+  notifyDelegateManyComplete?(results: DelegateResult[]): Promise<void>;
 }
 
 export function createDelegateManyTool(parent: DelegateParent) {
@@ -112,6 +113,7 @@ export function createDelegateManyTool(parent: DelegateParent) {
         } while (true);
         return { runId: result.runId, taskFingerprint: taskFingerprint(task), status: result.status, summary: result.summary, output: result.output, error: result.error, attempts, label: parsed.tasks[index].label };
       }));
+      await parent.notifyDelegateManyComplete?.(results);
       await parent.clearAgentToolRuns({ olderThan: Date.now() - DELEGATE_TTL_MS, status: ["completed", "error", "aborted", "interrupted"] });
       return { results, synthesisRequired: true as const };
     },

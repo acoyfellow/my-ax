@@ -15,7 +15,7 @@ Status:
 |---|---:|---|---|
 | Check-in | ✅ | `GET /api/check-in` and MCP `my_ax_check_in` summarize unread Attention, running jobs, active run receipts, recent completion, and suggested steers without adding storage. | `src/check-in.ts`, `npm run test:check-in` |
 | Attention inbox | ✅ | D1 stores owner-scoped items with unread state, href, and optional source session. Push delivery is best effort; the row remains if push fails. | `src/routes/attention.ts`, `src/notify.ts` |
-| Completion receipts | ✅ | Normal turns can push completion while the owner is away. Recurring scheduled/manual job runs share terminalization and emit an actionable Attention receipt. | `src/agent.ts`, `src/recurring-job-run.ts` |
+| Completion receipts | ✅ | Normal turns can push completion while the owner is away. Recurring scheduled/manual job runs share terminalization and emit an actionable Attention receipt. Delegated child batches now leave an owner-visible Attention receipt when the batch terminalizes. | `src/agent.ts`, `src/recurring-job-run.ts`, `src/delegate-receipt.ts` |
 | Run receipts | 🧪 | Owner-scoped ledger for explicitly appended events. It does not automatically capture every tool call or deploy. | `src/run-receipts.ts`, `npm run test:run-receipts` |
 
 ## Conversation and Client
