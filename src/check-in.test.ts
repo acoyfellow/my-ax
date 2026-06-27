@@ -27,6 +27,7 @@ test("check-in prioritizes unread owner attention", () => {
     { key: "completedRuns", total: 0, sampleCount: 0, sampleIds: [], href: null },
   ]);
   assert.deepEqual(result.deployment, { versionId: null, versionTag: null, versionTimestamp: null });
+  assert.match(result.checkedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test("check-in steers to filtered attention when the top item has a kind", () => {
@@ -50,6 +51,16 @@ test("check-in includes the deployed worker version receipt when provided", () =
     deployment: { versionId: "version-123", versionTag: "release", versionTimestamp: "2026-06-27T23:40:00Z" },
   });
   assert.deepEqual(result.deployment, { versionId: "version-123", versionTag: "release", versionTimestamp: "2026-06-27T23:40:00Z" });
+});
+
+test("check-in exposes an authoritative checked-at timestamp", () => {
+  const result = composeOwnerCheckIn({
+    attention: [],
+    jobs: [],
+    runs: [],
+    checkedAt: "2026-06-28T01:45:00.000Z",
+  });
+  assert.equal(result.checkedAt, "2026-06-28T01:45:00.000Z");
 });
 
 test("check-in separates completed receipts from running work", () => {
