@@ -57,7 +57,7 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
       : openRuns.length
         ? [{ label: "Review running work", href: `/api/runs/${encodeURIComponent(openRuns[0].id)}` }]
         : jobs.length
-          ? [{ label: "Review recurring jobs", href: "/api/jobs" }]
+          ? [{ label: "Review active recurring jobs", href: "/api/jobs?status=active" }]
           : [{ label: "Start a conversation", href: "/" }];
   const deployment = {
     versionId: sources.deployment?.versionId ?? null,
