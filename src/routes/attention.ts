@@ -17,6 +17,30 @@ function owner(c: any): string {
   return c.get("identity").email.toLowerCase();
 }
 
+export function summarizeAttentionItems(items: AttentionRow[]) {
+  const unreadItems = items.filter((item) => item.seen_at === null);
+  const byKind = new Map<string, { kind: string; unread: number; latest_at: string | null }>();
+  const bySession = new Map<string, { session_id: string | null; unread: number; latest_at: string | null }>();
+  for (const item of unreadItems) {
+    const kind = item.kind || "unknown";
+    const kindSummary = byKind.get(kind) ?? { kind, unread: 0, latest_at: null };
+    kindSummary.unread += 1;
+    kindSummary.latest_at = !kindSummary.latest_at || item.created_at > kindSummary.latest_at ? item.created_at : kindSummary.latest_at;
+    byKind.set(kind, kindSummary);
+
+    const sessionKey = item.session_id ?? "__none__";
+    const sessionSummary = bySession.get(sessionKey) ?? { session_id: item.session_id, unread: 0, latest_at: null };
+    sessionSummary.unread += 1;
+    sessionSummary.latest_at = !sessionSummary.latest_at || item.created_at > sessionSummary.latest_at ? item.created_at : sessionSummary.latest_at;
+    bySession.set(sessionKey, sessionSummary);
+  }
+  const sortSummary = <T extends { unread: number; latest_at: string | null }>(values: T[]) => values.sort((a, b) => b.unread - a.unread || String(b.latest_at ?? "").localeCompare(String(a.latest_at ?? "")));
+  return {
+    byKind: sortSummary([...byKind.values()]),
+    bySession: sortSummary([...bySession.values()]).slice(0, 10),
+  };
+}
+
 export function normalizeAttentionSeenIds(ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];
   return [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
@@ -30,7 +54,8 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
         FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 20`).bind(email).all<AttentionRow>(),
       c.env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>(),
     ]);
-    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { unread: Number(unread?.count ?? 0), items: items.results ?? [] }, next_actions: [] });
+    const rows = items.results ?? [];
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { unread: Number(unread?.count ?? 0), items: rows, summary: summarizeAttentionItems(rows) }, next_actions: [] });
   });
 
   app.delete("/api/attention", async (c) => {
