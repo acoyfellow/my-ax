@@ -47,18 +47,20 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
       ? `${totals.failedRuns} failed run${totals.failedRuns === 1 ? " needs" : "s need"} review; ${activeTotal} active.`
       : `${activeTotal} active; ${totals.completedRuns} recently completed.`;
   const attentionKind = needsOwner.find((item) => item.kind)?.kind ?? null;
-  const suggestedSteers: OwnerCheckIn["suggestedSteers"] = needsOwner.length
-    ? [{
+  const suggestedSteers: OwnerCheckIn["suggestedSteers"] = [];
+  const addSteer = (steer: OwnerCheckIn["suggestedSteers"][number]) => {
+    if (!suggestedSteers.some((existing) => existing.href === steer.href)) suggestedSteers.push(steer);
+  };
+  if (needsOwner.length) {
+    addSteer({
       label: attentionKind ? `Review ${attentionKind} attention` : "Review attention",
       href: attentionKind ? `/api/attention?kind=${encodeURIComponent(attentionKind)}` : (needsOwner[0].href || "/"),
-    }]
-    : failed.length
-      ? [{ label: "Review failed work", href: "/api/runs?status=failed" }]
-      : openRuns.length
-        ? [{ label: "Review running work", href: `/api/runs/${encodeURIComponent(openRuns[0].id)}` }]
-        : jobs.length
-          ? [{ label: "Review active recurring jobs", href: "/api/jobs?status=active" }]
-          : [{ label: "Start a conversation", href: "/" }];
+    });
+  }
+  if (totals.failedRuns > 0) addSteer({ label: "Review failed work", href: "/api/runs?status=failed" });
+  if (openRuns.length) addSteer({ label: "Review running work", href: `/api/runs/${encodeURIComponent(openRuns[0].id)}` });
+  if (totals.activeJobs > 0) addSteer({ label: "Review active recurring jobs", href: "/api/jobs?status=active" });
+  if (!suggestedSteers.length) addSteer({ label: "Start a conversation", href: "/" });
   const deployment = {
     versionId: sources.deployment?.versionId ?? null,
     versionTag: sources.deployment?.versionTag ?? null,
