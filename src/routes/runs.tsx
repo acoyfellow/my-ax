@@ -104,6 +104,16 @@ function claimSummary(events: ParsedRunEvent[]) {
   ];
 }
 
+const RUN_STATUSES = ["open", "running", "completed", "failed", "aborted"] as const;
+
+export function parseRunListQuery(url: URL) {
+  const limitRaw = parseInt(url.searchParams.get("limit") || "25", 10);
+  const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 25));
+  const statusParam = url.searchParams.get("status")?.trim() || null;
+  const status = statusParam && (RUN_STATUSES as readonly string[]).includes(statusParam) ? statusParam as RunStatus : null;
+  return { limit, status, invalidStatus: statusParam !== null && status === null ? statusParam : null };
+}
+
 function statusClass(status: string) {
   if (status === "completed") return "text-good border-good/30 bg-good/10";
   if (status === "failed" || status === "aborted") return "text-bad border-bad/30 bg-bad/10";
@@ -151,12 +161,16 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
   app.get("/api/runs", async (c) => {
     const identity = c.get("identity");
     const url = new URL(c.req.url);
-    const limitRaw = parseInt(url.searchParams.get("limit") || "25", 10);
-    const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 25));
-    const rows = await c.env.DB.prepare(
-      "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?",
-    ).bind(identity.email, limit).all();
-    return c.json(jsonResponse("GET /api/runs", { runs: rows.results ?? [], limit }));
+    const { limit, status, invalidStatus } = parseRunListQuery(url);
+    if (invalidStatus) return c.json(errorResponse("GET /api/runs", "BAD_RUN_STATUS", `unsupported run status: ${invalidStatus}`), 400);
+    const rows = status
+      ? await c.env.DB.prepare(
+        "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT ?",
+      ).bind(identity.email, status, limit).all()
+      : await c.env.DB.prepare(
+        "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?",
+      ).bind(identity.email, limit).all();
+    return c.json(jsonResponse("GET /api/runs", { runs: rows.results ?? [], limit, status }));
   });
 
   app.get("/api/runs/:id", async (c) => {

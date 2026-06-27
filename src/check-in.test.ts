@@ -33,7 +33,7 @@ test("check-in surfaces failed terminal runs before ordinary active work", () =>
   assert.equal(result.summary, "1 failed run needs review; 2 active.");
   assert.equal(result.failed[0].id, "run-failed");
   assert.equal(result.running.runs[0].id, "run-1");
-  assert.deepEqual(result.suggestedSteers, [{ label: "Review failed work", href: "/api/runs/run-failed" }]);
+  assert.deepEqual(result.suggestedSteers, [{ label: "Review failed work", href: "/api/runs?status=failed" }]);
 });
 
 test("unread attention still outranks failed run steering", () => {
