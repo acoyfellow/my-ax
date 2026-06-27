@@ -40,11 +40,12 @@
   let dialogEl = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
   let settingsQuery = $state("");
-  let activeSection = $state<"general" | "capabilities" | "jobs" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "hammers" | "jobs" | "connections">("general");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "Tools, memory, and boundaries" },
+    { id: "hammers" as const, label: "Hammers", hint: "Saved Code Mode recipes" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled prompts and history" },
     { id: "connections" as const, label: "Connections", hint: "Health, computers, MCP servers" },
   ];
@@ -55,6 +56,7 @@
       summary: "Built in and available without another connection.",
       items: [
         { name: "Workspace", tools: "work_search · work_code", description: "Find, read, write, search, and run bounded code or processes in the persistent owner workspace." },
+        { name: "Saved hammers", tools: "hammer.list · hammer.run", description: "Owner-approved work_code recipes are available inside Code Mode and every hammer run creates a receipt." },
         { name: "Public browser", tools: "browser_open", description: "Open and inspect public web pages in hosted Chrome, including a screenshot and replay. It has no personal browser cookies." },
         { name: "Conversation recall", tools: "search_conversations", description: "Search the owner’s earlier My AX conversation index. Conversation-local memory is also retained and compacted by Think." },
         { name: "Human decisions", tools: "ask_user", description: "Pause for one explicit multiple-choice decision and return the answer to the source conversation." },
@@ -88,6 +90,7 @@
     lastActiveElement = document.activeElement as HTMLElement | null;
     open = true;
     refreshJobs();
+    refreshHammers();
     tick().then(() => {
       if (dialogEl && !dialogEl.open) dialogEl.showModal();
       searchInput?.focus();
@@ -390,6 +393,121 @@
     jobPrompt = "";
     jobsStatusText = "Job added.";
     await refreshJobs();
+  }
+
+  // ── Saved hammers ──────────────────────────────────────────────────
+  interface Hammer {
+    id: string;
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+    capabilities: string[];
+    sourceRunId?: string | null;
+    status: "enabled" | "disabled";
+    updatedAt?: string;
+  }
+  let hammers = $state<Hammer[]>([]);
+  let hammerStatusText = $state("");
+  let hammerBusy = $state<Record<string, boolean>>({});
+  let editingHammerId = $state<string | null>(null);
+  let hammerName = $state("");
+  let hammerDescription = $state("");
+  let hammerInputSchema = $state('{"type":"object","properties":{}}');
+  let hammerCode = $state("");
+  let hammerCapabilities = $state("workspace.read");
+
+  async function refreshHammers() {
+    try {
+      const response = await fetch("/api/hammers", { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Hammers unavailable.");
+      hammers = body?.result?.hammers ?? [];
+    } catch (err: any) {
+      hammerStatusText = err?.message || "Hammers unavailable.";
+    }
+  }
+  function resetHammerForm() {
+    editingHammerId = null;
+    hammerName = "";
+    hammerDescription = "";
+    hammerInputSchema = '{"type":"object","properties":{}}';
+    hammerCode = "";
+    hammerCapabilities = "workspace.read";
+  }
+  async function editHammer(hammer: Hammer) {
+    editingHammerId = hammer.id;
+    hammerName = hammer.name;
+    hammerDescription = hammer.description;
+    hammerInputSchema = JSON.stringify(hammer.inputSchema ?? { type: "object", properties: {} }, null, 2);
+    hammerCode = "Loading…";
+    hammerCapabilities = hammer.capabilities.join("\n");
+    try {
+      const response = await fetch(`/api/hammers/${encodeURIComponent(hammer.id)}`, { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Could not load hammer.");
+      hammerCode = body.result.hammer.code ?? "";
+    } catch (err: any) {
+      hammerStatusText = err?.message || "Could not load hammer.";
+    }
+  }
+  function hammerPayload() {
+    let inputSchema: Record<string, unknown>;
+    try { inputSchema = JSON.parse(hammerInputSchema); }
+    catch { throw new Error("Input schema must be valid JSON."); }
+    return {
+      name: hammerName.trim(),
+      description: hammerDescription.trim(),
+      inputSchema,
+      code: hammerCode.trim(),
+      capabilities: hammerCapabilities.split(/[\n,]/).map((cap) => cap.trim()).filter(Boolean),
+    };
+  }
+  async function submitHammer(e: SubmitEvent) {
+    e.preventDefault();
+    try {
+      const payload = hammerPayload();
+      const url = editingHammerId ? `/api/hammers/${encodeURIComponent(editingHammerId)}` : "/api/hammers";
+      const response = await fetch(url, { method: editingHammerId ? "PATCH" : "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Could not save hammer.");
+      hammerStatusText = editingHammerId ? "Hammer updated." : "Hammer saved.";
+      resetHammerForm();
+      await refreshHammers();
+    } catch (err: any) {
+      hammerStatusText = err?.message || "Could not save hammer.";
+    }
+  }
+  async function hammerAction(id: string, operation: "status" | "delete" | "run", request: () => Promise<Response>, success?: string) {
+    const key = `${id}:${operation}`;
+    if (hammerBusy[key]) return;
+    hammerBusy[key] = true;
+    try {
+      const response = await request();
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error?.message || `Hammer ${operation} failed.`);
+      hammerStatusText = success ?? "Hammer updated.";
+      await refreshHammers();
+    } catch (err: any) {
+      hammerStatusText = err?.message || `Could not ${operation} hammer.`;
+    } finally {
+      hammerBusy[key] = false;
+    }
+  }
+  async function toggleHammer(hammer: Hammer) {
+    await hammerAction(hammer.id, "status", () => fetch(`/api/hammers/${encodeURIComponent(hammer.id)}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: hammer.status === "enabled" ? "disabled" : "enabled" }) }));
+  }
+  async function deleteHammer(id: string) {
+    if (!confirm("Delete this saved hammer? Existing run receipts stay, but Code Mode can no longer use it.")) return;
+    await hammerAction(id, "delete", () => fetch(`/api/hammers/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }), "Hammer deleted.");
+    if (editingHammerId === id) resetHammerForm();
+  }
+  async function runHammer(hammer: Hammer) {
+    const sessionId = localStorage.getItem(SESSION_KEY);
+    if (!sessionId) {
+      hammerStatusText = "Start a conversation before running a hammer.";
+      return;
+    }
+    await hammerAction(hammer.id, "run", () => fetch(`/api/hammers/${encodeURIComponent(hammer.id)}/run`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, input: {} }) }), "Hammer run queued; Check-in will show the receipt.");
   }
 
   // ── Model picker + catalog search ──────────────────────────────────
@@ -700,6 +818,7 @@
         <header>
           <h3 class="text-sm font-semibold text-fg">Agent capabilities</h3>
           <p class="mt-1 text-xs leading-relaxed text-fg-mut">The model receives callable capabilities, not your raw credentials. Availability can still depend on deployment configuration and provider health.</p>
+          <a href="/capabilities" class="mt-2 inline-flex rounded-md border border-line px-3 py-2 text-xs font-medium text-fg-mut hover:border-brand/60 hover:text-fg">Open scoped capability lab</a>
         </header>
         {#each capabilityGroups as group}
           <section class="rounded-lg border border-line bg-bg">
@@ -728,8 +847,62 @@
             <li>• Machine methods run with the companion OS account’s authority. Cloudbox and MCP retain their own configured authority.</li>
             <li>• Delegated children are model-only, depth one, and cannot use your application tools or connections.</li>
             <li>• Work Code Mode has no ambient secrets, database, network, or filesystem access; only named callbacks are callable.</li>
+            <li>• The /capabilities lab is a scoped-share proof: pasted URLs become exact read handles; it is not a broad internal search grant.</li>
           </ul>
         </section>
+      </div>
+
+      <div hidden={activeSection !== "hammers"} class="space-y-4">
+        <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Saved hammers</span>
+          <p class="mb-3 text-xs text-fg-mut">
+            Owner-approved Code Mode recipes. Enabled hammers appear inside <code>work_code</code> as <code>hammer.list()</code> and <code>hammer.run(...)</code>; every run creates a receipt.
+          </p>
+          <div class="grid gap-2">
+            {#if hammers.length === 0}
+              <p class="text-xs text-fg-mut">No saved hammers yet. Promote a successful work_code run, or create one below.</p>
+            {:else}
+              {#each hammers as hammer (hammer.id)}
+                <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
+                  <div class="flex min-w-0 items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <strong class="break-words text-sm text-fg">{hammer.name}</strong>
+                      <p class="mt-1 text-fg-mut line-clamp-2">{hammer.description}</p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{hammer.status}</span>
+                  </div>
+                  <div class="mt-2 flex flex-wrap gap-1">
+                    {#each hammer.capabilities as capability}
+                      <code class="rounded-full bg-bg px-2 py-1 text-[10px] text-brand">{capability}</code>
+                    {/each}
+                  </div>
+                  <div class="mt-3 grid grid-cols-4 gap-2">
+                    <button type="button" onclick={() => runHammer(hammer)} disabled={hammerBusy[`${hammer.id}:run`] || hammer.status !== "enabled"} aria-busy={hammerBusy[`${hammer.id}:run`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">Run</button>
+                    <button type="button" onclick={() => editHammer(hammer)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">Edit</button>
+                    <button type="button" onclick={() => toggleHammer(hammer)} disabled={hammerBusy[`${hammer.id}:status`]} aria-busy={hammerBusy[`${hammer.id}:status`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">
+                      {hammer.status === "enabled" ? "Disable" : "Enable"}
+                    </button>
+                    <button type="button" onclick={() => deleteHammer(hammer.id)} disabled={hammerBusy[`${hammer.id}:delete`]} aria-busy={hammerBusy[`${hammer.id}:delete`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-50">Delete</button>
+                  </div>
+                </article>
+              {/each}
+            {/if}
+          </div>
+          <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{hammerStatusText}</p>
+        </section>
+
+        <form onsubmit={submitHammer} class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4 grid gap-2">
+          <div class="flex items-center justify-between gap-3">
+            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingHammerId ? "Edit hammer" : "Create hammer"}</span>
+            {#if editingHammerId}<button type="button" onclick={resetHammerForm} class="text-xs text-fg-mut hover:text-fg">Cancel edit</button>{/if}
+          </div>
+          <input type="text" maxlength={64} placeholder="name_like_this" bind:value={hammerName} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
+          <textarea rows={2} maxlength={500} placeholder="Description" bind:value={hammerDescription} class="w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <textarea rows={4} placeholder="return input;" bind:value={hammerCode} class="font-mono w-full min-h-[112px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <textarea rows={3} placeholder="Input schema JSON" bind:value={hammerInputSchema} class="font-mono w-full min-h-[88px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <textarea rows={2} placeholder="workspace.read" bind:value={hammerCapabilities} class="font-mono w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+          <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">{editingHammerId ? "Update hammer" : "Save hammer"}</button>
+        </form>
       </div>
 
       <div hidden={activeSection !== "jobs"}>

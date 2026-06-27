@@ -47,6 +47,18 @@ export function registerHammerRoutes(app: Hono<AppEnv>) {
     catch (error) { return failure(c, command, error); }
   });
 
+  app.patch("/api/hammers/:id", async (c) => {
+    const command = `PATCH /api/hammers/${c.req.param("id")}`;
+    try { return ok(c, command, { hammer: await service(c).update(c.req.param("id"), await body(c)) }); }
+    catch (error) { return failure(c, command, error); }
+  });
+
+  app.delete("/api/hammers/:id", async (c) => {
+    const command = `DELETE /api/hammers/${c.req.param("id")}`;
+    try { return ok(c, command, await service(c).delete(c.req.param("id"))); }
+    catch (error) { return failure(c, command, error); }
+  });
+
   app.post("/api/hammers/:id/run", async (c) => {
     const command = `POST /api/hammers/${c.req.param("id")}/run`;
     try {
