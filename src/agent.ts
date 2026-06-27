@@ -246,7 +246,11 @@ export class MyAgent extends Think<Env> {
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-start-${crypto.randomUUID()}`, identity.email.toLowerCase(), now, actor, "hammer.started", JSON.stringify({ hammerId: hammer.id, name: hammer.name, input: body.input ?? {} }), null).run();
     const code = `async () => { const input = ${JSON.stringify(body.input ?? {})};\n${hammer.code}\n}`;
-    const result = await executeWorkCode(code, this.buildToolContext());
+    const result = await executeWorkCode(code, {
+      ...this.buildToolContext(),
+      allowedWorkCapabilities: JSON.parse(hammer.capabilities_json),
+      exposeSavedHammers: false,
+    });
     const terminal = result.ok ? "completed" : "failed";
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-${terminal}-${crypto.randomUUID()}`, identity.email.toLowerCase(), new Date().toISOString(), actor, `hammer.${terminal}`, JSON.stringify({ hammerId: hammer.id, name: hammer.name, ok: result.ok }), JSON.stringify(result)).run();

@@ -15,3 +15,12 @@ test("work_code exposes owner-approved saved hammers as a small hammer namespace
   assert.match(agent, /listSavedHammers: async \(\) =>/);
   assert.match(agent, /runSavedHammer: async \(input\) =>/);
 });
+
+test("saved hammer execution enforces declared capabilities and disables nested hammer calls", () => {
+  assert.match(source, /function restrictByCapabilities/);
+  assert.match(source, /allowedWorkCapabilities/);
+  assert.match(source, /capability not granted/);
+  assert.match(source, /ctx\.exposeSavedHammers !== false/);
+  assert.match(agent, /allowedWorkCapabilities: JSON\.parse\(hammer\.capabilities_json\)/);
+  assert.match(agent, /exposeSavedHammers: false/);
+});

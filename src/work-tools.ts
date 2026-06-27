@@ -54,6 +54,21 @@ function checkedWorkspaceProvider(ctx: ToolContext) {
   return fns;
 }
 
+function restrictByCapabilities(
+  where: WorkCall["where"],
+  fns: Record<string, (input: any) => Promise<unknown>>,
+  allowedCapabilities?: string[],
+) {
+  if (allowedCapabilities === undefined) return fns;
+  const allowed = new Set(allowedCapabilities);
+  return Object.fromEntries(Object.entries(fns).map(([method, invoke]) => {
+    const capability = `${where}.${method}`;
+    return [method, allowed.has(capability) ? invoke : async () => {
+      throw new Error(`capability not granted: ${capability}`);
+    }];
+  }));
+}
+
 function instrument(
   where: WorkCall["where"],
   fns: Record<string, (input: any) => Promise<unknown>>,
@@ -107,10 +122,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   // Use one RPC dispatcher and construct the three public namespaces in the
   // trusted generated module. This avoids cross-provider dispatcher loss
   // while keeping the raw bridge and host bindings out of guest input.
-  const workspaceFns = instrument("workspace", checkedWorkspaceProvider(ctx), calls);
-  const machineFns = instrument("machine", machine.fns, calls);
-  const cloudboxFns = instrument("cloudbox", cloudbox.fns, calls);
-  const hammerFns = ctx.listSavedHammers && ctx.runSavedHammer ? instrument("hammer", {
+  const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
+  const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
+  const cloudboxFns = instrument("cloudbox", restrictByCapabilities("cloudbox", cloudbox.fns, ctx.allowedWorkCapabilities), calls);
+  const hammerFns = ctx.exposeSavedHammers !== false && ctx.listSavedHammers && ctx.runSavedHammer ? instrument("hammer", {
     list: async () => ctx.listSavedHammers!(),
     run: async (input: any) => ctx.runSavedHammer!({
       id: typeof input?.id === "string" ? input.id : undefined,
