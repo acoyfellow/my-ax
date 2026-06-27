@@ -439,6 +439,42 @@
   right: max(10px, env(safe-area-inset-right));
   z-index: 3;
 }
+/* Always-visible, thumb-reachable exit in fullscreen. Sits above the iframe so
+   it works even when the sandboxed artifact has keyboard focus (Escape can't
+   reach the host window) and on touch devices with no Escape key. */
+.svelte-artifact-exit {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 2147483647;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 17, 23, 0.82);
+  color: #fff;
+  font: 600 14px/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.svelte-artifact-exit:hover,
+.svelte-artifact-exit:active {
+  background: rgba(40, 44, 58, 0.95);
+}
+.svelte-artifact-exit svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
 .svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-frame {
   width: 100vw;
   height: 100dvh;
