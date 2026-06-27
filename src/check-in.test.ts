@@ -19,12 +19,12 @@ test("check-in prioritizes unread owner attention", () => {
     { label: "Review active recurring jobs", href: "/api/jobs?status=active" },
   ]);
   assert.deepEqual(result.totals, { attention: 1, activeJobs: 1, openRuns: 1, completedRuns: 0, failedRuns: 0 });
-  assert.deepEqual(result.buckets.map(({ key, total, sampleCount, steer }) => ({ key, total, sampleCount, href: steer?.href ?? null })), [
-    { key: "attention", total: 1, sampleCount: 1, href: "/api/decisions/a" },
-    { key: "failedRuns", total: 0, sampleCount: 0, href: null },
-    { key: "openRuns", total: 1, sampleCount: 1, href: "/api/runs?status=running" },
-    { key: "activeJobs", total: 1, sampleCount: 1, href: "/api/jobs?status=active" },
-    { key: "completedRuns", total: 0, sampleCount: 0, href: null },
+  assert.deepEqual(result.buckets.map(({ key, total, sampleCount, sampleIds, steer }) => ({ key, total, sampleCount, sampleIds, href: steer?.href ?? null })), [
+    { key: "attention", total: 1, sampleCount: 1, sampleIds: ["a"], href: "/api/decisions/a" },
+    { key: "failedRuns", total: 0, sampleCount: 0, sampleIds: [], href: null },
+    { key: "openRuns", total: 1, sampleCount: 1, sampleIds: ["run-1"], href: "/api/runs?status=running" },
+    { key: "activeJobs", total: 1, sampleCount: 1, sampleIds: ["job-1"], href: "/api/jobs?status=active" },
+    { key: "completedRuns", total: 0, sampleCount: 0, sampleIds: [], href: null },
   ]);
   assert.deepEqual(result.deployment, { versionId: null, versionTag: null, versionTimestamp: null });
 });

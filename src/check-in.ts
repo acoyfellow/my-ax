@@ -7,7 +7,7 @@ export interface CheckInSources {
 }
 
 type CheckInSteer = { label: string; href: string };
-type CheckInBucket = { key: "attention" | "failedRuns" | "openRuns" | "activeJobs" | "completedRuns"; label: string; total: number; sampleCount: number; steer: CheckInSteer | null };
+type CheckInBucket = { key: "attention" | "failedRuns" | "openRuns" | "activeJobs" | "completedRuns"; label: string; total: number; sampleCount: number; sampleIds: string[]; steer: CheckInSteer | null };
 
 export interface OwnerCheckIn {
   summary: string;
@@ -82,11 +82,11 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
   }
   if (!suggestedSteers.length) addSteer({ label: "Start a conversation", href: "/" });
   const buckets: CheckInBucket[] = [
-    { key: "attention", label: "Attention", total: totals.attention, sampleCount: needsOwner.length, steer: steersByKey.attention ?? null },
-    { key: "failedRuns", label: "Failed runs", total: totals.failedRuns, sampleCount: failed.length, steer: steersByKey.failedRuns ?? null },
-    { key: "openRuns", label: "Open/running runs", total: totals.openRuns, sampleCount: openRuns.length, steer: steersByKey.openRuns ?? null },
-    { key: "activeJobs", label: "Active recurring jobs", total: totals.activeJobs, sampleCount: jobs.length, steer: steersByKey.activeJobs ?? null },
-    { key: "completedRuns", label: "Recently completed runs", total: totals.completedRuns, sampleCount: completed.length, steer: null },
+    { key: "attention", label: "Attention", total: totals.attention, sampleCount: needsOwner.length, sampleIds: needsOwner.map((item) => item.id), steer: steersByKey.attention ?? null },
+    { key: "failedRuns", label: "Failed runs", total: totals.failedRuns, sampleCount: failed.length, sampleIds: failed.map((run) => run.id), steer: steersByKey.failedRuns ?? null },
+    { key: "openRuns", label: "Open/running runs", total: totals.openRuns, sampleCount: openRuns.length, sampleIds: openRuns.map((run) => run.id), steer: steersByKey.openRuns ?? null },
+    { key: "activeJobs", label: "Active recurring jobs", total: totals.activeJobs, sampleCount: jobs.length, sampleIds: jobs.map((job) => job.id), steer: steersByKey.activeJobs ?? null },
+    { key: "completedRuns", label: "Recently completed runs", total: totals.completedRuns, sampleCount: completed.length, sampleIds: completed.map((run) => run.id), steer: null },
   ];
   const deployment = {
     versionId: sources.deployment?.versionId ?? null,
