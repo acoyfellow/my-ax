@@ -14,6 +14,7 @@ test("check-in prioritizes unread owner attention", () => {
   assert.equal(result.summary, "1 item needs your attention; 2 active.");
   assert.equal(result.needsOwner[0].id, "a");
   assert.deepEqual(result.suggestedSteers, [{ label: "Review attention", href: "/api/decisions/a" }]);
+  assert.deepEqual(result.totals, { attention: 1, activeJobs: 1, openRuns: 1, completedRuns: 0, failedRuns: 0 });
 });
 
 test("check-in separates completed receipts from running work", () => {
@@ -45,4 +46,36 @@ test("unread attention still outranks failed run steering", () => {
   assert.equal(result.summary, "1 item needs your attention; 0 active.");
   assert.equal(result.failed[0].id, "run-failed");
   assert.deepEqual(result.suggestedSteers, [{ label: "Review attention", href: "/api/decisions/a" }]);
+});
+
+test("check-in summary uses exact totals when samples are capped", () => {
+  const attention = Array.from({ length: 10 }, (_, i) => ({
+    id: `a-${i}`,
+    title: "Needs review",
+    body: "Receipt",
+    href: `/attention/${i}`,
+    created_at: "2026-06-24",
+  }));
+  const result = composeOwnerCheckIn({
+    attention,
+    jobs: [job],
+    runs: [run],
+    totals: { attention: 14, activeJobs: 2, openRuns: 3, completedRuns: 7, failedRuns: 4 },
+  });
+  assert.equal(result.needsOwner.length, 10);
+  assert.equal(result.summary, "14 items need your attention; 5 active.");
+  assert.deepEqual(result.totals, { attention: 14, activeJobs: 2, openRuns: 3, completedRuns: 7, failedRuns: 4 });
+});
+
+test("check-in failed summary uses exact failed totals when the failed sample is capped", () => {
+  const failedRuns = Array.from({ length: 10 }, (_, i) => ({ ...run, id: `failed-${i}`, status: "failed" }));
+  const result = composeOwnerCheckIn({
+    attention: [],
+    jobs: [],
+    runs: failedRuns,
+    totals: { failedRuns: 12 },
+  });
+  assert.equal(result.failed.length, 10);
+  assert.equal(result.summary, "12 failed runs need review; 0 active.");
+  assert.equal(result.totals.failedRuns, 12);
 });
