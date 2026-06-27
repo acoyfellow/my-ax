@@ -17,6 +17,9 @@ function owner(c: any): string {
   return c.get("identity").email.toLowerCase();
 }
 
+type AttentionKindSummary = { kind: string; unread: number; latest_at: string | null };
+type AttentionSessionSummary = { session_id: string | null; unread: number; latest_at: string | null };
+
 export function summarizeAttentionItems(items: AttentionRow[]) {
   const unreadItems = items.filter((item) => item.seen_at === null);
   const byKind = new Map<string, { kind: string; unread: number; latest_at: string | null }>();
@@ -41,6 +44,14 @@ export function summarizeAttentionItems(items: AttentionRow[]) {
   };
 }
 
+export function parseAttentionKindSummaryRows(rows: Array<{ kind: string | null; unread: number; latest_at: string | null }>): AttentionKindSummary[] {
+  return rows.map((row) => ({ kind: row.kind || "unknown", unread: Number(row.unread ?? 0), latest_at: row.latest_at ?? null }));
+}
+
+export function parseAttentionSessionSummaryRows(rows: Array<{ session_id: string | null; unread: number; latest_at: string | null }>): AttentionSessionSummary[] {
+  return rows.map((row) => ({ session_id: row.session_id ?? null, unread: Number(row.unread ?? 0), latest_at: row.latest_at ?? null }));
+}
+
 export function normalizeAttentionSeenIds(ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];
   return [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
@@ -49,13 +60,27 @@ export function normalizeAttentionSeenIds(ids: unknown): string[] {
 export function registerAttentionRoutes(app: Hono<AppEnv>) {
   app.get("/api/attention", async (c) => {
     const email = owner(c);
-    const [items, unread] = await Promise.all([
+    const [items, unread, kindSummary, sessionSummary] = await Promise.all([
       c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at
         FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 20`).bind(email).all<AttentionRow>(),
       c.env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>(),
+      c.env.DB.prepare(`SELECT kind, COUNT(*) AS unread, MAX(created_at) AS latest_at
+        FROM attention_items WHERE owner_email = ? AND seen_at IS NULL
+        GROUP BY kind ORDER BY unread DESC, latest_at DESC LIMIT 20`).bind(email).all<{ kind: string | null; unread: number; latest_at: string | null }>(),
+      c.env.DB.prepare(`SELECT session_id, COUNT(*) AS unread, MAX(created_at) AS latest_at
+        FROM attention_items WHERE owner_email = ? AND seen_at IS NULL
+        GROUP BY session_id ORDER BY unread DESC, latest_at DESC LIMIT 10`).bind(email).all<{ session_id: string | null; unread: number; latest_at: string | null }>(),
     ]);
     const rows = items.results ?? [];
-    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { unread: Number(unread?.count ?? 0), items: rows, summary: summarizeAttentionItems(rows) }, next_actions: [] });
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: {
+      unread: Number(unread?.count ?? 0),
+      items: rows,
+      summary: {
+        byKind: parseAttentionKindSummaryRows(kindSummary.results ?? []),
+        bySession: parseAttentionSessionSummaryRows(sessionSummary.results ?? []),
+        sample: summarizeAttentionItems(rows),
+      },
+    }, next_actions: [] });
   });
 
   app.delete("/api/attention", async (c) => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeAttentionSeenIds, summarizeAttentionItems } from "./attention";
+import { normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("normalizeAttentionSeenIds keeps unique UUIDs in request order", () => {
   const one = "11111111-1111-4111-8111-111111111111";
@@ -50,4 +50,24 @@ test("summarizeAttentionItems caps session groups", () => {
     seen_at: null,
   }));
   assert.equal(summarizeAttentionItems(items).bySession.length, 10);
+});
+
+test("parseAttentionKindSummaryRows normalizes exact grouped SQL rows", () => {
+  assert.deepEqual(parseAttentionKindSummaryRows([
+    { kind: "session.update", unread: 12, latest_at: "2026-06-27 21:15:42" },
+    { kind: null, unread: 2, latest_at: null },
+  ]), [
+    { kind: "session.update", unread: 12, latest_at: "2026-06-27 21:15:42" },
+    { kind: "unknown", unread: 2, latest_at: null },
+  ]);
+});
+
+test("parseAttentionSessionSummaryRows normalizes exact grouped SQL rows", () => {
+  assert.deepEqual(parseAttentionSessionSummaryRows([
+    { session_id: "s1", unread: 3, latest_at: "2026-06-27 21:15:42" },
+    { session_id: null, unread: 1, latest_at: null },
+  ]), [
+    { session_id: "s1", unread: 3, latest_at: "2026-06-27 21:15:42" },
+    { session_id: null, unread: 1, latest_at: null },
+  ]);
 });
