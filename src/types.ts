@@ -137,7 +137,11 @@ export interface ToolContext {
   searchConversations: (query: string, limit?: number) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
   /** Compile and persist one owner-scoped Svelte artifact attached to this conversation. */
   createSvelteArtifact: (input: { title: string; source: string }) => Promise<{ kind: "svelte-artifact"; artifactId: string; title: string; src: string; sourceHash: string }>;
-  /** Enabled owner-approved saved hammers exposed to work_code as hammer.list/run. */
+  /** Optional saved-recipe execution guard. Undefined means unrestricted normal Code Mode. */
+  allowedWorkCapabilities?: string[];
+  /** Disabled while running a saved hammer so saved hammers cannot recursively call saved hammers. */
+  exposeSavedHammers?: boolean;
+  /** Enabled owner-approved saved hammers exposed to normal work_code as hammer.list/run. */
   listSavedHammers?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[] }>>;
   runSavedHammer?: (input: { id?: string; name?: string; input?: Record<string, unknown> }) => Promise<unknown>;
   broadcast: (msg: string) => void;
