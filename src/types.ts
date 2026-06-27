@@ -139,11 +139,11 @@ export interface ToolContext {
   createSvelteArtifact: (input: { title: string; source: string }) => Promise<{ kind: "svelte-artifact"; artifactId: string; title: string; src: string; sourceHash: string }>;
   /** Optional saved-recipe execution guard. Undefined means unrestricted normal Code Mode. */
   allowedWorkCapabilities?: string[];
-  /** Disabled while running a saved hammer so saved hammers cannot recursively call saved hammers. */
-  exposeSavedHammers?: boolean;
-  /** Enabled owner-approved saved hammers exposed to normal work_code as hammer.list/run. */
-  listSavedHammers?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[] }>>;
-  runSavedHammer?: (input: { id?: string; name?: string; input?: Record<string, unknown> }) => Promise<unknown>;
+  /** Disabled while running a saved recipe so saved recipes cannot recursively call saved recipes. */
+  exposeSavedRecipes?: boolean;
+  /** Enabled owner-approved saved recipes exposed to normal work_code as recipe.list/run. */
+  listSavedRecipes?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[] }>>;
+  runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown> }) => Promise<unknown>;
   broadcast: (msg: string) => void;
 
   // Legacy in-process connector bridge surfaces retained for Settings

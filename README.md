@@ -51,7 +51,7 @@ Code Mode has no direct database, secret, or network bindings. Its allowlisted s
 |---|---|
 | Delegation | At most 2 concurrent children, depth 1, 8 model/tool-loop steps each, and a 120s timeout. Children receive no application, MCP, Browser, Machine, or delegation tools; they still incur model-provider calls and create retained records. The parent retries once only after a stopped platform interruption. Child results have no guaranteed one-hour deletion: a later delegation opportunistically clears older terminal runs. The UI shows a terminal snapshot, not live progress, cancel, or drill-in. |
 | Recurring jobs | At most 10 active jobs per owner. Cadence is 60 seconds to 30 days; names are 200 characters and prompts 4,000. D1 drives the UI while the native scheduler drives execution, and they can disagree. There is no automatic repair; if state drifts, pause/delete and recreate the job. |
-| Work Code Mode | Generated source is limited to 32 KiB and each Code Mode execution has a 60s wall-clock limit. Saved hammers are owner-approved persisted `work_code` recipes with explicit capabilities and run receipts; they are not a generic extension marketplace. Confinement does not reduce the authority of an allowlisted callback. |
+| Work Code Mode | Generated source is limited to 32 KiB and each Code Mode execution has a 60s wall-clock limit. Saved recipes are owner-approved persisted `work_code` recipes with explicit capabilities and run receipts; they are not a generic extension marketplace. Confinement does not reduce the authority of an allowlisted callback. |
 | Workspace | All conversations for one owner share `/home/user`. After a workspace mutation capability runs, My AX attempts an R2 snapshot. Recent writes can be lost, and concurrent conversations can edit the same files without a merge coordinator. |
 | Machine | Commands run as the OS account hosting the outbound companion, with that account's filesystem, process, and network permissions. My AX adds no privilege separation. |
 | Cloudbox | The adapter can create a run for a public repository, modify its checkout, and execute commands. My AX provides no repository publishing credential; commands retain whatever network authority Cloudbox permits. |
@@ -126,7 +126,7 @@ src/check-in.ts       owner-scoped check-in read model
 src/jobs.ts           native recurring schedules
 src/job-service.ts    owner-scoped job CRUD and evidence
 src/recurring-job-run.ts shared job terminal state and owner receipts
-src/saved-hammers.ts  owner-approved reusable work_code recipes
+src/saved-recipes.ts  owner-approved reusable work_code recipes
 src/delegate-many.ts  bounded Agents-as-tools delegation
 src/work-tools.ts     Workspace, Machine, and Cloudbox catalog
 src/mcp-code-mode.ts  allowlisted MCP composition

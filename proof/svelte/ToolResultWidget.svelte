@@ -103,21 +103,21 @@
   {/if}
 {:else if widget.kind === "inline-raster-image"}
   <img class="tool-call__inline-image" src={widget.src} alt={widget.alt} loading="lazy" data-tool-widget="inline-raster-image" />
-{:else if widget.kind === "saved-hammer-candidate"}
-  <section class="tool-call__result hammer-candidate" data-tool-widget="saved-hammer-candidate" data-ok={widget.ok ? "1" : "0"}>
-    <div class="hammer-candidate__head">
+{:else if widget.kind === "saved-recipe-candidate"}
+  <section class="tool-call__result recipe-candidate" data-tool-widget="saved-recipe-candidate" data-ok={widget.ok ? "1" : "0"}>
+    <div class="recipe-candidate__head">
       <strong>{widget.ok ? "Promotable work_code run" : "work_code run needs review"}</strong>
       <code>{widget.saveEndpoint}</code>
     </div>
-    <p>Save this exact reviewed source as an owner-approved hammer. Nothing is auto-enabled by the model.</p>
+    <p>Save this exact reviewed source as an owner-approved recipe. Nothing is auto-enabled by the model.</p>
     {#if widget.capabilities.length}
-      <div class="hammer-candidate__caps" aria-label="Inferred capabilities">
+      <div class="recipe-candidate__caps" aria-label="Inferred capabilities">
         {#each widget.capabilities as capability}
           <code>{capability}</code>
         {/each}
       </div>
     {:else}
-      <p class="hammer-candidate__muted">No host capabilities were used.</p>
+      <p class="recipe-candidate__muted">No host capabilities were used.</p>
     {/if}
     <details>
       <summary>Review source and result</summary>

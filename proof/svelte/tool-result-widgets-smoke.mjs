@@ -34,7 +34,7 @@ try {
   const externalSvelteArtifact = resolve({ kind: "svelte-artifact", artifactId: "55555555-5555-4555-8555-555555555555", title: "Bad", src: "https://evil.example/widget" }, "create_svelte_artifact");
   const svg = resolve("data:image/svg+xml;base64,PHN2Zz4=", "machinectl_call");
   const arbitrary = resolve({ html: "<script>alert(1)</script>", component: "Anything" }, "tool");
-  const hammerCandidate = resolve({ ok: true, result: { wrote: true }, sourceCode: "return 1", inferredCapabilities: ["workspace.write"], suggestedHammer: { code: "return 1" } }, "work_code");
+  const recipeCandidate = resolve({ ok: true, result: { wrote: true }, sourceCode: "return 1", inferredCapabilities: ["workspace.write"], suggestedRecipe: { code: "return 1" } }, "work_code");
   const delegation = resolve({ results: [
     { runId: "delegate:one", taskFingerprint: "a1b2c3d4", label: "Research evidence", status: "completed", summary: "Evidence found", attempts: 1, output: { safe: true } },
     { runId: "delegate:two", status: "interrupted", error: "Worker restarted", attempts: 2 },
@@ -52,11 +52,11 @@ try {
   if (externalSvelteArtifact.kind !== "raw-text") throw new Error("external Svelte artifact URL must remain inert raw text");
   if (svg.kind !== "raw-text") throw new Error("SVG must remain inert raw text");
   if (arbitrary.kind !== "raw-text") throw new Error("arbitrary model-adjacent widget payload must remain inert raw text");
-  if (hammerCandidate.kind !== "saved-hammer-candidate" || hammerCandidate.capabilities[0] !== "workspace.write") throw new Error("promotable work_code hammer candidate missing");
+  if (recipeCandidate.kind !== "saved-recipe-candidate" || recipeCandidate.capabilities[0] !== "workspace.write") throw new Error("promotable work_code recipe candidate missing");
   if (delegation.kind !== "delegation-group" || delegation.live !== false || delegation.runs.length !== 2) throw new Error("delegate_many terminal snapshot missing or unbounded");
   if (delegation.runs[0].taskFingerprint !== "a1b2c3d4" || delegation.runs[0].label !== "Research evidence" || delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation metadata/status/attempts missing");
 
-  console.log("✓ trusted inline tool-result widgets: safe replay + raster + hammer candidate + delegation snapshot + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
+  console.log("✓ trusted inline tool-result widgets: safe replay + raster + recipe candidate + delegation snapshot + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

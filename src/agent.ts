@@ -26,7 +26,7 @@ import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
 import { delegateCompletionNotification } from "./delegate-receipt";
-import { SavedHammerService, hammerRunTitle } from "./saved-hammers";
+import { SavedRecipeService, recipeRunTitle, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 
 // Generic system prompt for the public/self-host engine. Users connect
@@ -39,7 +39,7 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 
 Computer work is exposed through two tools:
 - work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and cloudbox.* is clean bounded repository work with receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. Owner-approved saved hammers are available inside work_code as hammer.list() and hammer.run({id|name,input}); use them when an enabled hammer clearly matches the task. Hammer runs create receipts and appear in Check-in. No publication authority is available inside work_code.
+- work_code executes one bounded async JavaScript function over those exact namespaces. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. Owner-approved saved recipes are available inside work_code as recipe.list() and recipe.run({id|name,input}); use them when an enabled recipe clearly matches the task. Recipe runs create receipts and appear in Check-in. No publication authority is available inside work_code.
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Cloudbox are needed.
@@ -223,12 +223,13 @@ export class MyAgent extends Think<Env> {
     await notifyOwner(this.env, identity.email, delegateCompletionNotification({ sessionId: this.name, results }));
   }
 
-  async runSavedHammer(body: { hammerId?: string; input?: Record<string, unknown> }) {
+  async runSavedRecipe(body: { recipeId?: string; input?: Record<string, unknown> }) {
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity?.email) throw new Error("session identity not seeded");
-    const hammerId = body.hammerId?.trim();
-    if (!hammerId) throw new Error("hammerId is required");
-    const hammer = await new SavedHammerService(this.env, identity.email).requireEnabled(hammerId);
+    const recipeId = body.recipeId?.trim();
+    if (!recipeId) throw new Error("recipeId is required");
+    const recipe = await new SavedRecipeService(this.env, identity.email).requireEnabled(recipeId);
+    const runInput = validateRecipeRunInput(body.input ?? {}, JSON.parse(recipe.input_schema_json));
     const runId = crypto.randomUUID();
     const now = new Date().toISOString();
     await this.env.DB.prepare(`INSERT INTO runs (id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at)
@@ -236,26 +237,26 @@ export class MyAgent extends Think<Env> {
         runId,
         identity.email.toLowerCase(),
         this.name,
-        hammerRunTitle(hammer),
-        hammer.description,
-        JSON.stringify({ kind: "saved_hammer", hammerId: hammer.id, capabilities: JSON.parse(hammer.capabilities_json) }),
+        recipeRunTitle(recipe),
+        recipe.description,
+        JSON.stringify({ kind: "saved_recipe", recipeId: recipe.id, capabilities: JSON.parse(recipe.capabilities_json) }),
         now,
         now,
       ).run();
     const actor = JSON.stringify({ id: "my-ax", kind: "coordinator", mode: "live" });
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-start-${crypto.randomUUID()}`, identity.email.toLowerCase(), now, actor, "hammer.started", JSON.stringify({ hammerId: hammer.id, name: hammer.name, input: body.input ?? {} }), null).run();
-    const code = `async () => { const input = ${JSON.stringify(body.input ?? {})};\n${hammer.code}\n}`;
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-start-${crypto.randomUUID()}`, identity.email.toLowerCase(), now, actor, "recipe.started", JSON.stringify({ recipeId: recipe.id, name: recipe.name, input: runInput }), null).run();
+    const code = `async () => { const input = ${JSON.stringify(runInput)};\n${recipe.code}\n}`;
     const result = await executeWorkCode(code, {
       ...this.buildToolContext(),
-      allowedWorkCapabilities: JSON.parse(hammer.capabilities_json),
-      exposeSavedHammers: false,
+      allowedWorkCapabilities: JSON.parse(recipe.capabilities_json),
+      exposeSavedRecipes: false,
     });
     const terminal = result.ok ? "completed" : "failed";
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-${terminal}-${crypto.randomUUID()}`, identity.email.toLowerCase(), new Date().toISOString(), actor, `hammer.${terminal}`, JSON.stringify({ hammerId: hammer.id, name: hammer.name, ok: result.ok }), JSON.stringify(result)).run();
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-${terminal}-${crypto.randomUUID()}`, identity.email.toLowerCase(), new Date().toISOString(), actor, `recipe.${terminal}`, JSON.stringify({ recipeId: recipe.id, name: recipe.name, ok: result.ok }), JSON.stringify(result)).run();
     await this.env.DB.prepare("UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(terminal, runId, identity.email.toLowerCase()).run();
-    return { runId, hammer: { id: hammer.id, name: hammer.name }, execution: result };
+    return { runId, recipe: { id: recipe.id, name: recipe.name }, execution: result };
   }
 
   async scheduleRecurringPrompt(payload: RecurringPromptPayload & { cadenceSecs: number }) {
@@ -688,26 +689,26 @@ export class MyAgent extends Think<Env> {
         return result.results ?? [];
       },
       createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
-      listSavedHammers: async () => {
-        const hammers = await new SavedHammerService(env, identity.email).list();
-        return hammers.filter((hammer) => hammer.status === "enabled").map((hammer) => ({
-          id: hammer.id,
-          name: hammer.name,
-          description: hammer.description,
-          inputSchema: hammer.inputSchema,
-          capabilities: hammer.capabilities,
+      listSavedRecipes: async () => {
+        const recipes = await new SavedRecipeService(env, identity.email).list();
+        return recipes.filter((recipe) => recipe.status === "enabled").map((recipe) => ({
+          id: recipe.id,
+          name: recipe.name,
+          description: recipe.description,
+          inputSchema: recipe.inputSchema,
+          capabilities: recipe.capabilities,
         }));
       },
-      runSavedHammer: async (input) => {
-        let hammerId = input.id?.trim();
-        if (!hammerId && input.name?.trim()) {
+      runSavedRecipe: async (input) => {
+        let recipeId = input.id?.trim();
+        if (!recipeId && input.name?.trim()) {
           const name = input.name.trim();
-          const matches = (await new SavedHammerService(env, identity.email).list()).filter((hammer) => hammer.status === "enabled" && hammer.name === name);
-          if (matches.length !== 1) throw new Error(matches.length ? `ambiguous hammer name: ${name}` : `saved hammer not found: ${name}`);
-          hammerId = matches[0].id;
+          const matches = (await new SavedRecipeService(env, identity.email).list()).filter((recipe) => recipe.status === "enabled" && recipe.name === name);
+          if (matches.length !== 1) throw new Error(matches.length ? `ambiguous recipe name: ${name}` : `saved recipe not found: ${name}`);
+          recipeId = matches[0].id;
         }
-        if (!hammerId) throw new Error("hammer.run requires id or exact name");
-        return this.runSavedHammer({ hammerId, input: input.input ?? {} });
+        if (!recipeId) throw new Error("recipe.run requires id or exact name");
+        return this.runSavedRecipe({ recipeId, input: input.input ?? {} });
       },
       broadcast: (message) => this.broadcast(message),
       identity,
