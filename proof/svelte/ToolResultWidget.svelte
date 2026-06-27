@@ -17,6 +17,16 @@
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && fullscreen) closeFullscreen();
   }
+
+  // Lock body scroll while fullscreen so mobile can't get stuck behind the artifact.
+  $effect(() => {
+    if (typeof document === "undefined") return;
+    const prev = document.body.style.overflow;
+    if (fullscreen) document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -30,19 +40,29 @@
       <span>Interactive artifact</span>
     </div>
     <div class="svelte-artifact-stage">
-      <button
-        type="button"
-        class="svelte-artifact-fullscreen"
-        aria-label={fullscreen ? "Exit fullscreen artifact" : "Open artifact fullscreen"}
-        title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-        onclick={fullscreen ? closeFullscreen : openFullscreen}
-      >
-        {#if fullscreen}
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" /></svg>
-        {:else}
+      {#if fullscreen}
+        <!-- Mobile-friendly, always-visible exit affordance: large labelled button, never hidden behind iframe focus. -->
+        <button
+          type="button"
+          class="svelte-artifact-exit"
+          aria-label="Exit fullscreen artifact"
+          title="Exit fullscreen (Esc)"
+          onclick={closeFullscreen}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          <span>Exit</span>
+        </button>
+      {:else}
+        <button
+          type="button"
+          class="svelte-artifact-fullscreen"
+          aria-label="Open artifact fullscreen"
+          title="Fullscreen"
+          onclick={openFullscreen}
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
-        {/if}
-      </button>
+        </button>
+      {/if}
       <iframe
         class="svelte-artifact-frame"
         src={widget.src}
