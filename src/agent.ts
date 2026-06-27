@@ -24,7 +24,8 @@ import type { Attachment } from "./types";
 import { makeOAuthClientStore } from "./oauth-store";
 import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
-import { createDelegateManyTool, ReadOnlyDelegateAgent } from "./delegate-many";
+import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
+import { delegateCompletionNotification } from "./delegate-receipt";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -212,6 +213,12 @@ export class MyAgent extends Think<Env> {
         },
       ],
     });
+  }
+
+  async notifyDelegateManyComplete(results: DelegateResult[]) {
+    const identity = this.getConfig<MyAgentConfig>()?.identity;
+    if (!identity?.email || results.length === 0) return;
+    await notifyOwner(this.env, identity.email, delegateCompletionNotification({ sessionId: this.name, results }));
   }
 
   async scheduleRecurringPrompt(payload: RecurringPromptPayload & { cadenceSecs: number }) {

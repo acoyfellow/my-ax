@@ -15,7 +15,7 @@ type DeliveryOutcome =
   | { kind: "expired"; failure?: NotificationFailureDetail }
   | { kind: "failed"; failure: NotificationFailureDetail };
 
-export type NotificationKind = "session.update" | "session.dead" | "job.complete" | "job.needs_input" | "watch.fired" | "deploy.gate";
+export type NotificationKind = "session.update" | "session.dead" | "job.complete" | "job.needs_input" | "delegate.complete" | "delegate.needs_input" | "watch.fired" | "deploy.gate";
 
 export interface OwnerNotification {
   kind: NotificationKind;
@@ -101,7 +101,9 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
     ? [{ action: "open", title: "Review gate" }, { action: "attention", title: "Inbox" }]
     : notification.kind === "job.complete" || notification.kind === "job.needs_input"
       ? [{ action: "open", title: "Open job" }, { action: "attention", title: "Inbox" }]
-      : [{ action: "open", title: "Open" }, { action: "attention", title: "Inbox" }];
+      : notification.kind === "delegate.complete" || notification.kind === "delegate.needs_input"
+        ? [{ action: "open", title: "Open delegation" }, { action: "attention", title: "Inbox" }]
+        : [{ action: "open", title: "Open" }, { action: "attention", title: "Inbox" }];
   const payload = {
     title: cleanText(notification.title, 80) || "my · ax",
     body: cleanText(notification.body, 300),
