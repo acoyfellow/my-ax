@@ -96,36 +96,37 @@ export const WORK_SEARCH_TOOL: ToolDef = {
   },
 };
 
+export async function executeWorkCode(code: string, ctx: ToolContext) {
+  if (!code || new TextEncoder().encode(code).byteLength > 32_000) return { ok: false, error: "code is required and must be <= 32000 bytes" };
+  const machine = await createMachineWorkProvider(ctx);
+  const cloudbox = createCloudboxWorkProvider(ctx);
+  const calls: WorkCall[] = [];
+  // Use one RPC dispatcher and construct the three public namespaces in the
+  // trusted generated module. This avoids cross-provider dispatcher loss
+  // while keeping the raw bridge and host bindings out of guest input.
+  const workspaceFns = instrument("workspace", checkedWorkspaceProvider(ctx), calls);
+  const machineFns = instrument("machine", machine.fns, calls);
+  const cloudboxFns = instrument("cloudbox", cloudbox.fns, calls);
+  const bridgeFns = {
+    ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
+    ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
+    ...Object.fromEntries(Object.entries(cloudboxFns).map(([name, fn]) => [`cloudbox_${name}`, fn])),
+  };
+  const namespace = (name: string, methods: string[]) =>
+    `globalThis.${name}={${methods.map((method) => `${JSON.stringify(method)}:(args)=>bridge[${JSON.stringify(`${name}_${method}`)}](args)`).join(",")}};`;
+  const prelude = [
+    namespace("workspace", Object.keys(workspaceFns)),
+    namespace("machine", Object.keys(machineFns)),
+    namespace("cloudbox", Object.keys(cloudboxFns)),
+  ].join("\n");
+  const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
+  const execution = await executor.execute(code, [{ name: "bridge", fns: bridgeFns, prelude }]);
+  return { ok: !execution.error, result: execution.result, ...(execution.error ? { error: execution.error } : {}), logs: execution.logs ?? [], calls: calls.sort((a, b) => a.index - b.index) };
+}
+
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
   description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). No raw network, credentials, environment, or publication authority is exposed.",
   parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, and/or cloudbox namespaces." } }, required: ["code"] },
-  execute: async (args, ctx) => {
-    const code = typeof args.code === "string" ? args.code : "";
-    if (!code || new TextEncoder().encode(code).byteLength > 32_000) return JSON.stringify({ ok: false, error: "code is required and must be <= 32000 bytes" });
-    const machine = await createMachineWorkProvider(ctx);
-    const cloudbox = createCloudboxWorkProvider(ctx);
-    const calls: WorkCall[] = [];
-    // Use one RPC dispatcher and construct the three public namespaces in the
-    // trusted generated module. This avoids cross-provider dispatcher loss
-    // while keeping the raw bridge and host bindings out of guest input.
-    const workspaceFns = instrument("workspace", checkedWorkspaceProvider(ctx), calls);
-    const machineFns = instrument("machine", machine.fns, calls);
-    const cloudboxFns = instrument("cloudbox", cloudbox.fns, calls);
-    const bridgeFns = {
-      ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
-      ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
-      ...Object.fromEntries(Object.entries(cloudboxFns).map(([name, fn]) => [`cloudbox_${name}`, fn])),
-    };
-    const namespace = (name: string, methods: string[]) =>
-      `globalThis.${name}={${methods.map((method) => `${JSON.stringify(method)}:(args)=>bridge[${JSON.stringify(`${name}_${method}`)}](args)`).join(",")}};`;
-    const prelude = [
-      namespace("workspace", Object.keys(workspaceFns)),
-      namespace("machine", Object.keys(machineFns)),
-      namespace("cloudbox", Object.keys(cloudboxFns)),
-    ].join("\n");
-    const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
-    const execution = await executor.execute(code, [{ name: "bridge", fns: bridgeFns, prelude }]);
-    return JSON.stringify({ ok: !execution.error, result: execution.result, ...(execution.error ? { error: execution.error } : {}), logs: execution.logs ?? [], calls: calls.sort((a, b) => a.index - b.index) });
-  },
+  execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };
