@@ -3,12 +3,18 @@
 
   type Steer = { label: string; href: string };
   type Bucket = { key: string; label: string; total: number; sampleCount: number; sampleIds?: string[]; steer: Steer | null };
-  type CheckIn = { summary: string; buckets?: Bucket[]; suggestedSteers?: Steer[]; deployment?: { versionId?: string | null } };
+  type CheckIn = { summary: string; checkedAt?: string; buckets?: Bucket[]; suggestedSteers?: Steer[]; deployment?: { versionId?: string | null } };
 
   let checkIn = $state<CheckIn | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
-  let refreshedAt = $state<string | null>(null);
+
+  function formatCheckedAt(value?: string): string | null {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
 
   async function refresh() {
     loading = true;
@@ -18,7 +24,6 @@
       const data = await response.json().catch(() => null) as { ok?: boolean; result?: CheckIn; error?: { message?: string } } | null;
       if (!response.ok || !data?.ok || !data.result) throw new Error(data?.error?.message || "Could not load Check-in");
       checkIn = data.result;
-      refreshedAt = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     } finally {
@@ -47,8 +52,8 @@
           <p class="truncate text-sm font-medium text-fg">{checkIn.summary}</p>
         {/if}
       </div>
-      {#if refreshedAt && !loading && !error}
-        <p class="mt-1 text-[11px] text-fg-mut">Updated {refreshedAt}</p>
+      {#if checkIn?.checkedAt && !loading && !error}
+        <p class="mt-1 text-[11px] text-fg-mut" title={checkIn.checkedAt} data-check-in-checked-at>Checked by server {formatCheckedAt(checkIn.checkedAt)}</p>
       {/if}
     </div>
     <div class="flex items-center gap-2 sm:ml-auto">
