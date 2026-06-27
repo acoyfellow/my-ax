@@ -27,6 +27,8 @@ assertIncludes(generatedBundles, "checkin", "generated Svelte bundles");
 assertIncludes(chatPage, "hydrateAs=\"checkin\"", "Chat shell Check-in mount");
 assertIncludes(checkIn, "data-check-in-root", "Check-in component root marker");
 assertIncludes(checkIn, "data-check-in-refresh", "Check-in refresh marker");
+assertIncludes(checkIn, "data-check-in-details-toggle", "Check-in details toggle marker");
+assertIncludes(checkIn, "data-check-in-details", "Check-in details panel marker");
 assertIncludes(checkIn, "data-check-in-checked-at", "Check-in server timestamp marker");
 assertIncludes(checkIn, "fetch(\"/api/check-in\"", "Check-in API fetch");
 assertIncludes(checkIn, "checkedAt", "Check-in server timestamp field");
