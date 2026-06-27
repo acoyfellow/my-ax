@@ -26,6 +26,11 @@ export async function readOwnerCheckIn(env: AppEnv["Bindings"], ownerEmail: stri
       completedRuns: completedRunsTotal?.count ?? 0,
       failedRuns: failedRunsTotal?.count ?? 0,
     },
+    deployment: {
+      versionId: env.CF_VERSION_METADATA?.id ?? null,
+      versionTag: env.CF_VERSION_METADATA?.tag ?? null,
+      versionTimestamp: env.CF_VERSION_METADATA?.timestamp ?? null,
+    },
   });
 }
 

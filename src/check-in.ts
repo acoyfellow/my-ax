@@ -3,6 +3,7 @@ export interface CheckInSources {
   jobs: Array<{ id: string; name: string; status: string; next_run_at: string; last_error: string | null }>;
   runs: Array<{ id: string; title: string | null; task_summary: string; status: string; updated_at: string }>;
   totals?: Partial<Record<"attention" | "activeJobs" | "openRuns" | "completedRuns" | "failedRuns", number>>;
+  deployment?: { versionId: string | null; versionTag?: string | null; versionTimestamp: string | null };
 }
 
 export interface OwnerCheckIn {
@@ -15,6 +16,7 @@ export interface OwnerCheckIn {
     runs: CheckInSources["runs"];
   };
   suggestedSteers: Array<{ label: string; href: string }>;
+  deployment: { versionId: string | null; versionTag: string | null; versionTimestamp: string | null };
   totals: {
     attention: number;
     activeJobs: number;
@@ -57,5 +59,10 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
         : jobs.length
           ? [{ label: "Review recurring jobs", href: "/api/jobs" }]
           : [{ label: "Start a conversation", href: "/" }];
-  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, totals };
+  const deployment = {
+    versionId: sources.deployment?.versionId ?? null,
+    versionTag: sources.deployment?.versionTag ?? null,
+    versionTimestamp: sources.deployment?.versionTimestamp ?? null,
+  };
+  return { summary, needsOwner, completed, failed, running: { jobs, runs: openRuns }, suggestedSteers, deployment, totals };
 }
