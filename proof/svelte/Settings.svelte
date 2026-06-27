@@ -415,6 +415,40 @@
   let hammerInputSchema = $state('{"type":"object","properties":{}}');
   let hammerCode = $state("");
   let hammerCapabilities = $state("workspace.read");
+  const hammerTemplates = [
+    {
+      name: "read_workspace_file",
+      title: "Read a workspace file",
+      description: "Read one explicit file from the My AX workspace.",
+      inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+      code: "return await workspace.read({ path: input.path });",
+      capabilities: ["workspace.read"],
+    },
+    {
+      name: "search_workspace",
+      title: "Search workspace notes",
+      description: "Search the owner workspace for a query in a bounded path.",
+      inputSchema: { type: "object", properties: { query: { type: "string" }, path: { type: "string", default: "/home/user" } }, required: ["query"] },
+      code: "return await workspace.search({ query: input.query, path: input.path || \"/home/user\" });",
+      capabilities: ["workspace.search"],
+    },
+    {
+      name: "write_workspace_note",
+      title: "Write a workspace note",
+      description: "Write reviewed text to one explicit workspace path.",
+      inputSchema: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] },
+      code: "return await workspace.write({ path: input.path, content: input.content });",
+      capabilities: ["workspace.write"],
+    },
+    {
+      name: "run_workspace_check",
+      title: "Run a bounded workspace check",
+      description: "Run one reviewed command in the workspace with a short timeout.",
+      inputSchema: { type: "object", properties: { command: { type: "string" }, timeoutMs: { type: "number", default: 30000 } }, required: ["command"] },
+      code: "return await workspace.exec({ command: input.command, timeoutMs: Math.min(Number(input.timeoutMs || 30000), 60000) });",
+      capabilities: ["workspace.exec"],
+    },
+  ];
 
   async function refreshHammers() {
     try {
@@ -433,6 +467,15 @@
     hammerInputSchema = '{"type":"object","properties":{}}';
     hammerCode = "";
     hammerCapabilities = "workspace.read";
+  }
+  function useHammerTemplate(template: (typeof hammerTemplates)[number]) {
+    editingHammerId = null;
+    hammerName = template.name;
+    hammerDescription = template.description;
+    hammerInputSchema = JSON.stringify(template.inputSchema, null, 2);
+    hammerCode = template.code;
+    hammerCapabilities = template.capabilities.join("\n");
+    hammerStatusText = `Template loaded: ${template.title}. Review it, then save.`;
   }
   async function editHammer(hammer: Hammer) {
     editingHammerId = hammer.id;
@@ -889,9 +932,25 @@
           <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{hammerStatusText}</p>
         </section>
 
+        <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter hammers</span>
+          <p class="mb-3 text-xs text-fg-mut">Pick a generic recipe, review the code and capabilities, then save your own copy. Templates are never enabled automatically.</p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            {#each hammerTemplates as template}
+              <button type="button" onclick={() => useHammerTemplate(template)} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-left hover:border-brand/60">
+                <strong class="text-sm text-fg">{template.title}</strong>
+                <p class="mt-1 text-xs leading-relaxed text-fg-mut">{template.description}</p>
+                <div class="mt-2 flex flex-wrap gap-1">
+                  {#each template.capabilities as capability}<code class="rounded-full bg-bg px-2 py-1 text-[10px] text-brand">{capability}</code>{/each}
+                </div>
+              </button>
+            {/each}
+          </div>
+        </section>
+
         <form onsubmit={submitHammer} class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4 grid gap-2">
           <div class="flex items-center justify-between gap-3">
-            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingHammerId ? "Edit hammer" : "Create hammer"}</span>
+            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingHammerId ? "Edit hammer" : "Create manually"}</span>
             {#if editingHammerId}<button type="button" onclick={resetHammerForm} class="text-xs text-fg-mut hover:text-fg">Cancel edit</button>{/if}
           </div>
           <input type="text" maxlength={64} placeholder="name_like_this" bind:value={hammerName} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
