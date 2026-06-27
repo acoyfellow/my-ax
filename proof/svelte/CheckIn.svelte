@@ -8,6 +8,7 @@
   let checkIn = $state<CheckIn | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
+  let refreshedAt = $state<string | null>(null);
 
   async function refresh() {
     loading = true;
@@ -17,6 +18,7 @@
       const data = await response.json().catch(() => null) as { ok?: boolean; result?: CheckIn; error?: { message?: string } } | null;
       if (!response.ok || !data?.ok || !data.result) throw new Error(data?.error?.message || "Could not load Check-in");
       checkIn = data.result;
+      refreshedAt = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     } finally {
@@ -45,7 +47,14 @@
           <p class="truncate text-sm font-medium text-fg">{checkIn.summary}</p>
         {/if}
       </div>
+      {#if refreshedAt && !loading && !error}
+        <p class="mt-1 text-[11px] text-fg-mut">Updated {refreshedAt}</p>
+      {/if}
     </div>
+    <div class="flex items-center gap-2 sm:ml-auto">
+      <button type="button" onclick={refresh} disabled={loading} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg disabled:cursor-wait disabled:opacity-60" aria-label="Refresh Check-in" data-check-in-refresh>
+        {loading ? "Refreshing…" : "Refresh"}
+      </button>
     {#if checkIn?.buckets?.length}
       <div class="flex gap-1.5 overflow-x-auto pb-0.5 sm:justify-end" aria-label="Check-in buckets">
         {#each checkIn.buckets as bucket (bucket.key)}
@@ -62,5 +71,6 @@
         {/each}
       </div>
     {/if}
+    </div>
   </div>
 </section>
