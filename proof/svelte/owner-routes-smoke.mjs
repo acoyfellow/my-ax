@@ -70,9 +70,11 @@ mustContain("src/routes/runs.tsx", "data-runs-next-actions", "runs next-actions 
 mustContain("src/routes/runs.tsx", "Unsupported run filter", "runs invalid-filter owner page");
 mustContain("src/routes/runs.tsx", 'href="/api/runs">API receipt', "runs invalid-filter API receipt action");
 mustContain("src/routes/runs.tsx", "formatRenderedRunsApiReceiptHref(status)", "runs filtered API receipt href wiring");
+mustContain("src/routes/runs.tsx", "data-runs-api-receipt-href", "runs API receipt href marker");
 mustContain("src/routes/runs.tsx", "data-run-receipt-href", "runs item rendered receipt marker");
 mustContain("src/routes/runs.tsx", "data-run-events-receipt-href", "runs detail raw events receipt marker");
-mustContain("docs/feature-matrix.md", "per-run receipt and raw event receipt markers", "feature matrix Runs receipt marker contract");
+mustContain("docs/feature-matrix.md", "data-runs-api-receipt-href", "feature matrix Runs API receipt marker contract");
+mustContain("docs/feature-matrix.md", "per-run receipt, and raw event receipt markers", "feature matrix Runs receipt marker contract");
 mustContain("src/routes/jobs.ts", 'app.get("/jobs"', "rendered /jobs route");
 mustContain("src/routes/jobs.ts", "data-jobs-page", "jobs HTML marker");
 mustContain("src/routes/jobs.ts", "data-jobs-status-summary", "jobs status summary marker");
@@ -82,7 +84,9 @@ mustContain("src/routes/jobs.ts", "Unsupported job filter", "jobs invalid-filter
 mustContain("src/routes/jobs.ts", "data-jobs-error", "jobs invalid-filter error marker");
 mustContain("src/routes/jobs.ts", 'href="${apiReceiptHref}">API receipt', "jobs invalid-filter API receipt action");
 mustContain("src/routes/jobs.ts", "formatRenderedJobsApiReceiptHref(input.status)", "jobs filtered API receipt href wiring");
+mustContain("src/routes/jobs.ts", "data-jobs-api-receipt-href", "jobs API receipt href marker");
 mustContain("src/routes/jobs.ts", "data-job-history-receipt-href", "jobs item raw history receipt marker");
+mustContain("docs/feature-matrix.md", "data-jobs-api-receipt-href", "feature matrix Jobs API receipt marker contract");
 mustContain("docs/feature-matrix.md", "per-job history receipt links", "feature matrix Jobs history receipt contract");
 
 mustContain("proof/svelte/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
