@@ -84,6 +84,10 @@ export function formatRenderedAttentionFilterLabel(query: { kind: string | null;
   return parts.length ? ` · ${escapeHtml(parts.join(" · "))}` : "";
 }
 
+export function formatRenderedAttentionEmptyList(): string {
+  return `<li class="card muted" data-attention-empty>Nothing needs you in this Attention view.</li>`;
+}
+
 export function parseAttentionListQuery(url: URL) {
   const kind = url.searchParams.get("kind")?.trim() || null;
   const sessionParam = url.searchParams.get("sessionId")?.trim() || null;
