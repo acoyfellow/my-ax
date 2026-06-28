@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -10,6 +10,17 @@ test("parseAttentionListQuery accepts kind and session filters", () => {
 test("parseAttentionListQuery rejects malformed session filters without dropping kind", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=not-a-session"));
   assert.deepEqual(result, { kind: "session.update", sessionId: null, invalidSessionId: "not-a-session" });
+});
+
+test("buildAttentionListFilter keeps owner bind first with no optional filters", () => {
+  assert.deepEqual(buildAttentionListFilter("owner@example.com", { kind: null, sessionId: null }), { filterSql: "", bindValues: ["owner@example.com"] });
+});
+
+test("buildAttentionListFilter appends kind and session filters in stable bind order", () => {
+  assert.deepEqual(buildAttentionListFilter("owner@example.com", { kind: "run.failed", sessionId: "11111111-1111-4111-8111-111111111111" }), {
+    filterSql: " AND kind = ? AND session_id = ?",
+    bindValues: ["owner@example.com", "run.failed", "11111111-1111-4111-8111-111111111111"],
+  });
 });
 
 test("normalizeAttentionSeenIds keeps unique UUIDs in request order", () => {

@@ -107,6 +107,20 @@ export function parseAttentionListQuery(url: URL) {
   return { kind, sessionId, invalidSessionId: sessionParam !== null && sessionId === null ? sessionParam : null };
 }
 
+export function buildAttentionListFilter(ownerEmail: string, query: { kind: string | null; sessionId: string | null }) {
+  const filters: string[] = [];
+  const bindValues: string[] = [ownerEmail];
+  if (query.kind) {
+    filters.push("kind = ?");
+    bindValues.push(query.kind);
+  }
+  if (query.sessionId) {
+    filters.push("session_id = ?");
+    bindValues.push(query.sessionId);
+  }
+  return { filterSql: filters.length ? ` AND ${filters.join(" AND ")}` : "", bindValues };
+}
+
 export function normalizeAttentionSeenIds(ids: unknown): string[] {
   if (!Array.isArray(ids)) return [];
   return [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
@@ -117,17 +131,7 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     const email = owner(c);
     const query = parseAttentionListQuery(new URL(c.req.url));
     if (query.invalidSessionId) return c.redirect("/attention", 302);
-    const filters: string[] = [];
-    const bindValues: string[] = [email];
-    if (query.kind) {
-      filters.push("kind = ?");
-      bindValues.push(query.kind);
-    }
-    if (query.sessionId) {
-      filters.push("session_id = ?");
-      bindValues.push(query.sessionId);
-    }
-    const filterSql = filters.length ? ` AND ${filters.join(" AND ")}` : "";
+    const { filterSql, bindValues } = buildAttentionListFilter(email, query);
     const [items, unread, total, kindRows, sessionRows] = await Promise.all([
       c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 50`).bind(...bindValues).all(),
       c.env.DB.prepare(`SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).first<{ count: number }>(),
@@ -149,17 +153,7 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     if (query.invalidSessionId) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ATTENTION_SESSION", message: `unsupported sessionId: ${query.invalidSessionId}` }, next_actions: [] }, 400);
     }
-    const filters: string[] = [];
-    const bindValues: string[] = [email];
-    if (query.kind) {
-      filters.push("kind = ?");
-      bindValues.push(query.kind);
-    }
-    if (query.sessionId) {
-      filters.push("session_id = ?");
-      bindValues.push(query.sessionId);
-    }
-    const filterSql = filters.length ? ` AND ${filters.join(" AND ")}` : "";
+    const { filterSql, bindValues } = buildAttentionListFilter(email, query);
     const [items, unread, kindSummary, sessionSummary] = await Promise.all([
       c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at
         FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 20`).bind(...bindValues).all<AttentionRow>(),
