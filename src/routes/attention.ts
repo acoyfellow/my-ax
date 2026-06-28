@@ -52,8 +52,22 @@ export function parseAttentionSessionSummaryRows(rows: Array<{ session_id: strin
   return rows.map((row) => ({ session_id: row.session_id ?? null, unread: Number(row.unread ?? 0), latest_at: row.latest_at ?? null }));
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[char] ?? char);
+}
+
 export function formatRenderedAttentionViewSummary(total: unknown, shown: unknown): string {
   return `${Math.max(0, Number(total ?? 0) || 0)} matching items · showing ${Math.max(0, Number(shown ?? 0) || 0)}`;
+}
+
+export function formatRenderedAttentionKindSummary(rows: Array<{ kind: string; count: unknown }>): string {
+  const links = rows.map((row) => `<a class="button outline" href="/attention?kind=${encodeURIComponent(row.kind)}"><strong>${Math.max(0, Number(row.count ?? 0) || 0)}</strong> ${escapeHtml(row.kind)}</a>`).join("");
+  return `<nav class="actions" data-attention-kind-summary>${links || `<span class="button outline" data-attention-kind-summary-empty>0 unread groups</span>`}</nav>`;
+}
+
+export function formatRenderedAttentionSessionSummary(rows: Array<{ sessionId: string; count: unknown }>): string {
+  const links = rows.map((row) => `<a class="button outline" href="/attention?sessionId=${encodeURIComponent(row.sessionId)}"><strong>${Math.max(0, Number(row.count ?? 0) || 0)}</strong> session ${escapeHtml(row.sessionId.slice(0, 8))}</a>`).join("");
+  return `<nav class="actions" data-attention-session-summary>${links || `<span class="button outline" data-attention-session-summary-empty>0 unread sessions</span>`}</nav>`;
 }
 
 export function parseAttentionListQuery(url: URL) {

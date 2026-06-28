@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { formatRenderedAttentionKindSummary, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -75,6 +75,23 @@ test("parseAttentionKindSummaryRows normalizes exact grouped SQL rows", () => {
 test("formatRenderedAttentionViewSummary states exact total and shown count", () => {
   assert.equal(formatRenderedAttentionViewSummary(72, 50), "72 matching items · showing 50");
   assert.equal(formatRenderedAttentionViewSummary(null, "bad"), "0 matching items · showing 0");
+});
+
+test("formatRenderedAttentionKindSummary renders filtered links and all-clear copy", () => {
+  const html = formatRenderedAttentionKindSummary([{ kind: "run.failed&urgent", count: 2 }]);
+  assert.match(html, /data-attention-kind-summary/);
+  assert.match(html, /href="\/attention\?kind=run\.failed%26urgent"/);
+  assert.match(html, /<strong>2<\/strong> run\.failed&amp;urgent/);
+  assert.match(formatRenderedAttentionKindSummary([]), /data-attention-kind-summary-empty>0 unread groups/);
+});
+
+test("formatRenderedAttentionSessionSummary renders filtered links and all-clear copy", () => {
+  const sessionId = "11111111-1111-4111-8111-111111111111";
+  const html = formatRenderedAttentionSessionSummary([{ sessionId, count: 3 }]);
+  assert.match(html, /data-attention-session-summary/);
+  assert.match(html, new RegExp(`href="/attention\\?sessionId=${sessionId}"`));
+  assert.match(html, /<strong>3<\/strong> session 11111111/);
+  assert.match(formatRenderedAttentionSessionSummary([]), /data-attention-session-summary-empty>0 unread sessions/);
 });
 
 test("parseAttentionSessionSummaryRows normalizes exact grouped SQL rows", () => {
