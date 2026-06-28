@@ -173,6 +173,7 @@ test("formatRenderedAttentionListItem escapes text and normalizes source href", 
   assert.match(html, /A &amp; B/);
   assert.match(html, /&lt;b&gt;body&lt;\/b&gt;/);
   assert.match(html, /href="\/"/);
+  assert.match(html, /data-attention-source-href="\/"/);
 });
 
 test("parseAttentionSessionSummaryRows normalizes exact grouped SQL rows", () => {
