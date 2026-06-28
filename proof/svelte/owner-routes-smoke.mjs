@@ -19,6 +19,8 @@ mustContain("src/index.tsx", "data-attention-page", "attention HTML marker");
 mustContain("src/index.tsx", "data-attention-next-actions", "attention next-actions marker");
 mustContain("src/index.tsx", "data-attention-kind-summary", "attention kind summary marker");
 mustContain("src/index.tsx", "data-attention-kind-summary-empty", "attention empty kind summary marker");
+mustContain("src/index.tsx", "data-attention-session-summary", "attention session summary marker");
+mustContain("src/index.tsx", "data-attention-session-summary-empty", "attention empty session summary marker");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
