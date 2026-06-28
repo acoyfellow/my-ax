@@ -303,7 +303,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
                   <span class={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${statusClass(run.status)}`}>{run.status}</span>
                 </div>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-fg-mut">
-                  <a class="rounded-full bg-brand px-3 py-1.5 font-bold text-white hover:opacity-90" href={`/runs/${run.id}`}>Open receipt</a>
+                  <a class="rounded-full bg-brand px-3 py-1.5 font-bold text-white hover:opacity-90" href={`/runs/${run.id}`} data-run-receipt-href={`/runs/${run.id}`}>Open receipt</a>
                   <time>{run.updated_at}</time>
                   <code class="font-mono text-[10px]">{run.id}</code>
                 </div>
@@ -391,7 +391,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
             <section class="rounded-2xl border border-line bg-bg-alt p-4">
               <div class="flex items-baseline justify-between gap-4">
                 <h2 class="text-lg font-semibold">Event trail</h2>
-                <a class="text-xs text-brand" href={`/api/runs/${runId}/events`}>raw JSON</a>
+                <a class="text-xs text-brand" href={`/api/runs/${runId}/events`} data-run-events-receipt-href={`/api/runs/${runId}/events`}>raw JSON</a>
               </div>
               <ol class="mt-4 space-y-3">
                 {events.map((event) => (
