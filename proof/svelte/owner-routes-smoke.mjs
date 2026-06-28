@@ -19,6 +19,7 @@ mustContain("src/index.tsx", "data-attention-page", "attention HTML marker");
 mustContain("src/index.tsx", "data-attention-next-actions", "attention next-actions marker");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
+mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
 mustContain("src/routes/runs.tsx", "data-runs-empty", "runs empty-state marker");
 mustContain("src/routes/runs.tsx", "data-runs-next-actions", "runs next-actions marker");
 mustContain("src/routes/jobs.ts", 'app.get("/jobs"', "rendered /jobs route");

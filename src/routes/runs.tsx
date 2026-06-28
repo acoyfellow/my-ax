@@ -258,10 +258,15 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     const identity = c.get("identity");
     const { limit, status, invalidStatus } = parseRunListQuery(new URL(c.req.url));
     if (invalidStatus) return c.html(<Layout title="Runs · My Agent Experience" identityEmail={identity.email} buildId={c.env.CF_VERSION_METADATA?.id ?? undefined} theme={readThemeCookie(c)}><main class="min-h-dvh grid place-items-center p-6"><section class="max-w-xl rounded-2xl border border-line bg-bg-alt p-6"><h1 class="text-xl font-semibold text-fg">Unsupported run filter</h1><p class="mt-2 text-sm text-fg-mut">Status filter `{invalidStatus}` is not supported.</p><a class="mt-4 inline-block text-brand" href="/runs">View all runs</a></section></main></Layout>, 400);
-    const rows = status
-      ? await c.env.DB.prepare("SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT ?").bind(identity.email, status, limit).all<Pick<RunRow, "id" | "status" | "title" | "task_summary" | "created_at" | "updated_at">>()
-      : await c.env.DB.prepare("SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?").bind(identity.email, limit).all<Pick<RunRow, "id" | "status" | "title" | "task_summary" | "created_at" | "updated_at">>();
+    const [rows, countRows] = await Promise.all([
+      status
+        ? c.env.DB.prepare("SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT ?").bind(identity.email, status, limit).all<Pick<RunRow, "id" | "status" | "title" | "task_summary" | "created_at" | "updated_at">>()
+        : c.env.DB.prepare("SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?").bind(identity.email, limit).all<Pick<RunRow, "id" | "status" | "title" | "task_summary" | "created_at" | "updated_at">>(),
+      c.env.DB.prepare("SELECT status, COUNT(*) AS count FROM runs WHERE owner_email = ? GROUP BY status").bind(identity.email).all<{ status: RunStatus; count: number }>(),
+    ]);
     const runs = rows.results ?? [];
+    const statusCounts: Record<RunStatus, number> = { open: 0, running: 0, completed: 0, failed: 0, aborted: 0 };
+    for (const row of countRows.results ?? []) if ((RUN_STATUSES as readonly string[]).includes(row.status)) statusCounts[row.status] = Number(row.count ?? 0);
     return c.html(
       <Layout title="Runs · My Agent Experience" identityEmail={identity.email} buildId={c.env.CF_VERSION_METADATA?.id ?? undefined} theme={readThemeCookie(c)}>
         <main class="min-h-dvh bg-bg text-fg" data-runs-page>
@@ -270,6 +275,9 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
               <a class="text-xs font-semibold text-fg-mut hover:text-fg" href="/">← Back to shell</a>
               <h1 class="mt-3 text-3xl font-bold">Runs</h1>
               <p class="mt-1 text-sm text-fg-mut">{runs.length} shown{status ? ` · status: ${status}` : ""}</p>
+              <div class="mt-4 flex flex-wrap gap-2" data-runs-status-summary>
+                {RUN_STATUSES.map((runStatus) => <a class="rounded-xl border border-line px-3 py-2 text-xs text-fg-mut hover:border-brand hover:text-brand" href={`/runs?status=${runStatus}`}><strong class="text-fg">{statusCounts[runStatus]}</strong> {runStatus}</a>)}
+              </div>
               <div class="mt-4 flex flex-wrap gap-2">
                 {RUN_STATUSES.map((runStatus) => <a class={`rounded-full border px-3 py-1 text-xs font-semibold ${status === runStatus ? "border-brand bg-brand/10 text-brand" : "border-line text-fg-mut hover:text-fg"}`} href={`/runs?status=${runStatus}`}>{runStatus}</a>)}
                 <a class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-fg-mut hover:text-fg" href="/api/runs">API receipt</a>
