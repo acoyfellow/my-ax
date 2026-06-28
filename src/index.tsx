@@ -17,6 +17,7 @@ function isVoiceEnabled(env: Env): boolean {
 }
 import { getUserWorkspace } from "./workspace";
 import { ChatPage } from "./views/ChatPage";
+import { AttentionPage } from "./views/AttentionPage";
 import type { AppEnv } from "./app-env";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
@@ -27,7 +28,7 @@ import { registerPushRoutes } from "./routes/push";
 import { registerJobRoutes } from "./routes/jobs";
 import { registerMcpRoutes } from "./routes/mcp";
 import { registerBrowserRoutes } from "./routes/browser";
-import { registerAttentionRoutes } from "./routes/attention";
+import { parseAttentionListQuery, registerAttentionRoutes } from "./routes/attention";
 import { registerCheckInRoutes } from "./routes/check-in";
 import { registerSystemRoutes } from "./routes/system";
 import { registerModelRoutes } from "./routes/models";
@@ -472,6 +473,39 @@ app.get("/", (c) => {
       appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
     />,
   );
+});
+
+app.get("/attention", async (c) => {
+  const identity = c.get("identity");
+  const email = identity.email.toLowerCase();
+  const query = parseAttentionListQuery(new URL(c.req.url));
+  if (query.invalidSessionId) return c.redirect("/attention", 302);
+  const filters: string[] = [];
+  const bindValues: string[] = [email];
+  if (query.kind) {
+    filters.push("kind = ?");
+    bindValues.push(query.kind);
+  }
+  if (query.sessionId) {
+    filters.push("session_id = ?");
+    bindValues.push(query.sessionId);
+  }
+  const filterSql = filters.length ? ` AND ${filters.join(" AND ")}` : "";
+  const [items, unread] = await Promise.all([
+    c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 50`).bind(...bindValues).all(),
+    c.env.DB.prepare(`SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).first<{ count: number }>(),
+  ]);
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
+  const theme = readThemeCookie(c);
+  return c.html(<AttentionPage
+    identityEmail={identity.email}
+    buildId={buildId}
+    theme={theme}
+    appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+    unread={Number(unread?.count ?? 0)}
+    items={(items.results ?? []) as any}
+    filter={{ kind: query.kind, sessionId: query.sessionId }}
+  />);
 });
 
 app.get("/capabilities", (c) => {
