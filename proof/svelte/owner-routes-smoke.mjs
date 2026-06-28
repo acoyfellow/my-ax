@@ -47,6 +47,9 @@ mustContain("src/routes/jobs.ts", "data-jobs-page", "jobs HTML marker");
 mustContain("src/routes/jobs.ts", "data-jobs-status-summary", "jobs status summary marker");
 mustContain("src/routes/jobs.ts", "data-jobs-empty", "jobs empty-state marker");
 mustContain("src/routes/jobs.ts", "data-jobs-next-actions", "jobs next-actions marker");
+mustContain("src/routes/jobs.ts", "Unsupported job filter", "jobs invalid-filter owner page");
+mustContain("src/routes/jobs.ts", "data-jobs-error", "jobs invalid-filter error marker");
+mustContain("src/routes/jobs.ts", 'href="${apiReceiptHref}">API receipt', "jobs invalid-filter API receipt action");
 mustContain("src/routes/jobs.ts", "formatRenderedJobsApiReceiptHref(input.status)", "jobs filtered API receipt href wiring");
 
 mustContain("proof/svelte/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
