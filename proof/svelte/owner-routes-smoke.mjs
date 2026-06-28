@@ -29,6 +29,8 @@ mustContain("src/routes/attention.ts", 'app.post("/attention/seen"', "rendered A
 mustContain("src/routes/attention.ts", "data-attention-seen-form", "rendered Attention seen form marker");
 mustContain("src/routes/attention.ts", 'action="/attention/seen"', "rendered Attention seen form action");
 mustContain("src/routes/attention.ts", "origin !== url.origin", "rendered Attention seen same-origin guard");
+mustContain("src/routes/attention.ts", "formatRenderedAttentionReturnHref(query)", "rendered Attention seen filtered return href wiring");
+mustContain("src/routes/attention.test.ts", "formatRenderedAttentionReturnHref preserves rendered filters after seen posts", "Attention seen filtered return href test");
 mustContain("src/routes/attention.ts", "rows.length ? rows.map(formatRenderedAttentionListItem).join(\"\") : formatRenderedAttentionEmptyList()", "attention rendered empty-list fallback");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionApiReceiptHref(query)", "attention filtered API receipt href wiring");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "attention page helper wiring");
