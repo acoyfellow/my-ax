@@ -70,6 +70,15 @@ export function formatRenderedAttentionSessionSummary(rows: Array<{ sessionId: s
   return `<nav class="actions" data-attention-session-summary>${links || `<span class="button outline" data-attention-session-summary-empty>0 unread sessions</span>`}</nav>`;
 }
 
+export function normalizeRenderedAttentionSourceHref(href: unknown): string {
+  const value = String(href ?? "").trim();
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
+export function formatRenderedAttentionListItem(item: { id: string; kind: string | null; title: string; body: string; href: string | null; created_at: string }): string {
+  return `<li class="card" data-attention-list-item="${escapeHtml(item.id)}"><div class="meta">${escapeHtml(item.kind || "attention")} · ${escapeHtml(item.created_at)}</div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.body)}</p><p><a class="button" href="${escapeHtml(normalizeRenderedAttentionSourceHref(item.href))}">Open source</a> <code>${escapeHtml(item.id)}</code></p></li>`;
+}
+
 export function parseAttentionListQuery(url: URL) {
   const kind = url.searchParams.get("kind")?.trim() || null;
   const sessionParam = url.searchParams.get("sessionId")?.trim() || null;
