@@ -161,6 +161,7 @@ app.use("/machinectl/*", accessMiddleware());
 // non-personalized /offline fallback stay anonymous so install metadata,
 // browser JS, and offline recovery don't have to re-auth on every fetch.
 app.use("/", accessMiddleware());
+app.use("/attention", accessMiddleware());
 app.use("/capabilities", accessMiddleware());
 
 // ─── Health / discovery ────────────────────────────────────────────────────
