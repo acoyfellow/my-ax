@@ -264,7 +264,7 @@ registerDecisionRoutes(app);
 registerCapabilityRoutes(app);
 registerSvelteServe(app);
 
-// ─── System / "About This Computer" info ──────────────────────────────────
+// ─── System / workspace container info ─────────────────────────────────────
 // Surfaces the equivalent of macOS "About This Mac" for the per-user
 // sandbox: disk usage of /home/user (R2-backed), file count, container
 // resources, worker version, region, etc. The Settings drawer renders

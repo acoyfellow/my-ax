@@ -84,12 +84,15 @@
 
 <section
   class="rounded-md bg-bg border border-line px-3 py-3 text-fg"
-  aria-label="Computer health"
+  aria-label="Workspace container health"
 >
-  <header class="flex items-center justify-between mb-2">
-    <h3 class="text-[11px] font-semibold text-fg uppercase tracking-wider">
-      This Computer
-    </h3>
+  <header class="flex items-start justify-between gap-3 mb-2">
+    <div>
+      <h3 class="text-[11px] font-semibold text-fg uppercase tracking-wider">
+        Workspace container
+      </h3>
+      <p class="mt-0.5 text-[10px] leading-snug text-fg-mut">Remote runtime for commands, files, and receipts.</p>
+    </div>
     <button
       type="button"
       onclick={refresh}

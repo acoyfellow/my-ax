@@ -20,6 +20,14 @@
     } catch {}
   }
 
+  const BUCKET_PRIORITY = ["failedRuns", "attention", "openRuns", "activeJobs", "completedRuns"];
+
+  function primaryBucket(buckets?: Bucket[]): Bucket | null {
+    const actionable = (buckets ?? []).filter((bucket) => bucket.total > 0 && bucket.steer);
+    actionable.sort((a, b) => BUCKET_PRIORITY.indexOf(a.key) - BUCKET_PRIORITY.indexOf(b.key));
+    return actionable[0] ?? null;
+  }
+
   function formatCheckedAt(value?: string): string | null {
     if (!value) return null;
     const date = new Date(value);
@@ -53,55 +61,47 @@
   });
 </script>
 
-<section class="check-in-strip border-b border-line bg-bg/85 px-3 py-2 text-fg sm:px-4" aria-label="Owner Check-in" data-check-in-root>
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+<section class="check-in-card @container/checkin bg-bg px-4 py-4 text-fg" aria-label="Owner Check-in" data-check-in-root>
+  <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
-      <div class="flex items-center gap-2">
-        <span class="rounded-full border border-line px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-fg-mut">Check-in</span>
-        {#if loading}
-          <span class="text-xs text-fg-mut">loading…</span>
-        {:else if error}
-          <button type="button" onclick={refresh} class="text-xs text-bad hover:underline">{error}</button>
-        {:else if checkIn}
-          <p class="truncate text-sm font-medium text-fg">{checkIn.summary}</p>
-        {/if}
-      </div>
+      <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-fg-mut">Owner status</p>
+      {#if loading}
+        <p class="mt-2 text-sm text-fg-mut">Loading latest state…</p>
+      {:else if error}
+        <button type="button" onclick={refresh} class="mt-2 text-left text-sm text-bad hover:underline">{error}</button>
+      {:else if checkIn}
+        <p class="mt-2 text-xl font-semibold leading-tight text-fg @min-[24rem]/checkin:text-2xl">{checkIn.summary}</p>
+      {/if}
       {#if checkIn?.checkedAt && !loading && !error}
-        <p class="mt-1 text-[11px] text-fg-mut" title={checkIn.checkedAt} data-check-in-checked-at>Checked by server {formatCheckedAt(checkIn.checkedAt)}</p>
+        <p class="mt-2 text-[11px] text-fg-mut" title={checkIn.checkedAt} data-check-in-checked-at>Checked {formatCheckedAt(checkIn.checkedAt)}</p>
       {/if}
     </div>
-    <div class="flex items-center gap-2 sm:ml-auto">
-      <button type="button" onclick={() => setExpanded(!expanded)} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
-        {expanded ? "Hide details" : "Details"}
-      </button>
-      <button type="button" onclick={refresh} disabled={loading} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg disabled:cursor-wait disabled:opacity-60" aria-label="Refresh Check-in" data-check-in-refresh>
-        {loading ? "Refreshing…" : "Refresh"}
-      </button>
-    {#if checkIn?.buckets?.length}
-      <div class="flex gap-1.5 overflow-x-auto pb-0.5 sm:justify-end" aria-label="Check-in buckets">
-        {#each checkIn.buckets as bucket (bucket.key)}
-          {@const content = `${bucket.label}: ${bucket.total} total, ${bucket.sampleCount} shown`}
-          {#if bucket.steer}
-            <a class="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-bg-alt px-2.5 py-1 text-[11px] text-fg-mut hover:border-brand/50 hover:text-fg" href={displayCheckInHref(bucket.steer.href)} title={content} data-check-in-bucket={bucket.key} data-check-in-raw-href={bucket.steer.href}>
-              <span>{bucket.label}</span><strong class="text-fg">{bucket.total}</strong>
-            </a>
-          {:else}
-            <span class="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-bg-alt px-2.5 py-1 text-[11px] text-fg-mut" title={content} data-check-in-bucket={bucket.key}>
-              <span>{bucket.label}</span><strong class="text-fg">{bucket.total}</strong>
-            </span>
-          {/if}
-        {/each}
-      </div>
-    {/if}
-    </div>
+    <button type="button" onclick={refresh} disabled={loading} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg disabled:cursor-wait disabled:opacity-60" aria-label="Refresh Check-in" data-check-in-refresh>
+      {loading ? "…" : "Refresh"}
+    </button>
   </div>
+
+  {#if checkIn?.buckets?.length}
+    {@const primary = primaryBucket(checkIn.buckets)}
+    {#if primary?.steer}
+      <a class="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/10 px-4 py-3 text-sm font-semibold text-brand hover:border-brand/60" href={displayCheckInHref(primary.steer.href)} data-check-in-raw-href={primary.steer.href}>
+        <span>{primary.steer.label}</span>
+        <span aria-hidden="true">→</span>
+      </a>
+    {/if}
+
+    <button type="button" onclick={() => setExpanded(!expanded)} class="mt-3 text-[11px] font-semibold text-brand hover:underline" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
+      {expanded ? "Hide receipt details" : "Show all receipt details"}
+    </button>
+  {/if}
+
   {#if expanded && checkIn?.buckets?.length}
-    <div id="check-in-details" class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" data-check-in-details>
+    <div id="check-in-details" class="mt-3 grid gap-1.5" data-check-in-details>
       {#each checkIn.buckets as bucket (bucket.key)}
-        <section class="rounded-xl border border-line bg-bg-alt p-3" data-check-in-detail-bucket={bucket.key}>
+        <section class="rounded-xl border border-line bg-bg-alt p-3" data-check-in-detail-bucket={bucket.key} data-check-in-bucket={bucket.key}>
           <div class="flex items-start justify-between gap-2">
-            <div>
-              <h3 class="text-xs font-semibold text-fg">{bucket.label}</h3>
+            <div class="min-w-0">
+              <h3 class="truncate text-xs font-semibold text-fg">{bucket.label}</h3>
               <p class="mt-1 text-[11px] text-fg-mut">{bucket.sampleCount} shown from {bucket.total} total</p>
             </div>
             <strong class="text-sm text-fg">{bucket.total}</strong>
@@ -117,3 +117,4 @@
     </div>
   {/if}
 </section>
+
