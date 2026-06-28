@@ -53,6 +53,9 @@ mustContain("docs/feature-matrix.md", "marks the current filtered view seen", "f
 mustContain("docs/feature-matrix.md", "rendered `/runs` owner views preserve valid status filters", "feature matrix Runs rendered filter contract");
 mustContain("docs/feature-matrix.md", "exact status summaries", "feature matrix Runs exact summary contract");
 mustContain("docs/feature-matrix.md", "authoritative API receipt", "feature matrix Runs API receipt contract");
+mustContain("docs/feature-matrix.md", "rendered `/jobs` owner views preserve valid status filters", "feature matrix Jobs rendered filter contract");
+mustContain("docs/feature-matrix.md", "exact active/paused summaries", "feature matrix Jobs exact summary contract");
+mustContain("docs/feature-matrix.md", "src/routes/jobs.ts", "feature matrix Jobs route evidence");
 mustContain("README.md", "data-attention-seen-form", "README Attention seen form marker");
 mustContain("README.md", "mark the current filtered view seen", "README Attention seen form behavior");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
