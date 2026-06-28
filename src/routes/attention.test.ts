@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -70,6 +70,11 @@ test("parseAttentionKindSummaryRows normalizes exact grouped SQL rows", () => {
     { kind: "session.update", unread: 12, latest_at: "2026-06-27 21:15:42" },
     { kind: "unknown", unread: 2, latest_at: null },
   ]);
+});
+
+test("formatRenderedAttentionViewSummary states exact total and shown count", () => {
+  assert.equal(formatRenderedAttentionViewSummary(72, 50), "72 matching items · showing 50");
+  assert.equal(formatRenderedAttentionViewSummary(null, "bad"), "0 matching items · showing 0");
 });
 
 test("parseAttentionSessionSummaryRows normalizes exact grouped SQL rows", () => {
