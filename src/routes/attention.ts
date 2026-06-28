@@ -52,6 +52,10 @@ export function parseAttentionSessionSummaryRows(rows: Array<{ session_id: strin
   return rows.map((row) => ({ session_id: row.session_id ?? null, unread: Number(row.unread ?? 0), latest_at: row.latest_at ?? null }));
 }
 
+export function formatRenderedAttentionViewSummary(total: unknown, shown: unknown): string {
+  return `${Math.max(0, Number(total ?? 0) || 0)} matching items · showing ${Math.max(0, Number(shown ?? 0) || 0)}`;
+}
+
 export function parseAttentionListQuery(url: URL) {
   const kind = url.searchParams.get("kind")?.trim() || null;
   const sessionParam = url.searchParams.get("sessionId")?.trim() || null;
