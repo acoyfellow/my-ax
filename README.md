@@ -55,7 +55,7 @@ The authenticated shell renders those steers as owner-friendly destinations:
 - `/runs` — run status summaries for open, running, completed, failed, and aborted work.
 - `/jobs` — recurring job status summaries for active and paused jobs.
 
-Those rendered pages are Access-protected, preserve the raw API receipts, and should answer the return-loop questions: what needs me, what is running, what finished or failed, where can I safely steer next?
+Those rendered pages are Access-protected, preserve the raw API receipts, and should answer the return-loop questions: what needs me, what is running, what finished or failed, where can I safely steer next? In the shell, Check-in bucket links navigate to rendered owner destinations while carrying the authoritative raw receipt href in `data-check-in-raw-href` for proof and debugging.
 
 ## Important Limits
 
