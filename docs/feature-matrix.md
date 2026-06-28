@@ -49,7 +49,7 @@ Status:
 
 | Capability | Status | Current shape | Evidence |
 |---|---:|---|---|
-| Recurring prompts | ✅ | Native per-session schedules run saved prompts. HTTP routes, Think tools, Code Mode, and MCP share one owner-scoped job service; D1 stores job state and durable history. Raw `/api/jobs` receipts and rendered `/jobs` owner views preserve valid status filters, show exact active/paused summaries, and expose safe next actions back to Check-in or the authoritative API receipt. | `src/jobs.ts`, `src/job-service.ts`, `src/routes/jobs.ts`, `npm run test:jobs-route`, `npm run test:owner-routes` |
+| Recurring prompts | ✅ | Native per-session schedules run saved prompts. HTTP routes, Think tools, Code Mode, and MCP share one owner-scoped job service; D1 stores job state and durable history. Raw `/api/jobs` receipts and rendered `/jobs` owner views preserve valid status filters, show exact active/paused summaries, expose per-job history receipt links, and provide safe next actions back to Check-in or the authoritative API receipt. | `src/jobs.ts`, `src/job-service.ts`, `src/routes/jobs.ts`, `npm run test:jobs-route`, `npm run test:owner-routes` |
 | Job drift repair | ⚠️ | Creation/update paths compensate known partial failures, but there is no automatic D1-vs-native-schedule reconciliation loop. | `src/jobs.ts`, `src/job-service.ts` |
 | Model catalog | ✅ | The deployment chooses models from `src/models.ts`; gateway-backed availability remains deployment-specific. | `src/models.ts`, `src/llm.ts` |
 | Vision attachments | ✅ | Owner-scoped R2 bytes attach only for models marked vision-capable; other models receive an omission notice. | `src/agent.ts`, `src/uploads.ts` |
