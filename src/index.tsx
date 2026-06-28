@@ -162,6 +162,8 @@ app.use("/machinectl/*", accessMiddleware());
 // browser JS, and offline recovery don't have to re-auth on every fetch.
 app.use("/", accessMiddleware());
 app.use("/attention", accessMiddleware());
+app.use("/runs/*", accessMiddleware());
+app.use("/runs", accessMiddleware());
 app.use("/capabilities", accessMiddleware());
 
 // ─── Health / discovery ────────────────────────────────────────────────────

@@ -254,6 +254,49 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     return c.json(jsonResponse(c.req.path, { runId, status }));
   });
 
+  app.get("/runs", async (c) => {
+    const identity = c.get("identity");
+    const { limit, status, invalidStatus } = parseRunListQuery(new URL(c.req.url));
+    if (invalidStatus) return c.html(<Layout title="Runs · My Agent Experience" identityEmail={identity.email} buildId={c.env.CF_VERSION_METADATA?.id ?? undefined} theme={readThemeCookie(c)}><main class="min-h-dvh grid place-items-center p-6"><section class="max-w-xl rounded-2xl border border-line bg-bg-alt p-6"><h1 class="text-xl font-semibold text-fg">Unsupported run filter</h1><p class="mt-2 text-sm text-fg-mut">Status filter `{invalidStatus}` is not supported.</p><a class="mt-4 inline-block text-brand" href="/runs">View all runs</a></section></main></Layout>, 400);
+    const rows = status
+      ? await c.env.DB.prepare("SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT ?").bind(identity.email, status, limit).all<Pick<RunRow, "id" | "status" | "title" | "task_summary" | "created_at" | "updated_at">>()
+      : await c.env.DB.prepare("SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?").bind(identity.email, limit).all<Pick<RunRow, "id" | "status" | "title" | "task_summary" | "created_at" | "updated_at">>();
+    const runs = rows.results ?? [];
+    return c.html(
+      <Layout title="Runs · My Agent Experience" identityEmail={identity.email} buildId={c.env.CF_VERSION_METADATA?.id ?? undefined} theme={readThemeCookie(c)}>
+        <main class="min-h-dvh bg-bg text-fg" data-runs-page>
+          <section class="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+            <header class="rounded-2xl border border-line bg-bg-alt p-5">
+              <a class="text-xs font-semibold text-fg-mut hover:text-fg" href="/">← Back to shell</a>
+              <h1 class="mt-3 text-3xl font-bold">Runs</h1>
+              <p class="mt-1 text-sm text-fg-mut">{runs.length} shown{status ? ` · status: ${status}` : ""}</p>
+              <div class="mt-4 flex flex-wrap gap-2">
+                {RUN_STATUSES.map((runStatus) => <a class={`rounded-full border px-3 py-1 text-xs font-semibold ${status === runStatus ? "border-brand bg-brand/10 text-brand" : "border-line text-fg-mut hover:text-fg"}`} href={`/runs?status=${runStatus}`}>{runStatus}</a>)}
+                <a class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-fg-mut hover:text-fg" href="/api/runs">API receipt</a>
+              </div>
+            </header>
+            {runs.length ? <ol class="space-y-3">
+              {runs.map((run) => <li class="rounded-2xl border border-line bg-bg-alt p-4" data-run-list-item={run.id}>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 class="text-sm font-semibold text-fg">{run.title || run.id}</h2>
+                    <p class="mt-1 text-sm leading-6 text-fg-mut">{run.task_summary}</p>
+                  </div>
+                  <span class={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${statusClass(run.status)}`}>{run.status}</span>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-fg-mut">
+                  <a class="rounded-full bg-brand px-3 py-1.5 font-bold text-white hover:opacity-90" href={`/runs/${run.id}`}>Open receipt</a>
+                  <time>{run.updated_at}</time>
+                  <code class="font-mono text-[10px]">{run.id}</code>
+                </div>
+              </li>)}
+            </ol> : <section class="rounded-2xl border border-line bg-bg-alt p-6 text-sm text-fg-mut">No runs match this view.</section>}
+          </section>
+        </main>
+      </Layout>,
+    );
+  });
+
   app.get("/runs/:id", async (c) => {
     const identity = c.get("identity");
     const runId = c.req.param("id");
