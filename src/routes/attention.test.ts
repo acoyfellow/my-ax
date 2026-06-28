@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSeenForm, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionReturnHref, formatRenderedAttentionSeenForm, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -123,6 +123,12 @@ test("formatRenderedAttentionApiReceiptHref preserves rendered filters for raw r
   assert.equal(formatRenderedAttentionApiReceiptHref({ kind: null, sessionId: null }), "/api/attention");
   assert.equal(formatRenderedAttentionApiReceiptHref({ kind: "run.failed&urgent", sessionId: null }), "/api/attention?kind=run.failed%26urgent");
   assert.equal(formatRenderedAttentionApiReceiptHref({ kind: "run.failed", sessionId: "11111111-1111-4111-8111-111111111111" }), "/api/attention?kind=run.failed&sessionId=11111111-1111-4111-8111-111111111111");
+});
+
+test("formatRenderedAttentionReturnHref preserves rendered filters after seen posts", () => {
+  assert.equal(formatRenderedAttentionReturnHref({ kind: null, sessionId: null }), "/attention");
+  assert.equal(formatRenderedAttentionReturnHref({ kind: "run.failed&urgent", sessionId: null }), "/attention?kind=run.failed%26urgent");
+  assert.equal(formatRenderedAttentionReturnHref({ kind: "run.failed", sessionId: "11111111-1111-4111-8111-111111111111" }), "/attention?kind=run.failed&sessionId=11111111-1111-4111-8111-111111111111");
 });
 
 test("formatRenderedAttentionSeenForm preserves filters in hidden owner-return controls", () => {

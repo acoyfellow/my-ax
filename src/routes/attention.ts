@@ -100,6 +100,10 @@ export function formatRenderedAttentionApiReceiptHref(query: { kind: string | nu
   return suffix ? `/api/attention?${suffix}` : "/api/attention";
 }
 
+export function formatRenderedAttentionReturnHref(query: { kind: string | null; sessionId: string | null }): string {
+  return formatRenderedAttentionApiReceiptHref(query).replace("/api/attention", "/attention");
+}
+
 export function formatRenderedAttentionSeenForm(query: { kind: string | null; sessionId: string | null }): string {
   const hidden = [
     query.kind ? `<input type="hidden" name="kind" value="${escapeHtml(query.kind)}">` : "",
@@ -159,7 +163,7 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     }
     const { filterSql, bindValues } = buildAttentionListFilter(email, query);
     await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).run();
-    const redirectTo = formatRenderedAttentionApiReceiptHref(query).replace("/api/attention", "/attention");
+    const redirectTo = formatRenderedAttentionReturnHref(query);
     return c.redirect(redirectTo, 303);
   });
 
