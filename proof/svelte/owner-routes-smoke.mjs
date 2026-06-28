@@ -45,6 +45,8 @@ mustContain("docs/architecture.md", "unsupported `/attention?sessionId=...`", "a
 mustContain("docs/architecture.md", "unfiltered `/api/attention`, `/api/runs`, or `/api/jobs` receipt", "architecture invalid-filter unfiltered receipt targets");
 mustContain("docs/feature-matrix.md", "data-attention-seen-form", "feature matrix Attention seen form marker");
 mustContain("docs/feature-matrix.md", "marks the current filtered view seen", "feature matrix Attention seen form behavior");
+mustContain("README.md", "data-attention-seen-form", "README Attention seen form marker");
+mustContain("README.md", "mark the current filtered view seen", "README Attention seen form behavior");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
