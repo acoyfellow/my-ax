@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -92,6 +92,12 @@ test("formatRenderedAttentionSessionSummary renders filtered links and all-clear
   assert.match(html, new RegExp(`href="/attention\\?sessionId=${sessionId}"`));
   assert.match(html, /<strong>3<\/strong> session 11111111/);
   assert.match(formatRenderedAttentionSessionSummary([]), /data-attention-session-summary-empty>0 unread sessions/);
+});
+
+test("formatRenderedAttentionFilterLabel escapes rendered filter labels", () => {
+  assert.equal(formatRenderedAttentionFilterLabel({ kind: null, sessionId: null }), "");
+  assert.equal(formatRenderedAttentionFilterLabel({ kind: "run.failed", sessionId: "11111111-1111-4111-8111-111111111111" }), " · kind: run.failed · session: 11111111-1111-4111-8111-111111111111");
+  assert.equal(formatRenderedAttentionFilterLabel({ kind: "<script>", sessionId: null }), " · kind: &lt;script&gt;");
 });
 
 test("normalizeRenderedAttentionSourceHref keeps only same-origin paths", () => {

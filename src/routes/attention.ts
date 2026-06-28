@@ -79,6 +79,11 @@ export function formatRenderedAttentionListItem(item: { id: string; kind: string
   return `<li class="card" data-attention-list-item="${escapeHtml(item.id)}"><div class="meta">${escapeHtml(item.kind || "attention")} · ${escapeHtml(item.created_at)}</div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.body)}</p><p><a class="button" href="${escapeHtml(normalizeRenderedAttentionSourceHref(item.href))}">Open source</a> <code>${escapeHtml(item.id)}</code></p></li>`;
 }
 
+export function formatRenderedAttentionFilterLabel(query: { kind: string | null; sessionId: string | null }): string {
+  const parts = [query.kind ? `kind: ${query.kind}` : null, query.sessionId ? `session: ${query.sessionId}` : null].filter(Boolean);
+  return parts.length ? ` · ${escapeHtml(parts.join(" · "))}` : "";
+}
+
 export function parseAttentionListQuery(url: URL) {
   const kind = url.searchParams.get("kind")?.trim() || null;
   const sessionParam = url.searchParams.get("sessionId")?.trim() || null;
