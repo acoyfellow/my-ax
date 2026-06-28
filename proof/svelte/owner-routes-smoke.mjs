@@ -23,6 +23,8 @@ mustContain("src/routes/attention.ts", "data-attention-session-summary", "attent
 mustContain("src/routes/attention.ts", "data-attention-session-summary-empty", "attention empty session summary marker");
 mustContain("src/routes/attention.ts", "data-attention-view-summary", "attention exact view summary marker");
 mustContain("src/routes/attention.ts", "data-attention-empty", "attention empty list marker");
+mustContain("src/routes/attention.ts", "data-attention-error", "attention invalid-filter error marker");
+mustContain("src/routes/attention.ts", "Unsupported sessionId", "attention invalid-filter owner page");
 mustContain("src/routes/attention.ts", "rows.length ? rows.map(formatRenderedAttentionListItem).join(\"\") : formatRenderedAttentionEmptyList()", "attention rendered empty-list fallback");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionApiReceiptHref(query)", "attention filtered API receipt href wiring");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "attention page helper wiring");

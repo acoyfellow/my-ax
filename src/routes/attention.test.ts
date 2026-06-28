@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -113,6 +113,10 @@ test("formatRenderedAttentionFilterLabel escapes rendered filter labels", () => 
 
 test("formatRenderedAttentionEmptyList renders stable owner-friendly empty copy", () => {
   assert.equal(formatRenderedAttentionEmptyList(), `<li class="card muted" data-attention-empty>Nothing needs you in this Attention view.</li>`);
+});
+
+test("formatRenderedAttentionErrorList renders stable escaped error marker", () => {
+  assert.equal(formatRenderedAttentionErrorList("Unsupported <session>"), `<li class="card muted" data-attention-error>Unsupported &lt;session&gt;</li>`);
 });
 
 test("formatRenderedAttentionApiReceiptHref preserves rendered filters for raw receipts", () => {

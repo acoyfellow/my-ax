@@ -88,6 +88,10 @@ export function formatRenderedAttentionEmptyList(): string {
   return `<li class="card muted" data-attention-empty>Nothing needs you in this Attention view.</li>`;
 }
 
+export function formatRenderedAttentionErrorList(message: string): string {
+  return `<li class="card muted" data-attention-error>${escapeHtml(message)}</li>`;
+}
+
 export function formatRenderedAttentionApiReceiptHref(query: { kind: string | null; sessionId: string | null }): string {
   const params = new URLSearchParams();
   if (query.kind) params.set("kind", query.kind);
@@ -131,7 +135,10 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
   app.get("/attention", async (c) => {
     const email = owner(c);
     const query = parseAttentionListQuery(new URL(c.req.url));
-    if (query.invalidSessionId) return c.redirect("/attention", 302);
+    if (query.invalidSessionId) {
+      const list = formatRenderedAttentionErrorList(`Unsupported sessionId: ${query.invalidSessionId}`);
+      return c.html(formatRenderedAttentionPageHtml({ unread: 0, total: 0, shown: 0, filterLabel: " · filter rejected", summary: "", list, apiReceiptHref: "/api/attention" }), 400);
+    }
     const { filterSql, bindValues } = buildAttentionListFilter(email, query);
     const [items, unread, total, kindRows, sessionRows] = await Promise.all([
       c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 50`).bind(...bindValues).all(),
