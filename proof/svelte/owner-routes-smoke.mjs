@@ -42,12 +42,13 @@ mustContain("src/routes/jobs.ts", "data-jobs-status-summary", "jobs status summa
 mustContain("src/routes/jobs.ts", "data-jobs-empty", "jobs empty-state marker");
 mustContain("src/routes/jobs.ts", "data-jobs-next-actions", "jobs next-actions marker");
 
-mustContain("proof/svelte/CheckIn.svelte", 'href.startsWith("/api/attention")', "Check-in attention API display mapping");
-mustContain("proof/svelte/CheckIn.svelte", 'replace("/api/attention", "/attention")', "Check-in attention rendered display mapping");
-mustContain("proof/svelte/CheckIn.svelte", 'href.startsWith("/api/runs")', "Check-in runs API display mapping");
-mustContain("proof/svelte/CheckIn.svelte", 'replace("/api/runs", "/runs")', "Check-in runs rendered display mapping");
-mustContain("proof/svelte/CheckIn.svelte", 'href.startsWith("/api/jobs")', "Check-in jobs API display mapping");
-mustContain("proof/svelte/CheckIn.svelte", 'replace("/api/jobs", "/jobs")', "Check-in jobs rendered display mapping");
+mustContain("proof/svelte/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
+mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/attention")', "Check-in attention API display mapping");
+mustContain("proof/svelte/check-in-display-href.ts", 'replace("/api/attention", "/attention")', "Check-in attention rendered display mapping");
+mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/runs")', "Check-in runs API display mapping");
+mustContain("proof/svelte/check-in-display-href.ts", 'replace("/api/runs", "/runs")', "Check-in runs rendered display mapping");
+mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/jobs")', "Check-in jobs API display mapping");
+mustContain("proof/svelte/check-in-display-href.ts", 'replace("/api/jobs", "/jobs")', "Check-in jobs rendered display mapping");
 
 if (failures.length) {
   console.error("owner-route smoke failed:");

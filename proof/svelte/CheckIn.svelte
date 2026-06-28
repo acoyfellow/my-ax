@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { displayCheckInHref } from "./check-in-display-href";
 
   type Steer = { label: string; href: string };
   type Bucket = { key: string; label: string; total: number; sampleCount: number; sampleIds?: string[]; steer: Steer | null };
@@ -17,13 +18,6 @@
     try {
       localStorage.setItem(DETAILS_STORAGE_KEY, value ? "1" : "0");
     } catch {}
-  }
-
-  function displayHref(href: string): string {
-    if (href.startsWith("/api/attention")) return href.replace("/api/attention", "/attention");
-    if (href.startsWith("/api/runs")) return href.replace("/api/runs", "/runs");
-    if (href.startsWith("/api/jobs")) return href.replace("/api/jobs", "/jobs");
-    return href;
   }
 
   function formatCheckedAt(value?: string): string | null {
@@ -88,7 +82,7 @@
         {#each checkIn.buckets as bucket (bucket.key)}
           {@const content = `${bucket.label}: ${bucket.total} total, ${bucket.sampleCount} shown`}
           {#if bucket.steer}
-            <a class="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-bg-alt px-2.5 py-1 text-[11px] text-fg-mut hover:border-brand/50 hover:text-fg" href={displayHref(bucket.steer.href)} title={content} data-check-in-bucket={bucket.key} data-check-in-raw-href={bucket.steer.href}>
+            <a class="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-bg-alt px-2.5 py-1 text-[11px] text-fg-mut hover:border-brand/50 hover:text-fg" href={displayCheckInHref(bucket.steer.href)} title={content} data-check-in-bucket={bucket.key} data-check-in-raw-href={bucket.steer.href}>
               <span>{bucket.label}</span><strong class="text-fg">{bucket.total}</strong>
             </a>
           {:else}
@@ -116,7 +110,7 @@
             <p class="mt-2 truncate font-mono text-[10px] text-fg-mut" title={bucket.sampleIds.join(", ")}>{bucket.sampleIds.slice(0, 2).join(", ")}{bucket.sampleIds.length > 2 ? "…" : ""}</p>
           {/if}
           {#if bucket.steer}
-            <a class="mt-2 inline-flex text-[11px] font-semibold text-brand hover:underline" href={displayHref(bucket.steer.href)} data-check-in-raw-href={bucket.steer.href}>{bucket.steer.label}</a>
+            <a class="mt-2 inline-flex text-[11px] font-semibold text-brand hover:underline" href={displayCheckInHref(bucket.steer.href)} data-check-in-raw-href={bucket.steer.href}>{bucket.steer.label}</a>
           {/if}
         </section>
       {/each}

@@ -21,7 +21,7 @@
     "build:assets": "npm run build:css && npm run build:brand && npm run build:vendor && npm run build:svelte",
     "build:svelte": "node proof/svelte/build.mjs",
     "test:tool-widgets": "node proof/svelte/tool-result-widgets-smoke.mjs",
-    "test:check-in-shell": "node proof/svelte/check-in-shell-smoke.mjs",
+    "test:check-in-shell": "tsx --test proof/svelte/check-in-display-href.test.ts && node proof/svelte/check-in-shell-smoke.mjs",
     "test:owner-routes": "node proof/svelte/owner-routes-smoke.mjs",
     "test:tool-output-limit": "tsx --test src/tool-output-limit.test.ts",
     "test:runs": "tsx --test src/routes/runs.test.ts",

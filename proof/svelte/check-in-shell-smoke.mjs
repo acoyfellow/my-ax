@@ -25,6 +25,8 @@ function assertNotIncludes(haystack, needle, label) {
 const buildConfig = read("proof/svelte/build.mjs");
 const chatPage = read("src/views/ChatPage.tsx");
 const checkIn = read("proof/svelte/CheckIn.svelte");
+const displayHrefHelper = read("proof/svelte/check-in-display-href.ts");
+const displayHrefTest = read("proof/svelte/check-in-display-href.test.ts");
 const generatedBundles = read("proof/svelte/bundles.generated.ts");
 const ssr = read("proof/svelte/CheckIn.ssr.mjs");
 
@@ -42,10 +44,14 @@ assertIncludes(checkIn, "fetch(\"/api/check-in\"", "Check-in API fetch");
 assertIncludes(checkIn, "checkedAt", "Check-in server timestamp field");
 assertIncludes(checkIn, "bucket.steer", "Check-in bucket singular steer field");
 assertIncludes(checkIn, "data-check-in-raw-href={bucket.steer.href}", "Check-in raw API href preservation marker");
-assertIncludes(checkIn, "href={displayHref(bucket.steer.href)}", "Check-in rendered owner destination href");
-assertIncludes(checkIn, 'href.replace("/api/attention", "/attention")', "Check-in Attention display href preserves query string");
-assertIncludes(checkIn, 'href.replace("/api/runs", "/runs")', "Check-in Runs display href preserves query string");
-assertIncludes(checkIn, 'href.replace("/api/jobs", "/jobs")', "Check-in Jobs display href preserves query string");
+assertIncludes(checkIn, "displayCheckInHref", "Check-in rendered owner destination helper");
+assertIncludes(checkIn, "href={displayCheckInHref(bucket.steer.href)}", "Check-in rendered owner destination href");
+assertIncludes(displayHrefHelper, 'href.replace("/api/attention", "/attention")', "Check-in Attention display href preserves query string");
+assertIncludes(displayHrefHelper, 'href.replace("/api/runs", "/runs")', "Check-in Runs display href preserves query string");
+assertIncludes(displayHrefHelper, 'href.replace("/api/jobs", "/jobs")', "Check-in Jobs display href preserves query string");
+assertIncludes(displayHrefTest, '"/api/attention?kind=job.complete"', "Check-in display href query-preservation test");
+assertIncludes(displayHrefTest, '"/api/runs?status=failed"', "Check-in display href query-preservation test");
+assertIncludes(displayHrefTest, '"/api/jobs?status=active"', "Check-in display href query-preservation test");
 assertNotIncludes(checkIn, "bucket.steers", "Check-in bucket plural steers field");
 assertIncludes(ssr, "data-check-in-root", "Check-in SSR output");
 assertIncludes(ssr, "data-check-in-refresh", "Check-in SSR output");
