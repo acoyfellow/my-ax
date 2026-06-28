@@ -114,6 +114,10 @@ export function parseRunListQuery(url: URL) {
   return { limit, status, invalidStatus: statusParam !== null && status === null ? statusParam : null };
 }
 
+export function formatRenderedRunsApiReceiptHref(status?: RunStatus | null): string {
+  return status ? `/api/runs?status=${status}` : "/api/runs";
+}
+
 function statusClass(status: string) {
   if (status === "completed") return "text-good border-good/30 bg-good/10";
   if (status === "failed" || status === "aborted") return "text-bad border-bad/30 bg-bad/10";
@@ -265,6 +269,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
       c.env.DB.prepare("SELECT status, COUNT(*) AS count FROM runs WHERE owner_email = ? GROUP BY status").bind(identity.email).all<{ status: RunStatus; count: number }>(),
     ]);
     const runs = rows.results ?? [];
+    const apiReceiptHref = formatRenderedRunsApiReceiptHref(status);
     const statusCounts: Record<RunStatus, number> = { open: 0, running: 0, completed: 0, failed: 0, aborted: 0 };
     for (const row of countRows.results ?? []) if ((RUN_STATUSES as readonly string[]).includes(row.status)) statusCounts[row.status] = Number(row.count ?? 0);
     return c.html(
@@ -280,12 +285,12 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
               </div>
               <div class="mt-4 flex flex-wrap gap-2">
                 {RUN_STATUSES.map((runStatus) => <a class={`rounded-full border px-3 py-1 text-xs font-semibold ${status === runStatus ? "border-brand bg-brand/10 text-brand" : "border-line text-fg-mut hover:text-fg"}`} href={`/runs?status=${runStatus}`}>{runStatus}</a>)}
-                <a class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-fg-mut hover:text-fg" href="/api/runs">API receipt</a>
+                <a class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-fg-mut hover:text-fg" href={apiReceiptHref}>API receipt</a>
               </div>
               <nav class="mt-3 flex flex-wrap gap-2" data-runs-next-actions>
                 <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/">Back to Check-in</a>
                 <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/runs">View all runs</a>
-                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/api/runs">API receipt</a>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href={apiReceiptHref}>API receipt</a>
               </nav>
             </header>
             {runs.length ? <ol class="space-y-3">
@@ -308,7 +313,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
               <div class="mt-4 flex flex-wrap gap-2">
                 <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/">Back to Check-in</a>
                 <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/runs">View all runs</a>
-                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/api/runs">API receipt</a>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href={apiReceiptHref}>API receipt</a>
               </div>
             </section>}
           </section>
