@@ -17,10 +17,10 @@ mustContain("src/index.tsx", 'app.use("/jobs", accessMiddleware());', "Access mi
 mustContain("src/index.tsx", 'app.get("/attention"', "rendered /attention route");
 mustContain("src/index.tsx", "data-attention-page", "attention HTML marker");
 mustContain("src/index.tsx", "data-attention-next-actions", "attention next-actions marker");
-mustContain("src/index.tsx", "data-attention-kind-summary", "attention kind summary marker");
-mustContain("src/index.tsx", "data-attention-kind-summary-empty", "attention empty kind summary marker");
-mustContain("src/index.tsx", "data-attention-session-summary", "attention session summary marker");
-mustContain("src/index.tsx", "data-attention-session-summary-empty", "attention empty session summary marker");
+mustContain("src/routes/attention.ts", "data-attention-kind-summary", "attention kind summary marker");
+mustContain("src/routes/attention.ts", "data-attention-kind-summary-empty", "attention empty kind summary marker");
+mustContain("src/routes/attention.ts", "data-attention-session-summary", "attention session summary marker");
+mustContain("src/routes/attention.ts", "data-attention-session-summary-empty", "attention empty session summary marker");
 mustContain("src/index.tsx", "data-attention-view-summary", "attention exact view summary marker");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
