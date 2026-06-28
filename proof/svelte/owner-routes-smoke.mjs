@@ -23,6 +23,7 @@ mustContain("src/routes/attention.ts", "data-attention-session-summary", "attent
 mustContain("src/routes/attention.ts", "data-attention-session-summary-empty", "attention empty session summary marker");
 mustContain("src/index.tsx", "data-attention-view-summary", "attention exact view summary marker");
 mustContain("src/routes/attention.ts", "data-attention-empty", "attention empty list marker");
+mustContain("src/index.tsx", "rows.length ? rows.map(formatRenderedAttentionListItem).join(\"\") : formatRenderedAttentionEmptyList()", "attention rendered empty-list fallback");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
