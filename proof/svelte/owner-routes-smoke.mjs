@@ -19,9 +19,11 @@ mustContain("src/index.tsx", "data-attention-page", "attention HTML marker");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-empty", "runs empty-state marker");
+mustContain("src/routes/runs.tsx", "data-runs-next-actions", "runs next-actions marker");
 mustContain("src/routes/jobs.ts", 'app.get("/jobs"', "rendered /jobs route");
 mustContain("src/routes/jobs.ts", "data-jobs-page", "jobs HTML marker");
 mustContain("src/routes/jobs.ts", "data-jobs-empty", "jobs empty-state marker");
+mustContain("src/routes/jobs.ts", "data-jobs-next-actions", "jobs next-actions marker");
 
 mustContain("proof/svelte/CheckIn.svelte", 'href.startsWith("/api/attention")', "Check-in attention API display mapping");
 mustContain("proof/svelte/CheckIn.svelte", 'replace("/api/attention", "/attention")', "Check-in attention rendered display mapping");

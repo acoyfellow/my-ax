@@ -274,6 +274,11 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
                 {RUN_STATUSES.map((runStatus) => <a class={`rounded-full border px-3 py-1 text-xs font-semibold ${status === runStatus ? "border-brand bg-brand/10 text-brand" : "border-line text-fg-mut hover:text-fg"}`} href={`/runs?status=${runStatus}`}>{runStatus}</a>)}
                 <a class="rounded-full border border-line px-3 py-1 text-xs font-semibold text-fg-mut hover:text-fg" href="/api/runs">API receipt</a>
               </div>
+              <nav class="mt-3 flex flex-wrap gap-2" data-runs-next-actions>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/">Back to Check-in</a>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/runs">View all runs</a>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/api/runs">API receipt</a>
+              </nav>
             </header>
             {runs.length ? <ol class="space-y-3">
               {runs.map((run) => <li class="rounded-2xl border border-line bg-bg-alt p-4" data-run-list-item={run.id}>
