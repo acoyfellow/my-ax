@@ -164,6 +164,7 @@ app.use("/", accessMiddleware());
 app.use("/attention", accessMiddleware());
 app.use("/runs/*", accessMiddleware());
 app.use("/runs", accessMiddleware());
+app.use("/jobs", accessMiddleware());
 app.use("/capabilities", accessMiddleware());
 
 // ─── Health / discovery ────────────────────────────────────────────────────
