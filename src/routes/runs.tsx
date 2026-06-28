@@ -290,7 +290,14 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
                   <code class="font-mono text-[10px]">{run.id}</code>
                 </div>
               </li>)}
-            </ol> : <section class="rounded-2xl border border-line bg-bg-alt p-6 text-sm text-fg-mut">No runs match this view.</section>}
+            </ol> : <section class="rounded-2xl border border-line bg-bg-alt p-6 text-sm text-fg-mut" data-runs-empty>
+              <p>No runs match this view.</p>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/">Back to Check-in</a>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/runs">View all runs</a>
+                <a class="rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-fg hover:border-brand hover:text-brand" href="/api/runs">API receipt</a>
+              </div>
+            </section>}
           </section>
         </main>
       </Layout>,
