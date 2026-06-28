@@ -129,6 +129,12 @@ test("formatRenderedAttentionPageHtml preserves owner page markers and filtered 
   assert.match(html, /data-attention-empty/);
 });
 
+test("formatRenderedAttentionPageHtml escapes API receipt href attributes", () => {
+  const html = formatRenderedAttentionPageHtml({ unread: 0, total: 0, shown: 0, filterLabel: "", summary: "", list: formatRenderedAttentionEmptyList(), apiReceiptHref: "/api/attention?kind=a&bad=<script>" });
+  assert.match(html, /href="\/api\/attention\?kind=a&amp;bad=&lt;script&gt;"/);
+  assert.doesNotMatch(html, /href="\/api\/attention\?kind=a&bad=<script>"/);
+});
+
 test("normalizeRenderedAttentionSourceHref keeps only same-origin paths", () => {
   assert.equal(normalizeRenderedAttentionSourceHref("/sessions/abc"), "/sessions/abc");
   assert.equal(normalizeRenderedAttentionSourceHref("//evil.example/path"), "/");
