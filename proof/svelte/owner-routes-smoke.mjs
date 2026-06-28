@@ -24,6 +24,7 @@ mustContain("src/routes/attention.ts", "data-attention-session-summary-empty", "
 mustContain("src/routes/attention.ts", "data-attention-view-summary", "attention exact view summary marker");
 mustContain("src/routes/attention.ts", "data-attention-empty", "attention empty list marker");
 mustContain("src/routes/attention.ts", "data-attention-source-href", "attention source href marker");
+mustContain("src/routes/attention.ts", "data-attention-api-receipt-href", "attention API receipt href marker");
 mustContain("src/routes/attention.ts", "data-attention-error", "attention invalid-filter error marker");
 mustContain("src/routes/attention.ts", "Unsupported sessionId", "attention invalid-filter owner page");
 mustContain("src/routes/attention.ts", 'app.post("/attention/seen"', "rendered Attention seen route");
@@ -52,6 +53,7 @@ mustContain("docs/architecture.md", "unfiltered `/api/attention`, `/api/runs`, o
 mustContain("docs/feature-matrix.md", "data-attention-seen-form", "feature matrix Attention seen form marker");
 mustContain("docs/feature-matrix.md", "marks the current filtered view seen", "feature matrix Attention seen form behavior");
 mustContain("docs/feature-matrix.md", "data-attention-source-href", "feature matrix Attention source href marker");
+mustContain("docs/feature-matrix.md", "data-attention-api-receipt-href", "feature matrix Attention API receipt href marker");
 mustContain("docs/feature-matrix.md", "rendered `/runs` owner views preserve valid status filters", "feature matrix Runs rendered filter contract");
 mustContain("docs/feature-matrix.md", "exact status summaries", "feature matrix Runs exact summary contract");
 mustContain("docs/feature-matrix.md", "authoritative API receipt", "feature matrix Runs API receipt contract");
