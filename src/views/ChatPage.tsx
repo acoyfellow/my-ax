@@ -1,10 +1,9 @@
-// views/ChatPage.tsx — chat page shell. Renders the Layout <head> + four
-// Svelte 5 mount targets that hydrate the entire UI.
+// views/ChatPage.tsx — chat page shell. Renders the Layout <head> + Svelte 5
+// mount targets that hydrate the UI.
 //
 // Architecture:
 //   - AppShell.svelte      header (logo, conn pill, hamburger, attention, settings)
 //   - Sessions.svelte      left-slide-in conversations sidebar
-//   - CheckIn.svelte       owner-return bucket strip
 //   - Chat.svelte          the entire chat surface (composer, log, WS, etc)
 //   - Settings.svelte      centered settings modal (capabilities, model, jobs, …)
 //   - ComputerHealth + Connectors hydrate separately, then Settings moves
@@ -17,8 +16,6 @@ import { SvelteEmbed } from "../../proof/svelte/SvelteEmbed";
 import AppShellComponent from "../../proof/svelte/AppShell.ssr.mjs";
 // @ts-expect-error -- pre-compiled Svelte SSR modules, no .d.ts.
 import ChatComponent from "../../proof/svelte/Chat.ssr.mjs";
-// @ts-expect-error -- pre-compiled Svelte SSR modules, no .d.ts.
-import CheckInComponent from "../../proof/svelte/CheckIn.ssr.mjs";
 // @ts-expect-error -- pre-compiled Svelte SSR modules, no .d.ts.
 import SessionsComponent from "../../proof/svelte/Sessions.ssr.mjs";
 // @ts-expect-error -- pre-compiled Svelte SSR modules, no .d.ts.
@@ -54,7 +51,6 @@ export const ChatPage: FC<ChatPageProps> = (props) => {
           props={{ identityEmail: props.identityEmail ?? null }}
           buildId={props.buildId}
         />
-        <SvelteEmbed component={CheckInComponent} hydrateAs="checkin" buildId={props.buildId} />
         <div class="flex-1 min-h-0">
           <SvelteEmbed component={ChatComponent} hydrateAs="chat" buildId={props.buildId} />
         </div>

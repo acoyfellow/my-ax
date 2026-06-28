@@ -24,6 +24,7 @@ function assertNotIncludes(haystack, needle, label) {
 
 const buildConfig = read("proof/svelte/build.mjs");
 const chatPage = read("src/views/ChatPage.tsx");
+const attention = read("proof/svelte/Attention.svelte");
 const checkIn = read("proof/svelte/CheckIn.svelte");
 const displayHrefHelper = read("proof/svelte/check-in-display-href.ts");
 const displayHrefTest = read("proof/svelte/check-in-display-href.test.ts");
@@ -33,7 +34,17 @@ const ssr = read("proof/svelte/CheckIn.ssr.mjs");
 assertIncludes(buildConfig, "checkin: here(\"CheckIn.svelte\")", "Svelte build config");
 assertIncludes(generatedBundles, "checkin", "generated Svelte bundles");
 assertIncludes(generatedBundles, "data-check-in-raw-href", "generated Check-in raw API href marker");
-assertIncludes(chatPage, "hydrateAs=\"checkin\"", "Chat shell Check-in mount");
+assertNotIncludes(chatPage, "hydrateAs=\"checkin\"", "Chat shell Check-in mount that steals composer space");
+assertIncludes(attention, 'import CheckIn from "./CheckIn.svelte"', "Attention popup Check-in import");
+assertIncludes(attention, "<CheckIn />", "Attention popup Check-in mount");
+assertIncludes(attention, "aria-label=\"Attention and Check-in\"", "Attention popup combined owner panel label");
+assertIncludes(attention, "data-attention-owner-backdrop", "Attention owner modal backdrop");
+assertIncludes(attention, "bg-black/55", "Attention owner modal backdrop dimming matches Settings intent");
+assertIncludes(attention, "w-[min(760px,calc(100vw-1rem))]", "Attention owner modal width matches Settings modal");
+assertIncludes(attention, "h-[min(760px,calc(100dvh-1rem))]", "Attention owner modal height matches Settings modal");
+assertIncludes(attention, "Close Check-in panel", "Attention owner modal close control");
+assertIncludes(checkIn, "@container/checkin", "Check-in Tailwind named container");
+assertIncludes(checkIn, "@min-[24rem]/checkin", "Check-in Tailwind container query");
 assertIncludes(checkIn, "data-check-in-root", "Check-in component root marker");
 assertIncludes(checkIn, "data-check-in-refresh", "Check-in refresh marker");
 assertIncludes(checkIn, "data-check-in-details-toggle", "Check-in details toggle marker");
@@ -56,4 +67,4 @@ assertNotIncludes(checkIn, "bucket.steers", "Check-in bucket plural steers field
 assertIncludes(ssr, "data-check-in-root", "Check-in SSR output");
 assertIncludes(ssr, "data-check-in-refresh", "Check-in SSR output");
 
-console.log("✓ check-in shell smoke: shell mounts Check-in, built bundle exists, SSR contains root + refresh markers");
+console.log("✓ check-in shell smoke: Check-in bundle/markers exist without mounting a vertical strip in the chat shell");
