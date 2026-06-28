@@ -17,7 +17,6 @@ function isVoiceEnabled(env: Env): boolean {
 }
 import { getUserWorkspace } from "./workspace";
 import { ChatPage } from "./views/ChatPage";
-import { AttentionPage } from "./views/AttentionPage";
 import type { AppEnv } from "./app-env";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
@@ -495,17 +494,11 @@ app.get("/attention", async (c) => {
     c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 50`).bind(...bindValues).all(),
     c.env.DB.prepare(`SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).first<{ count: number }>(),
   ]);
-  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
-  const theme = readThemeCookie(c);
-  return c.html(<AttentionPage
-    identityEmail={identity.email}
-    buildId={buildId}
-    theme={theme}
-    appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
-    unread={Number(unread?.count ?? 0)}
-    items={(items.results ?? []) as any}
-    filter={{ kind: query.kind, sessionId: query.sessionId }}
-  />);
+  const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[char] ?? char);
+  const rows = (items.results ?? []) as Array<{ id: string; kind: string | null; title: string; body: string; href: string; created_at: string }>;
+  const list = rows.length ? rows.map((item) => `<li class="card" data-attention-list-item="${escapeHtml(item.id)}"><div class="meta">${escapeHtml(item.kind || "attention")} · ${escapeHtml(item.created_at)}</div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.body)}</p><p><a class="button" href="${escapeHtml(item.href || "/")}">Open source</a> <code>${escapeHtml(item.id)}</code></p></li>`).join("") : `<li class="card muted">Nothing needs you in this Attention view.</li>`;
+  const filterLabel = [query.kind ? `kind: ${query.kind}` : null, query.sessionId ? `session: ${query.sessionId}` : null].filter(Boolean).join(" · ");
+  return c.html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Attention · my · ax</title><link rel="stylesheet" href="/static/styles.css"><style>body{margin:0;background:#0b1118;color:#e9e9ec;font-family:Inter,ui-sans-serif,system-ui,sans-serif}.wrap{max-width:900px;margin:0 auto;padding:24px}.hero,.card{border:1px solid #27272a;background:#111827;border-radius:18px;padding:16px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:16px}a{color:#f6821f}.muted,.meta,code{color:#a1a1aa}ol{list-style:none;padding:0;margin:0;display:grid;gap:12px}.button{display:inline-block;border-radius:999px;background:#f6821f;color:white;text-decoration:none;font-weight:700;padding:8px 12px;font-size:12px}h1{margin:.25rem 0 0;font-size:28px}h2{font-size:16px;margin:.35rem 0}.meta{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}p{line-height:1.55}</style></head><body><main class="wrap" data-attention-page><section class="hero"><div><a href="/">← Back to shell</a><h1>Attention</h1><p class="muted">${Number(unread?.count ?? 0)} unread${filterLabel ? ` · ${escapeHtml(filterLabel)}` : ""}</p></div><a href="/api/attention" class="button">API receipt</a></section><ol>${list}</ol></main></body></html>`);
 });
 
 app.get("/capabilities", (c) => {
