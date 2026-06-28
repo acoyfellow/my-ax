@@ -28,6 +28,9 @@ mustContain("src/routes/attention.ts", "formatRenderedAttentionApiReceiptHref(qu
 mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "attention page helper wiring");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionApiReceiptHref", "attention filtered API receipt href helper");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "attention page HTML helper");
+mustContain("docs/architecture.md", "**Attention owner return**", "architecture Attention owner-return contract");
+mustContain("docs/architecture.md", "share `buildAttentionListFilter(...)`", "architecture shared Attention filter contract");
+mustContain("docs/architecture.md", "Access middleware remains registered in `src/index.tsx`", "architecture Attention Access boundary");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
