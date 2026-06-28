@@ -43,6 +43,8 @@ mustContain("docs/architecture.md", "`/jobs` preserves `status`", "architecture 
 mustContain("docs/architecture.md", "Invalid rendered filters are not propagated into raw receipt links", "architecture invalid-filter receipt contract");
 mustContain("docs/architecture.md", "unsupported `/attention?sessionId=...`", "architecture Attention invalid-filter receipt contract");
 mustContain("docs/architecture.md", "unfiltered `/api/attention`, `/api/runs`, or `/api/jobs` receipt", "architecture invalid-filter unfiltered receipt targets");
+mustContain("docs/feature-matrix.md", "data-attention-seen-form", "feature matrix Attention seen form marker");
+mustContain("docs/feature-matrix.md", "marks the current filtered view seen", "feature matrix Attention seen form behavior");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
