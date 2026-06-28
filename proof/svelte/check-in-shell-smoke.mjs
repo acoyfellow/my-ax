@@ -30,6 +30,7 @@ const ssr = read("proof/svelte/CheckIn.ssr.mjs");
 
 assertIncludes(buildConfig, "checkin: here(\"CheckIn.svelte\")", "Svelte build config");
 assertIncludes(generatedBundles, "checkin", "generated Svelte bundles");
+assertIncludes(generatedBundles, "data-check-in-raw-href", "generated Check-in raw API href marker");
 assertIncludes(chatPage, "hydrateAs=\"checkin\"", "Chat shell Check-in mount");
 assertIncludes(checkIn, "data-check-in-root", "Check-in component root marker");
 assertIncludes(checkIn, "data-check-in-refresh", "Check-in refresh marker");
