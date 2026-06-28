@@ -16,6 +16,12 @@ function assertIncludes(haystack, needle, label) {
   }
 }
 
+function assertNotIncludes(haystack, needle, label) {
+  if (haystack.includes(needle)) {
+    throw new Error(`${label} unexpectedly contains ${JSON.stringify(needle)}`);
+  }
+}
+
 const buildConfig = read("proof/svelte/build.mjs");
 const chatPage = read("src/views/ChatPage.tsx");
 const checkIn = read("proof/svelte/CheckIn.svelte");
@@ -33,6 +39,8 @@ assertIncludes(checkIn, "my-ax:check-in-details-expanded", "Check-in details per
 assertIncludes(checkIn, "data-check-in-checked-at", "Check-in server timestamp marker");
 assertIncludes(checkIn, "fetch(\"/api/check-in\"", "Check-in API fetch");
 assertIncludes(checkIn, "checkedAt", "Check-in server timestamp field");
+assertIncludes(checkIn, "bucket.steer", "Check-in bucket singular steer field");
+assertNotIncludes(checkIn, "bucket.steers", "Check-in bucket plural steers field");
 assertIncludes(ssr, "data-check-in-root", "Check-in SSR output");
 assertIncludes(ssr, "data-check-in-refresh", "Check-in SSR output");
 
