@@ -100,9 +100,17 @@ export function formatRenderedAttentionApiReceiptHref(query: { kind: string | nu
   return suffix ? `/api/attention?${suffix}` : "/api/attention";
 }
 
-export function formatRenderedAttentionPageHtml(input: { unread: unknown; total: unknown; shown: number; filterLabel: string; summary: string; list: string; apiReceiptHref: string }): string {
+export function formatRenderedAttentionSeenForm(query: { kind: string | null; sessionId: string | null }): string {
+  const hidden = [
+    query.kind ? `<input type="hidden" name="kind" value="${escapeHtml(query.kind)}">` : "",
+    query.sessionId ? `<input type="hidden" name="sessionId" value="${escapeHtml(query.sessionId)}">` : "",
+  ].join("");
+  return `<form method="post" action="/attention/seen" data-attention-seen-form>${hidden}<button class="button" type="submit">Mark this view seen</button></form>`;
+}
+
+export function formatRenderedAttentionPageHtml(input: { unread: unknown; total: unknown; shown: number; filterLabel: string; summary: string; list: string; apiReceiptHref: string; seenForm?: string }): string {
   const apiReceiptHref = escapeHtml(input.apiReceiptHref);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Attention · my · ax</title><link rel="stylesheet" href="/static/styles.css"><style>body{margin:0;background:#0b1118;color:#e9e9ec;font-family:Inter,ui-sans-serif,system-ui,sans-serif}.wrap{max-width:900px;margin:0 auto;padding:24px}.hero,.card{border:1px solid #27272a;background:#111827;border-radius:18px;padding:16px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:16px}a{color:#f6821f}.muted,.meta,code{color:#a1a1aa}ol{list-style:none;padding:0;margin:0;display:grid;gap:12px}.button{display:inline-block;border-radius:999px;background:#f6821f;color:white;text-decoration:none;font-weight:700;padding:8px 12px;font-size:12px}.outline{border:1px solid #27272a;background:transparent;color:#e9e9ec}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 16px}h1{margin:.25rem 0 0;font-size:28px}h2{font-size:16px;margin:.35rem 0}.meta{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}p{line-height:1.55}</style></head><body><main class="wrap" data-attention-page><section class="hero"><div><a href="/">← Back to shell</a><h1>Attention</h1><p class="muted">${Number(input.unread ?? 0)} unread${input.filterLabel}</p><p class="muted" data-attention-view-summary>${formatRenderedAttentionViewSummary(input.total, input.shown)}</p></div><a href="${apiReceiptHref}" class="button">API receipt</a></section>${input.summary}<nav class="actions" data-attention-next-actions><a class="button outline" href="/">Back to Check-in</a><a class="button outline" href="/attention">View all attention</a><a class="button outline" href="${apiReceiptHref}">API receipt</a></nav><ol>${input.list}</ol></main></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Attention · my · ax</title><link rel="stylesheet" href="/static/styles.css"><style>body{margin:0;background:#0b1118;color:#e9e9ec;font-family:Inter,ui-sans-serif,system-ui,sans-serif}.wrap{max-width:900px;margin:0 auto;padding:24px}.hero,.card{border:1px solid #27272a;background:#111827;border-radius:18px;padding:16px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:16px}a{color:#f6821f}.muted,.meta,code{color:#a1a1aa}ol{list-style:none;padding:0;margin:0;display:grid;gap:12px}.button{display:inline-block;border-radius:999px;background:#f6821f;color:white;text-decoration:none;font-weight:700;padding:8px 12px;font-size:12px;border:0;cursor:pointer}.outline{border:1px solid #27272a;background:transparent;color:#e9e9ec}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 16px;align-items:center}h1{margin:.25rem 0 0;font-size:28px}h2{font-size:16px;margin:.35rem 0}.meta{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}p{line-height:1.55}</style></head><body><main class="wrap" data-attention-page><section class="hero"><div><a href="/">← Back to shell</a><h1>Attention</h1><p class="muted">${Number(input.unread ?? 0)} unread${input.filterLabel}</p><p class="muted" data-attention-view-summary>${formatRenderedAttentionViewSummary(input.total, input.shown)}</p></div><a href="${apiReceiptHref}" class="button">API receipt</a></section>${input.summary}<nav class="actions" data-attention-next-actions><a class="button outline" href="/">Back to Check-in</a><a class="button outline" href="/attention">View all attention</a><a class="button outline" href="${apiReceiptHref}">API receipt</a>${input.seenForm ?? ""}</nav><ol>${input.list}</ol></main></body></html>`;
 }
 
 export function parseAttentionListQuery(url: URL) {
@@ -132,6 +140,29 @@ export function normalizeAttentionSeenIds(ids: unknown): string[] {
 }
 
 export function registerAttentionRoutes(app: Hono<AppEnv>) {
+  app.post("/attention/seen", async (c) => {
+    const origin = c.req.header("origin");
+    const url = new URL(c.req.url);
+    if (origin && origin !== url.origin) {
+      return c.text("forbidden", 403);
+    }
+    const email = owner(c);
+    const form = await c.req.formData();
+    const params = new URLSearchParams();
+    const kind = String(form.get("kind") ?? "").trim();
+    const sessionId = String(form.get("sessionId") ?? "").trim();
+    if (kind) params.set("kind", kind);
+    if (sessionId) params.set("sessionId", sessionId);
+    const query = parseAttentionListQuery(new URL(`/attention?${params.toString()}`, url.origin));
+    if (query.invalidSessionId) {
+      return c.redirect(`/attention?sessionId=${encodeURIComponent(query.invalidSessionId)}`, 303);
+    }
+    const { filterSql, bindValues } = buildAttentionListFilter(email, query);
+    await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).run();
+    const redirectTo = formatRenderedAttentionApiReceiptHref(query).replace("/api/attention", "/attention");
+    return c.redirect(redirectTo, 303);
+  });
+
   app.get("/attention", async (c) => {
     const email = owner(c);
     const query = parseAttentionListQuery(new URL(c.req.url));
@@ -152,7 +183,7 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     const list = rows.length ? rows.map(formatRenderedAttentionListItem).join("") : formatRenderedAttentionEmptyList();
     const filterLabel = formatRenderedAttentionFilterLabel(query);
     const apiReceiptHref = formatRenderedAttentionApiReceiptHref(query);
-    return c.html(formatRenderedAttentionPageHtml({ unread: unread?.count, total: total?.count, shown: rows.length, filterLabel, summary, list, apiReceiptHref }));
+    return c.html(formatRenderedAttentionPageHtml({ unread: unread?.count, total: total?.count, shown: rows.length, filterLabel, summary, list, apiReceiptHref, seenForm: formatRenderedAttentionSeenForm(query) }));
   });
 
   app.get("/api/attention", async (c) => {

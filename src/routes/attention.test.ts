@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSeenForm, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -125,12 +125,26 @@ test("formatRenderedAttentionApiReceiptHref preserves rendered filters for raw r
   assert.equal(formatRenderedAttentionApiReceiptHref({ kind: "run.failed", sessionId: "11111111-1111-4111-8111-111111111111" }), "/api/attention?kind=run.failed&sessionId=11111111-1111-4111-8111-111111111111");
 });
 
+test("formatRenderedAttentionSeenForm preserves filters in hidden owner-return controls", () => {
+  const html = formatRenderedAttentionSeenForm({ kind: "run.failed&urgent", sessionId: "11111111-1111-4111-8111-111111111111" });
+  assert.match(html, /data-attention-seen-form/);
+  assert.match(html, /method="post" action="\/attention\/seen"/);
+  assert.match(html, /name="kind" value="run.failed&amp;urgent"/);
+  assert.match(html, /name="sessionId" value="11111111-1111-4111-8111-111111111111"/);
+});
+
 test("formatRenderedAttentionPageHtml preserves owner page markers and filtered receipt link", () => {
   const html = formatRenderedAttentionPageHtml({ unread: 2, total: 5, shown: 1, filterLabel: " · kind: run.failed", summary: "<nav data-attention-kind-summary></nav>", list: formatRenderedAttentionEmptyList(), apiReceiptHref: "/api/attention?kind=run.failed" });
   assert.match(html, /data-attention-page/);
   assert.match(html, /data-attention-view-summary>5 matching items · showing 1/);
   assert.match(html, /href="\/api\/attention\?kind=run.failed"/);
   assert.match(html, /data-attention-empty/);
+});
+
+test("formatRenderedAttentionPageHtml includes optional seen form in next actions", () => {
+  const html = formatRenderedAttentionPageHtml({ unread: 2, total: 5, shown: 1, filterLabel: "", summary: "", list: formatRenderedAttentionEmptyList(), apiReceiptHref: "/api/attention", seenForm: formatRenderedAttentionSeenForm({ kind: null, sessionId: null }) });
+  assert.match(html, /data-attention-next-actions/);
+  assert.match(html, /data-attention-seen-form/);
 });
 
 test("formatRenderedAttentionPageHtml escapes API receipt href attributes", () => {
