@@ -144,6 +144,7 @@ test("formatRenderedAttentionPageHtml preserves owner page markers and filtered 
   assert.match(html, /data-attention-page/);
   assert.match(html, /data-attention-view-summary>5 matching items · showing 1/);
   assert.match(html, /href="\/api\/attention\?kind=run.failed"/);
+  assert.match(html, /data-attention-api-receipt-href="\/api\/attention\?kind=run.failed"/);
   assert.match(html, /data-attention-empty/);
 });
 
@@ -156,6 +157,7 @@ test("formatRenderedAttentionPageHtml includes optional seen form in next action
 test("formatRenderedAttentionPageHtml escapes API receipt href attributes", () => {
   const html = formatRenderedAttentionPageHtml({ unread: 0, total: 0, shown: 0, filterLabel: "", summary: "", list: formatRenderedAttentionEmptyList(), apiReceiptHref: "/api/attention?kind=a&bad=<script>" });
   assert.match(html, /href="\/api\/attention\?kind=a&amp;bad=&lt;script&gt;"/);
+  assert.match(html, /data-attention-api-receipt-href="\/api\/attention\?kind=a&amp;bad=&lt;script&gt;"/);
   assert.doesNotMatch(html, /href="\/api\/attention\?kind=a&bad=<script>"/);
 });
 
