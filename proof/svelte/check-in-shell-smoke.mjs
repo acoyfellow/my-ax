@@ -40,6 +40,8 @@ assertIncludes(checkIn, "data-check-in-checked-at", "Check-in server timestamp m
 assertIncludes(checkIn, "fetch(\"/api/check-in\"", "Check-in API fetch");
 assertIncludes(checkIn, "checkedAt", "Check-in server timestamp field");
 assertIncludes(checkIn, "bucket.steer", "Check-in bucket singular steer field");
+assertIncludes(checkIn, "data-check-in-raw-href={bucket.steer.href}", "Check-in raw API href preservation marker");
+assertIncludes(checkIn, "href={displayHref(bucket.steer.href)}", "Check-in rendered owner destination href");
 assertNotIncludes(checkIn, "bucket.steers", "Check-in bucket plural steers field");
 assertIncludes(ssr, "data-check-in-root", "Check-in SSR output");
 assertIncludes(ssr, "data-check-in-refresh", "Check-in SSR output");
