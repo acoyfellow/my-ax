@@ -51,9 +51,9 @@ Code Mode has no direct database, secret, or network bindings. Its allowlisted s
 
 The authenticated shell renders those steers as owner-friendly destinations:
 
-- `/attention` — unread Attention context by kind and session, exact view totals, safe next actions, empty-state receipts, and a same-origin `data-attention-seen-form` to mark the current filtered view seen.
-- `/runs` — run status summaries for open, running, completed, failed, and aborted work.
-- `/jobs` — recurring job status summaries for active and paused jobs.
+- `/attention` — unread Attention context by kind and session, exact view totals, safe next actions, empty-state receipts, stable `data-attention-api-receipt-href` / `data-attention-source-href` link metadata, and a same-origin `data-attention-seen-form` to mark the current filtered view seen.
+- `/runs` — run status summaries for open, running, completed, failed, and aborted work, with `data-runs-api-receipt-href`, `data-run-receipt-href`, and `data-run-events-receipt-href` receipt metadata.
+- `/jobs` — recurring job status summaries for active and paused jobs, with `data-jobs-api-receipt-href` and `data-job-history-receipt-href` receipt metadata.
 
 Those rendered pages are Access-protected, preserve the raw API receipts, and should answer the return-loop questions: what needs me, what is running, what finished or failed, where can I safely steer next? In the shell, Check-in bucket links navigate to rendered owner destinations while carrying the authoritative raw receipt href in `data-check-in-raw-href` for proof and debugging.
 
