@@ -10,6 +10,15 @@
   let loading = $state(true);
   let expanded = $state(false);
 
+  const DETAILS_STORAGE_KEY = "my-ax:check-in-details-expanded";
+
+  function setExpanded(value: boolean) {
+    expanded = value;
+    try {
+      localStorage.setItem(DETAILS_STORAGE_KEY, value ? "1" : "0");
+    } catch {}
+  }
+
   function formatCheckedAt(value?: string): string | null {
     if (!value) return null;
     const date = new Date(value);
@@ -33,6 +42,9 @@
   }
 
   onMount(() => {
+    try {
+      expanded = localStorage.getItem(DETAILS_STORAGE_KEY) === "1";
+    } catch {}
     void refresh();
     const handler = () => void refresh();
     window.addEventListener("my-ax:check-in-refresh", handler);
@@ -58,7 +70,7 @@
       {/if}
     </div>
     <div class="flex items-center gap-2 sm:ml-auto">
-      <button type="button" onclick={() => expanded = !expanded} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
+      <button type="button" onclick={() => setExpanded(!expanded)} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
         {expanded ? "Hide details" : "Details"}
       </button>
       <button type="button" onclick={refresh} disabled={loading} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg disabled:cursor-wait disabled:opacity-60" aria-label="Refresh Check-in" data-check-in-refresh>
