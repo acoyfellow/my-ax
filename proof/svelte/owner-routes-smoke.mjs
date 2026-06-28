@@ -14,7 +14,7 @@ mustContain("src/index.tsx", 'app.use("/attention", accessMiddleware());', "Acce
 mustContain("src/index.tsx", 'app.use("/runs", accessMiddleware());', "Access middleware for /runs");
 mustContain("src/index.tsx", 'app.use("/jobs", accessMiddleware());', "Access middleware for /jobs");
 
-mustContain("src/index.tsx", 'app.get("/attention"', "rendered /attention route");
+mustContain("src/routes/attention.ts", 'app.get("/attention"', "rendered /attention route");
 mustContain("src/routes/attention.ts", "data-attention-page", "attention HTML marker");
 mustContain("src/routes/attention.ts", "data-attention-next-actions", "attention next-actions marker");
 mustContain("src/routes/attention.ts", "data-attention-kind-summary", "attention kind summary marker");
@@ -23,9 +23,9 @@ mustContain("src/routes/attention.ts", "data-attention-session-summary", "attent
 mustContain("src/routes/attention.ts", "data-attention-session-summary-empty", "attention empty session summary marker");
 mustContain("src/routes/attention.ts", "data-attention-view-summary", "attention exact view summary marker");
 mustContain("src/routes/attention.ts", "data-attention-empty", "attention empty list marker");
-mustContain("src/index.tsx", "rows.length ? rows.map(formatRenderedAttentionListItem).join(\"\") : formatRenderedAttentionEmptyList()", "attention rendered empty-list fallback");
-mustContain("src/index.tsx", "formatRenderedAttentionApiReceiptHref(query)", "attention filtered API receipt href wiring");
-mustContain("src/index.tsx", "formatRenderedAttentionPageHtml", "attention page helper wiring");
+mustContain("src/routes/attention.ts", "rows.length ? rows.map(formatRenderedAttentionListItem).join(\"\") : formatRenderedAttentionEmptyList()", "attention rendered empty-list fallback");
+mustContain("src/routes/attention.ts", "formatRenderedAttentionApiReceiptHref(query)", "attention filtered API receipt href wiring");
+mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "attention page helper wiring");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionApiReceiptHref", "attention filtered API receipt href helper");
 mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "attention page HTML helper");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
