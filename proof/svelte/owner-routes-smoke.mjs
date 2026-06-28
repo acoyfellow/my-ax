@@ -66,6 +66,9 @@ mustContain("docs/feature-matrix.md", "exact active/paused summaries", "feature 
 mustContain("docs/feature-matrix.md", "src/routes/jobs.ts", "feature matrix Jobs route evidence");
 mustContain("README.md", "data-attention-seen-form", "README Attention seen form marker");
 mustContain("README.md", "mark the current filtered view seen", "README Attention seen form behavior");
+mustContain("README.md", "data-attention-api-receipt-href", "README Attention API receipt marker");
+mustContain("README.md", "data-runs-api-receipt-href", "README Runs API receipt marker");
+mustContain("README.md", "data-jobs-api-receipt-href", "README Jobs API receipt marker");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
