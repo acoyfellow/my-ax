@@ -39,6 +39,9 @@ mustContain("src/routes/attention.ts", "formatRenderedAttentionPageHtml", "atten
 mustContain("docs/architecture.md", "**Attention owner return**", "architecture Attention owner-return contract");
 mustContain("docs/architecture.md", "share `buildAttentionListFilter(...)`", "architecture shared Attention filter contract");
 mustContain("docs/architecture.md", "Access middleware remains registered in `src/index.tsx`", "architecture Attention Access boundary");
+mustContain("docs/architecture.md", "same-origin `data-attention-seen-form`", "architecture Attention seen form contract");
+mustContain("docs/architecture.md", "same-origin `Origin` guard", "architecture Attention seen origin guard contract");
+mustContain("docs/architecture.md", "formatRenderedAttentionReturnHref(...)", "architecture Attention seen return helper contract");
 mustContain("docs/architecture.md", "**Rendered owner receipt links**", "architecture rendered owner receipt links contract");
 mustContain("docs/architecture.md", "`/runs` preserves `status`", "architecture Runs filtered receipt contract");
 mustContain("docs/architecture.md", "`/jobs` preserves `status`", "architecture Jobs filtered receipt contract");
