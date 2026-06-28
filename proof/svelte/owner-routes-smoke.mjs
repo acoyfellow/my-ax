@@ -75,6 +75,8 @@ mustContain("src/routes/jobs.ts", "Unsupported job filter", "jobs invalid-filter
 mustContain("src/routes/jobs.ts", "data-jobs-error", "jobs invalid-filter error marker");
 mustContain("src/routes/jobs.ts", 'href="${apiReceiptHref}">API receipt', "jobs invalid-filter API receipt action");
 mustContain("src/routes/jobs.ts", "formatRenderedJobsApiReceiptHref(input.status)", "jobs filtered API receipt href wiring");
+mustContain("src/routes/jobs.ts", "data-job-history-receipt-href", "jobs item raw history receipt marker");
+mustContain("docs/feature-matrix.md", "per-job history receipt links", "feature matrix Jobs history receipt contract");
 
 mustContain("proof/svelte/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
 mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/attention")', "Check-in attention API display mapping");
