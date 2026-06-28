@@ -88,6 +88,14 @@ export function formatRenderedAttentionEmptyList(): string {
   return `<li class="card muted" data-attention-empty>Nothing needs you in this Attention view.</li>`;
 }
 
+export function formatRenderedAttentionApiReceiptHref(query: { kind: string | null; sessionId: string | null }): string {
+  const params = new URLSearchParams();
+  if (query.kind) params.set("kind", query.kind);
+  if (query.sessionId) params.set("sessionId", query.sessionId);
+  const suffix = params.toString();
+  return suffix ? `/api/attention?${suffix}` : "/api/attention";
+}
+
 export function parseAttentionListQuery(url: URL) {
   const kind = url.searchParams.get("kind")?.trim() || null;
   const sessionParam = url.searchParams.get("sessionId")?.trim() || null;
