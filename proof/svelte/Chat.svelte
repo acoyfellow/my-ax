@@ -11,6 +11,14 @@
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import {
+    agentStatusFor,
+    idleStreamingTurnState,
+    isComposerLocked,
+    transition as transitionStreamingTurn,
+    type StreamingTurnEvent,
+    type StreamingTurnState,
+  } from "./streaming-turn-fsm";
+  import {
     setConn,
     setStatus,
     wsState,
@@ -277,6 +285,16 @@
   let thinkingInactivityTimer: ReturnType<typeof setTimeout> | null = null;
   const THINKING_SHOW_DELAY_MS = 200;
   const THINKING_INACTIVITY_MS = 600;
+  let turnState = $state<StreamingTurnState>(idleStreamingTurnState);
+
+  function dispatchTurn(event: StreamingTurnEvent) {
+    const next = transitionStreamingTurn(turnState, event);
+    turnState = next;
+    if (next.tag !== "active") {
+      applyStatus(agentStatusFor(next));
+    }
+    return next;
+  }
 
   function showThinking() {
     thinkingVisible = true;
@@ -323,7 +341,7 @@
 
   // ── Composer derived ───────────────────────────────────────────────
   const composerLocked = $derived(
-    wsState.status !== "idle" && wsState.status !== "done",
+    isComposerLocked(turnState) || (wsState.status !== "idle" && wsState.status !== "done"),
   );
   const wsDown = $derived(wsState.conn !== "live");
   const sendStatus = $derived.by(() => {
@@ -364,7 +382,10 @@
     if (document.visibilityState === "visible") {
       // A recovery request sent just before iOS froze the page may never have
       // reached the server. Do not let that stale latch suppress this retry.
-      if (Date.now() - lastSocketActivityAt > 10_000) responseRecoveryPending = false;
+      if (Date.now() - lastSocketActivityAt > 10_000) {
+        responseRecoveryPending = false;
+        dispatchTurn({ type: "visibility-stale" });
+      }
       requestActiveResponseRecovery();
     }
   }
@@ -766,6 +787,7 @@
       if (saved?.id && Date.now() - Number(saved.at || 0) < 86400000) {
         activeRequestId = saved.id;
         restoredActiveTurn = true;
+        dispatchTurn({ type: "restore", requestId: saved.id });
         applyStatus("thinking");
       } else if (saved) forgetActiveTurn();
     } catch { forgetActiveTurn(); }
@@ -818,6 +840,7 @@
     restoredActiveTurn = false;
     streamingMsgId = null;
     responseRecoveryPending = false;
+    dispatchTurn({ type: "session-switch" });
     messages = [];
     toastBus.pending = []; // don't carry a prior session's notices into this one
     applyStatus("idle");
@@ -981,6 +1004,7 @@
     }
   }
   function onClose(e: CloseEvent) {
+    dispatchTurn({ type: "connection-close" });
     setConn(e.wasClean ? "offline" : "reconnecting");
     // Do not discard an active request here. Think persists stream chunks and
     // can replay a response after reconnect, including a response that
@@ -1003,6 +1027,7 @@
       // existing transcript instead of pinning the restored session under the
       // loading veil / running state.
       responseRecoveryPending = false;
+      dispatchTurn({ type: "resume-timeout", requestId });
       activeRequestId = null;
       restoredActiveTurn = false;
       streamingMsgId = null;
@@ -1017,6 +1042,7 @@
       messages = messages.filter((message) => message.id !== streamingMsgId);
       streamingMsgId = null;
     }
+    dispatchTurn({ type: "resume-requested", requestId });
     (ws as any).send(JSON.stringify({ type: "cf_agent_stream_resume_ack", id: requestId }));
   }
 
@@ -1038,6 +1064,7 @@
     } else if (m.type === "cf_agent_stream_resume_none") {
       responseRecoveryPending = false;
       if (activeRequestId) {
+        dispatchTurn({ type: "resume-none", requestId: activeRequestId });
         finalizeStreaming();
         messages = messages.map((message) => ({
           ...message,
@@ -1069,6 +1096,7 @@
       window.dispatchEvent(new Event("my-ax:settings-open"));
       (window as any).__refreshConnectors?.();
     } else if (m.type === "cf_agent_chat_messages") {
+      dispatchTurn({ type: "history-loaded" });
       if (activeRequestId && !restoredActiveTurn) {
         thinkMessages = m.messages || thinkMessages;
       } else {
@@ -1084,9 +1112,11 @@
       // into the chat log live (and is finalized on done), instead of being
       // dropped. This is what makes spoken replies visible.
       if (m.error) {
+        dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Voice turn failed" } });
         pushError(m.body || "Voice turn failed");
         applyStatus("idle");
       } else if (m.done) {
+        dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, done: true } });
         finalizeStreaming();
         streamingMsgId = null;
         applyStatus("idle");
@@ -1102,6 +1132,7 @@
       // discard a terminal error merely because its id differs: that was the
       // primary "agent died with no error" failure mode.
       if (m.error) {
+        dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Agent request failed" } });
         finalizeStreaming();
         pushError(m.body || "Agent request failed");
         responseRecoveryPending = false;
@@ -1117,6 +1148,7 @@
       }
     } else if (m.type === "cf_agent_use_chat_response" && m.id === activeRequestId) {
       if (m.error) {
+        dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Agent request failed" } });
         finalizeStreaming();
         pushError(m.body || "Agent request failed");
         responseRecoveryPending = false;
@@ -1127,6 +1159,7 @@
         applyStatus("idle");
         window.dispatchEvent(new Event("my-ax:sessions-refresh"));
       } else if (m.done) {
+        dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, done: true } });
         finalizeStreaming();
         // Don't silently leave an empty "Agent" card. Think can complete a
         // tool-only / interrupted turn without text; surface that as an
@@ -1153,6 +1186,7 @@
         } catch {}
       } else if (m.replayComplete) {
         // Stored prefix has been rebuilt; any subsequent chunks are live.
+        dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, replayComplete: true } });
         responseRecoveryPending = false;
         applyStatus("running");
       }
@@ -1303,6 +1337,9 @@
   }
 
   function handleThinkChunk(chunk: any) {
+    if (typeof chunk?.type === "string") {
+      dispatchTurn({ type: "frame", frame: { requestId: activeRequestId, chunkType: chunk.type } });
+    }
     if (
       !streamingMsgId &&
       ["text-start", "text-delta", "reasoning-start", "reasoning-delta", "tool-input-start", "tool-input-available"].includes(chunk.type)
@@ -1473,6 +1510,7 @@
     thinkMessages = [...thinkMessages, user];
     activeRequestId = crypto.randomUUID();
     restoredActiveTurn = false;
+    dispatchTurn({ type: "submit", requestId: activeRequestId, clientMessageId: clientMsgId });
     rememberActiveTurn(activeRequestId, clientMsgId);
     streamingMsgId = null;
     ws!.send(
@@ -1512,6 +1550,7 @@
     restoredActiveTurn = false;
     streamingMsgId = null;
     responseRecoveryPending = false;
+    dispatchTurn({ type: "reset" });
     forgetActiveTurn();
     applyStatus("idle");
   }
