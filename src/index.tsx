@@ -27,7 +27,7 @@ import { registerPushRoutes } from "./routes/push";
 import { registerJobRoutes } from "./routes/jobs";
 import { registerMcpRoutes } from "./routes/mcp";
 import { registerBrowserRoutes } from "./routes/browser";
-import { formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionSessionSummary, parseAttentionListQuery, registerAttentionRoutes } from "./routes/attention";
+import { registerAttentionRoutes } from "./routes/attention";
 import { registerCheckInRoutes } from "./routes/check-in";
 import { registerSystemRoutes } from "./routes/system";
 import { registerModelRoutes } from "./routes/models";
@@ -476,37 +476,6 @@ app.get("/", (c) => {
       appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
     />,
   );
-});
-
-app.get("/attention", async (c) => {
-  const identity = c.get("identity");
-  const email = identity.email.toLowerCase();
-  const query = parseAttentionListQuery(new URL(c.req.url));
-  if (query.invalidSessionId) return c.redirect("/attention", 302);
-  const filters: string[] = [];
-  const bindValues: string[] = [email];
-  if (query.kind) {
-    filters.push("kind = ?");
-    bindValues.push(query.kind);
-  }
-  if (query.sessionId) {
-    filters.push("session_id = ?");
-    bindValues.push(query.sessionId);
-  }
-  const filterSql = filters.length ? ` AND ${filters.join(" AND ")}` : "";
-  const [items, unread, total, kindRows, sessionRows] = await Promise.all([
-    c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ?${filterSql} ORDER BY created_at DESC LIMIT 50`).bind(...bindValues).all(),
-    c.env.DB.prepare(`SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).first<{ count: number }>(),
-    c.env.DB.prepare(`SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ?${filterSql}`).bind(...bindValues).first<{ count: number }>(),
-    c.env.DB.prepare("SELECT COALESCE(kind, 'attention') AS kind, COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL GROUP BY COALESCE(kind, 'attention') ORDER BY count DESC, kind ASC LIMIT 8").bind(email).all<{ kind: string; count: number }>(),
-    c.env.DB.prepare("SELECT session_id AS sessionId, COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL AND session_id IS NOT NULL GROUP BY session_id ORDER BY count DESC, session_id ASC LIMIT 8").bind(email).all<{ sessionId: string; count: number }>(),
-  ]);
-  const rows = (items.results ?? []) as Array<{ id: string; kind: string | null; title: string; body: string; href: string; created_at: string }>;
-  const summary = `${formatRenderedAttentionKindSummary(kindRows.results ?? [])}${formatRenderedAttentionSessionSummary(sessionRows.results ?? [])}`;
-  const list = rows.length ? rows.map(formatRenderedAttentionListItem).join("") : formatRenderedAttentionEmptyList();
-  const filterLabel = formatRenderedAttentionFilterLabel(query);
-  const apiReceiptHref = formatRenderedAttentionApiReceiptHref(query);
-  return c.html(formatRenderedAttentionPageHtml({ unread: unread?.count, total: total?.count, shown: rows.length, filterLabel, summary, list, apiReceiptHref }));
 });
 
 app.get("/capabilities", (c) => {
