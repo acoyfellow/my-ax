@@ -6,7 +6,7 @@ The operator controls the deployment configuration and Cloudflare resources it u
 
 ## What It Does
 
-- **Check-in** — authenticated HTTP and MCP surfaces summarize what needs the owner, what is running, what recently completed, and the next steer from existing Attention, jobs, and run receipts.
+- **Check-in** — authenticated HTTP and MCP surfaces summarize what needs the owner, what is running, what recently completed, and the next steer from existing Attention, jobs, and run receipts. The shell maps raw API steers to rendered owner destinations for `/attention`, `/runs`, and `/jobs`.
 - **Durable conversations** — Think is authoritative for conversation execution and retained message state. D1 contains a derived transcript index for UI, search, and export. In-flight work may still be interrupted by provider or runtime failure.
 - **Connected capabilities** — the model and generated programs receive callable tools instead of OAuth tokens or deployment secrets. Trusted server-side adapters hold credentials and retain their configured authority.
 - **Execution environments** — use the container-backed owner workspace plus optional Machine, Cloudbox, and public-page Browser capabilities.
@@ -44,6 +44,18 @@ Owner through Cloudflare Access
 Think is authoritative for conversation execution and history. D1 stores application records and derived indexes; R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups.
 
 Code Mode has no direct database, secret, or network bindings. Its allowlisted server-side callbacks retain their normal authority.
+
+### Check-in as the owner-return dashboard
+
+`GET /api/check-in` and MCP `my_ax_check_in` remain the stable machine-readable receipts. They return raw API steers such as `/api/attention`, `/api/runs?status=failed`, and `/api/jobs?status=active` so agents and API clients can keep using receipt endpoints directly.
+
+The authenticated shell renders those steers as owner-friendly destinations:
+
+- `/attention` — unread Attention context by kind and session, exact view totals, safe next actions, and empty-state receipts.
+- `/runs` — run status summaries for open, running, completed, failed, and aborted work.
+- `/jobs` — recurring job status summaries for active and paused jobs.
+
+Those rendered pages are Access-protected, preserve the raw API receipts, and should answer the return-loop questions: what needs me, what is running, what finished or failed, where can I safely steer next?
 
 ## Important Limits
 
