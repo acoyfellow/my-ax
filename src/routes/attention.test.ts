@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { formatRenderedAttentionEmptyList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -98,6 +98,10 @@ test("formatRenderedAttentionFilterLabel escapes rendered filter labels", () => 
   assert.equal(formatRenderedAttentionFilterLabel({ kind: null, sessionId: null }), "");
   assert.equal(formatRenderedAttentionFilterLabel({ kind: "run.failed", sessionId: "11111111-1111-4111-8111-111111111111" }), " · kind: run.failed · session: 11111111-1111-4111-8111-111111111111");
   assert.equal(formatRenderedAttentionFilterLabel({ kind: "<script>", sessionId: null }), " · kind: &lt;script&gt;");
+});
+
+test("formatRenderedAttentionEmptyList renders stable owner-friendly empty copy", () => {
+  assert.equal(formatRenderedAttentionEmptyList(), `<li class="card muted" data-attention-empty>Nothing needs you in this Attention view.</li>`);
 });
 
 test("normalizeRenderedAttentionSourceHref keeps only same-origin paths", () => {
