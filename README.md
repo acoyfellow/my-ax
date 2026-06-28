@@ -51,7 +51,7 @@ Code Mode has no direct database, secret, or network bindings. Its allowlisted s
 
 The authenticated shell renders those steers as owner-friendly destinations:
 
-- `/attention` — unread Attention context by kind and session, exact view totals, safe next actions, and empty-state receipts.
+- `/attention` — unread Attention context by kind and session, exact view totals, safe next actions, empty-state receipts, and a same-origin `data-attention-seen-form` to mark the current filtered view seen.
 - `/runs` — run status summaries for open, running, completed, failed, and aborted work.
 - `/jobs` — recurring job status summaries for active and paused jobs.
 
