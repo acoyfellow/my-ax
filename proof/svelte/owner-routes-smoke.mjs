@@ -36,6 +36,9 @@ mustContain("docs/architecture.md", "Access middleware remains registered in `sr
 mustContain("docs/architecture.md", "**Rendered owner receipt links**", "architecture rendered owner receipt links contract");
 mustContain("docs/architecture.md", "`/runs` preserves `status`", "architecture Runs filtered receipt contract");
 mustContain("docs/architecture.md", "`/jobs` preserves `status`", "architecture Jobs filtered receipt contract");
+mustContain("docs/architecture.md", "Invalid rendered filters are not propagated into raw receipt links", "architecture invalid-filter receipt contract");
+mustContain("docs/architecture.md", "unsupported `/attention?sessionId=...`", "architecture Attention invalid-filter receipt contract");
+mustContain("docs/architecture.md", "unfiltered `/api/attention`, `/api/runs`, or `/api/jobs` receipt", "architecture invalid-filter unfiltered receipt targets");
 mustContain("src/routes/runs.tsx", 'app.get("/runs"', "rendered /runs route");
 mustContain("src/routes/runs.tsx", "data-runs-page", "runs HTML marker");
 mustContain("src/routes/runs.tsx", "data-runs-status-summary", "runs status summary marker");
