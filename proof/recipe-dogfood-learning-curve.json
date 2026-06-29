@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-29T23:43:41.500Z",
+  "harness": "scripts/recipe-dogfood-loop.mjs",
+  "modelReachability": {
+    "attempted": false,
+    "reachable": false,
+    "reason": "Track 2 was constrained to avoid secrets; no model credentials or endpoint were read. This is an honest partial mechanism proof, not a token-cost benchmark."
+  },
+  "thesis": "Cost per cycle should trend down as repeated work becomes an owner-approved recipe, then flatten above zero because listing, matching, and novel work still cost something.",
+  "measuredSeriesKind": "deterministic-mechanism-work-units",
+  "costPerCycle": [
+    {
+      "cycle": 1,
+      "value": 5,
+      "unit": "deterministic work units",
+      "recipeReused": null,
+      "promotedRecipe": null,
+      "measuredModelUsage": null
+    },
+    {
+      "cycle": 2,
+      "value": 5,
+      "unit": "deterministic work units",
+      "recipeReused": null,
+      "promotedRecipe": "local-recipe-normalize-status-v1",
+      "measuredModelUsage": null
+    },
+    {
+      "cycle": 3,
+      "value": 1,
+      "unit": "deterministic work units",
+      "recipeReused": "local-recipe-normalize-status-v1",
+      "promotedRecipe": null,
+      "measuredModelUsage": null
+    },
+    {
+      "cycle": 4,
+      "value": 1,
+      "unit": "deterministic work units",
+      "recipeReused": "local-recipe-normalize-status-v1",
+      "promotedRecipe": null,
+      "measuredModelUsage": null
+    },
+    {
+      "cycle": 5,
+      "value": 1,
+      "unit": "deterministic work units",
+      "recipeReused": "local-recipe-normalize-status-v1",
+      "promotedRecipe": null,
+      "measuredModelUsage": null
+    }
+  ],
+  "cycles": [
+    {
+      "cycle": 1,
+      "mode": "derive",
+      "recipeListCount": 0,
+      "recipeReused": null,
+      "promotedRecipe": null,
+      "deterministicWorkUnits": 5,
+      "measuredModelUsage": null,
+      "output": {
+        "region": "sfo",
+        "health": "degraded",
+        "latencyMs": 210,
+        "summary": "sfo: degraded, 210ms, 2 errors"
+      }
+    },
+    {
+      "cycle": 2,
+      "mode": "derive",
+      "recipeListCount": 0,
+      "recipeReused": null,
+      "promotedRecipe": "local-recipe-normalize-status-v1",
+      "deterministicWorkUnits": 5,
+      "measuredModelUsage": null,
+      "output": {
+        "region": "sfo",
+        "health": "ok",
+        "latencyMs": 190,
+        "summary": "sfo: ok, 190ms, 0 errors"
+      }
+    },
+    {
+      "cycle": 3,
+      "mode": "recipe.run",
+      "recipeListCount": 1,
+      "recipeReused": "local-recipe-normalize-status-v1",
+      "promotedRecipe": null,
+      "deterministicWorkUnits": 1,
+      "measuredModelUsage": null,
+      "output": {
+        "region": "sfo",
+        "health": "ok",
+        "latencyMs": 188,
+        "summary": "sfo: ok, 188ms, 0 errors"
+      }
+    },
+    {
+      "cycle": 4,
+      "mode": "recipe.run",
+      "recipeListCount": 1,
+      "recipeReused": "local-recipe-normalize-status-v1",
+      "promotedRecipe": null,
+      "deterministicWorkUnits": 1,
+      "measuredModelUsage": null,
+      "output": {
+        "region": "sfo",
+        "health": "ok",
+        "latencyMs": 191,
+        "summary": "sfo: ok, 191ms, 0 errors"
+      }
+    },
+    {
+      "cycle": 5,
+      "mode": "recipe.run",
+      "recipeListCount": 1,
+      "recipeReused": "local-recipe-normalize-status-v1",
+      "promotedRecipe": null,
+      "deterministicWorkUnits": 1,
+      "measuredModelUsage": null,
+      "output": {
+        "region": "sfo",
+        "health": "ok",
+        "latencyMs": 189,
+        "summary": "sfo: ok, 189ms, 0 errors"
+      }
+    }
+  ],
+  "checks": {
+    "idSaveReuseHappened": true,
+    "genuinePromotion": true,
+    "genuineReuse": true,
+    "promotionOptInOwnerApproved": true,
+    "pantryPublishAttempted": false,
+    "secretsPrinted": false
+  },
+  "writeup": "No model token curve is claimed in this local run. The deterministic loop listed recipes each cycle, promoted normalize_status_digest after repeated derivation in cycle 2, then reused that saved recipe by ID for cycles 3-5. The mechanism series drops from 5 to 1 deterministic work units and flattens at 1, which demonstrates ID to save to reuse behavior but is only a proxy until Track 1 usage capture or reachable model credentials provide real token numbers."
+}

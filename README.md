@@ -126,6 +126,7 @@ Optional providers:
 - **My Machine** — run [`machinectl`](https://github.com/acoyfellow/machinectl). This grants terminal-equivalent access as the companion's OS user; use a dedicated least-privilege account.
 - **Cloudbox** — configure a dedicated `CLOUDBOX_INTERNAL_TOKEN` shared only by this My AX deployment and its Cloudbox service.
 - **Web Push** — configure VAPID and grant browser notification permission.
+- **Pantry bridge** — set `PANTRY_TOKEN` (and optionally `PANTRY_URL`, default `https://pantry.coey.dev`) to push enabled saved recipes to a pantry for reuse by other agents. Additive, enabled-only, fail-soft, and a no-op without the token. See [Deploying My AX](./docs/deploy.md#pantry-bridge).
 
 ## Repository Map
 

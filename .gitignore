@@ -42,3 +42,6 @@ src/*.bak-*
 .env
 .env.*
 !.env.example
+
+# guardrail deploy artifacts (local only)
+.guardrail/
