@@ -42,7 +42,10 @@
   "routes": [],
 
   // Public template uses the workers.dev URL until an operator configures a custom domain.
-  "workers_dev": true,
+  // Disabled for the gated deploy: the only public surface is the Access-gated
+  // custom domain. The redundant workers.dev URL would be a second public surface
+  // exposing sensitive bindings, so it stays off.
+  "workers_dev": false,
   "preview_urls": false,
 
   // Periodically recover stale conversation turns after the live watchdog window.

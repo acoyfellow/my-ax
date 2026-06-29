@@ -12,6 +12,8 @@ test("work_code exposes owner-approved saved recipes as a small recipe namespace
   assert.match(source, /ctx\.runSavedRecipe/);
   assert.match(source, /namespace\("recipe", Object\.keys\(recipeFns\)\)/);
   assert.match(source, /method: `recipe\.run:\$\{recipe\.name\}`/);
+  assert.match(source, /Owner-approved saved recipes are exposed as recipe\.list\(\) and recipe\.run/);
+  assert.match(agent, /use them when an enabled recipe clearly matches the task/);
   assert.match(agent, /listSavedRecipes: async \(\) =>/);
   assert.match(agent, /runSavedRecipe: async \(input\) =>/);
 });

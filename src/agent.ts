@@ -14,6 +14,7 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { completeRecurringJobRun } from "./recurring-job-run";
+import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
@@ -150,6 +151,9 @@ export class MyAgent extends Think<Env> {
    *  consume it). The DO is single-threaded for a session so there's no
    *  race between turns. */
   private dirtyFsThisTurn = false;
+  private cycleStepUsage: Array<{ usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null }; finishReason?: string }> = [];
+  private recipesUsedThisTurn: unknown[] = [];
+  private recipesSavedThisTurn: unknown[] = [];
   /** Native agents MCP registrations are per-session DO, but bearer tokens
    * remain per-user in OAuthClientDO. Lazily hydrate once per isolate and
    * expose each discovered MCP tool directly to Think. */
@@ -441,6 +445,7 @@ export class MyAgent extends Think<Env> {
   async onChatResponse(result: ChatResponseResult) {
     const identity = this.identity();
     if (!identity) return;
+    await this.recordCurrentCycleCost(result).catch((error) => console.error("cycle_cost_record_failed", { sessionId: this.name, err: String(error) }));
     await this.logAcceptedUsers();
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
@@ -709,7 +714,9 @@ export class MyAgent extends Think<Env> {
           recipeId = matches[0].id;
         }
         if (!recipeId) throw new Error("recipe.run requires id or exact name");
-        return this.runSavedRecipe({ recipeId, input: input.input ?? {} });
+        const result = await this.runSavedRecipe({ recipeId, input: input.input ?? {} });
+        this.recipesUsedThisTurn.push({ recipeId, name: (result as { recipe?: { name?: string } })?.recipe?.name ?? input.name ?? null });
+        return result;
       },
       broadcast: (message) => this.broadcast(message),
       identity,
@@ -841,13 +848,42 @@ export class MyAgent extends Think<Env> {
     };
   }
 
-  onStepFinish(ctx: { stepNumber: number; text: string; toolCalls: unknown[]; toolResults: unknown[]; finishReason: string }) {
+  onStepFinish(ctx: { stepNumber: number; text: string; toolCalls: unknown[]; toolResults: unknown[]; finishReason: string; usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null } }) {
+    this.cycleStepUsage.push({ usage: ctx.usage, finishReason: ctx.finishReason });
     console.log("agent_step", {
       step: ctx.stepNumber,
       textBytes: ctx.text?.length ?? 0,
       toolCalls: ctx.toolCalls?.length ?? 0,
       toolResults: ctx.toolResults?.length ?? 0,
       finishReason: ctx.finishReason,
+      usage: ctx.usage ? { inputTokens: ctx.usage.inputTokens, outputTokens: ctx.usage.outputTokens, totalTokens: ctx.usage.totalTokens } : null,
+    });
+  }
+
+  private async recordCurrentCycleCost(result: ChatResponseResult): Promise<void> {
+    const identity = this.identity();
+    if (!identity) return;
+    const steps = this.cycleStepUsage.splice(0);
+    const recipesUsed = this.recipesUsedThisTurn.splice(0);
+    const recipesSaved = this.recipesSavedThisTurn.splice(0);
+    const usage: CycleCostUsage = steps.length
+      ? {
+          inputTokens: steps.some((step) => typeof step.usage?.inputTokens === "number") ? steps.reduce((sum, step) => sum + (step.usage?.inputTokens ?? 0), 0) : null,
+          outputTokens: steps.some((step) => typeof step.usage?.outputTokens === "number") ? steps.reduce((sum, step) => sum + (step.usage?.outputTokens ?? 0), 0) : null,
+          totalTokens: steps.some((step) => typeof step.usage?.totalTokens === "number") ? steps.reduce((sum, step) => sum + (step.usage?.totalTokens ?? 0), 0) : null,
+          basis: "ai_sdk_step_usage",
+        }
+      : { inputTokens: null, outputTokens: null, totalTokens: null, basis: "unavailable" };
+    await recordCycleCost(this.env, {
+      ownerEmail: identity.email,
+      sessionOrRunId: this.name,
+      cycleIndex: await nextCycleIndex(this.env, identity.email, this.name),
+      model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID,
+      finishReason: steps.at(-1)?.finishReason ?? result.status,
+      usage,
+      recipesUsed,
+      // TODO(recipe-promotion): append suggestedRecipe/saved_recipes promotions here when Track 2 wires an in-turn promotion signal.
+      recipesSaved,
     });
   }
 
