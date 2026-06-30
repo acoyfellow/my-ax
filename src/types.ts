@@ -88,6 +88,10 @@ declare global {
       LLM_GATEWAY_TOKEN?: string;
       LLM_GATEWAY_AUTH_HEADER?: string;
 
+      /** Explicit opt-in: saved recipe promotions skip pending gate and become enabled. */
+      MY_AX_RECIPE_AUTOTRUST?: string;
+      RECIPE_AUTOTRUST?: string;
+
     }
   }
 }
@@ -121,7 +125,7 @@ export interface ToolDef {
 export interface ToolContext {
   workingDirectory: string;
   /** Deliver a same-owner attention notification to subscribed installed apps. */
-  notifyOwner: (input: { kind: "session.update" | "job.complete" | "job.needs_input" | "watch.fired" | "deploy.gate"; title: string; body: string; href?: string }) => Promise<{ delivered: number; expired: number; failed: number; devices: number; failures?: { host: string; status?: number; reason: string }[] }>;
+  notifyOwner: (input: { kind: "session.update" | "job.complete" | "job.needs_input" | "watch.fired" | "deploy.gate" | "recipe.approval"; title: string; body: string; href?: string }) => Promise<{ delivered: number; expired: number; failed: number; devices: number; failures?: { host: string; status?: number; reason: string }[] }>;
   shellExec: (cmd: string, opts?: ShellExecOpts) => Promise<ShellResult>;
   processStart: (cmd: string, opts?: ProcessStartOpts) => Promise<BackgroundProcessInfo>;
   processStatus: (id: string) => Promise<BackgroundProcessInfo | null>;

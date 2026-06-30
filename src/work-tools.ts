@@ -162,6 +162,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     suggestedRecipe: {
       description: "Promoted from a successful work_code run.",
       inputSchema: { type: "object", properties: {} },
+      name: `WorkCodeRecipe_${Date.now()}`,
       code,
       capabilities: inferredCapabilities,
     },

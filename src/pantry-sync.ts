@@ -37,7 +37,7 @@ export type PantryRecipeBody = {
   inputSchema: Record<string, unknown>;
   code: string;
   capabilities: string[];
-  status: "enabled" | "disabled";
+  status: "pending" | "enabled" | "disabled";
   sourceRunId: string | null;
 };
 
