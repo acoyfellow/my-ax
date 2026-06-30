@@ -30,6 +30,7 @@ import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } fr
 import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeService, recipeRunTitle, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
+import { resolveBridgeOrigin } from "./bridge-origin";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -73,6 +74,12 @@ type MyAgentConfig = {
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
 };
+
+function requireBridgeOrigin(env: Env): string {
+  const origin = resolveBridgeOrigin(env.BRIDGE_BASE_URL);
+  if (!origin) throw new Error("BRIDGE_BASE_URL must be an absolute public URL before connector OAuth tools can run");
+  return origin;
+}
 
 type RecurringPromptPayload = {
   jobId: string;
@@ -368,7 +375,12 @@ export class MyAgent extends Think<Env> {
   private async ensureNativeMcp(): Promise<void> {
     const identity = this.identity();
     if (!identity) return;
-    const store = makeOAuthClientStore(this.env.OAUTH_CLIENT, new URL(this.env.BRIDGE_BASE_URL).origin);
+    const workerOrigin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
+    if (!workerOrigin) {
+      console.error("native_mcp_hydration_skipped_invalid_bridge_base_url", { bridgeBaseUrl: this.env.BRIDGE_BASE_URL ? "set" : "empty" });
+      return;
+    }
+    const store = makeOAuthClientStore(this.env.OAUTH_CLIENT, workerOrigin);
     const register = async (id: string, upstream: string) => {
       const existingEntry = Object.entries(this.getMcpServers().servers).find(([, server]) => server.name === id);
       const token = await store.getValidAccessToken(identity.email, id).catch(() => null);
@@ -724,7 +736,7 @@ export class MyAgent extends Think<Env> {
       bridgeBaseUrl: env.BRIDGE_BASE_URL,
       bridgeJwtSecret: env.BRIDGE_JWT_SECRET,
       env,
-      workerOrigin: new URL(env.BRIDGE_BASE_URL).origin,
+      workerOrigin: requireBridgeOrigin(env),
     };
   }
 
