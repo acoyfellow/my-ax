@@ -10,7 +10,6 @@
   "conditions": {
     "A": [
       {
-        "session": "8b2fc027-1494-47fe-b45a-cf78762e5d8c",
         "cycle": 1,
         "model": "@cf/moonshotai/kimi-k2.7-code",
         "inputTokens": 2304,
@@ -24,7 +23,6 @@
     ],
     "B": [
       {
-        "session": "7e7c71d6-c470-455a-a0a3-d1d01ea018cd",
         "cycle": 1,
         "model": "@cf/moonshotai/kimi-k2.7-code",
         "inputTokens": 2301,
@@ -38,7 +36,6 @@
     ],
     "C": [
       {
-        "session": "05c52d76-d3e2-4f75-a517-56a7fbebac97",
         "cycle": 1,
         "model": "@cf/moonshotai/kimi-k2.7-code",
         "inputTokens": 5352,
@@ -47,7 +44,6 @@
         "finishReason": "stop",
         "recipesUsed": [
           {
-            "recipeId": "1aed01c6-8656-4220-818c-1e5c9cec99a2",
             "name": "normalize_status_digest_mqzy7278"
           }
         ],
@@ -56,44 +52,9 @@
       }
     ]
   },
-  "averages": {
-    "A": {
-      "inputTokens": 2304,
-      "outputTokens": 394,
-      "totalTokens": 2698
-    },
-    "B": {
-      "inputTokens": 2301,
-      "outputTokens": 388,
-      "totalTokens": 2689
-    },
-    "C": {
-      "inputTokens": 5352,
-      "outputTokens": 157,
-      "totalTokens": 5509
-    }
-  },
-  "attribution": {
-    "outputDropBvsA": 1.5,
-    "outputDropCvsA": 60.2,
-    "inputAddedByToolDefinitions_BminusA": -3,
-    "inputAddedByRecipeRun_CminusB": 3051,
-    "totalDeltaCminusA": 2811,
-    "tinyProcedureTotalVerdict": "reuse loses on total for this tiny procedure"
-  },
   "cleanup": {
     "attempted": true,
-    "sessions": [
-      "8b2fc027-1494-47fe-b45a-cf78762e5d8c",
-      "7e7c71d6-c470-455a-a0a3-d1d01ea018cd",
-      "05c52d76-d3e2-4f75-a517-56a7fbebac97"
-    ],
-    "recipes": [
-      {
-        "id": "1aed01c6-8656-4220-818c-1e5c9cec99a2",
-        "name": "normalize_status_digest_mqzy7278"
-      }
-    ]
+    "metadataStripped": "ephemeral session and recipe UUIDs removed; only aggregate token/provenance fields retained"
   },
   "checks": {
     "realModelRan": true,
@@ -101,5 +62,22 @@
     "aiSdkUsageBasis": true,
     "recipeReuseHappened": true,
     "secretsPrinted": false
-  }
+  },
+  "provenance": {
+    "label": "exploratory, n=1, not a reproducible benchmark",
+    "honestFinding": "Recipe reuse reduced output tokens in this single prod Kimi K2.7 observation, but raised total tokens for the tiny procedure because of input/tool overhead.",
+    "limits": [
+      "single observation per condition",
+      "prod-only/Access-gated/manual run",
+      "derive and reuse prompts/tool modes were not a clean apples-to-apples benchmark",
+      "do not cite as a precise percentage or total-token-savings result"
+    ]
+  },
+  "qualitativeSummary": {
+    "deriveTotalTokens": 2698,
+    "recipeRunTotalTokens": 5509,
+    "finding": "In this single exploratory observation, recipe.run emitted fewer output tokens but used more total tokens than deriving from scratch.",
+    "interpretation": "Use this only as provenance for the downgraded claim; it is not a precise effect size or reproducible benchmark."
+  },
+  "tinyProcedureVerdict": "reuse loses on total for this tiny procedure"
 }
