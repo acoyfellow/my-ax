@@ -35,6 +35,16 @@
     return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
 
+  function checkedAtLabel(prefix: string, value?: string): string | null {
+    const formatted = formatCheckedAt(value);
+    return formatted ? `${prefix} ${formatted}` : null;
+  }
+
+  function shortVersion(value?: string | null): string | null {
+    if (!value) return null;
+    return value.length > 12 ? value.slice(0, 8) : value;
+  }
+
   async function refresh() {
     loading = true;
     error = null;
@@ -68,12 +78,20 @@
       {#if loading}
         <p class="mt-2 text-sm text-fg-mut">Loading latest state…</p>
       {:else if error}
-        <button type="button" onclick={refresh} class="mt-2 text-left text-sm text-bad hover:underline">{error}</button>
+        <button type="button" onclick={refresh} class="mt-2 text-left text-sm text-bad hover:underline">Could not refresh Check-in: {error}</button>
+        {#if checkIn}
+          <p class="mt-2 text-sm leading-snug text-fg-mut">Showing stale Check-in: {checkIn.summary}</p>
+        {/if}
       {:else if checkIn}
         <p class="mt-2 text-xl font-semibold leading-tight text-fg @min-[24rem]/checkin:text-2xl">{checkIn.summary}</p>
       {/if}
-      {#if checkIn?.checkedAt && !loading && !error}
-        <p class="mt-2 text-[11px] text-fg-mut" title={checkIn.checkedAt} data-check-in-checked-at>Checked {formatCheckedAt(checkIn.checkedAt)}</p>
+      {#if checkIn?.checkedAt && !loading}
+        <p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-mut" title={checkIn.checkedAt} data-check-in-checked-at>
+          <span>{error ? checkedAtLabel("Stale since", checkIn.checkedAt) : checkedAtLabel("Checked", checkIn.checkedAt)}</span>
+          {#if shortVersion(checkIn.deployment?.versionId)}
+            <code class="rounded-full border border-line bg-bg px-1.5 py-0.5 text-[10px] text-fg-mut" title={checkIn.deployment?.versionId} data-check-in-version>v{shortVersion(checkIn.deployment?.versionId)}</code>
+          {/if}
+        </p>
       {/if}
     </div>
     <button type="button" onclick={refresh} disabled={loading} class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold text-fg-mut hover:border-brand/50 hover:text-fg disabled:cursor-wait disabled:opacity-60" aria-label="Refresh Check-in" data-check-in-refresh>

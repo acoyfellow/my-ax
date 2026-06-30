@@ -82,7 +82,12 @@ export function isLocalDevBypassAllowed(req: Request, env: AuthEnv): boolean {
     !env.CF_ACCESS_AUD &&
     env.DEV_USER_EMAIL &&
     isLoopbackHost &&
-    hasLocalRuntimeSignal,
+    // Wrangler browser navigation to localhost does not reliably preserve a
+    // Miniflare-specific request header. The loopback host + dev env + blank
+    // Access config + explicit dev identity are the local-only trust boundary;
+    // deployed misconfigurations still fail closed because their host is not
+    // loopback. Keep accepting the stronger runtime signal for tests/proxies.
+    (hasLocalRuntimeSignal || env.ENVIRONMENT === "dev"),
   );
 }
 
