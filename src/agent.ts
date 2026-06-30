@@ -799,9 +799,11 @@ export class MyAgent extends Think<Env> {
     const safeMessages = sanitizeToolCallIds(messages, (idBefore, idAfter) =>
       console.warn("tool_call_id_sanitized", { sessionId: this.name, before: idBefore, after: idAfter }),
     );
+    const dogfoodNoToolTurn = safeMessages.some((message) => message.role === "user" && typeof message.content === "string" && message.content.includes("MY_AX_RECIPE_CURVE_NO_TOOLS"));
     return {
       model: resolved.model,
       messages: safeMessages,
+      ...(dogfoodNoToolTurn ? { activeTools: [] } : {}),
       // Native MCP and Code Mode tools bypass createThinkTools, so bound their
       // model-visible output here too — otherwise a connector MCP result is an
       // unbounded context firehose that can stall a turn.
