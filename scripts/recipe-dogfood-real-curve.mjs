@@ -6,8 +6,9 @@ const base = process.env.MY_AX_BASE_URL ?? "http://127.0.0.1:8797";
 const outPath = resolve(process.argv[2] ?? `proof/recipe-dogfood-learning-curve-${new Date().toISOString().slice(0, 10)}.json`);
 const model = "@cf/moonshotai/kimi-k2.7-code";
 
+const authCookie = process.env.MY_AX_COOKIE; // e.g. CF_Authorization=<access-jwt> for prod
 async function api(path, init) {
-  const res = await fetch(`${base}${path}`, { headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, ...init });
+  const res = await fetch(`${base}${path}`, { headers: { "content-type": "application/json", ...(authCookie ? { cookie: authCookie } : {}), ...(init?.headers ?? {}) }, ...init });
   const text = await res.text();
   let json;
   try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
@@ -68,7 +69,11 @@ for (let i = 2; i < samples.length; i++) {
     method: "POST",
     body: JSON.stringify({
       clientMsgId: crypto.randomUUID(),
-      content: `MY_AX_RECIPE_CURVE_NO_TOOLS. Dogfood cycle ${i + 1}. This is the same task family. A saved recipe named ${recipe.name} was promoted after cycle 2 and reused for this line ${JSON.stringify(samples[i])}; report the recipe reuse and final JSON only. Do not re-derive the parsing code. Keep the answer under 60 words.`,
+      // REUSE cycles: tools ENABLED (no no-tools marker). The agent must ACTUALLY
+      // invoke the saved recipe via work_code recipe.run instead of re-deriving the
+      // parser. recipe.run records recipesUsedThisTurn -> recipes_used_json, which is
+      // what makes idSaveReuseHappened true and proves genuine reuse.
+      content: `MY_AX_RECIPE_CURVE_REUSE. Dogfood cycle ${i + 1}, same task family. Do NOT re-derive or hand-write the parsing logic. Call work_code and inside it run the already-saved recipe: recipe.run({ name: ${JSON.stringify(recipe.name)}, input: { line: ${JSON.stringify(samples[i])} } }) and return its result as the final JSON. Keep any prose under 30 words.`,
     }),
   });
   await waitForCycles(session, i + 1, 240_000);

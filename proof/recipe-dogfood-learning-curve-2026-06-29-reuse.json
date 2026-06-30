@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-30T01:01:39.231Z",
+  "harness": "scripts/recipe-dogfood-real-curve.mjs",
+  "appBaseUrl": "https://my-ax.coey.dev",
+  "session": "f2eaa09c-2017-4176-ab99-9aadfa3ade51",
+  "model": "@cf/moonshotai/kimi-k2.7-code",
+  "measuredSeriesKind": "real-workers-ai-provider-tokens",
+  "thesis": "In a repeated agent loop, cost per cycle trends down after repeated work becomes an owner-approved saved recipe, then flattens above zero because discovery, matching, tool calling, and novel work still cost tokens.",
+  "promotedRecipe": {
+    "id": "003d3fc4-b477-4256-86dd-22dd9762ee1b",
+    "name": "normalize_status_digest_mqzxxxyq",
+    "afterCycle": 2,
+    "optInOwnerApproved": true
+  },
+  "costPerCycle": [
+    {
+      "cycle": 1,
+      "mode": "derive",
+      "inputTokens": 2308,
+      "outputTokens": 1313,
+      "totalTokens": 3621,
+      "recipeReused": null
+    },
+    {
+      "cycle": 2,
+      "mode": "derive",
+      "inputTokens": 2487,
+      "outputTokens": 404,
+      "totalTokens": 2891,
+      "recipeReused": null
+    },
+    {
+      "cycle": 3,
+      "mode": "recipe.run",
+      "inputTokens": 6064,
+      "outputTokens": 135,
+      "totalTokens": 6199,
+      "recipeReused": "003d3fc4-b477-4256-86dd-22dd9762ee1b"
+    },
+    {
+      "cycle": 4,
+      "mode": "derive",
+      "inputTokens": 3592,
+      "outputTokens": 97,
+      "totalTokens": 3689,
+      "recipeReused": null
+    },
+    {
+      "cycle": 5,
+      "mode": "recipe.run",
+      "inputTokens": 8756,
+      "outputTokens": 208,
+      "totalTokens": 8964,
+      "recipeReused": "003d3fc4-b477-4256-86dd-22dd9762ee1b"
+    }
+  ],
+  "cycles": [
+    {
+      "cycle": 1,
+      "mode": "derive",
+      "model": "@cf/moonshotai/kimi-k2.7-code",
+      "inputTokens": 2308,
+      "outputTokens": 1313,
+      "totalTokens": 3621,
+      "finishReason": "stop",
+      "recipesUsed": [],
+      "recipesSaved": [],
+      "usageBasis": "ai_sdk_step_usage"
+    },
+    {
+      "cycle": 2,
+      "mode": "derive",
+      "model": "@cf/moonshotai/kimi-k2.7-code",
+      "inputTokens": 2487,
+      "outputTokens": 404,
+      "totalTokens": 2891,
+      "finishReason": "stop",
+      "recipesUsed": [],
+      "recipesSaved": [],
+      "usageBasis": "ai_sdk_step_usage"
+    },
+    {
+      "cycle": 3,
+      "mode": "recipe.run",
+      "model": "@cf/moonshotai/kimi-k2.7-code",
+      "inputTokens": 6064,
+      "outputTokens": 135,
+      "totalTokens": 6199,
+      "finishReason": "stop",
+      "recipesUsed": [
+        {
+          "recipeId": "003d3fc4-b477-4256-86dd-22dd9762ee1b",
+          "name": "normalize_status_digest_mqzxxxyq"
+        }
+      ],
+      "recipesSaved": [],
+      "usageBasis": "ai_sdk_step_usage"
+    },
+    {
+      "cycle": 4,
+      "mode": "derive",
+      "model": "@cf/moonshotai/kimi-k2.7-code",
+      "inputTokens": 3592,
+      "outputTokens": 97,
+      "totalTokens": 3689,
+      "finishReason": "stop",
+      "recipesUsed": [],
+      "recipesSaved": [],
+      "usageBasis": "ai_sdk_step_usage"
+    },
+    {
+      "cycle": 5,
+      "mode": "recipe.run",
+      "model": "@cf/moonshotai/kimi-k2.7-code",
+      "inputTokens": 8756,
+      "outputTokens": 208,
+      "totalTokens": 8964,
+      "finishReason": "stop",
+      "recipesUsed": [
+        {
+          "recipeId": "003d3fc4-b477-4256-86dd-22dd9762ee1b",
+          "name": "normalize_status_digest_mqzxxxyq"
+        },
+        {
+          "recipeId": "003d3fc4-b477-4256-86dd-22dd9762ee1b",
+          "name": "normalize_status_digest_mqzxxxyq"
+        }
+      ],
+      "recipesSaved": [],
+      "usageBasis": "ai_sdk_step_usage"
+    }
+  ],
+  "checks": {
+    "realModelRan": true,
+    "tokenUsagePresent": true,
+    "idSaveReuseHappened": true,
+    "flattenFloorNotZero": true,
+    "secretsPrinted": false
+  }
+}
