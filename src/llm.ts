@@ -6,7 +6,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createWorkersAI } from "workers-ai-provider";
 import type { Env } from "./types";
-import { DEFAULT_MODEL_ID, findModel, resolveModelId } from "./models";
+import { DEFAULT_MODEL_ID, findModel, resolveAvailableModelId } from "./models";
 
 type GatewayEnv = {
   LLM_GATEWAY_URL?: string;
@@ -45,7 +45,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
   // Heal stale/removed model ids to the default rather than throwing every
   // turn. A session pinned to a churned model would otherwise look like a
   // permanent connection error to the user.
-  const modelId = resolveModelId(requestedModel || DEFAULT_MODEL_ID);
+  const modelId = resolveAvailableModelId(env, requestedModel || DEFAULT_MODEL_ID);
   const meta = findModel(modelId)!;
 
   let model;
