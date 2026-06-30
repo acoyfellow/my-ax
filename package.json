@@ -66,7 +66,8 @@
     "test:auth": "tsx --test src/auth.test.ts",
     "test:tool-id-sanitize": "tsx --test src/tool-id-sanitize.test.ts",
     "test:streaming-turn-fsm": "tsx --test proof/svelte/streaming-turn-fsm.test.ts",
-    "test:bridge-origin": "tsx --test src/bridge-origin.test.ts"
+    "test:bridge-origin": "tsx --test src/bridge-origin.test.ts",
+    "test": "npm run test:unit"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.84",

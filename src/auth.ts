@@ -21,9 +21,10 @@ export interface AccessIdentity {
 interface AuthEnv {
   CF_ACCESS_AUD: string;     // Application Audience tag from Zero Trust dashboard
   CF_ACCESS_ISS: string;     // Team domain, e.g. https://<team>.example.com
-  ENVIRONMENT?: string;      // "dev" bypasses verification with DEV_USER_EMAIL
+  ENVIRONMENT?: string;      // "dev" may bypass verification only for local runtimes
   DEV_USER_EMAIL?: string;
   DEV_USER_GROUPS?: string;  // comma-separated
+  MINIFLARE?: string;        // set by wrangler/miniflare local runtimes
 }
 
 // Module-level JWKS cache. Access JWKS keys rotate; jose handles caching+refresh.
@@ -71,21 +72,33 @@ function getJWKS(iss: string) {
   return jwks;
 }
 
+export function isLocalDevBypassAllowed(req: Request, env: AuthEnv): boolean {
+  const host = new URL(req.url).hostname.toLowerCase();
+  const isLoopbackHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".localhost");
+  const hasLocalRuntimeSignal = env.MINIFLARE === "1" || env.MINIFLARE === "true" || req.headers.get("MF-Original-URL") !== null;
+  return Boolean(
+    env.ENVIRONMENT === "dev" &&
+    !env.CF_ACCESS_ISS &&
+    !env.CF_ACCESS_AUD &&
+    env.DEV_USER_EMAIL &&
+    isLoopbackHost &&
+    hasLocalRuntimeSignal,
+  );
+}
+
 export async function verifyAccessRequest(
   req: Request,
   env: AuthEnv,
 ): Promise<AccessIdentity> {
-  // Local dev bypass — same pattern as seal/AGENTS.md (slip from cto-agent recon).
-  // Only fires when ENVIRONMENT=dev AND iss/aud are empty AND a dev email is set.
-  if (
-    env.ENVIRONMENT === "dev" &&
-    !env.CF_ACCESS_ISS &&
-    !env.CF_ACCESS_AUD &&
-    env.DEV_USER_EMAIL
-  ) {
+  // Local dev bypass. It deliberately requires both dev env config and a local
+  // runtime/loopback signal, so a deployed worker misbound with ENVIRONMENT=dev
+  // and blank Access settings still fails closed instead of authenticating as a
+  // synthetic dev user.
+  if (isLocalDevBypassAllowed(req, env)) {
+    const devUserEmail = env.DEV_USER_EMAIL ?? "";
     return {
-      email: env.DEV_USER_EMAIL.toLowerCase(),
-      sub: `dev-${env.DEV_USER_EMAIL}`,
+      email: devUserEmail.toLowerCase(),
+      sub: `dev-${devUserEmail}`,
       groups: env.DEV_USER_GROUPS?.split(",").map((s) => s.trim()),
     };
   }
