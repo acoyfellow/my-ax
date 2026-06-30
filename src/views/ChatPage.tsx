@@ -153,7 +153,8 @@ const chatPageStyles = `
     display: flex; align-items: center; gap: 12px; padding: 10px 14px;
     margin: 8px 12px 0; border-radius: 10px; font-size: 13px; color: var(--fg);
   }
-  .connector-banner[data-state="needs-auth"] {
+  .connector-banner[data-state="needs-auth"],
+  .connector-banner[data-state="upstream-auth"] {
     border: 1px solid rgba(244, 63, 94, 0.45);
     background: rgba(244, 63, 94, 0.10);
   }

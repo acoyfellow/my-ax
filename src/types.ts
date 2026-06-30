@@ -145,7 +145,7 @@ export interface ToolContext {
   allowedWorkCapabilities?: string[];
   /** Disabled while running a saved recipe so saved recipes cannot recursively call saved recipes. */
   exposeSavedRecipes?: boolean;
-  /** Enabled owner-approved saved recipes exposed to normal work_code as recipe.list/run. */
+  /** Enabled owner-approved saved snippets projected into work_code through the codemode namespace. */
   listSavedRecipes?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[]; codemodeExecutionId?: string; sourceRecipeId?: string | null; provenance?: "projected" | "native" }>>;
   runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown>; callerCapabilities?: string[] }) => Promise<unknown>;
   broadcast: (msg: string) => void;

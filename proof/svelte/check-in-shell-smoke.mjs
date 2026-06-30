@@ -53,6 +53,11 @@ assertIncludes(checkIn, "my-ax:check-in-details-expanded", "Check-in details per
 assertIncludes(checkIn, "data-check-in-checked-at", "Check-in server timestamp marker");
 assertIncludes(checkIn, "fetch(\"/api/check-in\"", "Check-in API fetch");
 assertIncludes(checkIn, "checkedAt", "Check-in server timestamp field");
+assertIncludes(checkIn, "Could not refresh Check-in", "Check-in refresh failure is explicit");
+assertIncludes(checkIn, "Showing stale Check-in", "Check-in keeps stale data labeled as stale after refresh failure");
+assertIncludes(checkIn, "Stale since", "Check-in stale timestamp label");
+assertIncludes(checkIn, "data-check-in-version", "Check-in exposes deployment version chip for owner/debug correlation");
+assertIncludes(checkIn, "shortVersion", "Check-in shortens deployment version ids for display");
 assertIncludes(checkIn, "bucket.steer", "Check-in bucket singular steer field");
 assertIncludes(checkIn, "data-check-in-raw-href={bucket.steer.href}", "Check-in raw API href preservation marker");
 assertIncludes(checkIn, "displayCheckInHref", "Check-in rendered owner destination helper");

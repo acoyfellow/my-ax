@@ -69,12 +69,12 @@
     );
   }
 
-  type SessionSignal = "idle" | "running" | "error" | "offline";
+  type SessionSignal = "idle" | "running" | "reconnecting" | "error" | "offline";
 
   function sessionSignal(row: SessionRow, active: boolean): SessionSignal {
     if (active) {
       if (wsState.conn === "offline") return "offline";
-      if (wsState.conn === "reconnecting") return "running";
+      if (wsState.conn === "reconnecting") return "reconnecting";
       if (wsState.status === "thinking" || wsState.status === "running") return "running";
     }
     const status = (row.status || "active").toLowerCase();
@@ -86,6 +86,7 @@
 
   function sessionSignalLabel(signal: SessionSignal): string {
     if (signal === "running") return "Agent is running";
+    if (signal === "reconnecting") return "Reconnecting";
     if (signal === "error") return "Last turn failed";
     if (signal === "offline") return "Disconnected";
     return "Ready";
@@ -501,6 +502,10 @@
     color: var(--fg-mut);
     background: currentColor;
     opacity: 0.65;
+  }
+  :global(.session-row__signal[data-signal="reconnecting"]) {
+    color: var(--warn);
+    background: currentColor;
   }
   :global(.session-row__signal[data-signal="running"]) {
     color: var(--brand);
