@@ -75,7 +75,7 @@ export const TOOLS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        kind: { type: "string", enum: ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate"], description: "Why the user needs attention" },
+        kind: { type: "string", enum: ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"], description: "Why the user needs attention" },
         title: { type: "string", description: "Short notification title" },
         body: { type: "string", description: "Short notification body; no secrets" },
         href: { type: "string", description: "Optional same-origin app deep link" },

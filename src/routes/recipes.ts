@@ -47,6 +47,27 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
     catch (error) { return failure(c, command, error); }
   });
 
+  app.get("/api/recipes/:id/approval", async (c) => {
+    const command = `GET /api/recipes/${c.req.param("id")}/approval`;
+    try {
+      const row = await service(c).get(c.req.param("id"));
+      return ok(c, command, { recipe: { ...publicRecipe(row), code: row.code }, actions: ["approve", "reject"] });
+    }
+    catch (error) { return failure(c, command, error); }
+  });
+
+  app.post("/api/recipes/:id/approval", async (c) => {
+    const command = `POST /api/recipes/${c.req.param("id")}/approval`;
+    try {
+      const request = await body(c);
+      const action = request.action === "reject" ? "reject" : request.action === "approve" ? "approve" : "";
+      if (!action) throw new SavedRecipeError("InvalidInput", "action must be approve or reject");
+      const recipe = await service(c).update(c.req.param("id"), { status: action === "approve" ? "enabled" : "disabled" });
+      return ok(c, command, { recipe, action });
+    }
+    catch (error) { return failure(c, command, error); }
+  });
+
   app.patch("/api/recipes/:id", async (c) => {
     const command = `PATCH /api/recipes/${c.req.param("id")}`;
     try { return ok(c, command, { recipe: await service(c).update(c.req.param("id"), await body(c)) }); }

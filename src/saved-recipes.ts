@@ -1,6 +1,6 @@
 import type { Env } from "./types";
 
-export const SAVED_RECIPE_STATUSES = ["enabled", "disabled"] as const;
+export const SAVED_RECIPE_STATUSES = ["pending", "enabled", "disabled"] as const;
 export type SavedRecipeStatus = (typeof SAVED_RECIPE_STATUSES)[number];
 
 export type SavedRecipe = {
@@ -62,7 +62,7 @@ export function validateSavedRecipeInput(input: unknown): SavedRecipeInput {
   const cleanCapabilities = capabilities.map((capability) => typeof capability === "string" ? capability.trim() : "");
   const invalid = cleanCapabilities.filter((capability) => !CAPABILITY_PATTERN.test(capability));
   if (invalid.length) throw new SavedRecipeError("InvalidInput", `invalid capabilities: ${invalid.join(", ")}`);
-  const status = body.status === "disabled" ? "disabled" : "enabled";
+  const status = body.status === "pending" ? "pending" : body.status === "disabled" ? "disabled" : "enabled";
   const sourceRunId = typeof body.sourceRunId === "string" && body.sourceRunId.trim() ? body.sourceRunId.trim() : null;
   return { name, description, inputSchema, code, capabilities: [...new Set(cleanCapabilities)].sort(), sourceRunId, status };
 }
@@ -147,7 +147,7 @@ export function validateSavedRecipePatch(input: unknown): Partial<SavedRecipeInp
     patch.capabilities = [...new Set(cleanCapabilities)].sort();
   }
   if ("status" in body) {
-    if (body.status !== "enabled" && body.status !== "disabled") throw new SavedRecipeError("InvalidInput", "status must be enabled or disabled");
+    if (body.status !== "pending" && body.status !== "enabled" && body.status !== "disabled") throw new SavedRecipeError("InvalidInput", "status must be pending, enabled, or disabled");
     patch.status = body.status;
   }
   if ("sourceRunId" in body) patch.sourceRunId = typeof body.sourceRunId === "string" && body.sourceRunId.trim() ? body.sourceRunId.trim() : null;
@@ -181,7 +181,7 @@ export class SavedRecipeService {
       code: parsed.code,
       capabilities_json: JSON.stringify(parsed.capabilities),
       source_run_id: parsed.sourceRunId ?? null,
-      status: parsed.status ?? "enabled",
+      status: parsed.status ?? "pending",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -225,7 +225,7 @@ export class SavedRecipeService {
 
   async requireEnabled(id: string) {
     const row = await this.get(id);
-    if (row.status !== "enabled") throw new SavedRecipeError("InvalidInput", "saved recipe is disabled");
+    if (row.status !== "enabled") throw new SavedRecipeError("InvalidInput", `saved recipe is ${row.status}`);
     return row;
   }
 }
