@@ -31,6 +31,9 @@ import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeService, recipeRunTitle, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { resolveBridgeOrigin } from "./bridge-origin";
+import { autoTrustMode, initialStatusForPromotion } from "./auto-trust";
+import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
+import { intersectCapabilities } from "./capability-intersect";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -42,7 +45,7 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 
 Computer work is exposed through two tools:
 - work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and cloudbox.* is clean bounded repository work with receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. Owner-approved saved recipes are available inside work_code as recipe.list() and recipe.run({id|name,input}); use them when an enabled recipe clearly matches the task. Recipe runs create receipts and appear in Check-in. No publication authority is available inside work_code.
+- work_code executes one bounded async JavaScript function over those exact namespaces. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved saved snippet when an enabled snippet clearly matches the task. Saved snippets are projected from the owner-curated D1 saved_recipes table into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every snippet today carries projected provenance. Snippet runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code.
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Cloudbox are needed.
@@ -235,13 +238,22 @@ export class MyAgent extends Think<Env> {
     await notifyOwner(this.env, identity.email, delegateCompletionNotification({ sessionId: this.name, results }));
   }
 
-  async runSavedRecipe(body: { recipeId?: string; input?: Record<string, unknown> }) {
+  async runSavedRecipe(body: { recipeId?: string; input?: Record<string, unknown>; callerCapabilities?: string[] }) {
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity?.email) throw new Error("session identity not seeded");
     const recipeId = body.recipeId?.trim();
     if (!recipeId) throw new Error("recipeId is required");
     const recipe = await new SavedRecipeService(this.env, identity.email).requireEnabled(recipeId);
     const runInput = validateRecipeRunInput(body.input ?? {}, JSON.parse(recipe.input_schema_json));
+    // Capability intersection (Round 02 objection #7): a snippet/recipe run
+    // must never widen the caller's capability bounds. When the caller passes
+    // its own grant set, use the intersection; otherwise the recipe's
+    // declared capabilities apply unchanged.
+    const declaredCapabilities = JSON.parse(recipe.capabilities_json) as string[];
+    const effectiveCapabilities = intersectCapabilities(body.callerCapabilities, declaredCapabilities);
+    // The synthetic-or-real codemode execution id for receipts. See
+    // cm-snippets.ts for the projection/dual-read seam.
+    const codemodeExecutionId = await codemodeExecutionIdForRecipe(this.env, { id: recipe.id, name: recipe.name, owner_email: identity.email });
     const runId = crypto.randomUUID();
     const now = new Date().toISOString();
     await this.env.DB.prepare(`INSERT INTO runs (id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at)
@@ -251,24 +263,66 @@ export class MyAgent extends Think<Env> {
         this.name,
         recipeRunTitle(recipe),
         recipe.description,
-        JSON.stringify({ kind: "saved_recipe", recipeId: recipe.id, capabilities: JSON.parse(recipe.capabilities_json) }),
+        JSON.stringify({
+          kind: "saved_recipe",
+          recipeId: recipe.id,
+          declaredCapabilities,
+          effectiveCapabilities,
+          codemodeExecutionId,
+        }),
         now,
         now,
       ).run();
     const actor = JSON.stringify({ id: "my-ax", kind: "coordinator", mode: "live" });
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-start-${crypto.randomUUID()}`, identity.email.toLowerCase(), now, actor, "recipe.started", JSON.stringify({ recipeId: recipe.id, name: recipe.name, input: runInput }), null).run();
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+        runId,
+        `evt-start-${crypto.randomUUID()}`,
+        identity.email.toLowerCase(),
+        now,
+        actor,
+        "recipe.started",
+        JSON.stringify({
+          recipeId: recipe.id,
+          name: recipe.name,
+          input: runInput,
+          codemodeExecutionId,
+          declaredCapabilities,
+          effectiveCapabilities,
+        }),
+        null,
+      ).run();
     const code = `async () => { const input = ${JSON.stringify(runInput)};\n${recipe.code}\n}`;
     const result = await executeWorkCode(code, {
       ...this.buildToolContext(),
-      allowedWorkCapabilities: JSON.parse(recipe.capabilities_json),
+      allowedWorkCapabilities: effectiveCapabilities,
       exposeSavedRecipes: false,
     });
     const terminal = result.ok ? "completed" : "failed";
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(runId, `evt-${terminal}-${crypto.randomUUID()}`, identity.email.toLowerCase(), new Date().toISOString(), actor, `recipe.${terminal}`, JSON.stringify({ recipeId: recipe.id, name: recipe.name, ok: result.ok }), JSON.stringify(result)).run();
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+        runId,
+        `evt-${terminal}-${crypto.randomUUID()}`,
+        identity.email.toLowerCase(),
+        new Date().toISOString(),
+        actor,
+        `recipe.${terminal}`,
+        JSON.stringify({
+          recipeId: recipe.id,
+          name: recipe.name,
+          ok: result.ok,
+          codemodeExecutionId,
+        }),
+        JSON.stringify(result),
+      ).run();
     await this.env.DB.prepare("UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(terminal, runId, identity.email.toLowerCase()).run();
-    return { runId, recipe: { id: recipe.id, name: recipe.name }, execution: result };
+    // Refresh the cm_snippets projection so a successful run keeps the
+    // dual-read store in sync with the latest recipe code. Fail-soft: a
+    // projection write must never break a successful recipe run.
+    if (result.ok) {
+      await projectSavedRecipe(this.env, recipe).catch((error) => console.error("cm_snippet_projection_failed", { recipeId: recipe.id, err: error instanceof Error ? error.message : String(error) }));
+    }
+    return { runId, recipe: { id: recipe.id, name: recipe.name }, execution: result, codemodeExecutionId, declaredCapabilities, effectiveCapabilities };
   }
 
   async scheduleRecurringPrompt(payload: RecurringPromptPayload & { cadenceSecs: number }) {
@@ -708,14 +762,32 @@ export class MyAgent extends Think<Env> {
       },
       createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
       listSavedRecipes: async () => {
+        // Dual-read from cm_snippets projection first, falling back to an
+        // in-memory projection of enabled saved_recipes when the
+        // projection table is empty (transition seam). Returns codemode-
+        // native shape so the snippet hook surface is consistent with the
+        // native runtime.
+        const snippets = await listSnippetsDualRead(env, identity.email);
+        // Mirror the authoritative capability list from saved_recipes
+        // where present, since cm_snippets records only connector names.
+        // The capability bound enforced at run time still comes from the
+        // saved_recipes row (intersected with caller grants), so this
+        // list is advisory metadata for the model only.
         const recipes = await new SavedRecipeService(env, identity.email).list();
-        return recipes.filter((recipe) => recipe.status === "enabled").map((recipe) => ({
-          id: recipe.id,
-          name: recipe.name,
-          description: recipe.description,
-          inputSchema: recipe.inputSchema,
-          capabilities: recipe.capabilities,
-        }));
+        const recipeByName = new Map(recipes.filter((r) => r.status === "enabled").map((r) => [r.name, r] as const));
+        return snippets.map((snippet) => {
+          const recipe = recipeByName.get(snippet.name);
+          return {
+            id: snippet.sourceRecipeId ?? snippet.id,
+            name: snippet.name,
+            description: snippet.description,
+            inputSchema: snippet.inputSchema,
+            capabilities: recipe?.capabilities ?? snippet.capabilities,
+            codemodeExecutionId: snippet.codemodeExecutionId,
+            sourceRecipeId: snippet.sourceRecipeId,
+            provenance: snippet.provenance,
+          };
+        });
       },
       runSavedRecipe: async (input) => {
         let recipeId = input.id?.trim();
@@ -726,8 +798,20 @@ export class MyAgent extends Think<Env> {
           recipeId = matches[0].id;
         }
         if (!recipeId) throw new Error("recipe.run requires id or exact name");
-        const result = await this.runSavedRecipe({ recipeId, input: input.input ?? {} });
-        this.recipesUsedThisTurn.push({ recipeId, name: (result as { recipe?: { name?: string } })?.recipe?.name ?? input.name ?? null });
+        // Forward the caller's capability bounds so runSavedRecipe can
+        // intersect (never widen) the snippet's declared capabilities
+        // against what the parent turn was allowed to do.
+        const result = await this.runSavedRecipe({
+          recipeId,
+          input: input.input ?? {},
+          callerCapabilities: input.callerCapabilities,
+        });
+        const resultWithRecipe = result as { recipe?: { name?: string }; codemodeExecutionId?: string };
+        this.recipesUsedThisTurn.push({
+          recipeId,
+          name: resultWithRecipe?.recipe?.name ?? input.name ?? null,
+          codemodeExecutionId: resultWithRecipe?.codemodeExecutionId ?? null,
+        });
         return result;
       },
       broadcast: (message) => this.broadcast(message),
@@ -917,7 +1001,12 @@ export class MyAgent extends Think<Env> {
       let parsed: { ok?: boolean; suggestedRecipe?: unknown } | null = null;
       try { parsed = JSON.parse(text); } catch { parsed = null; }
       if (!parsed?.ok || !parsed.suggestedRecipe) continue;
-      const auto = this.env.MY_AX_RECIPE_AUTOTRUST === "1" || this.env.RECIPE_AUTOTRUST === "1";
+      // Reusable auto-trust predicate (Round 02 objection #8) — shared
+      // with any future native snippet promotion path so trust mode is
+      // not re-implemented as inline literal env checks.
+      const trustMode = autoTrustMode(this.env);
+      const auto = trustMode === "auto";
+      const status = initialStatusForPromotion(this.env);
       const raw = parsed.suggestedRecipe as Record<string, unknown>;
       const recipe = await new SavedRecipeService(this.env, identity.email).create({
         name: typeof raw.name === "string" ? raw.name : `WorkCodeRecipe_${Date.now()}`,
@@ -926,9 +1015,22 @@ export class MyAgent extends Think<Env> {
         code: typeof raw.code === "string" ? raw.code : "return null;",
         capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : [],
         sourceRunId: this.name,
-        status: auto ? "enabled" : "pending",
+        status,
       });
-      this.recipesSavedThisTurn.push({ id: recipe.id, name: recipe.name, status: recipe.status, trustMode: auto ? "auto" : "gated" });
+      // Project to cm_snippets fail-soft so the codemode-native snippet
+      // surface stays in sync with newly-promoted recipes without coupling
+      // promotion success to the projection.
+      if (recipe.status === "enabled") {
+        try {
+          const row = await this.env.DB.prepare("SELECT * FROM saved_recipes WHERE id = ? AND owner_email = ?")
+            .bind(recipe.id, identity.email.toLowerCase())
+            .first<import("./saved-recipes").SavedRecipe>();
+          if (row) await projectSavedRecipe(this.env, row);
+        } catch (error) {
+          console.error("cm_snippet_projection_failed", { recipeId: recipe.id, err: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      this.recipesSavedThisTurn.push({ id: recipe.id, name: recipe.name, status: recipe.status, trustMode });
       if (!auto) {
         await notifyOwner(this.env, identity.email, {
           kind: "recipe.approval",

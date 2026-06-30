@@ -146,8 +146,8 @@ export interface ToolContext {
   /** Disabled while running a saved recipe so saved recipes cannot recursively call saved recipes. */
   exposeSavedRecipes?: boolean;
   /** Enabled owner-approved saved recipes exposed to normal work_code as recipe.list/run. */
-  listSavedRecipes?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[] }>>;
-  runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown> }) => Promise<unknown>;
+  listSavedRecipes?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[]; codemodeExecutionId?: string; sourceRecipeId?: string | null; provenance?: "projected" | "native" }>>;
+  runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown>; callerCapabilities?: string[] }) => Promise<unknown>;
   broadcast: (msg: string) => void;
 
   // Legacy in-process connector bridge surfaces retained for Settings

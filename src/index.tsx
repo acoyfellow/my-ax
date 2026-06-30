@@ -57,6 +57,21 @@ export { UserAgent } from "./user-agent";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
 export { Sandbox } from "@cloudflare/sandbox";
+// Native @cloudflare/codemode runtime Durable Object class.
+//
+// HELD: the DO binding + v11 migration are intentionally NOT declared in
+// wrangler.jsonc yet because no call site in this worker drives
+// `runNativeCodemode` against a real DurableObjectState handle. Round 04
+// review flagged premature wiring as a forward-only DO migration for
+// dead code. The class itself is kept available behind
+// `code-mode-runtime.worker.ts` so the future cutover only needs to:
+//   1. uncomment the export below,
+//   2. add the binding + `v11-codemode-runtime` migration to wrangler.jsonc,
+//   3. regenerate worker-configuration.d.ts via `wrangler types`,
+//   4. add the first real `runNativeCodemode` call site.
+// Until that change lands, the projected/synthetic snippet seam in
+// `cm-snippets.ts` remains the honest surface.
+// export { CodemodeRuntime } from "./code-mode-runtime.worker";
 
 const app = new Hono<AppEnv>();
 
