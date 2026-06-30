@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-30T01:09:01.034Z",
+  "harness": "scripts/recipe-overhead-attribution.mjs",
+  "appBaseUrl": "https://my-ax.coey.dev",
+  "model": "@cf/moonshotai/kimi-k2.7-code",
+  "cyclesPerCondition": 1,
+  "measuredSeriesKind": "real-workers-ai-provider-tokens",
+  "usageBasisRequired": "ai_sdk_step_usage",
+  "conditions": {
+    "A": [
+      {
+        "session": "8b2fc027-1494-47fe-b45a-cf78762e5d8c",
+        "cycle": 1,
+        "model": "@cf/moonshotai/kimi-k2.7-code",
+        "inputTokens": 2304,
+        "outputTokens": 394,
+        "totalTokens": 2698,
+        "finishReason": "stop",
+        "recipesUsed": [],
+        "recipesSaved": [],
+        "usageBasis": "ai_sdk_step_usage"
+      }
+    ],
+    "B": [
+      {
+        "session": "7e7c71d6-c470-455a-a0a3-d1d01ea018cd",
+        "cycle": 1,
+        "model": "@cf/moonshotai/kimi-k2.7-code",
+        "inputTokens": 2301,
+        "outputTokens": 388,
+        "totalTokens": 2689,
+        "finishReason": "stop",
+        "recipesUsed": [],
+        "recipesSaved": [],
+        "usageBasis": "ai_sdk_step_usage"
+      }
+    ],
+    "C": [
+      {
+        "session": "05c52d76-d3e2-4f75-a517-56a7fbebac97",
+        "cycle": 1,
+        "model": "@cf/moonshotai/kimi-k2.7-code",
+        "inputTokens": 5352,
+        "outputTokens": 157,
+        "totalTokens": 5509,
+        "finishReason": "stop",
+        "recipesUsed": [
+          {
+            "recipeId": "1aed01c6-8656-4220-818c-1e5c9cec99a2",
+            "name": "normalize_status_digest_mqzy7278"
+          }
+        ],
+        "recipesSaved": [],
+        "usageBasis": "ai_sdk_step_usage"
+      }
+    ]
+  },
+  "averages": {
+    "A": {
+      "inputTokens": 2304,
+      "outputTokens": 394,
+      "totalTokens": 2698
+    },
+    "B": {
+      "inputTokens": 2301,
+      "outputTokens": 388,
+      "totalTokens": 2689
+    },
+    "C": {
+      "inputTokens": 5352,
+      "outputTokens": 157,
+      "totalTokens": 5509
+    }
+  },
+  "attribution": {
+    "outputDropBvsA": 1.5,
+    "outputDropCvsA": 60.2,
+    "inputAddedByToolDefinitions_BminusA": -3,
+    "inputAddedByRecipeRun_CminusB": 3051,
+    "totalDeltaCminusA": 2811,
+    "tinyProcedureTotalVerdict": "reuse loses on total for this tiny procedure"
+  },
+  "cleanup": {
+    "attempted": true,
+    "sessions": [
+      "8b2fc027-1494-47fe-b45a-cf78762e5d8c",
+      "7e7c71d6-c470-455a-a0a3-d1d01ea018cd",
+      "05c52d76-d3e2-4f75-a517-56a7fbebac97"
+    ],
+    "recipes": [
+      {
+        "id": "1aed01c6-8656-4220-818c-1e5c9cec99a2",
+        "name": "normalize_status_digest_mqzy7278"
+      }
+    ]
+  },
+  "checks": {
+    "realModelRan": true,
+    "tokenUsagePresent": true,
+    "aiSdkUsageBasis": true,
+    "recipeReuseHappened": true,
+    "secretsPrinted": false
+  }
+}
