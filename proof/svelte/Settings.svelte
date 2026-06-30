@@ -44,36 +44,48 @@
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
-    { id: "capabilities" as const, label: "Capabilities", hint: "Tools, memory, and boundaries" },
-    { id: "recipes" as const, label: "Recipes", hint: "Saved Code Mode recipes" },
-    { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled prompts and history" },
-    { id: "connections" as const, label: "Connections", hint: "Health, computers, MCP servers" },
+    { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
+    { id: "recipes" as const, label: "Snippets", hint: "Saved Code Mode shortcuts" },
+    { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
+    { id: "connections" as const, label: "Connections", hint: "Runtime and services" },
   ];
 
   const capabilityGroups = [
     {
-      title: "Every conversation",
-      summary: "Built in and available without another connection.",
+      title: "Can work here",
+      summary: "Available in a normal chat.",
       items: [
-        { name: "Workspace", tools: "work_search · work_code", description: "Find, read, write, search, and run bounded code or processes in the persistent owner workspace." },
-        { name: "Saved recipes", tools: "recipe.list · recipe.run", description: "Owner-approved work_code recipes are available inside Code Mode and every recipe run creates a receipt." },
-        { name: "Public browser", tools: "browser_open", description: "Open and inspect public web pages in hosted Chrome, including a screenshot and replay. It has no personal browser cookies." },
-        { name: "Conversation recall", tools: "search_conversations", description: "Search the owner’s earlier My AX conversation index. Conversation-local memory is also retained and compacted by Think." },
-        { name: "Human decisions", tools: "ask_user", description: "Pause for one explicit multiple-choice decision and return the answer to the source conversation." },
-        { name: "Recurring work", tools: "manage_jobs", description: "Create, update, pause, resume, run, delete, and inspect scheduled prompts." },
-        { name: "Read-only delegation", tools: "delegate_many", description: "Ask up to two bounded child agents for independent analysis; the parent remains responsible for synthesis." },
-        { name: "Interactive output", tools: "create_svelte_artifact", description: "Create a durable, sandboxed Svelte widget attached to this conversation." },
-        { name: "Owner attention", tools: "notify_owner", description: "Create an owner-scoped Attention item and best-effort push for requested or important background updates." },
+        { name: "Workspace", tools: "work_search · work_code", description: "Read files, search, edit, and run bounded commands in your workspace." },
+        { name: "Saved snippets", tools: "codemode.search · codemode.run", description: "Run owner-approved Code Mode shortcuts from work_code." },
+        { name: "Recurring work", tools: "manage_jobs", description: "Create and inspect scheduled prompts." },
       ],
     },
     {
-      title: "Available when connected",
-      summary: "These appear only when the operator configures the provider.",
+      title: "Can look around",
+      summary: "Useful context without local secrets.",
       items: [
-        { name: "MCP servers", tools: "server-defined tools · mcp_code_mode", description: "Use tools and resources exposed by servers you add. Credentials stay in the server-side broker; approved read methods can be composed." },
-        { name: "My Machine", tools: "machine.* through work_code", description: "Use methods published by the outbound machine companion, with the authority of its operating-system account." },
-        { name: "Cloudbox", tools: "cloudbox.* through work_code", description: "Create a bounded clean repository run, inspect or modify its checkout, and execute commands with receipts." },
-        { name: "Push notifications", tools: "browser subscription", description: "Deliver Attention updates to subscribed installed apps when VAPID and browser permission are configured." },
+        { name: "Public browser", tools: "browser_open", description: "Open public pages with a screenshot and replay. No personal cookies." },
+        { name: "Conversation recall", tools: "search_conversations", description: "Search your earlier My AX conversations." },
+        { name: "Interactive output", tools: "create_svelte_artifact", description: "Attach a sandboxed Svelte widget to the conversation." },
+      ],
+    },
+    {
+      title: "Can ask or delegate",
+      summary: "Human checkpoints and bounded child analysis.",
+      items: [
+        { name: "Human decisions", tools: "ask_user", description: "Pause for one multiple-choice decision." },
+        { name: "Read-only delegation", tools: "delegate_many", description: "Ask up to two child agents for independent read-only analysis." },
+        { name: "Owner attention", tools: "notify_owner", description: "Leave an Attention item when background work needs you." },
+      ],
+    },
+    {
+      title: "When connected",
+      summary: "Only appears after you configure the service.",
+      items: [
+        { name: "MCP servers", tools: "server tools · mcp_code_mode", description: "Use tools from servers you add. Credentials stay server-side." },
+        { name: "Workspace container", tools: "machine.* through work_code", description: "Use methods from the connected runtime with that runtime’s account." },
+        { name: "Cloudbox", tools: "cloudbox.* through work_code", description: "Run bounded repo work in a clean Cloudflare computer." },
+        { name: "Push notifications", tools: "browser subscription", description: "Send Attention updates to subscribed browsers." },
       ],
     },
   ];
@@ -364,6 +376,7 @@
     }));
   }
   async function deleteJob(id: string) {
+    if (!confirm("Delete this recurring job? Existing run receipts stay, but it will not run again.")) return;
     await jobAction(id, "delete", () => fetch(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }));
   }
   async function submitJob(e: SubmitEvent) {
@@ -395,7 +408,7 @@
     await refreshJobs();
   }
 
-  // ── Saved recipes ──────────────────────────────────────────────────
+  // ── Saved snippets ─────────────────────────────────────────────────
   interface Recipe {
     id: string;
     name: string;
@@ -859,49 +872,51 @@
 
       <div hidden={activeSection !== "capabilities"} class="space-y-4">
         <header>
-          <h3 class="text-sm font-semibold text-fg">Agent capabilities</h3>
-          <p class="mt-1 text-xs leading-relaxed text-fg-mut">The model receives callable capabilities, not your raw credentials. Availability can still depend on deployment configuration and provider health.</p>
+          <h3 class="text-sm font-semibold text-fg">What the agent can use</h3>
+          <p class="mt-1 text-xs leading-relaxed text-fg-mut">These are callable tools. They are not raw credentials.</p>
         </header>
-        {#each capabilityGroups as group}
-          <section class="rounded-lg border border-line bg-bg">
-            <div class="border-b border-line px-3 py-2.5">
-              <h4 class="text-xs font-semibold text-fg">{group.title}</h4>
-              <p class="mt-0.5 text-[11px] text-fg-mut">{group.summary}</p>
-            </div>
-            <ul class="divide-y divide-line">
-              {#each group.items as item}
-                <li class="px-3 py-3">
-                  <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <strong class="text-xs font-medium text-fg">{item.name}</strong>
-                    <code class="max-w-full break-all text-[10px] text-brand">{item.tools}</code>
-                  </div>
-                  <p class="mt-1 text-[11px] leading-relaxed text-fg-mut">{item.description}</p>
-                </li>
-              {/each}
-            </ul>
-          </section>
-        {/each}
+        <div class="grid gap-3 sm:grid-cols-2">
+          {#each capabilityGroups as group}
+            <section class="rounded-lg border border-line bg-bg p-3">
+              <div>
+                <h4 class="text-xs font-semibold text-fg">{group.title}</h4>
+                <p class="mt-0.5 text-[11px] text-fg-mut">{group.summary}</p>
+              </div>
+              <ul class="mt-3 grid gap-2">
+                {#each group.items as item}
+                  <li class="rounded-md border border-line/60 bg-bg-alt/40 px-2.5 py-2">
+                    <div class="flex min-w-0 items-center justify-between gap-2">
+                      <strong class="truncate text-xs font-medium text-fg">{item.name}</strong>
+                      <code class="shrink-0 max-w-[48%] truncate text-[10px] text-brand" title={item.tools}>{item.tools}</code>
+                    </div>
+                    <p class="mt-1 text-[11px] leading-snug text-fg-mut">{item.description}</p>
+                  </li>
+                {/each}
+              </ul>
+            </section>
+          {/each}
+        </div>
         <section class="rounded-lg border border-line bg-bg px-3 py-3">
-          <h4 class="text-xs font-semibold text-fg">Important boundaries</h4>
-          <ul class="mt-2 grid gap-1.5 text-[11px] leading-relaxed text-fg-mut">
-            <li>• Workspace files are shared across this owner’s conversations; concurrent writes are not automatically merged.</li>
-            <li>• Public Browser has no local cookies. Authenticated browsing requires an explicitly connected Machine capability.</li>
-            <li>• Machine methods run with the companion OS account’s authority. Cloudbox and MCP retain their own configured authority.</li>
-            <li>• Delegated children are model-only, depth one, and cannot use your application tools or connections.</li>
-            <li>• Work Code Mode has no ambient secrets, database, network, or filesystem access; only named callbacks are callable.</li>
+          <h4 class="text-xs font-semibold text-fg">Boundaries</h4>
+          <ul class="mt-2 grid gap-1.5 text-[11px] leading-relaxed text-fg-mut sm:grid-cols-2">
+            <li>Workspace files are shared across your conversations.</li>
+            <li>The public browser has no personal cookies.</li>
+            <li>Connected runtimes use their own account authority.</li>
+            <li>Delegated child agents are read-only and model-only.</li>
+            <li>Work Code Mode only calls named callbacks.</li>
           </ul>
         </section>
       </div>
 
       <div hidden={activeSection !== "recipes"} class="space-y-4">
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Saved recipes</span>
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Saved snippets</span>
           <p class="mb-3 text-xs text-fg-mut">
-            Owner-approved Code Mode recipes. Enabled recipes appear inside <code>work_code</code> as <code>recipe.list()</code> and <code>recipe.run(...)</code>; every run creates a receipt.
+            Owner-approved Code Mode snippets. Enabled snippets appear inside <code>work_code</code> through <code>codemode.search()</code>, <code>codemode.describe(...)</code>, and <code>codemode.run(...)</code>; every run creates a receipt.
           </p>
           <div class="grid gap-2">
             {#if recipes.length === 0}
-              <p class="text-xs text-fg-mut">No saved recipes yet. Promote a successful work_code run, or create one below.</p>
+              <p class="text-xs text-fg-mut">No saved snippets yet. Promote a successful work_code run, or create one below.</p>
             {:else}
               {#each recipes as recipe (recipe.id)}
                 <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
@@ -917,13 +932,11 @@
                       <code class="rounded-full bg-bg px-2 py-1 text-[10px] text-brand">{capability}</code>
                     {/each}
                   </div>
-                  <div class="mt-3 grid grid-cols-4 gap-2">
-                    <button type="button" onclick={() => runRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:run`] || recipe.status !== "enabled"} aria-busy={recipeBusy[`${recipe.id}:run`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">Run</button>
-                    <button type="button" onclick={() => editRecipe(recipe)} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60">Edit</button>
-                    <button type="button" onclick={() => toggleRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:status`]} aria-busy={recipeBusy[`${recipe.id}:status`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">
-                      {recipe.status === "enabled" ? "Disable" : "Enable"}
-                    </button>
-                    <button type="button" onclick={() => deleteRecipe(recipe.id)} disabled={recipeBusy[`${recipe.id}:delete`]} aria-busy={recipeBusy[`${recipe.id}:delete`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-50">Delete</button>
+                  <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${recipe.name}`}>
+                    <button type="button" onclick={() => runRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:run`] || recipe.status !== "enabled"} aria-busy={recipeBusy[`${recipe.id}:run`]} aria-label={`Run ${recipe.name}`} title="Run" class="settings-icon-action text-brand hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">▶</span></button>
+                    <button type="button" onclick={() => editRecipe(recipe)} aria-label={`Edit ${recipe.name}`} title="Edit" class="settings-icon-action hover:border-brand/60"><span aria-hidden="true">✎</span></button>
+                    <button type="button" onclick={() => toggleRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:status`]} aria-busy={recipeBusy[`${recipe.id}:status`]} aria-label={recipe.status === "enabled" ? `Disable ${recipe.name}` : `Enable ${recipe.name}`} title={recipe.status === "enabled" ? "Disable" : "Enable"} class="settings-icon-action hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">{recipe.status === "enabled" ? "⏸" : "⏵"}</span></button>
+                    <button type="button" onclick={() => deleteRecipe(recipe.id)} disabled={recipeBusy[`${recipe.id}:delete`]} aria-busy={recipeBusy[`${recipe.id}:delete`]} aria-label={`Delete ${recipe.name}`} title="Delete" class="settings-icon-action text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40"><span aria-hidden="true">×</span></button>
                   </div>
                 </article>
               {/each}
@@ -933,8 +946,8 @@
         </section>
 
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter recipes</span>
-          <p class="mb-3 text-xs text-fg-mut">Pick a generic recipe, review the code and capabilities, then save your own copy. Templates are never enabled automatically.</p>
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter snippets</span>
+          <p class="mb-3 text-xs text-fg-mut">Pick a generic snippet, review the code and capabilities, then save your own copy. Templates are never enabled automatically.</p>
           <div class="grid gap-2 sm:grid-cols-2">
             {#each recipeTemplates as template}
               <button type="button" onclick={() => useRecipeTemplate(template)} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-left hover:border-brand/60">
@@ -966,7 +979,7 @@
     <section id="jobs" class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
       <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Recurring jobs</span>
       <p class="mb-3 text-xs text-fg-mut">
-        Run a saved prompt in this conversation later. Prompts can ask the agent to notify you when attention is needed.
+        Runs in this conversation on each tick. A future setting can start a fresh conversation per run; today, job history stays attached here.
       </p>
       <div class="grid gap-2">
         {#if jobs.length === 0}
@@ -987,12 +1000,10 @@
                 <div>{state} · next {nextRun}</div>
                 <div data-job-result={job.last_error ? "error" : "ok"}>last {lastRun} · {result}</div>
               </div>
-              <div class="mt-3 grid grid-cols-3 gap-2">
-                <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">Run</button>
-                <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 font-medium hover:border-brand/60 disabled:opacity-50">
-                  {job.status === "paused" ? "Resume" : "Pause"}
-                </button>
-                <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} class="min-h-[40px] rounded-md border border-line px-2 py-2 text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-50">Delete</button>
+              <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${job.name}`}>
+                <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} aria-label={`Run ${job.name} now`} title="Run now" class="settings-icon-action text-brand hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">▶</span></button>
+                <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} aria-label={job.status === "paused" ? `Resume ${job.name}` : `Pause ${job.name}`} title={job.status === "paused" ? "Resume" : "Pause"} class="settings-icon-action hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">{job.status === "paused" ? "⏵" : "⏸"}</span></button>
+                <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} aria-label={`Delete ${job.name}`} title="Delete" class="settings-icon-action text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40"><span aria-hidden="true">×</span></button>
               </div>
             </article>
           {/each}
@@ -1235,6 +1246,29 @@
     width: 2px;
     border-radius: 2px;
     background: var(--brand);
+  }
+
+  .settings-icon-action {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: border-color 120ms, color 120ms, background 120ms;
+  }
+
+  .settings-icon-action:hover {
+    background: var(--surface-2);
+  }
+
+  .settings-icon-action:focus-visible {
+    outline: 2px solid rgba(246, 130, 31, 0.7);
+    outline-offset: 2px;
   }
 
   .settings-content {

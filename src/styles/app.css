@@ -244,23 +244,6 @@
  * before JS or first paint, so they live here rather than inline in Layout.tsx.
  */
 
-/* Theme-cycle button (Settings drawer footer).
- *
- * Three glyphs (system / light / dark) live in the DOM permanently; we
- * show only the one whose data-glyph matches the button's data-theme
- * attribute. Stacking + hiding via display rules (rather than swapping
- * innerHTML in JS) keeps the button width stable across clicks and lets
- * the optimistic theme flip in chat.js stay a one-line dataset write.
- */
-#theme-cycle > svg[data-glyph] {
-  display: none;
-}
-#theme-cycle[data-theme="system"] > svg[data-glyph="system"],
-#theme-cycle[data-theme="light"] > svg[data-glyph="light"],
-#theme-cycle[data-theme="dark"] > svg[data-glyph="dark"] {
-  display: inline-block;
-}
-
 .msg-reasoning {
   margin: 0.25rem 0 0.65rem;
   border: 1px solid var(--line);
@@ -558,84 +541,6 @@
   font-size: 10px;
   font-weight: 600;
   padding-top: 1px;
-}
-
-/* Send/Stop/Done button glyph swap.
- *
- * The send button is the SINGLE visual indicator of agent status — there
- * is no longer a separate text status bar. All three glyphs live in the
- * DOM; CSS reveals only the one matching #send[data-status].
- *
- *   data-status=idle     → send (paper-airplane)
- *   data-status=offline  → send (dimmed via button background utility)
- *   data-status=thinking → stop (rounded square)
- *   data-status=running  → stop
- *   data-status=shell    → stop
- *   data-status=error    → stop (red bg)
- *   data-status=done     → done (checkmark)
- *
- * Hide all by default; show the matching one. */
-#send > svg[data-glyph] {
-  display: none;
-}
-#send[data-status="idle"] > svg[data-glyph="send"],
-#send[data-status="offline"] > svg[data-glyph="send"],
-#send[data-status="thinking"] > svg[data-glyph="stop"],
-#send[data-status="running"] > svg[data-glyph="stop"],
-#send[data-status="shell"] > svg[data-glyph="stop"],
-#send[data-status="error"] > svg[data-glyph="stop"],
-#send[data-status="done"] > svg[data-glyph="done"] {
-  display: inline-block;
-}
-
-/* ─── Busy-state pulse ──────────────────────────────────────────────────
- *
- * Whenever the agent is actively working (thinking / running / shell),
- * the send button pulses so "the agent is busy" is instantly legible
- * even from peripheral vision. Two effects on the same 1.4s cadence:
- *
- *   1. Expanding box-shadow ring (brand orange, fading out). Uses
- *      `box-shadow` so it draws OUTSIDE the button's rounded-lg
- *      clip without affecting layout. The ring radiates ~10px so
- *      it's visible but doesn't crowd the composer.
- *   2. Subtle ±5% scale "breathe" on the stop glyph inside. Cues
- *      "live" without reading as a click animation.
- *
- * Three states do NOT pulse:
- *   error    — terminal/stuck; steady red is the right read.
- *   done     — flashes briefly, then flips back to idle.
- *   offline  — nothing to wait on.
- *
- * Reduced motion: the @media rule under @layer base zeroes all
- * animation-duration. The glyph + color shift still convey the state;
- * we just lose the motion cue. That's the right behavior. */
-@keyframes my-ax-pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(246, 130, 31, 0.55);
-  }
-  100% {
-    box-shadow: 0 0 0 10px rgba(246, 130, 31, 0);
-  }
-}
-@keyframes my-ax-pulse-breathe {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(0.92); }
-}
-#send[data-status="thinking"],
-#send[data-status="running"],
-#send[data-status="shell"] {
-  animation: my-ax-pulse-ring 1.4s ease-out infinite;
-  /* Required so the ring's box-shadow draws above neighboring elements
-   * (the textarea sits to the left and would otherwise occlude the
-   * left half of the ring). */
-  position: relative;
-  z-index: 1;
-}
-#send[data-status="thinking"] > svg[data-glyph="stop"],
-#send[data-status="running"] > svg[data-glyph="stop"],
-#send[data-status="shell"] > svg[data-glyph="stop"] {
-  animation: my-ax-pulse-breathe 1.4s ease-in-out infinite;
-  transform-origin: center center;
 }
 
 /* iOS Safari auto-zooms when a focused text control's font-size is < 16px.

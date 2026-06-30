@@ -346,8 +346,8 @@
   const wsDown = $derived(wsState.conn !== "live");
   const sendStatus = $derived.by(() => {
     if (wsDown && !composerLocked) return "offline";
-    if (composerLocked) return wsState.status;
-    return wsState.status === "done" ? "done" : "idle";
+    if (composerLocked && wsState.status !== "done") return wsState.status;
+    return "idle";
   });
 
   // Keep the phone display awake only while the user is actively watching a
@@ -689,7 +689,6 @@
       connectorBanner.state = "upstream-auth";
       connectorBanner.server = server;
       connectorBanner.visible = true;
-      window.dispatchEvent(new Event("my-ax:settings-open"));
       (window as any).__refreshConnectors?.();
     }
     updateMessage(messageId, (msg) => {
@@ -1093,7 +1092,6 @@
       connectorBanner.state = "upstream-auth";
       connectorBanner.server = m.server;
       connectorBanner.visible = true;
-      window.dispatchEvent(new Event("my-ax:settings-open"));
       (window as any).__refreshConnectors?.();
     } else if (m.type === "cf_agent_chat_messages") {
       dispatchTurn({ type: "history-loaded" });
@@ -1598,14 +1596,13 @@
     const params = new URLSearchParams(location.search);
     const connector = params.get("connector");
     const result = params.get("result");
-    const reason = params.get("reason");
     if (!connector || !result) return;
     history.replaceState(null, "", location.pathname + location.hash);
     if (result === "ok") {
       pushSystem(`✓ Authorized ${connector}. You can now use its tools.`);
       connectorBanner.visible = false;
     } else {
-      pushError(`Authorization failed for ${connector}${reason ? `: ${reason}` : ""}. Tap "Authorize" to try again.`);
+      pushError(`Authorization failed for ${connector}. Tap "Authorize" to try again.`);
       connectorBanner.visible = true;
     }
   }
@@ -2062,19 +2059,14 @@
               data-[status=idle]:bg-brand/10 data-[status=idle]:text-brand data-[status=idle]:border-brand/25 data-[status=idle]:hover:bg-brand/20 data-[status=idle]:hover:border-brand/40 data-[status=idle]:active:bg-brand/25
               data-[status=thinking]:bg-brand data-[status=thinking]:text-white data-[status=thinking]:hover:bg-brand/90
               data-[status=running]:bg-brand data-[status=running]:text-white data-[status=running]:hover:bg-brand/90
-              data-[status=done]:bg-good data-[status=done]:text-white
               data-[status=offline]:bg-surface-1 data-[status=offline]:text-fg-mut/50 data-[status=offline]:cursor-not-allowed"
-            aria-label={sendStatus === "idle" || sendStatus === "done" ? "Send message" : "Stop the agent"}
-            title={sendStatus === "offline" ? (wsState.conn === "reconnecting" ? "Reconnecting…" : "Offline") : sendStatus === "idle" || sendStatus === "done" ? "Send (⌘↵)" : "Stop the agent"}
+            aria-label={sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send message"}
+            title={sendStatus === "offline" ? (wsState.conn === "reconnecting" ? "Reconnecting…" : "Offline") : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send (⌘↵)"}
           >
             {#if sendStatus === "idle" || sendStatus === "offline"}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            {:else if sendStatus === "done"}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
               </svg>
             {:else}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

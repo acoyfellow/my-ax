@@ -33,6 +33,7 @@
     const id = sessionState.id;
     const title = titleDraft.trim();
     if (!id || !title) return cancelRename();
+    if (title === sessionState.title) return cancelRename();
     const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: title }) });
     if (!response.ok) return;
     setActiveSession(id, title);
@@ -60,7 +61,7 @@
     <button
       type="button"
       onclick={openSessions}
-      class="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
+      class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
       aria-label="Open conversations sidebar"
       aria-haspopup="dialog"
       title="Conversations"
@@ -90,7 +91,7 @@
   <!-- Connection pill — reads from wsState.conn directly. -->
   <span
     data-state={wsState.conn}
-    class="flex-shrink-0 inline-flex items-center justify-center gap-0 sm:gap-1.5 rounded-full sm:rounded-md w-8 h-8 sm:w-auto sm:h-auto sm:px-2 sm:py-1 text-[11px] font-medium data-[state=live]:bg-good/10 data-[state=live]:text-good data-[state=reconnecting]:bg-warn/10 data-[state=reconnecting]:text-warn data-[state=offline]:bg-bad/10 data-[state=offline]:text-bad"
+    class="flex-shrink-0 inline-flex items-center justify-center gap-0 sm:gap-1.5 rounded-full sm:rounded-md w-10 h-10 sm:w-auto sm:h-auto sm:px-2 sm:py-1 text-[11px] font-medium data-[state=live]:bg-good/10 data-[state=live]:text-good data-[state=reconnecting]:bg-warn/10 data-[state=reconnecting]:text-warn data-[state=offline]:bg-bad/10 data-[state=offline]:text-bad"
     aria-live="polite"
     title="Connection status"
   >
@@ -105,7 +106,7 @@
     id="settings-button"
     type="button"
     onclick={openSettings}
-    class="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
+    class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
     aria-label="Settings"
     aria-haspopup="dialog"
     title="Settings"

@@ -277,7 +277,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
         <main class="min-h-dvh bg-bg text-fg" data-runs-page>
           <section class="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
             <header class="rounded-2xl border border-line bg-bg-alt p-5">
-              <a class="text-xs font-semibold text-fg-mut hover:text-fg" href="/">← Back to shell</a>
+              <a class="text-xs font-semibold text-fg-mut hover:text-fg" href="/">← Back to Check-in</a>
               <h1 class="mt-3 text-3xl font-bold">Runs</h1>
               <p class="mt-1 text-sm text-fg-mut">{runs.length} shown{status ? ` · status: ${status}` : ""}</p>
               <div class="mt-4 flex flex-wrap gap-2" data-runs-status-summary>
@@ -328,7 +328,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     const run = await c.env.DB.prepare(
       "SELECT * FROM runs WHERE id = ? AND owner_email = ?",
     ).bind(runId, identity.email).first<RunRow>();
-    if (!run) return c.html(<Layout title="Run not found · My Agent Experience" identityEmail={identity.email} buildId={c.env.CF_VERSION_METADATA?.id ?? undefined} theme={readThemeCookie(c)}><main class="min-h-dvh grid place-items-center p-6"><section class="max-w-xl rounded-2xl border border-line bg-bg-alt p-6"><h1 class="text-xl font-semibold text-fg">Run not found</h1><p class="mt-2 text-sm text-fg-mut">This receipt does not exist, or it is not owned by this Access identity.</p><a class="mt-4 inline-block text-brand" href="/">Back to my · ax</a></section></main></Layout>, 404);
+    if (!run) return c.html(<Layout title="Run not found · My Agent Experience" identityEmail={identity.email} buildId={c.env.CF_VERSION_METADATA?.id ?? undefined} theme={readThemeCookie(c)}><main class="min-h-dvh grid place-items-center p-6"><section class="max-w-xl rounded-2xl border border-line bg-bg-alt p-6"><h1 class="text-xl font-semibold text-fg">Run not found</h1><p class="mt-2 text-sm text-fg-mut">This receipt does not exist, or it is not owned by this Access identity.</p><a class="mt-4 inline-block text-brand" href="/">Back to Check-in</a></section></main></Layout>, 404);
 
     const rows = await c.env.DB.prepare(
       "SELECT * FROM run_events WHERE run_id = ? AND owner_email = ? ORDER BY ts ASC",

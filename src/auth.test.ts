@@ -25,7 +25,18 @@ test("configured issuer wins when valid", () => {
 });
 
 
-test("dev bypass works only for local miniflare/loopback", async () => {
+test("dev bypass works for local loopback browser navigation", async () => {
+  const identity = await verifyAccessRequest(new Request("http://localhost/api/health"), {
+    ENVIRONMENT: "dev",
+    CF_ACCESS_ISS: "",
+    CF_ACCESS_AUD: "",
+    DEV_USER_EMAIL: "Dev@Localhost",
+  });
+  assert.equal(identity.email, "dev@localhost");
+  assert.equal(identity.sub, "dev-Dev@Localhost");
+});
+
+test("dev bypass also accepts the miniflare/proxy runtime signal", async () => {
   const identity = await verifyAccessRequest(new Request("http://localhost/api/health", { headers: { "MF-Original-URL": "http://localhost/api/health" } }), {
     ENVIRONMENT: "dev",
     CF_ACCESS_ISS: "",
