@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { availableModels, DEFAULT_MODEL_ID, MODELS, findModel, resolveModelId } from "./models";
+import { availableModels, DEFAULT_MODEL_ID, MODELS, findModel, resolveAvailableModelId, resolveModelId } from "./models";
 import type { Env } from "./types";
 
 const minimalEnv = {} as Env;
@@ -31,5 +31,11 @@ describe("model catalog", () => {
     assert.equal(resolveModelId(undefined), DEFAULT_MODEL_ID);
     assert.equal(resolveModelId("gpt-5.5"), "gpt-5.5");
     assert.equal(resolveModelId("claude-opus-4-8"), "claude-opus-4-8");
+  });
+
+  it("heals stale gateway selections when this installation has no gateway", () => {
+    assert.equal(resolveAvailableModelId(minimalEnv, "gpt-5.5"), DEFAULT_MODEL_ID);
+    assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-4-8"), DEFAULT_MODEL_ID);
+    assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), "gpt-5.5");
   });
 });

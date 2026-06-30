@@ -63,7 +63,7 @@ export const MODELS: ModelEntry[] = [
 
 export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
 
-function hasModelGateway(env: Env): boolean {
+export function hasModelGateway(env: Env): boolean {
   return Boolean(env.LLM_GATEWAY_URL?.trim() && env.LLM_GATEWAY_TOKEN?.trim());
 }
 
@@ -87,4 +87,14 @@ export function findModel(id: string): ModelEntry | undefined {
  * the default instead of hard-failing every turn with model_not_found. */
 export function resolveModelId(id: string | undefined): string {
   return id && findModel(id) ? id : DEFAULT_MODEL_ID;
+}
+
+/** Resolve a model id against the models this installation can actually run.
+ * A session pinned to a gateway model must heal when the gateway is absent,
+ * otherwise every turn fails with a provider configuration error even though
+ * the visible catalog correctly hides that model. */
+export function resolveAvailableModelId(env: Env, id: string | undefined): string {
+  const requested = id && findModel(id);
+  if (!requested) return DEFAULT_MODEL_ID;
+  return availableModels(env).some((model) => model.id === requested.id) ? requested.id : DEFAULT_MODEL_ID;
 }
