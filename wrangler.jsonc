@@ -144,6 +144,16 @@
       { "name": "SANDBOX", "class_name": "Sandbox" },
       // Direct-routed voice DO; delegates turns into the MyAgent facet by RPC.
       { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
+      // NOTE: The native @cloudflare/codemode `CodemodeRuntime` Durable
+      // Object class is exported from src/index.tsx and ready to bind,
+      // but is intentionally NOT bound here yet. Round 04 review flagged
+      // a premature DO binding/v11 migration without a real call site
+      // as a forward-only migration for dead wiring. The binding (and a
+      // matching `v11-codemode-runtime` migration plus a
+      // `wrangler types` regeneration) will land in the same change as
+      // the first `runNativeCodemode` call site — see
+      // `src/code-mode-runtime.worker.ts` and the held seam in
+      // `src/cm-snippets.ts`.
     ]
   },
 
@@ -159,6 +169,9 @@
     { "tag": "v8-remove-voice-ladder", "deleted_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
     { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
     { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] }
+    // v11-codemode-runtime intentionally NOT declared yet. It will be
+    // added alongside the CODEMODE_RUNTIME binding above when the first
+    // real call site lands.
   ],
 
   // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
@@ -226,6 +239,7 @@
           { "name": "MACHINE_HOST", "class_name": "MachineHost" },
           { "name": "SANDBOX", "class_name": "Sandbox" },
           { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
+          // CODEMODE_RUNTIME intentionally held — see top-level note.
         ]
       },
       "migrations": [
@@ -239,6 +253,7 @@
         { "tag": "v8-remove-voice-ladder", "deleted_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
         { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
         { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] }
+        // v11-codemode-runtime intentionally held — see top-level note.
       ],
       "kv_namespaces": [
         { "binding": "AUDIT_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }

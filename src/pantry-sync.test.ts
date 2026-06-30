@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { syncRecipesToPantry, pushRecipe, mapRecipeToPantryBody } from "./pantry-sync";
+import { syncRecipesToPantry, pushRecipe, mapRecipeToPantryBody, mapSnippetToPantryBody } from "./pantry-sync";
 import type { SavedRecipe } from "./saved-recipes";
 import type { Env } from "./types";
+import { SYNTHETIC_EXECUTION_ID_PREFIX, type PublicSnippet } from "./cm-snippets";
 
 function makeRow(over: Partial<SavedRecipe> = {}): SavedRecipe {
   return {
@@ -20,11 +21,16 @@ function makeRow(over: Partial<SavedRecipe> = {}): SavedRecipe {
   };
 }
 
-// Minimal D1 mock that supports SavedRecipeService.list() (SELECT ... all) and
-// get(id) (SELECT ... first). It routes by whether the SQL has "= ?" on id.
-function makeEnv(rows: SavedRecipe[], extra: Partial<Env> = {}): Env {
+// Minimal D1 mock that supports SavedRecipeService.list() (SELECT ... all),
+// get(id) (SELECT ... first), and the cm_snippets dual-read path that
+// syncRecipesToPantry now goes through. The cm_snippets table starts empty
+// so listSnippetsDualRead falls through to the saved_recipes projection,
+// which is the realistic "fresh deploy" shape; tests that want a populated
+// projection table pass it through `extraSnippets`.
+function makeEnv(rows: SavedRecipe[], extra: Partial<Env> = {}, extraSnippets: Array<Record<string, unknown>> = []): Env {
   const db = {
     prepare(sql: string) {
+      const normalized = sql.replace(/\s+/g, " ").trim();
       let bound: unknown[] = [];
       const stmt = {
         bind(...args: unknown[]) {
@@ -32,9 +38,18 @@ function makeEnv(rows: SavedRecipe[], extra: Partial<Env> = {}): Env {
           return stmt;
         },
         async all<T>() {
+          if (/FROM cm_snippets/.test(normalized)) {
+            return { results: extraSnippets as unknown as T[] };
+          }
+          if (/FROM saved_recipes/.test(normalized) && /status = 'enabled'/.test(normalized)) {
+            return { results: rows.filter((r) => r.status === "enabled") as unknown as T[] };
+          }
           return { results: rows as unknown as T[] };
         },
         async first<T>() {
+          if (/FROM cm_snippets/.test(normalized)) {
+            return null as unknown as T;
+          }
           const id = bound[0];
           const found = rows.find((r) => r.id === id);
           return (found ?? null) as unknown as T;
@@ -94,6 +109,15 @@ test("syncRecipesToPantry pushes only enabled recipes and maps fields correctly"
   assert.deepEqual(sent.inputSchema, { type: "object", properties: { path: { type: "string" } } });
   assert.equal(sent.code, "return await workspace.read({ path: input.path });");
   assert.deepEqual(sent.capabilities, ["workspace.read"]);
+  // Codemode-native snippet provenance must be on the body so the
+  // consumer can tell apart projected/transition data from native runs.
+  assert.ok(sent.snippet, "body must carry the codemode snippet shape");
+  assert.equal(sent.snippet.sourceRecipeId, "a");
+  assert.ok(typeof sent.snippet.codemodeExecutionId === "string");
+  assert.ok(sent.snippet.codemodeExecutionId.startsWith(SYNTHETIC_EXECUTION_ID_PREFIX), "projected rows carry a synthetic execution id");
+  assert.equal(sent.snippet.provenance, "projected");
+  assert.deepEqual(sent.snippet.connectors, ["workspace"]);
+  assert.equal(typeof sent.snippet.savedAt, "number");
 });
 
 test("pushRecipe sends the token only in the Authorization header and never logs it", async () => {
@@ -164,6 +188,54 @@ test("mapRecipeToPantryBody parses JSON fields and passes capabilities through v
   assert.equal(body.status, "enabled");
   assert.equal(body.sourceRunId, "run-9");
   assert.deepEqual(body.inputSchema, { type: "object", properties: { path: { type: "string" } } });
+  // Even the raw-row mapper now carries codemode snippet shape (so a
+  // legacy caller that does not yet read through the projection still
+  // pushes provenance-tagged bodies).
+  assert.equal(body.snippet.sourceRecipeId, "id-1");
+  assert.ok(body.snippet.codemodeExecutionId.startsWith(SYNTHETIC_EXECUTION_ID_PREFIX));
+  assert.equal(body.snippet.provenance, "projected");
+  assert.deepEqual(body.snippet.connectors, ["machine", "workspace"]);
+});
+
+test("mapSnippetToPantryBody pushes a native-provenance execution id when the snippet is a real CodemodeRuntime promotion", () => {
+  const recipe = makeRow({ id: "rid-1", name: "n1", capabilities_json: JSON.stringify(["workspace.read"]) });
+  const snippet: PublicSnippet = {
+    id: "snip-1",
+    name: "n1",
+    description: "native promoted snippet",
+    code: "return await codemode.run('workspace.read', { path: input.path });",
+    savedAt: 1_700_000_000_000,
+    inputSchema: { type: "object", properties: {} },
+    connectors: ["workspace"],
+    sourceRecipeId: "rid-1",
+    codemodeExecutionId: "cm_exec_abc123",
+    provenance: "native",
+    capabilities: ["workspace.read"],
+  };
+  const body = mapSnippetToPantryBody(snippet, recipe);
+  assert.equal(body.snippet.codemodeExecutionId, "cm_exec_abc123", "real native execution id flows through");
+  assert.equal(body.snippet.provenance, "native");
+  assert.equal(body.snippet.sourceRecipeId, "rid-1");
+  // Capabilities still come from the authoritative saved_recipes row.
+  assert.deepEqual(body.capabilities, ["workspace.read"]);
+});
+
+test("mapSnippetToPantryBody refuses to push a snippet whose source recipe has zero capabilities", () => {
+  const recipe = makeRow({ capabilities_json: "[]" });
+  const snippet: PublicSnippet = {
+    id: "snip-x",
+    name: recipe.name,
+    description: recipe.description,
+    code: recipe.code,
+    savedAt: Date.now(),
+    inputSchema: { type: "object", properties: {} },
+    connectors: [],
+    sourceRecipeId: recipe.id,
+    codemodeExecutionId: `${SYNTHETIC_EXECUTION_ID_PREFIX}${recipe.id}`,
+    provenance: "projected",
+    capabilities: [],
+  };
+  assert.throws(() => mapSnippetToPantryBody(snippet, recipe), /zero capabilities/);
 });
 
 test("pushRecipe defaults PANTRY_URL to pantry.coey.dev when unset", async () => {
