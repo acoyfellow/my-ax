@@ -880,6 +880,10 @@ export class MyAgent extends Think<Env> {
     const steps = this.cycleStepUsage.splice(0);
     const recipesUsed = this.recipesUsedThisTurn.splice(0);
     const recipesSaved = this.recipesSavedThisTurn.splice(0);
+    await this.promoteSuggestedRecipe(result).catch((error) => {
+      recipesSaved.push({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      console.error("recipe_promotion_failed", { sessionId: this.name, err: error instanceof Error ? error.message : String(error) });
+    });
     const usage: CycleCostUsage = steps.length
       ? {
           inputTokens: steps.some((step) => typeof step.usage?.inputTokens === "number") ? steps.reduce((sum, step) => sum + (step.usage?.inputTokens ?? 0), 0) : null,
@@ -896,9 +900,45 @@ export class MyAgent extends Think<Env> {
       finishReason: steps.at(-1)?.finishReason ?? result.status,
       usage,
       recipesUsed,
-      // TODO(recipe-promotion): append suggestedRecipe/saved_recipes promotions here when Track 2 wires an in-turn promotion signal.
       recipesSaved,
     });
+  }
+
+  private async promoteSuggestedRecipe(result: ChatResponseResult): Promise<void> {
+    const identity = this.identity();
+    if (!identity || result.status !== "completed") return;
+    const toolOutputs = result.message.parts.flatMap((part) => {
+      const candidate = part as { type?: string; output?: unknown; state?: string };
+      if (!candidate.type?.startsWith("tool-") || candidate.state !== "output-available") return [];
+      return [candidate.output];
+    });
+    for (const output of toolOutputs) {
+      const text = typeof output === "string" ? output : JSON.stringify(output);
+      let parsed: { ok?: boolean; suggestedRecipe?: unknown } | null = null;
+      try { parsed = JSON.parse(text); } catch { parsed = null; }
+      if (!parsed?.ok || !parsed.suggestedRecipe) continue;
+      const auto = this.env.MY_AX_RECIPE_AUTOTRUST === "1" || this.env.RECIPE_AUTOTRUST === "1";
+      const raw = parsed.suggestedRecipe as Record<string, unknown>;
+      const recipe = await new SavedRecipeService(this.env, identity.email).create({
+        name: typeof raw.name === "string" ? raw.name : `WorkCodeRecipe_${Date.now()}`,
+        description: typeof raw.description === "string" ? raw.description : "Promoted from a successful work_code run.",
+        inputSchema: raw.inputSchema && typeof raw.inputSchema === "object" ? raw.inputSchema : { type: "object", properties: {} },
+        code: typeof raw.code === "string" ? raw.code : "return null;",
+        capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : [],
+        sourceRunId: this.name,
+        status: auto ? "enabled" : "pending",
+      });
+      this.recipesSavedThisTurn.push({ id: recipe.id, name: recipe.name, status: recipe.status, trustMode: auto ? "auto" : "gated" });
+      if (!auto) {
+        await notifyOwner(this.env, identity.email, {
+          kind: "recipe.approval",
+          sessionId: this.name,
+          title: `Approve recipe: ${recipe.name}`,
+          body: `${recipe.description} Pending recipes are not runnable until approved.`,
+          href: `/api/recipes/${encodeURIComponent(recipe.id)}/approval`,
+        }).catch((error) => console.error("recipe_approval_attention_failed", { sessionId: this.name, err: String(error) }));
+      }
+    }
   }
 
   getSystemPrompt() {

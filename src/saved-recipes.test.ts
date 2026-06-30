@@ -38,5 +38,5 @@ test("saved recipe patch supports focused CRUD edits", () => {
     capabilities: ["workspace.read", "workspace.write"],
   });
   assert.throws(() => validateSavedRecipePatch({}), /at least one field/);
-  assert.throws(() => validateSavedRecipePatch({ status: "archived" }), /status must be enabled or disabled/);
+  assert.throws(() => validateSavedRecipePatch({ status: "archived" }), /status must be pending, enabled, or disabled/);
 });

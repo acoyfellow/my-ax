@@ -15,7 +15,7 @@ type DeliveryOutcome =
   | { kind: "expired"; failure?: NotificationFailureDetail }
   | { kind: "failed"; failure: NotificationFailureDetail };
 
-export type NotificationKind = "session.update" | "session.dead" | "job.complete" | "job.needs_input" | "delegate.complete" | "delegate.needs_input" | "watch.fired" | "deploy.gate";
+export type NotificationKind = "session.update" | "session.dead" | "job.complete" | "job.needs_input" | "delegate.complete" | "delegate.needs_input" | "watch.fired" | "deploy.gate" | "recipe.approval";
 
 export interface OwnerNotification {
   kind: NotificationKind;
