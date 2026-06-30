@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-29T00:00:00.000Z",
+  "track": "recipe-learning-curve",
+  "gatewayCredentialCheck": {
+    "envLLMGatewayUrlPresent": false,
+    "envLLMGatewayTokenPresent": false,
+    "devVarsLLMGatewayUrlPresent": false,
+    "devVarsLLMGatewayTokenPresent": false,
+    "summary": "Real curve PENDING gateway creds: LLM_GATEWAY_URL and LLM_GATEWAY_TOKEN were absent from the environment and my-ax/.dev.vars. No model loop was run and no provider token curve is claimed."
+  },
+  "realMeasuredTokenCurve": null,
+  "proxyArtifact": "proof/recipe-dogfood-learning-curve.json",
+  "proxySeries": [5, 5, 1, 1, 1],
+  "proxySeriesKind": "deterministic mechanism work units, not provider tokens",
+  "honestClaim": "In an agent loop, cost per cycle should trend down as repeated work becomes a reused recipe, then flatten to a floor because discovery, matching, and novel work still cost. The current checked-in curve is a deterministic proxy [5, 5, 1, 1, 1] showing the ID to save to reuse mechanism. A measured token curve is pending a real gateway-backed loop."
+}
