@@ -13,6 +13,7 @@ The operator controls the deployment configuration and Cloudflare resources it u
 - **Recurring jobs** — authenticated UI routes and agent tools share one owner-scoped service to create, update, pause, resume, run, inspect, and delete scheduled prompts.
 - **Bounded delegation** — a parent can invoke up to two concurrent child agents for model-only analysis, then synthesize their retained results.
 - **Attention and outputs** — decisions and supported output records remain associated with their owner and source conversation; object bytes live in R2 where applicable.
+- **Saved recipe learning loop** — owner-approved `work_code` recipes can be listed, promoted, and run again. Reuse replaces regenerating saved code. Per-cycle model usage is instrumented and live in production through `cycle_costs` and the owner-scoped `/api/cost-series` endpoint. In an agent loop, cost per cycle trends down as repeated work becomes a reused recipe, then flattens to a floor because discovery, matching, and novel work still cost. The checked-in curve is currently a labeled deterministic proxy `[5, 5, 1, 1, 1]` in `proof/recipe-dogfood-learning-curve.json`, not measured provider tokens; a measured token curve is pending `LLM_GATEWAY_URL` and `LLM_GATEWAY_TOKEN` for a real gateway-backed loop.
 
 ```text
 Owner through Cloudflare Access

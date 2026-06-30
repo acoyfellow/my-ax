@@ -34,7 +34,7 @@ Status:
 
 | Capability | Status | Current shape | Evidence |
 |---|---:|---|---|
-| Unified work surface | ✅ | `work_search` discovers methods; `work_code` dispatches one async program across workspace, Machine, and Cloudbox namespaces. Saved recipes persist owner-approved `work_code` recipes and record each run as a receipt. | `src/work-tools.ts`, `src/saved-recipes.ts`, `npm run test:recipes` |
+| Unified work surface | ✅ | `work_search` discovers methods; `work_code` dispatches one async program across workspace, Machine, and Cloudbox namespaces. Saved recipes persist owner-approved `work_code` recipes, support list/run reuse and promotion, and record each run as a receipt. Reuse replaces regenerating saved code. Per-cycle real model usage is instrumented in `cycle_costs` and exposed through owner-scoped `/api/cost-series`; the current learning-curve proof is a labeled deterministic proxy `[5, 5, 1, 1, 1]`, not measured provider tokens, with a measured token curve pending gateway credentials. | `src/work-tools.ts`, `src/saved-recipes.ts`, `src/cycle-costs.ts`, `src/routes/cost-series.ts`, `migrations/0013_cycle_cost.sql`, `proof/recipe-dogfood-learning-curve.json`, `npm run test:recipes`, `npm run test:cycle-costs` |
 | Workspace | ✅ | `/home/user` lives in Cloudflare Sandbox; mutating turns snapshot to R2. Writes after the last successful snapshot can be lost with the container. | `src/workspace.ts` |
 | My Machine | 🧪 | An outbound Machinectl companion contributes live `machine.*` methods with the connected user's local authority. | `src/routes/machinectl.ts` |
 | Cloudbox | 🧪 | Optional `cloudbox.*` methods create public-repo runs and operate on relative files. No publication method is exposed. | `src/cloudbox-tools.ts` |
