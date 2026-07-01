@@ -3,6 +3,7 @@ import { createCloudboxWorkProvider, CLOUDBOX_WORK_METHODS } from "./cloudbox-to
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import type { ToolContext, ToolDef } from "./types";
+import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 
 const WORKSPACE_METHODS = [
   { name: "read", description: "Read a persistent file in the My AX Workspace." },
@@ -202,6 +203,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const execution = await executor.execute(code, [{ name: "bridge", fns: bridgeFns, prelude }]);
   const sortedCalls = calls.sort((a, b) => a.index - b.index);
   const inferredCapabilities = [...new Set(sortedCalls.map((call) => `${call.where}.${call.method}`))].sort();
+  // Portability signal: portable when it needs no host namespace — its logic
+  // runs in any harness. Surfaced so the owner can tell shelf-worthy (portable)
+  // snippets from machine-bound ones without reading the code. (recipe audit)
+  const portable = isPortable(inferredCapabilities);
   return {
     ok: !execution.error,
     result: execution.result,
@@ -210,12 +215,17 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     calls: sortedCalls,
     sourceCode: code,
     inferredCapabilities,
+    portable,
     suggestedRecipe: {
-      description: "Promoted from a successful work_code run.",
+      description: suggestRecipeDescription(code, inferredCapabilities),
       inputSchema: { type: "object", properties: {} },
-      name: `WorkCodeRecipe_${Date.now()}`,
+      // A meaningful proposed name derived from what the code does, so the owner
+      // edits a real name instead of accepting `WorkCodeRecipe_<epoch>` (which
+      // made 92% of the corpus undiscoverable — see the recipe audit).
+      name: suggestRecipeName(code),
       code,
       capabilities: inferredCapabilities,
+      portable,
     },
   };
 }
