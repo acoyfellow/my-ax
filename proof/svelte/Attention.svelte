@@ -137,13 +137,13 @@
   </button>
   {#if open}
     <button type="button" class="fixed inset-0 z-40 bg-black/55 backdrop-blur-[3px]" aria-label="Close Check-in panel backdrop" onclick={() => open = false} data-attention-owner-backdrop></button>
-    <section class="attention-owner-panel fixed left-1/2 top-2 z-50 flex h-[min(760px,calc(100dvh-1rem))] max-h-[min(760px,calc(100dvh-1rem))] w-[min(760px,calc(100vw-1rem))] -translate-x-1/2 flex-col overflow-hidden rounded-[18px] border border-line bg-bg-alt text-fg shadow-[0_28px_80px_rgb(0_0_0/0.32),0_2px_10px_rgb(0_0_0/0.12)] sm:top-[6vh] max-sm:h-[calc(100dvh-1rem)] max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-[14px]" role="dialog" aria-label="Attention and Check-in" data-attention-owner-panel>
-      <div class="flex items-center justify-between gap-3 border-b border-line bg-bg px-4 py-3">
+    <section class="attention-owner-panel fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] top-[max(0.5rem,env(safe-area-inset-top))] z-50 flex w-auto flex-col overflow-hidden rounded-[14px] border border-line bg-bg-alt text-fg shadow-[0_28px_80px_rgb(0_0_0/0.32),0_2px_10px_rgb(0_0_0/0.12)] sm:bottom-auto sm:left-1/2 sm:top-[6vh] sm:h-[min(760px,calc(100dvh-1rem))] sm:max-h-[min(760px,calc(100dvh-1rem))] sm:w-[min(760px,calc(100vw-1rem))] sm:-translate-x-1/2 sm:rounded-[18px]" role="dialog" aria-modal="true" aria-label="Attention and Check-in" data-attention-owner-panel>
+      <div class="safe-area-appbar flex min-h-[60px] items-center justify-between gap-3 border-b border-line bg-bg px-4 py-3">
         <div>
           <h2 class="text-sm font-semibold text-fg">Check-in</h2>
           <p class="text-[11px] text-fg-mut">What needs you, then receipts.</p>
         </div>
-        <button type="button" onclick={() => open = false} class="flex h-8 w-8 items-center justify-center rounded-md text-fg-mut hover:bg-surface-2 hover:text-fg" aria-label="Close Check-in panel">×</button>
+        <button type="button" onclick={() => open = false} class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-fg-mut hover:bg-surface-2 hover:text-fg" aria-label="Close Check-in panel">×</button>
       </div>
       <div class="min-h-0 flex-1 overflow-auto">
         <div class="border-b border-line bg-bg">
