@@ -106,10 +106,10 @@
 {:else if widget.kind === "saved-recipe-candidate"}
   <section class="tool-call__result recipe-candidate" data-tool-widget="saved-recipe-candidate" data-ok={widget.ok ? "1" : "0"}>
     <div class="recipe-candidate__head">
-      <strong>{widget.ok ? "Promotable work_code run" : "work_code run needs review"}</strong>
-      <code>{widget.saveEndpoint}</code>
+      <strong>{widget.ok ? "Snippet candidate" : "Review before saving"}</strong>
+      <code title="Compatibility API endpoint">{widget.saveEndpoint}</code>
     </div>
-    <p>Save this exact reviewed source as an owner-approved recipe. Nothing is auto-enabled by the model.</p>
+    <p>Save this reviewed work_code source as a snippet you approve. It stays disabled until you enable it.</p>
     {#if widget.capabilities.length}
       <div class="recipe-candidate__caps" aria-label="Inferred capabilities">
         {#each widget.capabilities as capability}
