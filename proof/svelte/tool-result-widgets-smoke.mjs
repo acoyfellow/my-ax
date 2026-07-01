@@ -4,7 +4,7 @@
 // so this stays dependency-free and runnable in CI / from a clean checkout.
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -52,11 +52,14 @@ try {
   if (externalSvelteArtifact.kind !== "raw-text") throw new Error("external Svelte artifact URL must remain inert raw text");
   if (svg.kind !== "raw-text") throw new Error("SVG must remain inert raw text");
   if (arbitrary.kind !== "raw-text") throw new Error("arbitrary model-adjacent widget payload must remain inert raw text");
-  if (recipeCandidate.kind !== "saved-recipe-candidate" || recipeCandidate.capabilities[0] !== "workspace.write") throw new Error("promotable work_code recipe candidate missing");
+  if (recipeCandidate.kind !== "saved-recipe-candidate" || recipeCandidate.capabilities[0] !== "workspace.write") throw new Error("work_code snippet candidate missing");
+  const widgetSource = readFileSync("proof/svelte/ToolResultWidget.svelte", "utf8");
+  if (!widgetSource.includes("Snippet candidate")) throw new Error("work_code candidate should use snippet language");
+  if (widgetSource.includes("Promotable work_code run") || widgetSource.includes("owner-approved recipe")) throw new Error("work_code candidate still uses stale recipe/promotable copy");
   if (delegation.kind !== "delegation-group" || delegation.live !== false || delegation.runs.length !== 2) throw new Error("delegate_many terminal snapshot missing or unbounded");
   if (delegation.runs[0].taskFingerprint !== "a1b2c3d4" || delegation.runs[0].label !== "Research evidence" || delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation metadata/status/attempts missing");
 
-  console.log("✓ trusted inline tool-result widgets: safe replay + raster + recipe candidate + delegation snapshot + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
+  console.log("✓ trusted inline tool-result widgets: safe replay + raster + snippet candidate + delegation snapshot + sandboxed Svelte artifact render; external URLs, SVG, and arbitrary component payloads stay inert");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
