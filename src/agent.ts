@@ -78,7 +78,20 @@ type MyAgentConfig = {
   reasoningEffort?: "low" | "medium" | "high";
 };
 
-function requireBridgeOrigin(env: Env): string {
+// Resolve the public origin used to build connector-OAuth callback URLs.
+// LENIENT by design: a blank/invalid BRIDGE_BASE_URL returns "" instead of
+// throwing, so pure work_code (which never touches connector OAuth) is not
+// starved by missing config. The connector-OAuth path validates the origin at
+// the point of use via requireBridgeOrigin(). (Previously this threw at
+// tool-context build, so EVERY work_code run — even pure ones — errored when
+// BRIDGE_BASE_URL was empty, starving the whole snippet-promotion flywheel.)
+function resolveWorkerOrigin(env: Env): string {
+  return resolveBridgeOrigin(env.BRIDGE_BASE_URL) ?? "";
+}
+
+// Require a valid origin — call this only where a connector OAuth flow actually
+// needs a public callback URL, never at generic context build.
+export function requireBridgeOrigin(env: Env): string {
   const origin = resolveBridgeOrigin(env.BRIDGE_BASE_URL);
   if (!origin) throw new Error("BRIDGE_BASE_URL must be an absolute public URL before connector OAuth tools can run");
   return origin;
@@ -820,7 +833,9 @@ export class MyAgent extends Think<Env> {
       bridgeBaseUrl: env.BRIDGE_BASE_URL,
       bridgeJwtSecret: env.BRIDGE_JWT_SECRET,
       env,
-      workerOrigin: requireBridgeOrigin(env),
+      // Lenient: never throw here for pure work_code. Connector-OAuth flows
+      // validate the origin at their point of use.
+      workerOrigin: resolveWorkerOrigin(env),
     };
   }
 

@@ -295,6 +295,7 @@ export class OAuthClientDO extends DurableObject<Env> {
     const stateBytes = crypto.getRandomValues(new Uint8Array(16));
     const state = base64UrlEncode(stateBytes);
 
+    if (!workerOrigin) throw new Error("BRIDGE_BASE_URL must be an absolute public URL before connector OAuth tools can run");
     const callbackUrl = `${workerOrigin}/api/connectors/${connectorId}/callback`;
 
     // For user-added MCPs whose /.well-known doc advertised a
@@ -384,6 +385,7 @@ export class OAuthClientDO extends DurableObject<Env> {
     }
     const auth = connector.auth;
 
+    if (!workerOrigin) throw new Error("BRIDGE_BASE_URL must be an absolute public URL before connector OAuth tools can run");
     const callbackUrl = `${workerOrigin}/api/connectors/${connectorId}/callback`;
     // For DCR'd flows, the client_id used at /token MUST match the one
     // used at /authorize. We stashed it on pending; fall back to the
