@@ -10,10 +10,13 @@ export function stripReasoningArtifacts(content: string): string {
   return sanitized.replace(/<\/?think>/gi, "").trim();
 }
 
-export function visibleAssistantContent(input: { status: string; content: string; error?: string | null }): string {
+export function visibleAssistantContent(input: { status: string; content: string; error?: string | null; ownerNotified?: boolean }): string {
   const content = stripReasoningArtifacts(input.content);
   if (content.trim()) return content;
   if (input.status === "error" && input.error?.trim()) return input.error;
+  if (input.status === "completed" && input.ownerNotified) {
+    return "The agent turn completed after sending an owner notification. Review the notification or conversation for the result.";
+  }
   if (input.status === "completed") {
     return "The agent turn completed without a visible response. Review the conversation and retry or steer with a more explicit instruction.";
   }

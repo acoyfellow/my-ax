@@ -171,6 +171,7 @@ export class MyAgent extends Think<Env> {
    *  consume it). The DO is single-threaded for a session so there's no
    *  race between turns. */
   private dirtyFsThisTurn = false;
+  private notifiedOwnerThisTurn = false;
   private cycleStepUsage: Array<{ usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null }; finishReason?: string }> = [];
   private recipesUsedThisTurn: unknown[] = [];
   private recipesSavedThisTurn: unknown[] = [];
@@ -563,7 +564,7 @@ export class MyAgent extends Think<Env> {
     await this.completeInjectedRecurringJobRun(result).catch((error) => console.error("recurring_job_terminal_receipt_failed", { sessionId: this.name, err: String(error) }));
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
-    const visibleContent = visibleAssistantContent({ status: result.status, content, error: result.error });
+    const visibleContent = visibleAssistantContent({ status: result.status, content, error: result.error, ownerNotified: this.notifiedOwnerThisTurn });
     if (visibleContent || reasoning || result.status === "error") {
       await logAssistantMessage(this.env, identity, this.name, visibleContent, {
         uiMessageId: result.message.id,
@@ -607,6 +608,7 @@ export class MyAgent extends Think<Env> {
     // A successful mutating tool commits workspace state even if a later model
     // step errors. The live Sandbox cannot roll back, so skipping the snapshot
     // would make successful writes disappear on recycle.
+    this.notifiedOwnerThisTurn = false;
     if (this.dirtyFsThisTurn) {
       this.dirtyFsThisTurn = false;
       try {
@@ -703,6 +705,9 @@ export class MyAgent extends Think<Env> {
     // because an additional workspace snapshot is a no-op delta.
     if (ctx.success && !READ_ONLY_TOOLS.has(ctx.toolName)) {
       this.dirtyFsThisTurn = true;
+    }
+    if (ctx.success && ctx.toolName === "notify_owner") {
+      this.notifiedOwnerThisTurn = true;
     }
     await logToolCall(this.env, identity, this.name, ctx.toolName, ctx.input, {
       content: ctx.success ? (typeof ctx.output === "string" ? ctx.output : JSON.stringify(ctx.output)) : (ctx.error instanceof Error ? ctx.error.message : String(ctx.error)),
