@@ -143,3 +143,20 @@ test("check-in failed summary uses exact failed totals when the failed sample is
   assert.equal(result.summary, "12 failed runs need review; 0 active.");
   assert.equal(result.totals.failedRuns, 12);
 });
+
+test("check-in does not report non-zero run totals with empty status samples", () => {
+  const failed = { ...run, id: "failed-visible", status: "failed" };
+  const open = { ...run, id: "open-visible", status: "open" };
+  const result = composeOwnerCheckIn({
+    attention: [],
+    jobs: [],
+    runs: [failed, open, ...Array.from({ length: 10 }, (_, i) => ({ ...run, id: `completed-${i}`, status: "completed" }))],
+    totals: { failedRuns: 2, openRuns: 1, completedRuns: 51 },
+  });
+  assert.equal(result.failed.length, 1);
+  assert.equal(result.running.runs.length, 1);
+  assert.equal(result.buckets.find((bucket) => bucket.key === "failedRuns")?.sampleCount, 1);
+  assert.equal(result.buckets.find((bucket) => bucket.key === "openRuns")?.sampleCount, 1);
+  assert.deepEqual(result.buckets.find((bucket) => bucket.key === "failedRuns")?.sampleIds, ["failed-visible"]);
+  assert.deepEqual(result.buckets.find((bucket) => bucket.key === "openRuns")?.sampleIds, ["open-visible"]);
+});
