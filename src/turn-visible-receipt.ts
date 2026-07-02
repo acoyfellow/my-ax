@@ -8,9 +8,16 @@ export function stripReasoningArtifacts(content: string): string {
     sanitized = (leakStart === -1 ? before : before.slice(0, leakStart)) + after;
   }
   sanitized = sanitized.replace(/<\/?think>/gi, "").trim();
+  const leadingScratchpad = /^(?:I need|Let me|I'll|I should|Need|The user wants me to|The prompt says)\b/i;
   const doneAfterScratchpad = sanitized.search(/\bDone[.!:]/);
-  if (doneAfterScratchpad > 0 && /^(?:I need|Let me|I'll|I should|Need)\b/i.test(sanitized.slice(0, doneAfterScratchpad).trim())) {
+  if (doneAfterScratchpad > 0 && leadingScratchpad.test(sanitized.slice(0, doneAfterScratchpad).trim())) {
     sanitized = sanitized.slice(doneAfterScratchpad).trim();
+  }
+
+  const statusMatch = sanitized.match(/(?:Lee cmux[^.\n]{0,120}?status ping|Lee \(|Notification sent|Status ping|Summary captured)\b/i);
+  const statusAfterScratchpad = statusMatch?.index ?? -1;
+  if (statusAfterScratchpad > 0 && statusAfterScratchpad < 280 && leadingScratchpad.test(sanitized.slice(0, statusAfterScratchpad).trim())) {
+    sanitized = sanitized.slice(statusAfterScratchpad).trim();
   }
   return sanitized;
 }
