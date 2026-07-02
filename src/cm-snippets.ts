@@ -198,7 +198,10 @@ export async function backfillOwnerSnippets(env: Env, ownerEmail: string): Promi
 export async function listSnippetsDualRead(env: Env, ownerEmail: string): Promise<PublicSnippet[]> {
   const owner = ownerEmail.toLowerCase();
   const { results = [] } = await env.DB.prepare(
-    "SELECT * FROM cm_snippets WHERE owner_email = ? ORDER BY saved_at DESC",
+    `SELECT c.* FROM cm_snippets c
+     JOIN saved_recipes r ON r.owner_email = c.owner_email AND r.id = c.source_recipe_id
+     WHERE c.owner_email = ? AND r.status = 'enabled'
+     ORDER BY c.saved_at DESC`,
   ).bind(owner).all<SnippetRow>();
   if (results.length) return results.map(rowToSnippet);
   // Transition fallback: derive an ephemeral projection from saved_recipes

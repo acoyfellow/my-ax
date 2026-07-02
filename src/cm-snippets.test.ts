@@ -42,6 +42,14 @@ function makeEnv(): { env: Env; tables: { saved_recipes: SavedRecipe[]; cm_snipp
             if (/status = 'enabled'/.test(normalized)) rows = rows.filter((r) => r.status === "enabled");
             return { results: rows as unknown as T[] };
           }
+          if (/FROM cm_snippets/.test(normalized) && /JOIN saved_recipes/.test(normalized)) {
+            const owner = String(bound[0]);
+            const rows = tables.cm_snippets.filter((snippet) => {
+              const recipe = tables.saved_recipes.find((r) => r.owner_email === snippet.owner_email && r.id === snippet.source_recipe_id);
+              return snippet.owner_email === owner && recipe?.status === "enabled";
+            });
+            return { results: rows as unknown as T[] };
+          }
           if (/FROM cm_snippets/.test(normalized) && /WHERE owner_email = \?/.test(normalized)) {
             const owner = String(bound[0]);
             const rows = tables.cm_snippets.filter((r) => r.owner_email === owner);
@@ -178,6 +186,17 @@ test("listSnippetsDualRead reads cm_snippets first and falls back to saved_recip
   assert.equal(persisted[0].name, "search_blog");
   assert.equal(persisted[0].codemodeExecutionId, syntheticExecutionId("r-7"));
   assert.ok(!persisted[0].id.startsWith("transient_"), "served from cm_snippets row, not in-memory transient");
+});
+
+test("listSnippetsDualRead does not advertise stale disabled projections", async () => {
+  const { env, tables } = makeEnv();
+  const recipe = makeRecipe({ id: "r-disabled", name: "stale_disabled", status: "enabled" });
+  tables.saved_recipes.push(recipe);
+  await projectSavedRecipe(env, recipe);
+  tables.saved_recipes[0] = { ...recipe, status: "disabled" };
+  const snippets = await listSnippetsDualRead(env, "owner@example.com");
+  assert.equal(snippets.some((snippet) => snippet.name === "stale_disabled"), false);
+  assert.equal(await getSnippetDualRead(env, "owner@example.com", "stale_disabled"), null);
 });
 
 test("getSnippetDualRead looks up a single snippet by name through the same seam", async () => {
