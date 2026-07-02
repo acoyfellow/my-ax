@@ -198,9 +198,12 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     namespace("machine", Object.keys(machineFns)),
     namespace("cloudbox", Object.keys(cloudboxFns)),
     codemodeRuntime.prelude,
+    "globalThis.ctx={workspace:globalThis.workspace,machine:globalThis.machine,cloudbox:globalThis.cloudbox,codemode:globalThis.codemode};",
   ].join("\n");
+  const submittedCode = code.trim().replace(/;+$/, "");
+  const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
-  const execution = await executor.execute(code, [{ name: "bridge", fns: bridgeFns, prelude }]);
+  const execution = await executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]);
   const sortedCalls = calls.sort((a, b) => a.index - b.index);
   const inferredCapabilities = [...new Set(sortedCalls.map((call) => `${call.where}.${call.method}`))].sort();
   // Portability signal: portable when it needs no host namespace — its logic

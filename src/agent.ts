@@ -28,7 +28,7 @@ import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
 import { delegateCompletionNotification } from "./delegate-receipt";
-import { SavedRecipeService, recipeRunTitle, validateRecipeRunInput } from "./saved-recipes";
+import { SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { resolveBridgeOrigin } from "./bridge-origin";
 import { autoTrustMode, initialStatusForPromotion } from "./auto-trust";
@@ -305,7 +305,7 @@ export class MyAgent extends Think<Env> {
         }),
         null,
       ).run();
-    const code = `async () => { const input = ${JSON.stringify(runInput)};\n${recipe.code}\n}`;
+    const code = savedRecipeExecutionCode(recipe.code, runInput);
     const result = await executeWorkCode(code, {
       ...this.buildToolContext(),
       allowedWorkCapabilities: effectiveCapabilities,
