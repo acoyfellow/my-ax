@@ -1,0 +1,31 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { recipeApprovalDecision } from "./recipe-approval-policy";
+
+test("auto-trusted recipes do not create approval attention", () => {
+  assert.deepEqual(recipeApprovalDecision({ autoTrust: true, capabilities: ["workspace.read"], portable: true }), {
+    notify: false,
+    reason: "auto_trust",
+  });
+});
+
+test("portable workspace recipes still ask for owner review when not auto-trusted", () => {
+  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["workspace.read"], portable: true }), {
+    notify: true,
+    reason: "owner_review_required",
+  });
+});
+
+test("non-portable machine recipes stay inline instead of creating attention noise", () => {
+  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["machine.shell"], portable: false }), {
+    notify: false,
+    reason: "high_authority_inline_only",
+  });
+});
+
+test("cloudbox recipes are also treated as high-authority inline-only prompts", () => {
+  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["cloudbox.run_exec"], portable: false }), {
+    notify: false,
+    reason: "high_authority_inline_only",
+  });
+});
