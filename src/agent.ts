@@ -13,7 +13,7 @@ import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
-import { completeRecurringJobRun } from "./recurring-job-run";
+import { completeRecurringJobRun, recurringJobIdFromClientMessageId } from "./recurring-job-run";
 import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
 import { deriveSessionTitle } from "./session-title";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
@@ -429,6 +429,30 @@ export class MyAgent extends Think<Env> {
     if (error) throw new Error(error);
   }
 
+  private async completeInjectedRecurringJobRun(result: ChatResponseResult): Promise<void> {
+    if (result.status !== "completed" && result.status !== "error") return;
+    const identity = this.identity();
+    if (!identity) return;
+    const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
+    const jobId = recurringJobIdFromClientMessageId(lastUser?.id);
+    if (!jobId) return;
+    const ownerEmail = identity.email.toLowerCase();
+    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
+      .bind(jobId, ownerEmail).first<JobRow>().catch(() => null);
+    if (!row || row.thread_mode !== "new_session_per_run") return;
+    await completeRecurringJobRun(this.env, {
+      jobId: row.id,
+      ownerEmail,
+      sessionId: this.name,
+      sourceSessionId: row.session_id,
+      threadMode: row.thread_mode,
+      ranAt: new Date(),
+      nextRunAt: null,
+      jobName: row.name,
+      error: result.status === "error" ? result.error : null,
+    });
+  }
+
   getModel() {
     return resolveMyAxModel(this.env, this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID).model;
   }
@@ -536,6 +560,7 @@ export class MyAgent extends Think<Env> {
     if (!identity) return;
     await this.recordCurrentCycleCost(result).catch((error) => console.error("cycle_cost_record_failed", { sessionId: this.name, err: String(error) }));
     await this.logAcceptedUsers();
+    await this.completeInjectedRecurringJobRun(result).catch((error) => console.error("recurring_job_terminal_receipt_failed", { sessionId: this.name, err: String(error) }));
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
     const visibleContent = visibleAssistantContent({ status: result.status, content, error: result.error });
