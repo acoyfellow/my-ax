@@ -14,6 +14,7 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { completeRecurringJobRun } from "./recurring-job-run";
+import { computeNextRun, runJobNow, type JobRow } from "./jobs";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
@@ -400,6 +401,15 @@ export class MyAgent extends Think<Env> {
     const identity = this.identity() ?? { email: payload.ownerEmail, sub: `job:${payload.ownerEmail}` };
     this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), identity });
     const now = new Date();
+    const ownerEmail = payload.ownerEmail.toLowerCase();
+    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
+      .bind(payload.jobId, ownerEmail).first<JobRow>().catch(() => null);
+    if (row?.status === "paused") return;
+    if (row?.thread_mode === "new_session_per_run") {
+      const result = await runJobNow(this.env, row, now);
+      if (!result.ok) throw new Error(result.error ?? "recurring job failed");
+      return;
+    }
     let error: string | null = null;
     try {
       await this.runTurn({
@@ -416,7 +426,11 @@ export class MyAgent extends Think<Env> {
       jobId: payload.jobId,
       ownerEmail: payload.ownerEmail,
       sessionId: this.name,
+      sourceSessionId: row?.session_id ?? this.name,
+      threadMode: row?.thread_mode ?? "same_session",
       ranAt: now,
+      nextRunAt: row ? computeNextRun(now, row.cadence_secs) : null,
+      jobName: row?.name ?? null,
       error,
     });
     if (error) throw new Error(error);
