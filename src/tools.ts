@@ -33,13 +33,14 @@ export const TOOLS: ToolDef[] = [
   WORK_CODE_TOOL,
   {
     name: "manage_jobs",
-    description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs.",
-    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string" }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, idempotencyKey: { type: "string" } }, required: ["action"] },
+    description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'.",
+    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string", description: "Target session id. For create, omit to use the current conversation." }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, idempotencyKey: { type: "string" } }, required: ["action"] },
     execute: async (args, ctx) => {
       const jobs = new JobService(ctx.env, ctx.identity.email);
       const id = typeof args.id === "string" ? args.id : "";
       const action = args.action;
-      const input = { sessionId: args.sessionId as string | undefined, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
+      const sessionId = typeof args.sessionId === "string" && args.sessionId.trim() ? args.sessionId : (action === "create" ? ctx.sessionId : undefined);
+      const input = { sessionId, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
       const result = action === "list" ? await jobs.list()
         : action === "create" ? await jobs.create(input, args.idempotencyKey as string | undefined)
         : action === "update" ? await jobs.update(id, input)
