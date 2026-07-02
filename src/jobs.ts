@@ -115,17 +115,23 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
     error = e instanceof Error ? e.message : String(e);
   }
   const nextRunAt = computeNextRun(now, row.cadence_secs);
-  await completeRecurringJobRun(env, {
-    jobId: row.id,
-    ownerEmail: row.owner_email,
-    sessionId: target.targetSessionId,
-    sourceSessionId: target.sourceSessionId,
-    threadMode: target.threadMode,
-    ranAt: now,
-    nextRunAt,
-    jobName: row.name,
-    error: ok ? null : error,
-  });
+  if (ok) {
+    await env.DB.prepare(
+      "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
+    ).bind(nextRunAt, now.toISOString(), row.id, row.owner_email.toLowerCase()).run().catch(() => undefined);
+  } else {
+    await completeRecurringJobRun(env, {
+      jobId: row.id,
+      ownerEmail: row.owner_email,
+      sessionId: target.targetSessionId,
+      sourceSessionId: target.sourceSessionId,
+      threadMode: target.threadMode,
+      ranAt: now,
+      nextRunAt,
+      jobName: row.name,
+      error,
+    });
+  }
   return { next_run_at: nextRunAt, ok, error, target_session_id: target.targetSessionId, thread_mode: target.threadMode };
 }
 

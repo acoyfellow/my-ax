@@ -3,6 +3,11 @@ import { notifyOwner } from "./notify";
 import { recurringJobReceipt } from "./recurring-job-receipt";
 import type { RecurringJobThreadMode } from "./jobs";
 
+export function recurringJobIdFromClientMessageId(id: string | null | undefined): string | null {
+  const match = typeof id === "string" ? /^job:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):\d+$/i.exec(id) : null;
+  return match?.[1] ?? null;
+}
+
 export interface CompleteRecurringJobRunInput {
   jobId: string;
   ownerEmail: string;

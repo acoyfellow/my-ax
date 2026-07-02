@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recurringJobReceipt } from "./recurring-job-receipt";
+import { recurringJobIdFromClientMessageId } from "./recurring-job-run";
 
 test("same-session recurring work says it updated the existing conversation", () => {
   const receipt = recurringJobReceipt({ jobId: "job-1", jobName: "Daily brief", sessionId: "session 1", threadMode: "same_session", ranAt: new Date("2026-01-01T00:00:00.000Z") });
@@ -20,6 +21,14 @@ test("new-session recurring work says it created a fresh conversation", () => {
   assert.equal(receipt.sessionId, "session-new");
   assert.match(receipt.body, /in a new conversation/);
   assert.equal(receipt.dedupeKey, "recurring-job:job-1:session-new:2026-01-01T01:00:00.000Z");
+});
+
+test("recurring job client message ids reveal the job id for terminal receipts", () => {
+  assert.equal(
+    recurringJobIdFromClientMessageId("job:6e45ba82-0ff8-4cf0-bfb5-de943c5934ba:1783028698153"),
+    "6e45ba82-0ff8-4cf0-bfb5-de943c5934ba",
+  );
+  assert.equal(recurringJobIdFromClientMessageId("not-a-job"), null);
 });
 
 test("failed recurring work tells the owner its terminal state and destination", () => {
