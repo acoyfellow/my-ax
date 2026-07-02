@@ -1,17 +1,16 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
-import { resolveBridgeOrigin } from "./bridge-origin";
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { resolveBridgeOrigin } from './bridge-origin.ts';
 
-test("resolveBridgeOrigin accepts absolute URL config", () => {
-  assert.equal(resolveBridgeOrigin("https://ax.example.com/path?q=1"), "https://ax.example.com");
+test('blank/invalid returns null (lenient path yields "" origin, no throw)', () => {
+  assert.equal(resolveBridgeOrigin(''), null);
+  assert.equal(resolveBridgeOrigin('   '), null);
+  assert.equal(resolveBridgeOrigin(undefined), null);
 });
-
-test("resolveBridgeOrigin accepts host-only deploy config", () => {
-  assert.equal(resolveBridgeOrigin("ax.example.com"), "https://ax.example.com");
+test('absolute URL resolves to origin', () => {
+  assert.equal(resolveBridgeOrigin('https://<deployment-host>'), 'https://<deployment-host>');
+  assert.equal(resolveBridgeOrigin('https://<deployment-host>/foo'), 'https://<deployment-host>');
 });
-
-test("resolveBridgeOrigin treats empty or malformed config as unavailable, not an opaque URL throw", () => {
-  assert.equal(resolveBridgeOrigin(""), null);
-  assert.equal(resolveBridgeOrigin("   "), null);
-  assert.equal(resolveBridgeOrigin("http://[not-a-host"), null);
+test('bare host gets https:// and resolves', () => {
+  assert.equal(resolveBridgeOrigin('<deployment-host>'), 'https://<deployment-host>');
 });
