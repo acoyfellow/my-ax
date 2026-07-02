@@ -8,6 +8,7 @@ import type { AppEnv } from "../app-env";
 import type { ToolDef } from "../types";
 import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
 import { storeInlineRasterArtifact } from "../uploads";
+import { parseMachineShellContent } from "../machinectl-output";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
 type MachineResult = { ok?: boolean; content?: string; error?: string };
@@ -148,6 +149,7 @@ export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute
         const artifact = await storeInlineRasterArtifact(ctx.env, ctx.identity, result.content);
         if (artifact) return artifact;
       }
+      if (published.name === "shell") return parseMachineShellContent(result.content ?? "");
       try { return JSON.parse(result.content ?? "") as unknown; } catch { return result.content ?? ""; }
     };
   }
