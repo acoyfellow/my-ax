@@ -14,7 +14,7 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { completeRecurringJobRun } from "./recurring-job-run";
-import { computeNextRun, runJobNow, type JobRow } from "./jobs";
+import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
@@ -416,7 +416,7 @@ export class MyAgent extends Think<Env> {
         mode: "submit",
         idempotencyKey: `job:${payload.jobId}:${now.getTime()}`,
         input: [
-          { id: `job:${payload.jobId}:${now.getTime()}`, role: "user", parts: [{ type: "text", text: payload.prompt }] },
+          { id: `job:${payload.jobId}:${now.getTime()}`, role: "user", parts: [{ type: "text", text: scheduledJobRunPrompt(payload.prompt) }] },
         ],
       });
     } catch (err) {

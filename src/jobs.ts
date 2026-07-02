@@ -95,6 +95,10 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
  * Ownership is the caller's responsibility — REST routes verify the
  * owner_email match before calling.
  */
+export function scheduledJobRunPrompt(prompt: string): string {
+  return `You are executing one scheduled run of an existing recurring job. Do not create, update, resume, pause, delete, or schedule recurring jobs from this run unless the owner explicitly asked this run to modify job configuration. Do the requested check/work once, leave truthful receipts/notifications required by the prompt, then stop.\n\n${prompt}`;
+}
+
 export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): Promise<{ next_run_at: string; ok: boolean; error?: string; target_session_id: string; thread_mode: RecurringJobThreadMode }> {
   let ok = true;
   let error: string | undefined;
@@ -103,7 +107,7 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
     const stub = await sessionAgent(env, row.owner_email, target.targetSessionId);
     // Scheduled work has no browser connection to seed Access identity.
     await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
-    await stub.injectUserMessage({ content: row.prompt, clientMsgId: `job:${row.id}:${now.getTime()}` });
+    await stub.injectUserMessage({ content: scheduledJobRunPrompt(row.prompt), clientMsgId: `job:${row.id}:${now.getTime()}` });
   } catch (e) {
     ok = false;
     error = e instanceof Error ? e.message : String(e);
