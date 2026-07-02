@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { resolveBridgeOrigin } from './bridge-origin.ts';
+import { resolveBridgeOrigin } from './bridge-origin';
 
 test('blank/invalid returns null (lenient path yields "" origin, no throw)', () => {
   assert.equal(resolveBridgeOrigin(''), null);
@@ -8,9 +8,9 @@ test('blank/invalid returns null (lenient path yields "" origin, no throw)', () 
   assert.equal(resolveBridgeOrigin(undefined), null);
 });
 test('absolute URL resolves to origin', () => {
-  assert.equal(resolveBridgeOrigin('https://<deployment-host>'), 'https://<deployment-host>');
-  assert.equal(resolveBridgeOrigin('https://<deployment-host>/foo'), 'https://<deployment-host>');
+  assert.equal(resolveBridgeOrigin('https://example.com'), 'https://example.com');
+  assert.equal(resolveBridgeOrigin('https://example.com/foo'), 'https://example.com');
 });
 test('bare host gets https:// and resolves', () => {
-  assert.equal(resolveBridgeOrigin('<deployment-host>'), 'https://<deployment-host>');
+  assert.equal(resolveBridgeOrigin('example.com'), 'https://example.com');
 });

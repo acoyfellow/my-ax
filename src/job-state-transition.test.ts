@@ -4,7 +4,7 @@ import { transitionJobPaused, type JobStateTransitionDeps } from "./job-state-tr
 import type { JobRow } from "./jobs";
 
 const pausedRow = (): JobRow => ({
-  id: "job", owner_email: "owner@example.com", session_id: "session", name: "job", prompt: "go",
+  id: "job", owner_email: "owner@example.com", session_id: "session", thread_mode: "same_session", name: "job", prompt: "go",
   cadence_secs: 60, status: "paused", next_run_at: "old", last_run_at: null, last_error: null,
   schedule_id: null, created_at: "now", updated_at: "now",
 });

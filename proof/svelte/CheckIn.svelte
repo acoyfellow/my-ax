@@ -6,6 +6,9 @@
   type Bucket = { key: string; label: string; total: number; sampleCount: number; sampleIds?: string[]; steer: Steer | null };
   type CheckIn = { summary: string; checkedAt?: string; buckets?: Bucket[]; suggestedSteers?: Steer[]; deployment?: { versionId?: string | null } };
 
+  interface Props { embedded?: boolean }
+  const { embedded = false }: Props = $props();
+
   let checkIn = $state<CheckIn | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
@@ -108,12 +111,14 @@
       </a>
     {/if}
 
-    <button type="button" onclick={() => setExpanded(!expanded)} class="mt-3 text-[11px] font-semibold text-brand hover:underline" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
-      {expanded ? "Hide receipt details" : "Show all receipt details"}
-    </button>
+    {#if !embedded}
+      <button type="button" onclick={() => setExpanded(!expanded)} class="mt-3 text-[11px] font-semibold text-brand hover:underline" aria-expanded={expanded} aria-controls="check-in-details" data-check-in-details-toggle>
+        {expanded ? "Hide receipt details" : "Show all receipt details"}
+      </button>
+    {/if}
   {/if}
 
-  {#if expanded && checkIn?.buckets?.length}
+  {#if !embedded && expanded && checkIn?.buckets?.length}
     <div id="check-in-details" class="mt-3 grid gap-1.5" data-check-in-details>
       {#each checkIn.buckets as bucket (bucket.key)}
         <section class="rounded-xl border border-line bg-bg-alt p-3" data-check-in-detail-bucket={bucket.key} data-check-in-bucket={bucket.key}>
