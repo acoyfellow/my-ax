@@ -5,8 +5,9 @@ import { getSessionAgent } from "../agent-stub";
 import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
 import { JobService } from "../job-service";
 import { readOwnerCheckIn } from "./check-in";
+import { SavedRecipeService } from "../saved-recipes";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "recipes_list", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history"] as const;
 type Method = typeof METHODS[number];
 
 const TOOLS = [
@@ -89,6 +90,21 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     await c.env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)").bind(runId, `evt-${crypto.randomUUID()}`, email, new Date().toISOString(), JSON.stringify({ id: email, kind: "human", mode: "live" }), "attention.acknowledged", JSON.stringify({ attentionId: id, href: item.href, surface: "glance" })).run();
     return { acknowledged: true, id, receipt: `/api/runs/${runId}` };
   }
+  if (method === "recipes_list") {
+    const recipes = await new SavedRecipeService(c.env, email).list();
+    return { recipes };
+  }
+  if (method === "recipes_run") {
+    const sessionId = typeof args.sessionId === "string" ? args.sessionId : "";
+    await ownedSession(c, sessionId);
+    const recipeId = typeof args.recipeId === "string" ? args.recipeId.trim() : "";
+    if (!recipeId) throw new Error("recipeId is required");
+    const input = args.input && typeof args.input === "object" && !Array.isArray(args.input) ? args.input as Record<string, unknown> : {};
+    const callerCapabilities = Array.isArray(args.callerCapabilities) ? args.callerCapabilities.filter((capability): capability is string => typeof capability === "string") : undefined;
+    const stub = await getSessionAgent(c.env, email, sessionId);
+    await stub.seedIdentity(c.get("identity"));
+    return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
+  }
   if (method === "list_sessions") {
     const rows = await c.env.DB.prepare("SELECT id, name, status, created_at, updated_at FROM sessions WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?").bind(email, clamp(args.limit, 20, 100)).all();
     return { sessions: rows.results ?? [] };
@@ -145,6 +161,8 @@ const CODE_METHODS: Record<string, Method> = {
   inject: "inject",
   attentionList: "attention_list",
   attentionAcknowledge: "attention_acknowledge",
+  recipesList: "recipes_list",
+  recipesRun: "recipes_run",
   jobsList: "jobs_list",
   jobsCreate: "jobs_create",
   jobsUpdate: "jobs_update",
@@ -172,6 +190,8 @@ const CODE_TYPES = `declare const codemode: {
   inject(args: { sessionId: string; content: string }): Promise<unknown>;
   attentionList(args?: { limit?: number }): Promise<unknown>;
   attentionAcknowledge(args: { id: string }): Promise<unknown>;
+  recipesList(args?: {}): Promise<unknown>;
+  recipesRun(args: { sessionId: string; recipeId: string; input?: Record<string, unknown>; callerCapabilities?: string[] }): Promise<unknown>;
   jobsList(args?: {}): Promise<unknown>;
   jobsCreate(args: { sessionId: string; name: string; prompt: string; cadenceSecs: number; idempotencyKey?: string }): Promise<unknown>;
   jobsUpdate(args: { id: string; sessionId?: string; name?: string; prompt?: string; cadenceSecs?: number }): Promise<unknown>;
