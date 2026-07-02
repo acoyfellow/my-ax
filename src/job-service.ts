@@ -5,7 +5,7 @@
 import type { Env } from "./types";
 import { cancelJobSchedule, computeNextRun, MAX_ACTIVE_JOBS_PER_OWNER, runJobNow, scheduleJob, validateJobInput, type JobInput, type JobRow } from "./jobs";
 
-const COLS = "id, owner_email, session_id, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at";
+const COLS = "id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at";
 export type JobAction = "create" | "update" | "pause" | "resume" | "run" | "delete";
 export class JobServiceError extends Error { constructor(public code: "InvalidInput" | "NotFound" | "QuotaExceeded" | "Conflict" | "DispatchFailed", message: string) { super(message); } }
 
@@ -53,11 +53,11 @@ export class JobService {
     if ((count?.count ?? 0) >= MAX_ACTIVE_JOBS_PER_OWNER) throw new JobServiceError("QuotaExceeded", `Maximum active jobs is ${MAX_ACTIVE_JOBS_PER_OWNER}`);
     const id = crypto.randomUUID();
     const next = computeNextRun(this.now(), parsed.cadenceSecs);
-    await this.env.DB.prepare("INSERT INTO jobs (id, owner_email, session_id, name, prompt, cadence_secs, status, next_run_at, idempotency_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))")
-      .bind(id, this.owner, parsed.sessionId, parsed.name, parsed.prompt, parsed.cadenceSecs, next, idempotencyKey ?? null).run();
+    await this.env.DB.prepare("INSERT INTO jobs (id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, idempotency_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))")
+      .bind(id, this.owner, parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, next, idempotencyKey ?? null).run();
     let scheduleId: string | null = null;
     try {
-      scheduleId = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
+      scheduleId = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
       await this.env.DB.prepare("UPDATE jobs SET schedule_id = ? WHERE id = ? AND owner_email = ?").bind(scheduleId, id, this.owner).run();
       await this.evidence(id, "create", true, { scheduleId });
       return this.owned(id);
@@ -69,16 +69,16 @@ export class JobService {
   }
   async update(id: string, patch: Partial<JobInput>) {
     const old = await this.owned(id);
-    const parsed = validateJobInput({ sessionId: patch.sessionId ?? old.session_id, name: patch.name ?? old.name, prompt: patch.prompt ?? old.prompt, cadenceSecs: patch.cadenceSecs ?? old.cadence_secs });
+    const parsed = validateJobInput({ sessionId: patch.sessionId ?? old.session_id, threadMode: patch.threadMode ?? old.thread_mode, name: patch.name ?? old.name, prompt: patch.prompt ?? old.prompt, cadenceSecs: patch.cadenceSecs ?? old.cadence_secs });
     if ("tag" in parsed) throw new JobServiceError("InvalidInput", `${parsed.field}: ${parsed.message}`);
     const session = await this.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(parsed.sessionId, this.owner).first();
     if (!session) throw new JobServiceError("NotFound", "session not found or not owned");
     let replacement: string | null = null;
-    if (old.status === "active") replacement = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
+    if (old.status === "active") replacement = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
     try {
       const next = old.status === "active" ? computeNextRun(this.now(), parsed.cadenceSecs) : old.next_run_at;
-      await this.env.DB.prepare("UPDATE jobs SET session_id=?, name=?, prompt=?, cadence_secs=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=?")
-        .bind(parsed.sessionId, parsed.name, parsed.prompt, parsed.cadenceSecs, next, replacement, id, this.owner).run();
+      await this.env.DB.prepare("UPDATE jobs SET session_id=?, thread_mode=?, name=?, prompt=?, cadence_secs=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=?")
+        .bind(parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, next, replacement, id, this.owner).run();
     } catch (error) {
       if (replacement) await this.runtime.cancel(this.env, { owner_email: this.owner, session_id: parsed.sessionId, schedule_id: replacement }).catch(() => undefined);
       throw error;
@@ -162,7 +162,7 @@ export class JobService {
     const row = await this.owned(id);
     await this.runtime.cancel(this.env, row);
     try {
-      await this.evidence(id, "delete", true, { snapshot: { name: row.name, sessionId: row.session_id } });
+      await this.evidence(id, "delete", true, { snapshot: { name: row.name, sessionId: row.session_id, threadMode: row.thread_mode } });
       await this.env.DB.prepare("DELETE FROM jobs WHERE id=? AND owner_email=?").bind(id, this.owner).run();
     } catch (error) {
       if (row.status === "active") {

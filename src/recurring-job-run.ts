@@ -1,11 +1,14 @@
 import type { Env } from "./types";
 import { notifyOwner } from "./notify";
 import { recurringJobReceipt } from "./recurring-job-receipt";
+import type { RecurringJobThreadMode } from "./jobs";
 
 export interface CompleteRecurringJobRunInput {
   jobId: string;
   ownerEmail: string;
   sessionId: string;
+  sourceSessionId?: string | null;
+  threadMode?: RecurringJobThreadMode;
   ranAt: Date;
   error?: string | null;
   nextRunAt?: string | null;
@@ -35,6 +38,9 @@ export async function completeRecurringJobRun(env: Env, input: CompleteRecurring
     jobId: input.jobId,
     jobName: jobName ?? undefined,
     sessionId: input.sessionId,
+    sourceSessionId: input.sourceSessionId ?? input.sessionId,
+    threadMode: input.threadMode ?? "same_session",
+    ranAt: input.ranAt,
     error,
   })).catch((notifyError) => console.error("recurring_job_receipt_failed", { jobId: input.jobId, err: String(notifyError) }));
 }

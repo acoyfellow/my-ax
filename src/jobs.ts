@@ -14,6 +14,19 @@ async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
   return getSessionAgent(env, ownerEmail, sessionId);
 }
 
+function recurringRunSessionTitle(row: Pick<JobRow, "name">, now: Date): string {
+  const stamp = now.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" });
+  return `${row.name} · ${stamp}`.slice(0, MAX_NAME_CHARS);
+}
+
+export async function resolveRecurringJobTargetSession(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "thread_mode" | "name">, now: Date): Promise<{ targetSessionId: string; sourceSessionId: string; threadMode: RecurringJobThreadMode; created: boolean }> {
+  if (row.thread_mode === "same_session") return { targetSessionId: row.session_id, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: false };
+  const targetSessionId = crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?)")
+    .bind(targetSessionId, recurringRunSessionTitle(row, now), row.owner_email, now.toISOString(), now.toISOString()).run();
+  return { targetSessionId, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: true };
+}
+
 export const MIN_CADENCE_SECS = 60;
 export const MAX_CADENCE_SECS = 60 * 60 * 24 * 30; // 30 days
 export const MAX_PROMPT_CHARS = 4000;
@@ -21,11 +34,14 @@ export const MAX_NAME_CHARS = 200;
 export const MAX_ACTIVE_JOBS_PER_OWNER = 10;
 
 export type JobStatus = "active" | "paused";
+export type RecurringJobThreadMode = "same_session" | "new_session_per_run";
+export const RECURRING_JOB_THREAD_MODES: readonly RecurringJobThreadMode[] = ["same_session", "new_session_per_run"];
 
 export interface JobRow {
   id: string;
   owner_email: string;
   session_id: string;
+  thread_mode: RecurringJobThreadMode;
   name: string;
   prompt: string;
   cadence_secs: number;
@@ -43,6 +59,7 @@ export interface JobInput {
   name: string;
   prompt: string;
   cadenceSecs: number;
+  threadMode: RecurringJobThreadMode;
 }
 
 export type ValidationError = { tag: "InvalidInput"; field: string; message: string };
@@ -66,7 +83,10 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
   if (cadenceSecs < MIN_CADENCE_SECS || cadenceSecs > MAX_CADENCE_SECS) {
     return { tag: "InvalidInput", field: "cadenceSecs", message: `must be in [${MIN_CADENCE_SECS}, ${MAX_CADENCE_SECS}]` };
   }
-  return { sessionId, name: name.slice(0, MAX_NAME_CHARS), prompt: prompt.slice(0, MAX_PROMPT_CHARS), cadenceSecs };
+  const rawThreadMode = typeof (input as Partial<JobInput>).threadMode === "string" ? (input as Partial<JobInput>).threadMode : "new_session_per_run";
+  const threadMode = RECURRING_JOB_THREAD_MODES.includes(rawThreadMode as RecurringJobThreadMode) ? rawThreadMode as RecurringJobThreadMode : null;
+  if (!threadMode) return { tag: "InvalidInput", field: "threadMode", message: "must be same_session or new_session_per_run" };
+  return { sessionId, name: name.slice(0, MAX_NAME_CHARS), prompt: prompt.slice(0, MAX_PROMPT_CHARS), cadenceSecs, threadMode };
 }
 
 /**
@@ -75,11 +95,12 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
  * Ownership is the caller's responsibility — REST routes verify the
  * owner_email match before calling.
  */
-export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): Promise<{ next_run_at: string; ok: boolean; error?: string }> {
+export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): Promise<{ next_run_at: string; ok: boolean; error?: string; target_session_id: string; thread_mode: RecurringJobThreadMode }> {
   let ok = true;
   let error: string | undefined;
+  const target = await resolveRecurringJobTargetSession(env, row, now);
   try {
-    const stub = await sessionAgent(env, row.owner_email, row.session_id);
+    const stub = await sessionAgent(env, row.owner_email, target.targetSessionId);
     // Scheduled work has no browser connection to seed Access identity.
     await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
     await stub.injectUserMessage({ content: row.prompt, clientMsgId: `job:${row.id}:${now.getTime()}` });
@@ -91,13 +112,15 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
   await completeRecurringJobRun(env, {
     jobId: row.id,
     ownerEmail: row.owner_email,
-    sessionId: row.session_id,
+    sessionId: target.targetSessionId,
+    sourceSessionId: target.sourceSessionId,
+    threadMode: target.threadMode,
     ranAt: now,
     nextRunAt,
     jobName: row.name,
     error: ok ? null : error,
   });
-  return { next_run_at: nextRunAt, ok, error };
+  return { next_run_at: nextRunAt, ok, error, target_session_id: target.targetSessionId, thread_mode: target.threadMode };
 }
 
 /** Register a native agents scheduleEvery alarm on the target session DO. */
@@ -106,7 +129,7 @@ export function requireScheduleId(schedule: { id?: string } | null | undefined):
   return schedule.id;
 }
 
-export async function scheduleJob(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "prompt" | "cadence_secs">): Promise<string> {
+export async function scheduleJob(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "thread_mode" | "prompt" | "cadence_secs">): Promise<string> {
   const stub = await sessionAgent(env, row.owner_email, row.session_id);
   await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
   return requireScheduleId(await stub.scheduleRecurringPrompt({ jobId: row.id, ownerEmail: row.owner_email, prompt: row.prompt, cadenceSecs: row.cadence_secs }));
