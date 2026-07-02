@@ -28,6 +28,11 @@ test("visible turn receipts strip leading scratchpad before done-style answers",
   assert.equal(stripReasoningArtifacts(content), "Done. Lee cmux PR exchange checked, notification delivered.");
 });
 
+test("visible turn receipts strip leading scratchpad before status answers", () => {
+  const content = "I'll start by checking tool availability asLee cmux PR exchange status ping sent. Summary captured from the read-screen.";
+  assert.equal(stripReasoningArtifacts(content), "Lee cmux PR exchange status ping sent. Summary captured from the read-screen.");
+});
+
 test("visible turn receipts strip leaked think artifacts while preserving the answer", () => {
   const content = [
     "Lee cmux read-screen succeeded; workspace:1 is Lee.",
