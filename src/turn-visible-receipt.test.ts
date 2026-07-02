@@ -33,6 +33,11 @@ test("visible turn receipts strip leading scratchpad before status answers", () 
   assert.equal(stripReasoningArtifacts(content), "Lee cmux PR exchange status ping sent. Summary captured from the read-screen.");
 });
 
+test("visible turn receipts strip leading scratchpad before check-complete answers", () => {
+  const content = "I'll start by searching for the available machine/cmuxCheck complete. Sent owner notification (`session.update`) for Lee cmux PR exchange.";
+  assert.equal(stripReasoningArtifacts(content), "Check complete. Sent owner notification (`session.update`) for Lee cmux PR exchange.");
+});
+
 test("visible turn receipts strip leaked think artifacts while preserving the answer", () => {
   const content = [
     "Lee cmux read-screen succeeded; workspace:1 is Lee.",
