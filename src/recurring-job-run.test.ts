@@ -35,12 +35,14 @@ function envMock() {
   return { env, calls, inserted };
 }
 
-test("completeRecurringJobRun is the shared terminal state and owner receipt path", async () => {
+test("completeRecurringJobRun records terminal state and same-session receipt path", async () => {
   const { env, calls, inserted } = envMock();
   await completeRecurringJobRun(env, {
     jobId: "job-1",
     ownerEmail: "Owner@Example.COM",
     sessionId: "session 1",
+    sourceSessionId: "session 1",
+    threadMode: "same_session",
     ranAt: new Date("2026-06-24T12:00:00.000Z"),
     nextRunAt: "2026-06-24T13:00:00.000Z",
     jobName: "Daily proof",
@@ -49,22 +51,39 @@ test("completeRecurringJobRun is the shared terminal state and owner receipt pat
   assert.deepEqual(inserted, [{
     kind: "job.complete",
     title: "Daily proof completed",
-    body: "Completed successfully. Next action: open the conversation to review the result.",
+    body: "Completed successfully in the existing conversation. Next action: open it to review the result.",
     href: "/?session=session%201",
   }]);
 });
 
-test("completeRecurringJobRun uses the same receipt path for failed scheduled runs", async () => {
+test("completeRecurringJobRun records terminal state and new-session receipt path", async () => {
+  const { env, inserted } = envMock();
+  await completeRecurringJobRun(env, {
+    jobId: "job-1",
+    ownerEmail: "Owner@Example.COM",
+    sessionId: "session-new",
+    sourceSessionId: "session-source",
+    threadMode: "new_session_per_run",
+    ranAt: new Date("2026-06-24T12:00:00.000Z"),
+    nextRunAt: "2026-06-24T13:00:00.000Z",
+    jobName: "Daily proof",
+  });
+  assert.equal(inserted[0]?.href, "/?session=session-new");
+  assert.match(inserted[0]?.body ?? "", /new conversation/);
+});
+
+test("completeRecurringJobRun uses the explicit destination for failed scheduled runs", async () => {
   const { env, calls, inserted } = envMock();
   await completeRecurringJobRun(env, {
     jobId: "job-2",
     ownerEmail: "owner@example.com",
     sessionId: "session-2",
+    threadMode: "same_session",
     ranAt: new Date("2026-06-24T12:00:00.000Z"),
     error: "failed\nwith detail",
   });
   assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET last_run_at")));
   assert.equal(inserted[0]?.title, "Fallback job failed");
   assert.match(inserted[0]?.body ?? "", /failed with detail/);
-  assert.match(inserted[0]?.body ?? "", /Next action: open the conversation and retry or update the job\./);
+  assert.match(inserted[0]?.body ?? "", /Next action: open the existing conversation and retry or update the job\./);
 });

@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Env } from "./types";
 import type { JobRow } from "./jobs";
-import { computeNextRun, validateJobInput } from "./jobs";
+import { computeNextRun, resolveRecurringJobTargetSession, validateJobInput } from "./jobs";
 import { recurringJobReceipt } from "./recurring-job-receipt";
+import type { Env } from "./types";
 
 const row: JobRow = {
   id: "job-1",
   owner_email: "owner@example.com",
   session_id: "session-existing",
+  thread_mode: "same_session",
   name: "Morning check",
   prompt: "Summarize what changed overnight.",
   cadence_secs: 3600,
@@ -21,7 +22,7 @@ const row: JobRow = {
   updated_at: "2026-01-01T00:00:00.000Z",
 };
 
-test("recurring job input requires a target existing conversation today", () => {
+test("recurring job input requires a target conversation and defaults new jobs to fresh conversations", () => {
   assert.deepEqual(validateJobInput({ name: "job", prompt: "run", cadenceSecs: 60 }), {
     tag: "InvalidInput",
     field: "sessionId",
@@ -32,53 +33,76 @@ test("recurring job input requires a target existing conversation today", () => 
     name: "job",
     prompt: "run",
     cadenceSecs: 60,
+    threadMode: "new_session_per_run",
   });
 });
 
-test("manual and scheduled recurring runs are currently same-thread by contract", () => {
-  // JobRow has exactly one session_id today. scheduleJob(), runJobNow(), and
-  // JobService.run(...) all pass that id through to the session agent. There is
-  // no field that can mean "create a fresh conversation per tick" yet.
-  assert.equal(row.session_id, "session-existing");
-  assert.equal("thread_mode" in row, false);
-  assert.equal("new_session_each_run" in row, false);
+test("recurring job input accepts explicit same-session standing loops", () => {
+  assert.deepEqual(validateJobInput({ sessionId: "session-existing", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "same_session" }), {
+    sessionId: "session-existing",
+    name: "job",
+    prompt: "run",
+    cadenceSecs: 60,
+    threadMode: "same_session",
+  });
 });
 
-test("recurring job receipts send the owner back to the existing conversation", () => {
+test("recurring job thread mode is now persisted, not prompt convention", () => {
+  assert.equal(row.thread_mode, "same_session");
+  assert.equal("thread_mode" in row, true);
+});
+
+test("same-session recurring receipts explain that they open the existing conversation", () => {
   const receipt = recurringJobReceipt({
     jobId: row.id,
     jobName: row.name,
     sessionId: row.session_id,
+    threadMode: row.thread_mode,
     error: null,
   });
   assert.equal(receipt.kind, "job.complete");
   assert.equal(receipt.sessionId, "session-existing");
   assert.equal(receipt.href, "/?session=session-existing");
-  assert.match(receipt.body, /open the conversation to review the result/);
+  assert.match(receipt.body, /existing conversation/);
 });
 
-test("recurring job receipt dedupe stays per job, not per tick", () => {
-  const first = recurringJobReceipt({ jobId: row.id, jobName: row.name, sessionId: row.session_id, error: "first failure" });
-  const second = recurringJobReceipt({ jobId: row.id, jobName: row.name, sessionId: row.session_id, error: "second failure" });
-  assert.equal(first.dedupeKey, `recurring-job:${row.id}`);
-  assert.equal(second.dedupeKey, first.dedupeKey);
+test("new-session recurring receipts open the new target conversation", () => {
+  const receipt = recurringJobReceipt({ jobId: row.id, jobName: row.name, sourceSessionId: row.session_id, sessionId: "session-new", threadMode: "new_session_per_run", error: null });
+  assert.equal(receipt.sessionId, "session-new");
+  assert.equal(receipt.href, "/?session=session-new");
+  assert.match(receipt.body, /new conversation/);
 });
 
-test("manual run and scheduled tick should share the same target-session contract", () => {
-  const manual = { targetSessionId: row.session_id, clientMsgIdPrefix: `job:${row.id}:`, prompt: row.prompt };
-  const scheduled = { targetSessionId: row.session_id, clientMsgIdPrefix: `job:${row.id}:`, prompt: row.prompt };
-  assert.deepEqual(manual, scheduled);
+test("recurring job receipt dedupe is per run destination, not per job forever", () => {
+  const first = recurringJobReceipt({ jobId: row.id, jobName: row.name, sessionId: row.session_id, threadMode: "same_session", ranAt: new Date("2026-01-01T00:00:00.000Z"), error: "first failure" });
+  const second = recurringJobReceipt({ jobId: row.id, jobName: row.name, sessionId: row.session_id, threadMode: "same_session", ranAt: new Date("2026-01-01T01:00:00.000Z"), error: "second failure" });
+  assert.notEqual(first.dedupeKey, second.dedupeKey);
+});
+
+test("same-session target resolver reuses the source conversation", async () => {
+  const env = { DB: { prepare() { throw new Error("same-session must not create a session"); } } } as unknown as Env;
+  assert.deepEqual(await resolveRecurringJobTargetSession(env, row, new Date("2026-01-01T00:00:00.000Z")), {
+    targetSessionId: "session-existing",
+    sourceSessionId: "session-existing",
+    threadMode: "same_session",
+    created: false,
+  });
+});
+
+test("new-session target resolver creates a fresh owned conversation", async () => {
+  const inserts: unknown[][] = [];
+  const env = { DB: { prepare(sql: string) { return { bind(...values: unknown[]) { inserts.push([sql, ...values]); return { async run() { return {}; } }; } }; } } } as unknown as Env;
+  const target = await resolveRecurringJobTargetSession(env, { ...row, thread_mode: "new_session_per_run" }, new Date("2026-01-01T00:00:00.000Z"));
+  assert.equal(target.sourceSessionId, "session-existing");
+  assert.equal(target.threadMode, "new_session_per_run");
+  assert.equal(target.created, true);
+  assert.notEqual(target.targetSessionId, "session-existing");
+  assert.equal(inserts.length, 1);
+  assert.match(String(inserts[0][0]), /INSERT INTO sessions/);
+  assert.equal(inserts[0][2], "Morning check · Jan 1, 12:00 AM UTC");
+  assert.equal(inserts[0][3], "owner@example.com");
 });
 
 test("recurring next-run math is independent of conversation threading mode", () => {
   assert.equal(computeNextRun(new Date("2026-01-01T00:00:00.000Z"), 3600), "2026-01-01T01:00:00.000Z");
-});
-
-test("future new-thread-per-run option needs a persisted thread policy, not prompt convention", () => {
-  type FutureThreadMode = "same_session" | "new_session_per_run";
-  const allowed: FutureThreadMode[] = ["same_session", "new_session_per_run"];
-  assert.deepEqual(allowed, ["same_session", "new_session_per_run"]);
-  // This is intentionally a design assertion: the current Env/database schema
-  // has no place to store this choice, so product copy must not imply it exists.
-  assert.equal(({} as Env & { RECURRING_JOB_THREAD_MODE?: string }).RECURRING_JOB_THREAD_MODE, undefined);
 });

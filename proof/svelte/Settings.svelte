@@ -304,6 +304,7 @@
     status: "active" | "paused";
     last_run_at?: string | null;
     next_run_at?: string | null;
+    thread_mode?: "same_session" | "new_session_per_run";
     last_error?: string | null;
   }
   let jobs = $state<Job[]>([]);
@@ -311,6 +312,7 @@
   let jobName = $state("");
   let jobPrompt = $state("");
   let jobCadence = $state("60");
+  let jobThreadMode = $state<"same_session" | "new_session_per_run">("new_session_per_run");
   let jobActionBusy = $state<Record<string, boolean>>({});
 
   function cadenceLabel(seconds: number) {
@@ -395,6 +397,7 @@
         name: jobName.trim(),
         prompt: jobPrompt.trim(),
         cadenceSecs: Number(jobCadence),
+        threadMode: jobThreadMode,
       }),
     });
     const body = await response.json();
@@ -404,6 +407,7 @@
     }
     jobName = "";
     jobPrompt = "";
+    jobThreadMode = "new_session_per_run";
     jobsStatusText = "Job added.";
     await refreshJobs();
   }
@@ -979,7 +983,7 @@
     <section id="jobs" class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
       <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Recurring jobs</span>
       <p class="mb-3 text-xs text-fg-mut">
-        Runs in this conversation on each tick. A future setting can start a fresh conversation per run; today, job history stays attached here.
+        Choose whether each tick continues this conversation or starts a fresh one. Push notifications explain which destination they open.
       </p>
       <div class="grid gap-2">
         {#if jobs.length === 0}
@@ -990,6 +994,7 @@
             {@const nextRun = job.status === "paused" ? "paused" : jobTimeLabel(job.next_run_at, "not scheduled")}
             {@const result = job.last_error ? `failed · ${job.last_error}` : job.last_run_at ? "ok" : "waiting"}
             {@const state = job.status === "paused" ? "paused" : "active"}
+            {@const threadMode = job.thread_mode ?? "same_session"}
             <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
               <div class="flex min-w-0 items-start justify-between gap-3">
                 <strong class="min-w-0 break-words text-sm text-fg">{job.name}</strong>
@@ -998,6 +1003,7 @@
               <div class="mt-1 text-fg-mut line-clamp-2">{job.prompt}</div>
               <div class="mt-2 grid gap-0.5 font-mono text-[11px] text-fg-mut">
                 <div>{state} · next {nextRun}</div>
+                <div>{threadMode === "new_session_per_run" ? "starts a new conversation each run" : "runs in this conversation"}</div>
                 <div data-job-result={job.last_error ? "error" : "ok"}>last {lastRun} · {result}</div>
               </div>
               <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${job.name}`}>
@@ -1031,6 +1037,17 @@
           <option value="3600">Every hour</option>
           <option value="86400">Every day</option>
         </select>
+        <fieldset class="rounded-md border border-line bg-bg px-3 py-2">
+          <legend class="px-1 text-[11px] font-medium uppercase tracking-wider text-fg-mut">Conversation</legend>
+          <label class="mt-1 flex gap-2 text-sm text-fg">
+            <input type="radio" bind:group={jobThreadMode} value="new_session_per_run" />
+            <span><strong>Start a new conversation each run</strong><span class="block text-xs text-fg-mut">Best for repeated reports, checks, and independent loop ticks.</span></span>
+          </label>
+          <label class="mt-2 flex gap-2 text-sm text-fg">
+            <input type="radio" bind:group={jobThreadMode} value="same_session" />
+            <span><strong>Use this conversation</strong><span class="block text-xs text-fg-mut">Best for a standing loop where every tick continues this thread.</span></span>
+          </label>
+        </fieldset>
         <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">Add recurring job</button>
       </form>
       <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{jobsStatusText}</p>

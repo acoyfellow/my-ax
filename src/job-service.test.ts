@@ -9,7 +9,7 @@ test("native recurring schedules must return a durable id", () => {
 });
 
 const row: JobRow = {
-  id: "job-1", owner_email: "owner@example.com", session_id: "session-1",
+  id: "job-1", owner_email: "owner@example.com", session_id: "session-1", thread_mode: "same_session",
   name: "proof", prompt: "run", cadence_secs: 60, status: "active",
   next_run_at: "2026-01-01T00:01:00.000Z", last_run_at: null,
   last_error: null, schedule_id: "schedule-1", created_at: "now", updated_at: "now",
@@ -53,7 +53,7 @@ function fakeEnv(jobExists = true) {
             const event = events.find((item) => item.id === values[2]);
             if (event) { event.ok = Number(values[0]); event.detail_json = String(values[1]); }
           } else if (sql.startsWith("UPDATE jobs SET session_id")) {
-            Object.assign(mutableRow, { session_id: values[0], name: values[1], prompt: values[2], cadence_secs: values[3], next_run_at: values[4], schedule_id: values[5] });
+            Object.assign(mutableRow, { session_id: values[0], thread_mode: values[1], name: values[2], prompt: values[3], cadence_secs: values[4], next_run_at: values[5], schedule_id: values[6] });
           }
           return { success: true, meta: { changes: 1 } };
         },

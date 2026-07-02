@@ -7,7 +7,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { JobService, JobServiceError } from "../job-service";
-import type { JobRow, JobStatus } from "../jobs";
+import type { JobInput, JobRow, JobStatus, RecurringJobThreadMode } from "../jobs";
 
 const JOB_STATUSES = new Set<JobStatus>(["active", "paused"]);
 
@@ -17,6 +17,10 @@ function escapeHtml(value: unknown): string {
 
 function jobStatusClass(status: JobStatus): string {
   return status === "active" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700" : "border-amber-500/30 bg-amber-500/10 text-amber-700";
+}
+
+function jobThreadModeLabel(job: JobRow): string {
+  return job.thread_mode === "new_session_per_run" ? "starts a new conversation each run" : "runs in this conversation";
 }
 
 export function formatRenderedJobsApiReceiptHref(status?: JobStatus | null): string {
@@ -33,7 +37,7 @@ function renderJobsPage(input: { identityEmail: string; buildId?: string | null;
   const body = input.error
     ? `<section class="rounded-2xl border border-line bg-bg-alt p-6 text-sm text-fg-mut" data-jobs-error>${escapeHtml(input.error)} <a class="text-brand" href="/jobs">View all jobs.</a></section>`
     : input.jobs.length
-      ? `<ol class="space-y-3">${input.jobs.map((job) => `<li class="rounded-2xl border border-line bg-bg-alt p-4" data-job-list-item="${escapeHtml(job.id)}"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-sm font-semibold text-fg">${escapeHtml(job.name)}</h2><p class="mt-1 line-clamp-3 text-sm leading-6 text-fg-mut">${escapeHtml(job.prompt)}</p></div><span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${jobStatusClass(job.status)}">${escapeHtml(job.status)}</span></div><div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-fg-mut"><a class="rounded-full bg-brand px-3 py-1.5 font-bold text-white hover:opacity-90" href="/api/jobs/${escapeHtml(job.id)}/history" data-job-history-receipt-href="/api/jobs/${escapeHtml(job.id)}/history">History receipt</a><span>next ${escapeHtml(job.next_run_at)}</span><code class="font-mono text-[10px]">${escapeHtml(job.id)}</code></div></li>`).join("")}</ol>`
+      ? `<ol class="space-y-3">${input.jobs.map((job) => `<li class="rounded-2xl border border-line bg-bg-alt p-4" data-job-list-item="${escapeHtml(job.id)}"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-sm font-semibold text-fg">${escapeHtml(job.name)}</h2><p class="mt-1 line-clamp-3 text-sm leading-6 text-fg-mut">${escapeHtml(job.prompt)}</p><p class="mt-2 text-xs font-medium text-fg-mut">${escapeHtml(jobThreadModeLabel(job))}</p></div><span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${jobStatusClass(job.status)}">${escapeHtml(job.status)}</span></div><div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-fg-mut"><a class="rounded-full bg-brand px-3 py-1.5 font-bold text-white hover:opacity-90" href="/api/jobs/${escapeHtml(job.id)}/history" data-job-history-receipt-href="/api/jobs/${escapeHtml(job.id)}/history">History receipt</a><span>next ${escapeHtml(job.next_run_at)}</span><code class="font-mono text-[10px]">${escapeHtml(job.id)}</code></div></li>`).join("")}</ol>`
       : `<section class="rounded-2xl border border-line bg-bg-alt p-6 text-sm text-fg-mut" data-jobs-empty><h2 class="text-base font-semibold text-fg">No scheduled work here.</h2><p class="mt-1">Create a recurring job from Settings when you want My AX to run a prompt later.</p><div class="mt-4 flex flex-wrap items-center gap-3"><a class="rounded-md bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90" href="/?action=settings#jobs">Create a job</a><a class="text-xs text-fg-mut underline decoration-line underline-offset-4 hover:text-fg" href="/jobs">Show all jobs</a>${rawDataLink}</div></section>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} · My Agent Experience</title><link rel="stylesheet" href="/static/styles.css"></head><body class="bg-bg text-fg"><main class="min-h-dvh bg-bg text-fg" data-jobs-page><section class="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8"><header class="rounded-2xl border border-line bg-bg-alt p-5"><a class="text-xs font-semibold text-fg-mut hover:text-fg" href="/">← Overview</a><div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 class="text-3xl font-bold">${title}</h1><p class="mt-1 text-sm text-fg-mut">${input.error ? "Filter rejected" : `${input.jobs.length} shown${filterText}`}</p></div><div class="flex items-center gap-3">${rawDataLink}</div></div>${counts}<div class="mt-4 flex flex-wrap items-center gap-2"><span class="text-xs text-fg-mut">Show</span>${nav}</div><nav class="sr-only" data-jobs-next-actions><a href="/">Overview</a><a href="/jobs">All jobs</a><a href="${apiReceiptHref}" data-jobs-api-receipt-href="${apiReceiptHref}">Raw data</a></nav></header>${body}</section><footer hidden data-build-id="${escapeHtml(input.buildId ?? "")}" data-owner="${escapeHtml(input.identityEmail)}"></footer></main></body></html>`;
 }
@@ -55,7 +59,7 @@ function failure(c: Context<AppEnv>, command: string, error: unknown) {
 export function registerJobRoutes(app: Hono<AppEnv>) {
   const body = (c: Context<AppEnv>): Promise<Record<string, unknown>> => c.req.json<Record<string, unknown>>().catch(() => ({}));
   const service = (c: Context<AppEnv>) => new JobService(c.env, c.get("identity").email);
-  const input = (v: Record<string, unknown>) => ({ sessionId: typeof v.sessionId === "string" ? v.sessionId : undefined, name: typeof v.name === "string" ? v.name : undefined, prompt: typeof v.prompt === "string" ? v.prompt : undefined, cadenceSecs: v.cadenceSecs === undefined ? undefined : Number(v.cadenceSecs) });
+  const input = (v: Record<string, unknown>): Partial<JobInput> => ({ sessionId: typeof v.sessionId === "string" ? v.sessionId : undefined, threadMode: typeof v.threadMode === "string" ? v.threadMode as RecurringJobThreadMode : undefined, name: typeof v.name === "string" ? v.name : undefined, prompt: typeof v.prompt === "string" ? v.prompt : undefined, cadenceSecs: v.cadenceSecs === undefined ? undefined : Number(v.cadenceSecs) });
   const key = (c: Context<AppEnv>) => c.req.header("Idempotency-Key")?.trim().slice(0, 200);
   const ok = (c: Context<AppEnv>, command: string, result: unknown, status: ContentfulStatusCode = 200) => c.json<ApiResponse>({ ok: true, command, result, next_actions: [] }, status);
 
