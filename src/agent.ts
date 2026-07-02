@@ -14,7 +14,8 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { completeRecurringJobRun } from "./recurring-job-run";
-import { computeNextRun, runJobNow, scheduledJobRunPrompt, SCHEDULED_JOB_RUN_PREFIX, type JobRow } from "./jobs";
+import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
+import { deriveSessionTitle } from "./session-title";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
@@ -112,18 +113,6 @@ function textParts(message: UIMessage): string {
 }
 function reasoningParts(message: UIMessage): string {
   return message.parts.filter((part) => part.type === "reasoning").map((part) => part.text).join("");
-}
-function deriveSessionTitle(content: string): string {
-  const withoutCodeBlocks = content.replace(/```[\s\S]*?```/g, "");
-  const withoutScheduledJobFrame = withoutCodeBlocks.startsWith(SCHEDULED_JOB_RUN_PREFIX)
-    ? withoutCodeBlocks.slice(SCHEDULED_JOB_RUN_PREFIX.length)
-    : withoutCodeBlocks;
-  const cleaned = withoutScheduledJobFrame.replace(/\s+/g, " ").trim();
-  if (!cleaned) return "Untitled session";
-  // Preserve a useful server-side title. The sidebar owns visual truncation
-  // based on its actual available width; do not bake an early ellipsis into
-  // persisted conversation data.
-  return cleaned.slice(0, 200);
 }
 function attachmentParts(message: UIMessage): Attachment[] {
   return message.parts.flatMap((part) => {
@@ -574,12 +563,13 @@ export class MyAgent extends Think<Env> {
       // Carry the actual reply (and the prompt for context) into the push so a
       // completion notification is useful on its own, not just "turn complete".
       const lastUser = [...this.messages].reverse().find((m) => m.role === "user");
-      const prompt = lastUser ? textParts(lastUser).replace(/\s+/g, " ").trim() : "";
+      const prompt = lastUser ? textParts(lastUser) : "";
+      const title = prompt ? deriveSessionTitle(prompt) : "";
       const reply = visibleCompletionNotificationBody(visibleContent.replace(/\s+/g, " ").trim());
       await notifyOwner(this.env, identity.email, {
         kind: "session.update",
         sessionId: this.name,
-        title: prompt ? `My AX: ${prompt.slice(0, 60)}` : "My AX finished",
+        title: title ? `My AX: ${title.slice(0, 60)}` : "My AX finished",
         body: reply,
         href: `/?session=${encodeURIComponent(this.name)}`,
       }).catch((error) => console.error("turn_completion_push_failed", { sessionId: this.name, err: String(error) }));
