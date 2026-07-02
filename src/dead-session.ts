@@ -1,7 +1,7 @@
 import type { Env } from "./types";
 import { getSessionAgent } from "./agent-stub";
 import { notifyOwner } from "./notify";
-import { AUTO_REVIVE_PREFIX, DEAD_SESSION_STALL_MS, detectDeadSession, isAutoRevive, type RecentConversationEntry } from "./dead-session-detector";
+import { AUTO_REVIVE_PREFIX, DEAD_SESSION_STALL_MS, detectDeadSession, isAutoRevive, isDeadSessionAttentionForCurrentTurn, type RecentConversationEntry } from "./dead-session-detector";
 
 export { DEAD_SESSION_STALL_MS, detectDeadSession } from "./dead-session-detector";
 export const DEAD_SESSION_ATTENTION_KIND = "session.dead";
@@ -23,8 +23,8 @@ export async function scanDeadSessions(env: Env, now = new Date()): Promise<void
       const ownerEmail = session.owner_email?.trim().toLowerCase();
       if (!ownerEmail) throw new Error("session owner is missing");
       const recent = await env.DB.prepare(
-        `SELECT id, role, content, meta_json FROM (
-          SELECT id, role, content, meta_json FROM conversation_entries
+        `SELECT id, ts, role, content, meta_json FROM (
+          SELECT id, ts, role, content, meta_json FROM conversation_entries
           WHERE session_id = ? AND owner_email = ? ORDER BY id DESC LIMIT 12
         ) ORDER BY id ASC`,
       ).bind(session.id, ownerEmail).all<RecentConversationEntry>();
@@ -38,9 +38,11 @@ export async function scanDeadSessions(env: Env, now = new Date()): Promise<void
       const latestUserEntry = (recent.results ?? []).find((entry) => entry.id === dead.latestUserEntryId);
       const alreadyRevived = isAutoRevive(latestUserEntry);
 
-      const attention = await env.DB.prepare(
-        "SELECT id FROM attention_items WHERE owner_email = ? AND session_id = ? AND kind = ? AND seen_at IS NULL LIMIT 1",
-      ).bind(ownerEmail, session.id, DEAD_SESSION_ATTENTION_KIND).first<{ id: string }>();
+      const latestUserCreatedAt = latestUserEntry?.ts ?? session.updated_at;
+      const priorAttention = await env.DB.prepare(
+        "SELECT id, created_at FROM attention_items WHERE owner_email = ? AND session_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1",
+      ).bind(ownerEmail, session.id, DEAD_SESSION_ATTENTION_KIND).first<{ id: string; created_at: string }>();
+      const attention = priorAttention && isDeadSessionAttentionForCurrentTurn(priorAttention.created_at, latestUserCreatedAt) ? priorAttention : null;
       if (!attention) {
         await notifyOwner(env, ownerEmail, {
           kind: DEAD_SESSION_ATTENTION_KIND,

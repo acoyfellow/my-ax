@@ -4,6 +4,7 @@ export interface RecentConversationEntry {
   id: number;
   role: string;
   content: string | null;
+  ts?: string | null;
   meta_json?: string | null;
 }
 
@@ -34,6 +35,13 @@ export function detectDeadSession(
   if (entries.slice(latestUserIndex + 1).some((entry) => entry.role === "assistant")) return null;
   const latestUser = entries[latestUserIndex]!;
   return { latestUserEntryId: latestUser.id, latestUserMessage: latestUser.content ?? "" };
+}
+
+export function isDeadSessionAttentionForCurrentTurn(attentionCreatedAt: string | null | undefined, latestUserCreatedAt: string | null | undefined): boolean {
+  if (!attentionCreatedAt || !latestUserCreatedAt) return false;
+  const attentionMs = Date.parse(attentionCreatedAt);
+  const latestUserMs = Date.parse(latestUserCreatedAt);
+  return Number.isFinite(attentionMs) && Number.isFinite(latestUserMs) && attentionMs >= latestUserMs;
 }
 
 export const AUTO_REVIVE_PREFIX = "auto-revive:";
