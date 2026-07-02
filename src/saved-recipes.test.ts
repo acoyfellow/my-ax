@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateRecipeRunInput, validateSavedRecipeInput, validateSavedRecipePatch } from "./saved-recipes";
+import { savedRecipeExecutionCode, validateRecipeRunInput, validateSavedRecipeInput, validateSavedRecipePatch } from "./saved-recipes";
 
 test("saved recipe validation keeps promoted work_code bounded and explicit", () => {
   const recipe = validateSavedRecipeInput({
@@ -39,4 +39,16 @@ test("saved recipe patch supports focused CRUD edits", () => {
   });
   assert.throws(() => validateSavedRecipePatch({}), /at least one field/);
   assert.throws(() => validateSavedRecipePatch({ status: "archived" }), /status must be pending, enabled, or disabled/);
+});
+
+test("saved recipe execution returns full async-arrow snippet result", () => {
+  const code = savedRecipeExecutionCode("async (input) => ({ slug: input.title.toLowerCase() })", { title: "Hello" });
+  assert.match(code, /return await \(async \(input\) =>/);
+  assert.doesNotMatch(code, /async \(\) => \{ const input = \{\"title\":\"Hello\"\};\nasync \(input\)/, "must not nest an async arrow without returning it");
+});
+
+test("saved recipe execution preserves legacy body-style recipes", () => {
+  const code = savedRecipeExecutionCode("return await workspace.read({ path: input.path });", { path: "README.md" });
+  assert.match(code, /const input = \{"path":"README\.md"\}/);
+  assert.match(code, /return await workspace\.read/);
 });

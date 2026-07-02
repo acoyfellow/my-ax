@@ -37,6 +37,12 @@ test("work_code sandbox prelude no longer exposes a top-level recipe namespace",
   assert.match(source, /codemodeRuntime\.prelude/, "codemode runtime prelude must be spliced into the sandbox prelude");
 });
 
+test("work_code invokes submitted async arrow with ctx while preserving globals", () => {
+  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,cloudbox:globalThis\.cloudbox,codemode:globalThis\.codemode\}/);
+  assert.match(source, /const executableCode = `async \(\) => await \(\$\{submittedCode\}\)\(globalThis\.ctx\)`/);
+  assert.match(source, /executor\.execute\(executableCode,/);
+});
+
 test("agent system prompt no longer references recipe.list / recipe.run", () => {
   assert.doesNotMatch(agent, /recipe\.list\(\)/);
   assert.doesNotMatch(agent, /recipe\.run\(\{id\|name/);

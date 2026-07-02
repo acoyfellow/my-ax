@@ -34,6 +34,15 @@ export class SavedRecipeError extends Error {
   }
 }
 
+export function savedRecipeExecutionCode(recipeCode: string, input: Record<string, unknown>): string {
+  const trimmed = recipeCode.trim().replace(/;+$/, "");
+  const inputJson = JSON.stringify(input);
+  if (/^(async\s*)?(\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(trimmed)) {
+    return `async () => { const input = ${inputJson}; return await (${trimmed})(input); }`;
+  }
+  return `async () => { const input = ${inputJson};\n${recipeCode}\n}`;
+}
+
 const CAPABILITY_PATTERN = /^(workspace|machine|cloudbox)\.[a-zA-Z0-9_.-]+$/;
 
 function assertObject(value: unknown, field: string): Record<string, unknown> {
