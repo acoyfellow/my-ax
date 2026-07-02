@@ -35,6 +35,7 @@ import { resolveBridgeOrigin } from "./bridge-origin";
 import { autoTrustMode, initialStatusForPromotion } from "./auto-trust";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
+import { errorConversationMeta } from "./error-meta";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -698,7 +699,12 @@ export class MyAgent extends Think<Env> {
   onChatError(error: unknown) {
     const identity = this.identity();
     if (identity) {
-      appendConversationLog(this.env, identity, this.name, { ts: new Date().toISOString(), role: "error", content: error instanceof Error ? error.message : String(error) }).catch(() => {});
+      appendConversationLog(this.env, identity, this.name, {
+        ts: new Date().toISOString(),
+        role: "error",
+        content: error instanceof Error ? error.message : String(error),
+        meta: errorConversationMeta(error),
+      }).catch(() => {});
     }
     return error;
   }
