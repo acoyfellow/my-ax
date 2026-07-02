@@ -17,6 +17,12 @@ test("visible turn receipts use model error text for error responses", () => {
   assert.equal(visibleAssistantContent({ status: "error", content: "", error: "Invalid URL string." }), "Invalid URL string.");
 });
 
+test("empty completed responses with owner notifications do not ask the owner to retry", () => {
+  const content = visibleAssistantContent({ status: "completed", content: "", error: null, ownerNotified: true });
+  assert.match(content, /after sending an owner notification/);
+  assert.doesNotMatch(content, /retry/);
+});
+
 test("visible turn receipts strip leaked think artifacts while preserving the answer", () => {
   const content = [
     "Lee cmux read-screen succeeded; workspace:1 is Lee.",
