@@ -14,7 +14,7 @@ export function stripReasoningArtifacts(content: string): string {
     sanitized = sanitized.slice(doneAfterScratchpad).trim();
   }
 
-  const statusMatch = sanitized.match(/(?:Lee cmux[^.\n]{0,120}?status ping|Lee \(|Notification sent|Status ping|Summary captured)\b/i);
+  const statusMatch = sanitized.match(/(?:Lee cmux[^.\n]{0,120}?status ping|Lee \(|Notification sent|Status ping|Summary captured|Check complete)\b/i);
   const statusAfterScratchpad = statusMatch?.index ?? -1;
   if (statusAfterScratchpad > 0 && statusAfterScratchpad < 280 && leadingScratchpad.test(sanitized.slice(0, statusAfterScratchpad).trim())) {
     sanitized = sanitized.slice(statusAfterScratchpad).trim();
