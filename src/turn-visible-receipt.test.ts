@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
+import { stripReasoningArtifacts, visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
 
 test("visible turn receipts preserve normal assistant content", () => {
   assert.equal(visibleAssistantContent({ status: "completed", content: "done", error: null }), "done");
@@ -15,4 +15,22 @@ test("empty completed responses become truthful owner-visible receipts", () => {
 
 test("visible turn receipts use model error text for error responses", () => {
   assert.equal(visibleAssistantContent({ status: "error", content: "", error: "Invalid URL string." }), "Invalid URL string.");
+});
+
+test("visible turn receipts strip leaked think artifacts while preserving the answer", () => {
+  const content = [
+    "Lee cmux read-screen succeeded; workspace:1 is Lee.",
+    "",
+    "Status to notify:\n- Active: yes\n- Scoreboard visible: 2 approved, 4 owed",
+    "",
+    "Need also write same concise status into job session via set_context? The instruction says write the same concise status.",
+    "</think>Notification sent and status written to memory. Done with this scheduled check.",
+  ].join("\n");
+
+  const stripped = stripReasoningArtifacts(content);
+  assert.match(stripped, /Lee cmux read-screen succeeded/);
+  assert.match(stripped, /Status to notify/);
+  assert.match(stripped, /Notification sent/);
+  assert.doesNotMatch(stripped, /Need also/);
+  assert.doesNotMatch(stripped, /<\/think>/);
 });
