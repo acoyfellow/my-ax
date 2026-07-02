@@ -16,6 +16,7 @@ import { notifyOwner } from "./notify";
 import { completeRecurringJobRun } from "./recurring-job-run";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
+import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
@@ -528,12 +529,14 @@ export class MyAgent extends Think<Env> {
     await this.logAcceptedUsers();
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
-    if (content || reasoning || result.status === "error") {
-      await logAssistantMessage(this.env, identity, this.name, content || result.error || "", {
+    const visibleContent = visibleAssistantContent({ status: result.status, content, error: result.error });
+    if (visibleContent || reasoning || result.status === "error") {
+      await logAssistantMessage(this.env, identity, this.name, visibleContent, {
         uiMessageId: result.message.id,
         model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID,
         ...(reasoning ? { reasoning } : {}),
         status: result.status,
+        ...(content.trim() ? {} : { emptyVisibleResponse: true }),
       });
     }
     // Workspace durability: one snapshot per turn that touched /home/user.
@@ -552,12 +555,12 @@ export class MyAgent extends Think<Env> {
       // completion notification is useful on its own, not just "turn complete".
       const lastUser = [...this.messages].reverse().find((m) => m.role === "user");
       const prompt = lastUser ? textParts(lastUser).replace(/\s+/g, " ").trim() : "";
-      const reply = content.replace(/\s+/g, " ").trim();
+      const reply = visibleCompletionNotificationBody(visibleContent.replace(/\s+/g, " ").trim());
       await notifyOwner(this.env, identity.email, {
         kind: "session.update",
         sessionId: this.name,
         title: prompt ? `My AX: ${prompt.slice(0, 60)}` : "My AX finished",
-        body: reply || "Your agent turn is complete.",
+        body: reply,
         href: `/?session=${encodeURIComponent(this.name)}`,
       }).catch((error) => console.error("turn_completion_push_failed", { sessionId: this.name, err: String(error) }));
     }
