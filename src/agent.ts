@@ -14,7 +14,7 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { notifyOwner } from "./notify";
 import { completeRecurringJobRun } from "./recurring-job-run";
-import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
+import { computeNextRun, runJobNow, scheduledJobRunPrompt, SCHEDULED_JOB_RUN_PREFIX, type JobRow } from "./jobs";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
@@ -114,7 +114,11 @@ function reasoningParts(message: UIMessage): string {
   return message.parts.filter((part) => part.type === "reasoning").map((part) => part.text).join("");
 }
 function deriveSessionTitle(content: string): string {
-  const cleaned = content.replace(/```[\s\S]*?```/g, "").replace(/\s+/g, " ").trim();
+  const withoutCodeBlocks = content.replace(/```[\s\S]*?```/g, "");
+  const withoutScheduledJobFrame = withoutCodeBlocks.startsWith(SCHEDULED_JOB_RUN_PREFIX)
+    ? withoutCodeBlocks.slice(SCHEDULED_JOB_RUN_PREFIX.length)
+    : withoutCodeBlocks;
+  const cleaned = withoutScheduledJobFrame.replace(/\s+/g, " ").trim();
   if (!cleaned) return "Untitled session";
   // Preserve a useful server-side title. The sidebar owns visual truncation
   // based on its actual available width; do not bake an early ellipsis into
