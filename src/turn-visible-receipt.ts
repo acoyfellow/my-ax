@@ -7,7 +7,12 @@ export function stripReasoningArtifacts(content: string): string {
     const leakStart = before.search(/\n\n(?:Need|I need|Let's|Since|The instruction|This is a recurring job)\b/);
     sanitized = (leakStart === -1 ? before : before.slice(0, leakStart)) + after;
   }
-  return sanitized.replace(/<\/?think>/gi, "").trim();
+  sanitized = sanitized.replace(/<\/?think>/gi, "").trim();
+  const doneAfterScratchpad = sanitized.search(/\bDone[.!:]/);
+  if (doneAfterScratchpad > 0 && /^(?:I need|Let me|I'll|I should|Need)\b/i.test(sanitized.slice(0, doneAfterScratchpad).trim())) {
+    sanitized = sanitized.slice(doneAfterScratchpad).trim();
+  }
+  return sanitized;
 }
 
 export function visibleAssistantContent(input: { status: string; content: string; error?: string | null; ownerNotified?: boolean }): string {

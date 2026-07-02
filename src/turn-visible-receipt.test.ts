@@ -23,6 +23,11 @@ test("empty completed responses with owner notifications do not ask the owner to
   assert.doesNotMatch(content, /retry/);
 });
 
+test("visible turn receipts strip leading scratchpad before done-style answers", () => {
+  const content = "I need to get the actual output content. Let me try again.Done. Lee cmux PR exchange checked, notification delivered.";
+  assert.equal(stripReasoningArtifacts(content), "Done. Lee cmux PR exchange checked, notification delivered.");
+});
+
 test("visible turn receipts strip leaked think artifacts while preserving the answer", () => {
   const content = [
     "Lee cmux read-screen succeeded; workspace:1 is Lee.",
