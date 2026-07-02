@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { detectDeadSession } from "./dead-session-detector";
-import { isAutoRevive } from "./dead-session-detector";
+import { detectDeadSession, isAutoRevive, isDeadSessionAttentionForCurrentTurn } from "./dead-session-detector";
 
 const now = new Date("2026-06-23T12:00:00.000Z");
 const stale = "2026-06-23T11:54:59.000Z";
@@ -41,4 +40,11 @@ test("isAutoRevive recognizes a prior automatic revival and ignores other entrie
   assert.equal(isAutoRevive({ id: 9, role: "user", content: "x", meta_json: JSON.stringify({ uiMessageId: "ui-123" }) }), false);
   assert.equal(isAutoRevive({ id: 9, role: "user", content: "x", meta_json: null }), false);
   assert.equal(isAutoRevive(undefined), false);
+});
+
+test("dead-session attention dedupes only the current unanswered user turn", () => {
+  assert.equal(isDeadSessionAttentionForCurrentTurn("2026-06-23T12:00:00.000Z", "2026-06-23T11:59:00.000Z"), true);
+  assert.equal(isDeadSessionAttentionForCurrentTurn("2026-06-23T11:58:00.000Z", "2026-06-23T11:59:00.000Z"), false);
+  assert.equal(isDeadSessionAttentionForCurrentTurn(null, "2026-06-23T11:59:00.000Z"), false);
+  assert.equal(isDeadSessionAttentionForCurrentTurn("not-a-date", "2026-06-23T11:59:00.000Z"), false);
 });
