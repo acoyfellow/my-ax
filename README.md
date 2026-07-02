@@ -1,8 +1,16 @@
 # My Agent Experience
 
-My AX is an experimental, single-operator personal agent runtime deployed in the operator's Cloudflare account. Each conversation has durable Think state and can use connected capabilities, run recurring work, delegate bounded analysis, request decisions, and retain supported outputs across authenticated devices.
+A personal agent you deploy into your own Cloudflare account. It holds durable conversations, runs code across your workspace and connected machine, schedules recurring work, delegates bounded analysis, and surfaces what needs you — all behind your Access login, on infrastructure you own.
 
-The operator controls the deployment configuration and Cloudflare resources it uses. Calls to model providers, MCP servers, Cloudbox, and a connected machine execute outside My AX's storage boundary. Each receives the data and capabilities explicitly sent to it and may retain data under its own configuration or policy.
+[![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a Cloudbox run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
+
+In this 3.4s clip the agent writes a workspace file, runs a command on a connected machine, and reads a Cloudbox run — one configured path, not a validation of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
+
+My AX is experimental and single-operator: you control the deployment and its Cloudflare resources. Calls to model providers, MCP servers, Cloudbox, and a connected machine run outside My AX's storage boundary — each receives only what you send it and retains data under its own policy.
+
+**Read this in seven minutes:** [What It Does](#what-it-does) (capabilities) · [Important Limits](#important-limits) (the hard bounds) · [Deploy](#deploy) (get it running) · [Repository Map](#repository-map) (where the code lives).
+
+> **Verify before trusting.** `npm run check` covers local build/type/tests only. Access, containers, models, voice, push, and workspace restoration are proven only by the [deployment proof](./proof/README.md), not by a green local run.
 
 ## What It Does
 
@@ -13,7 +21,7 @@ The operator controls the deployment configuration and Cloudflare resources it u
 - **Recurring jobs** — authenticated UI routes and agent tools share one owner-scoped service to create, update, pause, resume, run, inspect, and delete scheduled prompts.
 - **Bounded delegation** — a parent can invoke up to two concurrent child agents for model-only analysis, then synthesize their retained results.
 - **Attention and outputs** — decisions and supported output records remain associated with their owner and source conversation; object bytes live in R2 where applicable.
-- **Saved recipe learning loop** — owner-approved `work_code` recipes can be listed, promoted, and run again. Reuse replaces re-derivation risk with exact saved code. Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated. A small exploratory run (n=1, prod Workers AI Kimi K2.7) saw reuse reduce output tokens while raising total tokens for a tiny procedure because of input/tool overhead; a clean apples-to-apples multi-sample benchmark is future work. Per-cycle model usage is instrumented and live in production through `cycle_costs` and the owner-scoped `/api/cost-series` endpoint; see the exploratory provenance note in `proof/experiments/overhead-attribution-2026-06-30.json`.
+- **Saved recipe learning loop** — you approve a successful `work_code` run as a named recipe, then reuse it by name instead of re-deriving the logic. Reuse runs the exact saved code (no regeneration drift). It trades re-derivation for a determinism gain, not a guaranteed token saving: reuse cuts output tokens but total tokens only fall for large or repeated procedures, so a one-line recipe can cost more end to end. Per-cycle model usage is measured live in production via `cycle_costs` and the owner-scoped `/api/cost-series`.
 
 ```text
 Owner through Cloudflare Access
@@ -72,12 +80,6 @@ Those rendered pages are Access-protected, preserve the raw API receipts, and sh
 | Voice and push | Depend on explicit browser permission and provider availability. A failed push does not remove its D1 Attention record. Microphone access begins only from a user action. |
 
 [Feature Status and Limits](./docs/feature-matrix.md) is the current-state inventory: what is real, where it lives, and the known limits.
-
-## One Deployed Happy-Path Demonstration
-
-[![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a Cloudbox run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
-
-[Open the accelerated MP4](./docs/media/my-ax-kitchen-sink.mp4). The original interaction took about six seconds; the checked-in video trims startup and runs for 3.4 seconds. It demonstrates one configured path. It does not validate recovery, provider availability, isolation, or every production boundary.
 
 ## Deploy
 
