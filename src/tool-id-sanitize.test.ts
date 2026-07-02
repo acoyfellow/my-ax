@@ -27,6 +27,17 @@ test("falls back to a fixed token for empty/non-string ids", () => {
   assert.match(sanitizeToolCallId(""), /^[a-zA-Z0-9_-]+$/);
 });
 
+test("bounds otherwise-valid ids to the strict provider max length", () => {
+  const long = `call_${"a".repeat(70)}`;
+  const out = sanitizeToolCallId(long);
+  assert.equal(out.length, 64);
+  assert.match(out, /^[a-zA-Z0-9_-]+$/);
+  assert.ok(!isValidToolCallId(long));
+  assert.ok(isValidToolCallId(out));
+  assert.equal(sanitizeToolCallId(long), out);
+  assert.notEqual(sanitizeToolCallId(`${long}b`), out);
+});
+
 test("rewrites a tool-call and its tool-result to the SAME id so the pair stays linked", () => {
   const messages: ModelMessage[] = [
     { role: "assistant", content: [
