@@ -20,12 +20,13 @@
 import type { ModelMessage } from "ai";
 
 /** Anthropic's id grammar — the strictest across our providers. */
+const MAX_TOOL_ID_LENGTH = 64;
 const VALID_TOOL_ID = /^[a-zA-Z0-9_-]+$/;
 const INVALID_CHAR = /[^a-zA-Z0-9_-]/g;
 
 /** True when `id` is already accepted by every provider we route to. */
 export function isValidToolCallId(id: unknown): id is string {
-  return typeof id === "string" && VALID_TOOL_ID.test(id);
+  return typeof id === "string" && id.length <= MAX_TOOL_ID_LENGTH && VALID_TOOL_ID.test(id);
 }
 
 /**
@@ -38,7 +39,19 @@ export function isValidToolCallId(id: unknown): id is string {
 export function sanitizeToolCallId(id: unknown): string {
   if (isValidToolCallId(id)) return id;
   const escaped = typeof id === "string" ? id.replace(INVALID_CHAR, (ch) => `_${ch.charCodeAt(0).toString(16)}_`) : "";
-  return escaped.length ? escaped : "toolcall_unknown";
+  const normalized = escaped.length ? escaped : "toolcall_unknown";
+  if (normalized.length <= MAX_TOOL_ID_LENGTH) return normalized;
+  const suffix = `_${fnv1a32Hex(normalized)}`;
+  return `${normalized.slice(0, MAX_TOOL_ID_LENGTH - suffix.length)}${suffix}`;
+}
+
+function fnv1a32Hex(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
 }
 
 /**
@@ -59,7 +72,7 @@ export function sanitizeToolCallIds(
       if (
         (part?.type === "tool-call" || part?.type === "tool-result") &&
         typeof part.toolCallId === "string" &&
-        !VALID_TOOL_ID.test(part.toolCallId)
+        !isValidToolCallId(part.toolCallId)
       ) {
         const after = sanitizeToolCallId(part.toolCallId);
         onChange?.(part.toolCallId, after);
