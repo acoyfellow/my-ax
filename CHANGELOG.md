@@ -30,11 +30,13 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Changed
 
+- Split Check-in unread receipts into actionable owner requests and informational updates while preserving the total unread count, capped samples, and failed-run visibility.
 - Absorbed the Agents SDK v0.17.0 cohort by exact-pinning `agents@0.17.0`, `@cloudflare/think@0.11.0`, `@cloudflare/voice@0.3.3`, and `@cloudflare/codemode@0.4.2`; My AX keeps using Think's unified `runTurn({ mode: "submit" })` path for owner/API injection and native recurring alarms, and leaves detached/background sub-agent progress as a deliberate future UI/receipt adoption rather than a hidden behavior change.
 - Raised explicit Work Code Mode and MCP Code Mode execution caps from 30s to 60s to match the current Code Mode runtime cohort.
 
 ### Fixed
 
+- Protected every rendered Attention subroute with the Access identity middleware, restoring the owner-scoped “Mark this view seen” action without weakening its same-origin check.
 - Added a release and CI guard that fails if stale pre-Recipes API or agent-facing surfaces reappear in user/agent-facing source or generated assets, preventing another Recipes rename deploy regression.
 - Reopened a human decision and removed its provisional answer event when delivery to the canonical Think session fails, returning retryable `DECISION_RESUME_FAILED` instead of falsely reporting that the conversation resumed.
 - Rejected conversation-entry pagination cursors outside JavaScript’s exact integer range instead of querying from a precision-lost boundary.
