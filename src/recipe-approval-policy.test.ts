@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { recipeApprovalDecision } from "./recipe-approval-policy";
+import { recipeApprovalDecision, shouldPersistSuggestedRecipe } from "./recipe-approval-policy";
 
 test("auto-trusted recipes do not create approval attention", () => {
   assert.deepEqual(recipeApprovalDecision({ autoTrust: true, capabilities: ["workspace.read"], portable: true }), {
@@ -17,10 +17,12 @@ test("portable workspace recipes still ask for owner review when not auto-truste
 });
 
 test("non-portable machine recipes stay inline instead of creating attention noise", () => {
-  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["machine.shell"], portable: false }), {
+  const decision = recipeApprovalDecision({ autoTrust: false, capabilities: ["machine.shell"], portable: false });
+  assert.deepEqual(decision, {
     notify: false,
     reason: "high_authority_inline_only",
   });
+  assert.equal(shouldPersistSuggestedRecipe(decision), false);
 });
 
 test("cloudbox recipes are also treated as high-authority inline-only prompts", () => {
@@ -28,4 +30,9 @@ test("cloudbox recipes are also treated as high-authority inline-only prompts", 
     notify: false,
     reason: "high_authority_inline_only",
   });
+});
+
+test("portable owner-reviewed recipes are still persisted for review", () => {
+  const decision = recipeApprovalDecision({ autoTrust: false, capabilities: ["workspace.read"], portable: true });
+  assert.equal(shouldPersistSuggestedRecipe(decision), true);
 });

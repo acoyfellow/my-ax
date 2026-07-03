@@ -17,3 +17,7 @@ export function recipeApprovalDecision(input: {
   }
   return { notify: true, reason: "owner_review_required" };
 }
+
+export function shouldPersistSuggestedRecipe(decision: RecipeApprovalDecision): boolean {
+  return decision.reason !== "high_authority_inline_only";
+}
