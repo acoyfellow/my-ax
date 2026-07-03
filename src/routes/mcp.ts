@@ -66,7 +66,10 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     const jobs = new JobService(c.env, email);
     const id = typeof args.id === "string" ? args.id : "";
     const input = { sessionId: args.sessionId as string | undefined, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
-    if (method === "jobs_list") return { jobs: await jobs.list() };
+    if (method === "jobs_list") {
+      const status = typeof args.status === "string" && ["active", "paused"].includes(args.status) ? args.status as "active" | "paused" : undefined;
+      return { jobs: await jobs.list(status) };
+    }
     if (method === "jobs_create") return jobs.create(input, args.idempotencyKey as string | undefined);
     if (method === "jobs_update") return jobs.update(id, input);
     if (method === "jobs_pause") return jobs.setPaused(id, true);
@@ -76,7 +79,17 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     return { events: await jobs.history(id) };
   }
   if (method === "attention_list") {
-    const rows = await c.env.DB.prepare("SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT ?").bind(email, clamp(args.limit, 20, 50)).all();
+    const limit = clamp(args.limit, 20, 100);
+    const kind = typeof args.kind === "string" && args.kind.trim() ? args.kind.trim() : "";
+    const onlyUnread = args.unread === true;
+    const filters = ["owner_email = ?"];
+    const params: unknown[] = [email];
+    if (kind) {
+      filters.push("kind = ?");
+      params.push(kind);
+    }
+    if (onlyUnread) filters.push("seen_at IS NULL");
+    const rows = await c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at FROM attention_items WHERE ${filters.join(" AND ")} ORDER BY created_at DESC LIMIT ?`).bind(...params, limit).all();
     return { items: rows.results ?? [] };
   }
   if (method === "attention_acknowledge") {
