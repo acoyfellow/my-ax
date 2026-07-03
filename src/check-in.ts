@@ -117,10 +117,12 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
     ? (totals.attentionInformational > 0
         ? `${totals.attentionActionable} item${totals.attentionActionable === 1 ? " needs" : "s need"} your attention; ${totals.attentionInformational} update${totals.attentionInformational === 1 ? "" : "s"} awaiting review; ${activeTotal} active.`
         : `${totals.attentionActionable} item${totals.attentionActionable === 1 ? " needs" : "s need"} your attention; ${activeTotal} active.`)
-    : totals.attentionInformational > 0
-      ? `0 items need your attention; ${totals.attentionInformational} update${totals.attentionInformational === 1 ? "" : "s"} awaiting review; ${activeTotal} active.`
-      : totals.failedRuns > 0
-        ? `${totals.failedRuns} failed run${totals.failedRuns === 1 ? " needs" : "s need"} review; ${activeTotal} active.`
+    : totals.failedRuns > 0
+      ? (totals.attentionInformational > 0
+          ? `${totals.failedRuns} failed run${totals.failedRuns === 1 ? " needs" : "s need"} review; ${totals.attentionInformational} update${totals.attentionInformational === 1 ? "" : "s"} awaiting review; ${activeTotal} active.`
+          : `${totals.failedRuns} failed run${totals.failedRuns === 1 ? " needs" : "s need"} review; ${activeTotal} active.`)
+      : totals.attentionInformational > 0
+        ? `0 items need your attention; ${totals.attentionInformational} update${totals.attentionInformational === 1 ? "" : "s"} awaiting review; ${activeTotal} active.`
         : `${activeTotal} active; ${totals.completedRuns} recently completed.`;
 
   const attentionKind = needsOwner.find((item) => item.kind)?.kind ?? null;

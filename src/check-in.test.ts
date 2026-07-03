@@ -267,6 +267,17 @@ test("check-in failed summary uses exact failed totals when the failed sample is
   assert.equal(result.totals.failedRuns, 12);
 });
 
+test("check-in keeps failed work visible ahead of informational updates", () => {
+  const result = composeOwnerCheckIn({
+    attention: [],
+    informationalAttention: [{ id: "update", kind: "session.update", title: "Done", body: "FYI", href: "/", created_at: "2026-06-24" }],
+    jobs: [],
+    runs: [{ ...run, id: "failed", status: "failed" }],
+    totals: { attention: 8, attentionActionable: 0, attentionInformational: 8, failedRuns: 2, openRuns: 1 },
+  });
+  assert.equal(result.summary, "2 failed runs need review; 8 updates awaiting review; 1 active.");
+});
+
 test("check-in does not report non-zero run totals with empty status samples", () => {
   const failed = { ...run, id: "failed-visible", status: "failed" };
   const open = { ...run, id: "open-visible", status: "open" };
