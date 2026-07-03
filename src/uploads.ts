@@ -2,8 +2,10 @@ import type { Attachment, Env } from "./types";
 import type { AccessIdentity } from "./auth";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 64 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const INLINE_RASTER_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=\r\n]+)$/;
+const INLINE_MEDIA_RE = /^data:((?:image\/(?:png|jpeg|webp|gif))|(?:video\/(?:quicktime|mp4|webm)));base64,([A-Za-z0-9+/=\r\n]+)$/;
 const ARTIFACT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function uploadsBucket(env: Env): R2Bucket {
@@ -18,7 +20,9 @@ export function assertOwnedUploadKey(identity: AccessIdentity, key: string): voi
 }
 
 function extForType(type: string): string {
-  return type === "image/jpeg" ? "jpg" : type.split("/")[1] ?? "bin";
+  if (type === "image/jpeg") return "jpg";
+  if (type === "video/quicktime") return "mov";
+  return type.split("/")[1] ?? "bin";
 }
 
 export async function storeImageUpload(
@@ -56,24 +60,31 @@ export async function readUploadBytes(env: Env, identity: AccessIdentity, attach
 /** Normalize a laptop/tool screenshot out of transcript-sized base64 into an
  * owner-scoped R2 artifact. Returns null for non-raster tool output. */
 export async function storeInlineRasterArtifact(env: Env, identity: AccessIdentity, value: string) {
-  const match = INLINE_RASTER_RE.exec(value);
+  const artifact = await storeInlineMediaArtifact(env, identity, value);
+  return artifact?.kind === "raster-artifact" ? artifact : null;
+}
+
+export async function storeInlineMediaArtifact(env: Env, identity: AccessIdentity, value: string) {
+  const match = INLINE_MEDIA_RE.exec(value);
   if (!match) return null;
   const mime = match[1];
   const bytes = Uint8Array.from(atob(match[2].replace(/[\r\n]/g, "")), (char) => char.charCodeAt(0));
-  if (bytes.length <= 0 || bytes.length > MAX_IMAGE_BYTES) throw new Error("Screenshot artifact must be between 1 byte and 10 MB");
+  const isVideo = mime.startsWith("video/");
+  const max = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (bytes.length <= 0 || bytes.length > max) throw new Error(`${isVideo ? "Video" : "Screenshot"} artifact must be between 1 byte and ${max / (1024 * 1024)} MB`);
   const id = crypto.randomUUID();
   const key = `artifacts/${identity.email.toLowerCase()}/${id}.${extForType(mime)}`;
   await uploadsBucket(env).put(key, bytes, {
     httpMetadata: { contentType: mime },
-    customMetadata: { owner: identity.email.toLowerCase(), kind: "tool-screenshot" },
+    customMetadata: { owner: identity.email.toLowerCase(), kind: isVideo ? "tool-video" : "tool-screenshot" },
   });
-  return { kind: "raster-artifact" as const, src: `/api/artifacts/${id}`, mime, bytes: bytes.length };
+  return { kind: isVideo ? "video-artifact" as const : "raster-artifact" as const, src: `/api/artifacts/${id}`, mime, bytes: bytes.length };
 }
 
 export async function getRasterArtifact(env: Env, identity: AccessIdentity, id: string): Promise<R2ObjectBody | null> {
   if (!ARTIFACT_ID_RE.test(id)) throw new Error("artifact not found");
   const prefix = `artifacts/${identity.email.toLowerCase()}/${id}.`;
-  for (const ext of ["png", "jpeg", "jpg", "webp", "gif"]) {
+  for (const ext of ["png", "jpeg", "jpg", "webp", "gif", "mov", "mp4", "webm"]) {
     const obj = await uploadsBucket(env).get(prefix + ext);
     if (obj) return obj;
   }

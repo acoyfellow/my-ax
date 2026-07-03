@@ -7,7 +7,7 @@ import type { Context, Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ToolDef } from "../types";
 import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
-import { storeInlineRasterArtifact } from "../uploads";
+import { storeInlineMediaArtifact } from "../uploads";
 import { parseMachineShellContent } from "../machinectl-output";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
@@ -82,10 +82,10 @@ export function registerMachinectlRoutes(app: Hono<AppEnv>) {
     if (body.tool === "tools/list") return hostFor(c).fetch("http://internal/status");
     const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": c.get("identity").email.toLowerCase() });
     const response = await hostFor(c).fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool: body.tool, args: body.arguments ?? {} }) });
-    if (body.tool !== "screenshot") return response;
+    if (body.tool !== "screenshot" && body.tool !== "screen_record") return response;
     const result = await response.json<{ ok?: boolean; content?: string; error?: string }>();
     if (result.ok && typeof result.content === "string") {
-      const artifact = await storeInlineRasterArtifact(c.env, c.get("identity"), result.content);
+      const artifact = await storeInlineMediaArtifact(c.env, c.get("identity"), result.content);
       if (artifact) return c.json({ ...result, content: artifact });
     }
     return c.json(result);
@@ -145,8 +145,8 @@ export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute
     fns[published.name] = async (input) => {
       const result = await machineInvoke(published.name, (input && typeof input === "object" ? input : {}) as Record<string, unknown>, ctx);
       if (!result.ok) throw new Error(result.error ?? `Laptop tool failed: ${published.name}`);
-      if (published.name === "screenshot" && typeof result.content === "string") {
-        const artifact = await storeInlineRasterArtifact(ctx.env, ctx.identity, result.content);
+      if ((published.name === "screenshot" || published.name === "screen_record") && typeof result.content === "string") {
+        const artifact = await storeInlineMediaArtifact(ctx.env, ctx.identity, result.content);
         if (artifact) return artifact;
       }
       if (published.name === "shell") return parseMachineShellContent(result.content ?? "");
@@ -210,8 +210,8 @@ export const MACHINECTL_TOOL: ToolDef = {
     const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": identity.email.toLowerCase() });
     const response = await host.fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool, args: (args.arguments as Record<string, unknown> | undefined) ?? {} }) });
     const result = await response.json<{ ok?: boolean; content?: string; error?: string }>();
-    if (tool === "screenshot" && result.ok && typeof result.content === "string") {
-      const artifact = await storeInlineRasterArtifact(env, identity, result.content);
+    if ((tool === "screenshot" || tool === "screen_record") && result.ok && typeof result.content === "string") {
+      const artifact = await storeInlineMediaArtifact(env, identity, result.content);
       if (artifact) return JSON.stringify({ ...result, content: artifact });
     }
     return JSON.stringify(result);
