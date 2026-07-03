@@ -14,8 +14,14 @@ assertIncludes(settings, 'Start a new conversation each run', "recurring job cre
 assertIncludes(settings, 'Use this conversation', "recurring job creation still supports standing same-thread loops");
 assertIncludes(settings, 'runs in this conversation', "existing same-session jobs are labeled honestly");
 assertIncludes(settings, 'Delete this recurring job? Existing run receipts stay, but it will not run again.', "recurring job delete has explicit destructive confirmation");
-assertIncludes(settings, 'aria-label={`Run ${job.name} now`}', "recurring job run action is compact but accessible");
-assertIncludes(settings, 'class="settings-icon-action text-brand', "recurring job action buttons share compact icon styling");
+assertIncludes(settings, 'aria-label={`Run ${job.name} now`}', "recurring job run action is accessible");
+assertIncludes(settings, '>Run now</button>', "recurring job run action has a distinct text label");
+assertIncludes(settings, '{job.status === "paused" ? "Resume" : "Pause"}</button>', "recurring job pause action has a distinct stateful text label");
+assertIncludes(settings, '>Delete</button>', "recurring job delete action has a distinct text label");
+assertIncludes(settings, 'class="job-action-button text-brand', "recurring job actions use labeled button styling");
+assertIncludes(settings, '>Approve &amp; enable</button>', "pending reusable tools require a distinct owner approval action");
+assertIncludes(settings, 'recipe.status !== "enabled"', "unapproved reusable tools stay unrunnable");
+assertIncludes(settings, 'class="job-action-button min-h-[44px]', "reusable-tool actions keep mobile-sized labeled controls");
 assertIncludes(appShell, 'if (title === sessionState.title) return cancelRename();', "unchanged conversation rename does not PATCH");
 assertIncludes(sessions, 'return "reconnecting";', "session row distinguishes reconnecting from agent running");
 assertIncludes(sessions, 'return "Reconnecting";', "session reconnecting label is honest about transport state");
