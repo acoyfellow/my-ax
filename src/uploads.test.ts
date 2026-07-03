@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
-import { assertOwnedUploadKey, getRasterArtifact, storeImageUpload } from "./uploads";
+import { assertOwnedUploadKey, getRasterArtifact, storeImageUpload, storeInlineMediaArtifact } from "./uploads";
 
 const identity: AccessIdentity = { email: "owner@example.com", sub: "owner" };
 
@@ -46,4 +46,22 @@ test("getRasterArtifact reads an owner-scoped UUID artifact", async () => {
 
   assert.deepEqual(object, { key: "artifacts/owner@example.com/123e4567-e89b-12d3-a456-426614174000.webp" });
   assert.equal(keys.length, 4);
+});
+
+test("storeInlineMediaArtifact stores screen recordings as owner-scoped video artifacts", async () => {
+  const stored: Array<{ key: string; bytes: Uint8Array; contentType?: string; kind?: string }> = [];
+  const bucket = {
+    put: async (key: string, bytes: Uint8Array, options: { httpMetadata?: { contentType?: string }; customMetadata?: { kind?: string } }) => {
+      stored.push({ key, bytes, contentType: options.httpMetadata?.contentType, kind: options.customMetadata?.kind });
+    },
+  };
+  const env = { USER_UPLOADS: bucket } as unknown as Env;
+
+  const artifact = await storeInlineMediaArtifact(env, identity, `data:video/quicktime;base64,${btoa("mov")}`);
+
+  assert.equal(artifact?.kind, "video-artifact");
+  assert.equal(artifact?.mime, "video/quicktime");
+  assert.equal(stored[0]?.contentType, "video/quicktime");
+  assert.equal(stored[0]?.kind, "tool-video");
+  assert.match(stored[0]?.key ?? "", /^artifacts\/owner@example\.com\/[0-9a-f-]+\.mov$/);
 });
