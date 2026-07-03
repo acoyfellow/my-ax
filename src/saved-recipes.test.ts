@@ -13,7 +13,7 @@ test("saved recipe validation keeps promoted work_code bounded and explicit", ()
   });
   assert.equal(recipe.name, "check_blog");
   assert.deepEqual(recipe.capabilities, ["workspace.read"]);
-  assert.equal(recipe.status, "enabled");
+  assert.equal(recipe.status, "pending", "new reusable code must never auto-enable when status is omitted");
   assert.equal(recipe.sourceRunId, "run-1");
 });
 
@@ -45,6 +45,12 @@ test("saved recipe execution returns full async-arrow snippet result", () => {
   const code = savedRecipeExecutionCode("async (input) => ({ slug: input.title.toLowerCase() })", { title: "Hello" });
   assert.match(code, /return await \(async \(input\) =>/);
   assert.doesNotMatch(code, /async \(\) => \{ const input = \{\"title\":\"Hello\"\};\nasync \(input\)/, "must not nest an async arrow without returning it");
+});
+
+test("saved recipe execution returns a marked reusable-tool async arrow", () => {
+  const code = savedRecipeExecutionCode("// reusable-tool: make slug\nasync (input) => ({ slug: input.title.toLowerCase() })", { title: "Hello" });
+  assert.match(code, /return await \(async \(input\) =>/);
+  assert.doesNotMatch(code, /reusable-tool/, "marker metadata must not turn the arrow into an unreturned body expression");
 });
 
 test("saved recipe execution preserves legacy body-style recipes", () => {

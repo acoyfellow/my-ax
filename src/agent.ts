@@ -34,7 +34,7 @@ import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { resolveBridgeOrigin } from "./bridge-origin";
-import { autoTrustMode, initialStatusForPromotion } from "./auto-trust";
+import { autoTrustMode } from "./auto-trust";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
@@ -51,7 +51,7 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 
 Computer work is exposed through two tools:
 - work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and cloudbox.* is clean bounded repository work with receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, cloudbox, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved saved snippet when an enabled snippet clearly matches the task. Saved snippets are projected from the owner-curated D1 saved_recipes table into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every snippet today carries projected provenance. Snippet runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner sees marked candidates as pending recipes in Settings → Recipes and approves them one-by-one; unmarked runs stay inline forever. Do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
+- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, cloudbox, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved reusable tool when an enabled reusable tool clearly matches the task. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner sees marked candidates as pending reusable tools in Settings → Reusable tools and approves them one-by-one; unmarked runs stay inline forever. Do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Cloudbox are needed.
@@ -1079,8 +1079,8 @@ export class MyAgent extends Think<Env> {
     // historical shape and any deploy that had RECIPE_AUTOTRUST=1 still logs
     // that fact — but the frozen contract forces every eligible candidate to
     // pending regardless, so an eligible suggestion is *always* owner-gated.
-    // The legacy auto-trust helpers (autoTrustMode, initialStatusForPromotion,
-    // shouldAutoTrust) remain intact for other call sites and future policy.
+    // Legacy auto-trust helpers remain intact for other call sites and future
+    // policy, but they never bypass this owner-review gate.
     const trustMode = autoTrustMode(this.env);
     for (const output of workCodeOutputs) {
       const text = typeof output === "string" ? output : JSON.stringify(output);
@@ -1163,14 +1163,14 @@ export class MyAgent extends Think<Env> {
       if (decision.notify) {
         // Owner notification uses the rendered Settings deep-link (not the
         // legacy /api/recipes/<id>/approval JSON endpoint) so a tap lands on
-        // the Recipes list where the owner can review, edit, and enable the
+        // Reusable tools where the owner can review, edit, and enable the
         // pending candidate — the single approval surface for the marker path.
         await notifyOwner(this.env, identity.email, {
           kind: "recipe.approval",
           sessionId: this.name,
-          title: `Approve recipe: ${recipe.name}`,
-          body: `${recipe.description} Pending recipes are not runnable until approved.`,
-          href: `/?action=settings&section=recipes`,
+          title: `Review reusable tool: ${recipe.name}`,
+          body: `${recipe.description} Pending reusable tools are not runnable until approved.`,
+          href: `/?action=settings&section=recipes&recipe=${encodeURIComponent(recipe.name)}`,
         }).catch((error) => console.error("recipe_approval_attention_failed", { sessionId: this.name, err: String(error) }));
       }
     }

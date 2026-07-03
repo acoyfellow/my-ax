@@ -22,10 +22,10 @@
 //     never worth a shelf slot.
 //   - Suggested recipe shape (name/description/code/inputSchema) must be
 //     structurally valid before the model's suggestion is ever persisted.
-//   - Fingerprint is a synchronous stable hash over the *normalized* source
-//     plus the *sorted* inferred capability list — same code + same caps →
-//     same fingerprint, regardless of whitespace/comments/property order —
-//     so future dedup/promotion policy can key on identity, not free text.
+//   - Fingerprint is a synchronous stable hash over minimally normalized source
+//     plus the sorted inferred capability list. Line endings, marker wording,
+//     trailing spaces, and trailing semicolons do not change identity; comments
+//     and internal JavaScript text remain identity-bearing to avoid collisions.
 //
 // This module is pure (no Env, no I/O) so both work-tools.ts and agent.ts
 // can call it, and both can be tested without a Worker harness.
@@ -44,6 +44,7 @@ export type ReusableToolCandidate = {
   fingerprint: string;
   reason:
     | "eligible"
+    | "execution_failed"
     | "no_marker"
     | "empty_marker_name"
     | "trivial_source"
@@ -52,6 +53,7 @@ export type ReusableToolCandidate = {
 };
 
 export type ReusableToolCandidateInput = {
+  executionSucceeded?: boolean;
   sourceCode: string;
   inferredCapabilities: string[];
   suggestedRecipe?: SuggestedRecipeShape;
@@ -67,57 +69,32 @@ export const REUSABLE_TOOL_MIN_SOURCE_LENGTH = 48;
 // The `[ \t]*` (not `\s*`) inside the pattern is deliberate: `\s` includes `\n`,
 // which would let the capture group swallow the *next* line as the marker name
 // when the marker line itself is empty after the colon.
-const MARKER_PATTERN = /^[ \t]*\/\/[ \t]*reusable-tool[ \t]*:[ \t]*([^\r\n]{0,80}?)[ \t]*$/m;
+const MARKER_PATTERN = /^[\uFEFF \t]*\/\/[ \t]*reusable-tool[ \t]*:[ \t]*([^\r\n]{0,80}?)[ \t]*(?:\r?\n|$)/;
 
 // A "meaningful name" is at least one word-y character after cleanup, and
 // the cleanup itself must not collapse it to an empty string.
 const MIN_CLEAN_NAME_LENGTH = 3;
 
 /**
- * Normalize source for fingerprinting and length checks:
- *   - strip leading/trailing whitespace
- *   - normalize CRLF to LF
- *   - strip line comments (including the marker itself, so the fingerprint
- *     is stable across re-typed marker whitespace)
- *   - strip /* block comments *\/
- *   - collapse internal runs of whitespace to a single space
- *
- * The result is used both to check the >=48 chars threshold and to feed
- * the fingerprint hash. It is deliberately NOT what gets stored as the
- * recipe code — the recipe still stores the original source verbatim so
- * the model's intent (including the marker) is auditable.
+ * Normalize source for fingerprinting and length checks without rewriting
+ * JavaScript semantics. Remove only the leading reusable-tool marker, then:
+ * normalize line endings, trim trailing spaces, collapse excessive blank
+ * lines, trim the file, and ignore trailing semicolons. Comments and internal
+ * whitespace remain identity-bearing so distinct programs do not collide just
+ * because a lossy normalizer made them look alike.
  */
 export function normalizeReusableSource(code: string): string {
   if (typeof code !== "string") return "";
-  const noCr = code.replace(/\r\n?/g, "\n");
-  // Strip block comments first so their contents cannot leak into fingerprint.
-  const noBlock = noCr.replace(/\/\*[\s\S]*?\*\//g, " ");
-  // Strip line comments (including the marker line, which is metadata,
-  // not code). Only strip the // to end-of-line — never touch strings that
-  // contain //, because that would corrupt real URLs; the sandbox executor
-  // is what actually runs the code, this normalizer is a fingerprint helper.
-  const noLine = noBlock.split("\n").map((line) => {
-    const idx = findLineCommentStart(line);
-    return idx === -1 ? line : line.slice(0, idx);
-  }).join("\n");
-  return noLine.replace(/\s+/g, " ").trim();
-}
-
-// Best-effort line-comment detector that skips // inside string literals.
-// Not a full JS parser — good enough for the fingerprint helper.
-function findLineCommentStart(line: string): number {
-  let inSingle = false;
-  let inDouble = false;
-  let inTemplate = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    const prev = i > 0 ? line[i - 1] : "";
-    if (ch === "'" && !inDouble && !inTemplate && prev !== "\\") inSingle = !inSingle;
-    else if (ch === '"' && !inSingle && !inTemplate && prev !== "\\") inDouble = !inDouble;
-    else if (ch === "`" && !inSingle && !inDouble && prev !== "\\") inTemplate = !inTemplate;
-    else if (!inSingle && !inDouble && !inTemplate && ch === "/" && line[i + 1] === "/") return i;
-  }
-  return -1;
+  const normalizedLines = code
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(MARKER_PATTERN, "")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return normalizedLines.replace(/;+$/g, "").trimEnd();
 }
 
 /**
@@ -150,10 +127,9 @@ function cleanMarkerName(raw: string): string {
 }
 
 /**
- * Stable synchronous fingerprint over normalized source + sorted inferred
- * capabilities. Synchronous so it composes with the sync executeWorkCode
- * return path; stable so the same run always yields the same id even if
- * the model re-emits the code with different whitespace / comment noise.
+ * Stable synchronous fingerprint over minimally normalized source + sorted
+ * inferred capabilities. Synchronous so it composes with executeWorkCode;
+ * conservative normalization avoids hiding distinct programs.
  *
  * Uses a plain FNV-1a mix — sufficient to distinguish
  * work_code candidates within an owner's shelf. Not a security primitive.
@@ -214,6 +190,7 @@ export function evaluateReusableToolCandidate(input: ReusableToolCandidateInput)
   const source = typeof input.sourceCode === "string" ? input.sourceCode : "";
   const caps = Array.isArray(input.inferredCapabilities) ? input.inferredCapabilities : [];
   const fingerprint = reusableToolFingerprint(source, caps);
+  if (input.executionSucceeded === false) return { eligible: false, fingerprint, reason: "execution_failed" };
   if (!source.trim()) return { eligible: false, fingerprint, reason: "empty_source" };
   const marker = parseReusableMarker(source);
   if (marker === null) {
