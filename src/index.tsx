@@ -177,7 +177,13 @@ app.use("/machinectl/*", accessMiddleware());
 // non-personalized /offline fallback stay anonymous so install metadata,
 // browser JS, and offline recovery don't have to re-auth on every fetch.
 app.use("/", accessMiddleware());
+// Gate BOTH the base rendered path and every rendered subroute (e.g.
+// POST /attention/seen). In Hono, app.use("/attention", ...) alone only
+// matches the exact path, so mutating subroutes silently bypassed the
+// Access identity middleware and reached owner()/DB with no verified
+// caller. See routes/attention.test.ts regressions.
 app.use("/attention", accessMiddleware());
+app.use("/attention/*", accessMiddleware());
 app.use("/runs/*", accessMiddleware());
 app.use("/runs", accessMiddleware());
 app.use("/jobs", accessMiddleware());

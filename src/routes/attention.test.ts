@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionReturnHref, formatRenderedAttentionSeenForm, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, summarizeAttentionItems } from "./attention";
+import { Hono } from "hono";
+import type { AppEnv } from "../app-env";
+import { buildAttentionListFilter, formatRenderedAttentionApiReceiptHref, formatRenderedAttentionEmptyList, formatRenderedAttentionErrorList, formatRenderedAttentionFilterLabel, formatRenderedAttentionKindSummary, formatRenderedAttentionListItem, formatRenderedAttentionPageHtml, formatRenderedAttentionReturnHref, formatRenderedAttentionSeenForm, formatRenderedAttentionSessionSummary, formatRenderedAttentionViewSummary, normalizeAttentionSeenIds, normalizeRenderedAttentionSourceHref, parseAttentionKindSummaryRows, parseAttentionListQuery, parseAttentionSessionSummaryRows, registerAttentionRoutes, summarizeAttentionItems } from "./attention";
 
 test("parseAttentionListQuery accepts kind and session filters", () => {
   const result = parseAttentionListQuery(new URL("https://example.com/api/attention?kind=session.update&sessionId=11111111-1111-4111-8111-111111111111"));
@@ -186,4 +188,173 @@ test("parseAttentionSessionSummaryRows normalizes exact grouped SQL rows", () =>
     { session_id: "s1", unread: 3, latest_at: "2026-06-27 21:15:42" },
     { session_id: null, unread: 1, latest_at: null },
   ]);
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// R1A regression: the rendered POST /attention/seen route mutates the
+// attention_items table through owner() (which reads c.get("identity").email).
+// Historically index.tsx gated Attention with only `app.use("/attention",
+// accessMiddleware())`. In Hono that pattern matches ONLY the exact path
+// `/attention`; nested paths like `/attention/seen` bypass the middleware
+// entirely, so anyone hitting the deployed worker URL could reach owner()
+// without a verified Cloudflare Access identity and trigger a mutating
+// UPDATE against arbitrary owner_email values inferred by owner().
+//
+// These tests wire the real registerAttentionRoutes() onto a fresh Hono app
+// mounted behind the same "compose access middleware, then routes" shape as
+// index.tsx uses. The middleware here is a stand-in that records whether it
+// ran and rejects with 401 when no identity header is present — the point is
+// to prove the route dispatch, NOT to re-verify JWT parsing (auth.test.ts
+// covers that). The DB binding is a spy that fails the test if any
+// prepare() call is reached without identity.
+// ────────────────────────────────────────────────────────────────────────
+
+type SpyDbCall = { sql: string; binds: unknown[] };
+
+function makeDbSpy(): { calls: SpyDbCall[]; DB: { prepare: (sql: string) => unknown } } {
+  const calls: SpyDbCall[] = [];
+  const prepare = (sql: string) => {
+    const stmt = {
+      _binds: [] as unknown[],
+      bind(...args: unknown[]) { this._binds = args; return this; },
+      async run() { calls.push({ sql, binds: this._binds }); return { meta: { changes: 0 } }; },
+      async first() { calls.push({ sql, binds: this._binds }); return { count: 0 }; },
+      async all() { calls.push({ sql, binds: this._binds }); return { results: [] }; },
+    };
+    return stmt;
+  };
+  return { calls, DB: { prepare } };
+}
+
+function makeGatedAttentionApp(opts: { identityHeader?: string } = {}) {
+  // Stand-in for accessMiddleware(): trusts a synthetic header purely for
+  // the test harness. Real auth is verified in auth.test.ts; this test only
+  // proves that whatever gate is mounted is actually invoked for every
+  // rendered Attention subroute (not just /attention).
+  const identityHeader = opts.identityHeader ?? "X-Test-Identity";
+  const stats = { gateCalls: 0 };
+  const gate = async (c: any, next: any) => {
+    stats.gateCalls++;
+    const email = c.req.header(identityHeader);
+    if (!email) return c.json({ ok: false, error: { tag: "NoAccessJwt" } }, 401);
+    c.set("identity", { email: email.toLowerCase(), sub: `test-${email}` });
+    await next();
+  };
+  const app = new Hono<AppEnv>();
+  // Mirrors the index.tsx mount pattern for /attention: both the base path
+  // AND the wildcard subroute path. Dropping the wildcard is precisely the
+  // vulnerability under test.
+  app.use("/attention", gate);
+  app.use("/attention/*", gate);
+  registerAttentionRoutes(app);
+  return { app, stats };
+}
+
+test("rendered POST /attention/seen refuses to touch owner()/DB without identity", async () => {
+  const { app, stats } = makeGatedAttentionApp();
+  const db = makeDbSpy();
+  const res = await app.fetch(
+    new Request("http://my-ax.test/attention/seen", { method: "POST", body: new URLSearchParams({ kind: "run.failed" }) }),
+    { DB: db.DB } as any,
+  );
+  assert.equal(res.status, 401, "unauthenticated POST /attention/seen must be rejected before owner()");
+  assert.equal(stats.gateCalls, 1, "access gate must run on /attention/seen; a zero-count reproduces the historical bypass");
+  assert.equal(db.calls.length, 0, "no D1 mutation may occur without a verified identity");
+});
+
+test("rendered GET /attention refuses to touch owner()/DB without identity", async () => {
+  const { app, stats } = makeGatedAttentionApp();
+  const db = makeDbSpy();
+  const res = await app.fetch(new Request("http://my-ax.test/attention"), { DB: db.DB } as any);
+  assert.equal(res.status, 401);
+  assert.equal(stats.gateCalls, 1);
+  assert.equal(db.calls.length, 0);
+});
+
+test("authenticated same-origin POST /attention/seen still mutates and redirects", async () => {
+  const { app } = makeGatedAttentionApp();
+  const db = makeDbSpy();
+  const res = await app.fetch(
+    new Request("http://my-ax.test/attention/seen", {
+      method: "POST",
+      headers: { "X-Test-Identity": "Owner@Example.com", origin: "http://my-ax.test" },
+      body: new URLSearchParams({ kind: "run.failed" }),
+    }),
+    { DB: db.DB } as any,
+  );
+  assert.equal(res.status, 303, "authenticated same-origin POST must redirect to the return href");
+  assert.equal(res.headers.get("location"), "/attention?kind=run.failed");
+  // Exactly one UPDATE, bound to the lowercased identity email and the kind
+  // filter. This proves owner() ran, the CSRF origin check passed, and the
+  // filter is scoped to the caller instead of the full owner_email space.
+  assert.equal(db.calls.length, 1);
+  const [call] = db.calls;
+  assert.match(call.sql, /^UPDATE attention_items SET seen_at = datetime\('now'\) WHERE owner_email = \? AND seen_at IS NULL AND kind = \?$/);
+  assert.deepEqual(call.binds, ["owner@example.com", "run.failed"]);
+});
+
+test("authenticated cross-origin POST /attention/seen still fails CSRF origin check", async () => {
+  const { app } = makeGatedAttentionApp();
+  const db = makeDbSpy();
+  const res = await app.fetch(
+    new Request("http://my-ax.test/attention/seen", {
+      method: "POST",
+      headers: { "X-Test-Identity": "Owner@Example.com", origin: "http://evil.example" },
+      body: new URLSearchParams(),
+    }),
+    { DB: db.DB } as any,
+  );
+  // Identity passes, but the same-origin/CSRF check in registerAttentionRoutes
+  // rejects the request before any UPDATE. The Access gate change must NOT
+  // weaken this second defense.
+  assert.equal(res.status, 403);
+  assert.equal(db.calls.length, 0);
+});
+
+test("dropping the /attention/* wildcard reproduces the pre-fix bypass (regression proof)", async () => {
+  // This test intentionally builds the *broken* mount configuration to lock
+  // in the vulnerability's shape: without the wildcard, POST /attention/seen
+  // skips the gate and reaches owner()/DB. If Hono ever changes semantics so
+  // that app.use("/attention", ...) also matches subroutes, this test will
+  // start failing and the redundant `/attention/*` mount in index.tsx can be
+  // revisited. Until then, this test documents *why* the fix is necessary.
+  const app = new Hono<AppEnv>();
+  const stats = { gateCalls: 0 };
+  const gate = async (c: any, next: any) => {
+    stats.gateCalls++;
+    const email = c.req.header("X-Test-Identity");
+    if (!email) return c.json({ ok: false, error: { tag: "NoAccessJwt" } }, 401);
+    c.set("identity", { email: email.toLowerCase(), sub: `test-${email}` });
+    await next();
+  };
+  // Only the base path — deliberately omitting `/attention/*`.
+  app.use("/attention", gate);
+  registerAttentionRoutes(app);
+  const db = makeDbSpy();
+  // Without the wildcard, the request goes straight to the handler, which
+  // calls owner() on a context that never had `identity` set. Rather than
+  // let the handler crash (Hono logs the TypeError to stderr, which pollutes
+  // the test run), swap owner()'s dependency in by mounting a probe route
+  // BEFORE registerAttentionRoutes so we can observe the bypass cleanly. We
+  // additionally silence Hono's onError logger for this test.
+  //
+  // The essential guarantee: with only `app.use("/attention", gate)`,
+  // a POST to `/attention/seen` never triggers the gate.
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const res = await app.fetch(
+      new Request("http://my-ax.test/attention/seen", { method: "POST", body: new URLSearchParams() }),
+      { DB: db.DB } as any,
+    );
+    assert.equal(stats.gateCalls, 0, "the base-only /attention mount does NOT gate /attention/seen — this is the historical bypass");
+    // Response is a 500 because owner() crashed, but the point is that
+    // Access middleware never got the chance to reject with a proper 401.
+    // A production Access gate that DID run would have returned 401 with
+    // NoAccessJwt long before owner() was ever called.
+    assert.notEqual(res.status, 401, "no 401 was produced because no gate ran; the crash-shaped 500 is a data-leak-adjacent bypass symptom");
+    assert.equal(db.calls.length, 0, "the crash happened before any D1 mutation on THIS unauthenticated path, but no auth check protected us — that's the bug");
+  } finally {
+    console.error = originalError;
+  }
 });
