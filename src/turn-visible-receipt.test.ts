@@ -28,6 +28,7 @@ test("hidden completed turns skip the generic completion push after notify_owner
   assert.equal(shouldSendCompletionNotification({ status: "completed", hasVisibleChat: false, ownerNotified: true }), false);
   assert.equal(shouldSendCompletionNotification({ status: "completed", hasVisibleChat: true, ownerNotified: false }), false);
   assert.equal(shouldSendCompletionNotification({ status: "error", hasVisibleChat: false, ownerNotified: false }), false);
+  assert.equal(shouldSendCompletionNotification({ status: "completed", hasVisibleChat: false, ownerNotified: false, automaticRecovery: true }), false);
 });
 
 test("visible turn receipts strip leading scratchpad before done-style answers", () => {
