@@ -585,7 +585,12 @@ export class MyAgent extends Think<Env> {
     // 'Backup requires R2 presigned URL credentials.'
     const hasVisibleChat = [...this.getConnections<{ chatVisible?: boolean }>()]
       .some((connection) => connection.state?.chatVisible === true);
-    if (shouldSendCompletionNotification({ status: result.status, hasVisibleChat, ownerNotified: this.notifiedOwnerThisTurn })) {
+    if (shouldSendCompletionNotification({
+      status: result.status,
+      hasVisibleChat,
+      ownerNotified: this.notifiedOwnerThisTurn,
+      automaticRecovery: identity.sub === "system:auto-revive",
+    })) {
       // Carry the actual reply (and the prompt for context) into the push so a
       // completion notification is useful on its own, not just "turn complete".
       const lastUser = [...this.messages].reverse().find((m) => m.role === "user");
