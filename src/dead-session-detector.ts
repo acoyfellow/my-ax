@@ -46,13 +46,46 @@ export function isDeadSessionAttentionForCurrentTurn(attentionCreatedAt: string 
 
 export const AUTO_REVIVE_PREFIX = "auto-revive:";
 
-/** True when an entry was produced by a prior automatic revival. */
-export function isAutoRevive(entry: RecentConversationEntry | undefined): boolean {
-  if (!entry?.meta_json) return false;
+export type DeadSessionIncident = {
+  alreadyRevived: boolean;
+  originalUserEntryId: number;
+};
+
+export type DeadSessionRecoveryPlan = DeadSessionIncident & {
+  action: "retry_silently" | "notify_owner";
+};
+
+/** Keep an automatic retry attached to the original dead turn. The retry is a
+ * recovery attempt, not a second owner-visible incident. */
+export function deadSessionIncident(entry: RecentConversationEntry): DeadSessionIncident {
+  if (!entry.meta_json) return { alreadyRevived: false, originalUserEntryId: entry.id };
   try {
     const id = (JSON.parse(entry.meta_json) as { uiMessageId?: unknown }).uiMessageId;
-    return typeof id === "string" && id.startsWith(AUTO_REVIVE_PREFIX);
+    if (typeof id !== "string" || !id.startsWith(AUTO_REVIVE_PREFIX)) {
+      return { alreadyRevived: false, originalUserEntryId: entry.id };
+    }
+    const originalUserEntryId = Number(id.slice(AUTO_REVIVE_PREFIX.length));
+    return {
+      alreadyRevived: true,
+      originalUserEntryId: Number.isSafeInteger(originalUserEntryId) && originalUserEntryId > 0
+        ? originalUserEntryId
+        : entry.id,
+    };
   } catch {
-    return false;
+    return { alreadyRevived: false, originalUserEntryId: entry.id };
   }
+}
+
+/** One dead incident gets at most one automatic retry and one owner alert. */
+export function deadSessionRecoveryPlan(entry: RecentConversationEntry): DeadSessionRecoveryPlan {
+  const incident = deadSessionIncident(entry);
+  return {
+    ...incident,
+    action: incident.alreadyRevived ? "notify_owner" : "retry_silently",
+  };
+}
+
+/** True when an entry was produced by a prior automatic revival. */
+export function isAutoRevive(entry: RecentConversationEntry | undefined): boolean {
+  return entry ? deadSessionIncident(entry).alreadyRevived : false;
 }

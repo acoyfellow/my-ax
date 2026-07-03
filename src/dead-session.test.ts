@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { detectDeadSession, isAutoRevive, isDeadSessionAttentionForCurrentTurn } from "./dead-session-detector";
+import { deadSessionIncident, deadSessionRecoveryPlan, detectDeadSession, isAutoRevive, isDeadSessionAttentionForCurrentTurn } from "./dead-session-detector";
 
 const now = new Date("2026-06-23T12:00:00.000Z");
 const stale = "2026-06-23T11:54:59.000Z";
@@ -35,9 +35,14 @@ test("alive when the most recent user already has a later assistant entry", () =
   ], stale, now), null);
 });
 
-test("isAutoRevive recognizes a prior automatic revival and ignores other entries", () => {
-  assert.equal(isAutoRevive({ id: 9, role: "user", content: "x", meta_json: JSON.stringify({ uiMessageId: "auto-revive:42" }) }), true);
-  assert.equal(isAutoRevive({ id: 9, role: "user", content: "x", meta_json: JSON.stringify({ uiMessageId: "ui-123" }) }), false);
+test("automatic revival stays attached to the original dead-turn incident", () => {
+  const retry = { id: 9, role: "user", content: "x", meta_json: JSON.stringify({ uiMessageId: "auto-revive:42" }) };
+  assert.deepEqual(deadSessionIncident(retry), { alreadyRevived: true, originalUserEntryId: 42 });
+  assert.deepEqual(deadSessionRecoveryPlan(retry), { alreadyRevived: true, originalUserEntryId: 42, action: "notify_owner" });
+  assert.deepEqual(deadSessionRecoveryPlan({ id: 41, role: "user", content: "x", meta_json: null }), { alreadyRevived: false, originalUserEntryId: 41, action: "retry_silently" });
+  assert.equal(isAutoRevive(retry), true);
+  assert.deepEqual(deadSessionIncident({ id: 9, role: "user", content: "x", meta_json: JSON.stringify({ uiMessageId: "ui-123" }) }), { alreadyRevived: false, originalUserEntryId: 9 });
+  assert.deepEqual(deadSessionIncident({ id: 9, role: "user", content: "x", meta_json: JSON.stringify({ uiMessageId: "auto-revive:not-an-id" }) }), { alreadyRevived: true, originalUserEntryId: 9 });
   assert.equal(isAutoRevive({ id: 9, role: "user", content: "x", meta_json: null }), false);
   assert.equal(isAutoRevive(undefined), false);
 });
