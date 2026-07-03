@@ -100,9 +100,9 @@ function catalogEntry(where: WorkCall["where"] | "codemode" | "snippet", name: s
 // `codemode.run(name, input)` and dispatches to whichever underlying
 // connector (workspace / machine / cloudbox) or snippet owns the tool.
 const CODEMODE_METHODS = [
-  { name: "search", description: "List or filter codemode tools across workspace, machine, cloudbox, and saved snippets." },
+  { name: "search", description: "List or filter codemode tools across workspace, machine, cloudbox, and reusable tools." },
   { name: "describe", description: "Return the description and input schema for one codemode tool by qualified name." },
-  { name: "run", description: "Invoke one codemode tool or saved snippet by name with a structured input." },
+  { name: "run", description: "Invoke one codemode tool or owner-approved reusable tool by name with a structured input." },
 ] as const;
 
 export const WORK_SEARCH_TOOL: ToolDef = {
@@ -227,6 +227,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     portable,
   };
   const reusableToolCandidate = evaluateReusableToolCandidate({
+    executionSucceeded: !execution.error,
     sourceCode: code,
     inferredCapabilities,
     suggestedRecipe,
@@ -247,7 +248,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
-  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,cloudbox,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and saved snippets, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved snippet by name; snippet runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. Owner sees it in Settings → Recipes as pending for approval. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
+  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,cloudbox,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and reusable tools, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved reusable tool by name; reusable-tool runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner sees it under Settings → Reusable tools as pending for approval. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
   parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, cloudbox, and/or codemode namespaces." } }, required: ["code"] },
   execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };

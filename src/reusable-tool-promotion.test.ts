@@ -81,9 +81,10 @@ test("promotion loop keeps the high-authority inline-only decision (recipeApprov
 // Owner notification uses the Settings deep-link href
 // ---------------------------------------------------------------------------
 
-test("owner notification renders the Settings recipes deep-link, not the legacy /api/recipes approval URL", () => {
+test("owner notification renders the Reusable tools Settings deep-link, not the legacy API approval URL", () => {
   const slice = promotionSlice(agent);
-  assert.match(slice, /href:\s*`\/\?action=settings&section=recipes`/, "must use the Settings deep-link");
+  assert.match(slice, /href:\s*`\/\?action=settings&section=recipes&recipe=\$\{encodeURIComponent\(recipe\.name\)\}`/, "must use the rendered Settings review deep-link");
+  assert.match(slice, /Review reusable tool:/, "owner-visible notification must use Reusable tool language");
   assert.doesNotMatch(slice, /\/api\/recipes\/\$\{encodeURIComponent\(recipe\.id\)\}\/approval/, "legacy approval URL must be gone");
 });
 
@@ -101,10 +102,8 @@ test("promotion loop catches SavedRecipeError inside each iteration so a duplica
 // Legacy auto-trust helpers still intact (frozen: don't delete)
 // ---------------------------------------------------------------------------
 
-test("legacy auto-trust helpers remain callable from agent.ts", () => {
-  assert.match(agent, /import \{ autoTrustMode, initialStatusForPromotion \} from "\.\/auto-trust"/, "auto-trust imports must remain");
-  // They are still referenced somewhere — either for logging or for a future
-  // policy path — so a downstream deploy that had them wired does not break.
+test("legacy auto-trust mode remains observable without controlling candidate status", () => {
+  assert.match(agent, /import \{ autoTrustMode \} from "\.\/auto-trust"/, "auto-trust mode remains available for receipt compatibility");
   assert.match(agent, /autoTrustMode\(this\.env\)/, "autoTrustMode must still be read (receipt shape stability)");
 });
 
@@ -133,5 +132,5 @@ test("public agent system prompt teaches the marker semantics", () => {
   const promptSlice = agent.slice(agent.indexOf("PUBLIC_SYSTEM"), agent.indexOf("PUBLIC_SYSTEM") + 5000);
   assert.match(promptSlice, /reusable-tool:/, "system prompt must show the marker prefix");
   assert.match(promptSlice, /broadly reusable/, "system prompt must explain the marker is for broadly reusable code");
-  assert.match(promptSlice, /Settings\s*→\s*Recipes|Settings.*Recipes/, "system prompt should reference where marked candidates land");
+  assert.match(promptSlice, /Settings\s*→\s*Reusable tools|Settings.*Reusable tools/, "system prompt should use the owner-facing Reusable tools destination");
 });
