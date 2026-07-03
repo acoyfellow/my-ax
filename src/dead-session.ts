@@ -1,7 +1,7 @@
 import type { Env } from "./types";
 import { getSessionAgent } from "./agent-stub";
 import { notifyOwner } from "./notify";
-import { AUTO_REVIVE_PREFIX, DEAD_SESSION_STALL_MS, detectDeadSession, isAutoRevive, isDeadSessionAttentionForCurrentTurn, type RecentConversationEntry } from "./dead-session-detector";
+import { AUTO_REVIVE_PREFIX, DEAD_SESSION_STALL_MS, deadSessionRecoveryPlan, detectDeadSession, isDeadSessionAttentionForCurrentTurn, type RecentConversationEntry } from "./dead-session-detector";
 
 export { DEAD_SESSION_STALL_MS, detectDeadSession } from "./dead-session-detector";
 export const DEAD_SESSION_ATTENTION_KIND = "session.dead";
@@ -31,14 +31,22 @@ export async function scanDeadSessions(env: Env, now = new Date()): Promise<void
       const dead = detectDeadSession(recent.results ?? [], session.updated_at, now);
       if (!dead) continue;
 
-      // One-shot guard: if the unanswered user turn is itself a prior automatic
-      // revival, we already retried this turn once. Keep the owner Attention
-      // item but never re-inject — otherwise a hard-broken session would be
-      // revived on every scan, because each revival creates a new user row.
+      // Retry the original dead turn silently. The owner only needs attention if
+      // that one automatic recovery also stalls; notifying both before and after
+      // retry made one incident look like two repeating failures.
       const latestUserEntry = (recent.results ?? []).find((entry) => entry.id === dead.latestUserEntryId);
-      const alreadyRevived = isAutoRevive(latestUserEntry);
+      if (!latestUserEntry) continue;
+      const incident = deadSessionRecoveryPlan(latestUserEntry);
+      if (incident.action === "retry_silently") {
+        const stub = await getSessionAgent(env, ownerEmail, session.id);
+        await stub.seedIdentity({ email: ownerEmail, sub: "system:auto-revive" });
+        await stub.injectUserMessage({ content: dead.latestUserMessage, clientMsgId: `${AUTO_REVIVE_PREFIX}${incident.originalUserEntryId}` });
+        continue;
+      }
 
-      const latestUserCreatedAt = latestUserEntry?.ts ?? session.updated_at;
+      // The retry row carries auto-revive:<original user entry id>, so repeated
+      // scans stay attached to one owner-visible incident and never re-inject.
+      const latestUserCreatedAt = latestUserEntry.ts ?? session.updated_at;
       const priorAttention = await env.DB.prepare(
         "SELECT id, created_at FROM attention_items WHERE owner_email = ? AND session_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1",
       ).bind(ownerEmail, session.id, DEAD_SESSION_ATTENTION_KIND).first<{ id: string; created_at: string }>();
@@ -47,18 +55,12 @@ export async function scanDeadSessions(env: Env, now = new Date()): Promise<void
         await notifyOwner(env, ownerEmail, {
           kind: DEAD_SESSION_ATTENTION_KIND,
           title: "Session needs attention",
-          body: alreadyRevived
-            ? "A conversation stopped before replying and an automatic retry did not recover it."
-            : "A conversation stopped before replying. My AX will retry it once.",
+          body: "A conversation stopped before replying and its automatic retry did not recover it.",
           href: `/?session=${encodeURIComponent(session.id)}`,
           sessionId: session.id,
+          dedupeKey: `session-dead:${session.id}:${incident.originalUserEntryId}`,
         });
       }
-      if (alreadyRevived) continue;
-
-      const stub = await getSessionAgent(env, ownerEmail, session.id);
-      await stub.seedIdentity({ email: ownerEmail, sub: "system:auto-revive" });
-      await stub.injectUserMessage({ content: dead.latestUserMessage, clientMsgId: `${AUTO_REVIVE_PREFIX}${dead.latestUserEntryId}` });
     } catch (error) {
       console.error("dead_session_scan_failed", {
         sessionId: session.id,
