@@ -18,7 +18,7 @@ import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from ".
 import { deriveSessionTitle } from "./session-title";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
-import { visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
+import { shouldSendCompletionNotification, visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
@@ -585,7 +585,7 @@ export class MyAgent extends Think<Env> {
     // 'Backup requires R2 presigned URL credentials.'
     const hasVisibleChat = [...this.getConnections<{ chatVisible?: boolean }>()]
       .some((connection) => connection.state?.chatVisible === true);
-    if (result.status === "completed" && !hasVisibleChat) {
+    if (shouldSendCompletionNotification({ status: result.status, hasVisibleChat, ownerNotified: this.notifiedOwnerThisTurn })) {
       // Carry the actual reply (and the prompt for context) into the push so a
       // completion notification is useful on its own, not just "turn complete".
       const lastUser = [...this.messages].reverse().find((m) => m.role === "user");

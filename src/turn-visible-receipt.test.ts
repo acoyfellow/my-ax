@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { stripReasoningArtifacts, visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
+import { shouldSendCompletionNotification, stripReasoningArtifacts, visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
 
 test("visible turn receipts preserve normal assistant content", () => {
   assert.equal(visibleAssistantContent({ status: "completed", content: "done", error: null }), "done");
@@ -21,6 +21,13 @@ test("empty completed responses with owner notifications do not ask the owner to
   const content = visibleAssistantContent({ status: "completed", content: "", error: null, ownerNotified: true });
   assert.match(content, /after sending an owner notification/);
   assert.doesNotMatch(content, /retry/);
+});
+
+test("hidden completed turns skip the generic completion push after notify_owner", () => {
+  assert.equal(shouldSendCompletionNotification({ status: "completed", hasVisibleChat: false, ownerNotified: false }), true);
+  assert.equal(shouldSendCompletionNotification({ status: "completed", hasVisibleChat: false, ownerNotified: true }), false);
+  assert.equal(shouldSendCompletionNotification({ status: "completed", hasVisibleChat: true, ownerNotified: false }), false);
+  assert.equal(shouldSendCompletionNotification({ status: "error", hasVisibleChat: false, ownerNotified: false }), false);
 });
 
 test("visible turn receipts strip leading scratchpad before done-style answers", () => {
