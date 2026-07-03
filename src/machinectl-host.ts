@@ -34,6 +34,7 @@ const TOOL_LIMIT = 64;
 const CATALOG_BYTE_LIMIT = 128 * 1024;
 const ARGS_BYTE_LIMIT = 128 * 1024;
 const RESULT_BYTE_LIMIT = 512 * 1024;
+const RESULT_MEDIA_BYTE_LIMIT = 64 * 1024 * 1024;
 const MAX_PENDING_CALLS = 8;
 const CALL_TIMEOUT_MS = 60 * 1000;
 const AUDIT_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -63,6 +64,10 @@ function safeText(value: string, maxBytes: number): string {
   return value.slice(0, maxBytes) + "\n... (truncated by relay)";
 }
 
+function resultByteLimit(tool: string): number {
+  return tool === "screenshot" || tool === "screen_record" ? RESULT_MEDIA_BYTE_LIMIT : RESULT_BYTE_LIMIT;
+}
+
 function validateTools(tools: unknown): tools is PublishedTool[] {
   if (!Array.isArray(tools) || tools.length > TOOL_LIMIT || byteLength(tools) > CATALOG_BYTE_LIMIT) return false;
   return tools.every((tool) => {
@@ -83,6 +88,8 @@ function summarizeArgs(tool: string, args: Record<string, unknown>) {
         ? ["action", "key", "modifiers"]
         : tool === "screenshot"
           ? ["format", "quality", "maxWidth", "fullResolution", "display", "region"]
+          : tool === "screen_record"
+            ? ["durationSec", "display", "showClicks", "captureAudio"]
           : tool === "input_sequence"
             ? []
       : tool === "harness_start" || tool === "pi_start"
@@ -194,7 +201,7 @@ export class MachineHost extends DurableObject<HostEnv> {
     this.pending.delete(frame.id);
     console.log("machinectl_tool_timing", { tool: pending.tool, roundTripMs: Date.now() - pending.dispatchedAt, toolExecMs: frame.metrics?.toolExecMs ?? null, resultBytes: frame.metrics?.resultBytes ?? (frame.ok ? byteLength(frame.content) : byteLength(frame.error)) });
     pending.resolve(frame.ok
-      ? { ok: true, content: safeText(frame.content, RESULT_BYTE_LIMIT) }
+      ? { ok: true, content: safeText(frame.content, resultByteLimit(pending.tool)) }
       : { ok: false, error: safeText(frame.error, 8_192) });
   }
 
