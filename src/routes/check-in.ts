@@ -2,27 +2,56 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { composeOwnerCheckIn, type CheckInSources } from "../check-in";
+import { ACTIONABLE_NOTIFICATION_KINDS } from "../notify";
+
+const ACTIONABLE_KIND_PLACEHOLDERS = ACTIONABLE_NOTIFICATION_KINDS.map(() => "?").join(",");
+const ACTIONABLE_KIND_BINDS: string[] = [...ACTIONABLE_NOTIFICATION_KINDS];
 
 export async function readOwnerCheckIn(env: AppEnv["Bindings"], ownerEmail: string) {
   const owner = ownerEmail.toLowerCase();
-  const [attention, jobs, openRuns, completedRuns, failedRuns, attentionTotal, activeJobsTotal, openRunsTotal, completedRunsTotal, failedRunsTotal] = await Promise.all([
-    env.DB.prepare("SELECT id, session_id, kind, title, body, href, created_at FROM attention_items WHERE owner_email = ? AND seen_at IS NULL ORDER BY created_at DESC LIMIT 10").bind(owner).all<CheckInSources["attention"][number]>(),
+  const actionableSampleSql = `SELECT id, session_id, kind, title, body, href, created_at FROM attention_items WHERE owner_email = ? AND seen_at IS NULL AND kind IN (${ACTIONABLE_KIND_PLACEHOLDERS}) ORDER BY created_at DESC LIMIT 10`;
+  const informationalSampleSql = `SELECT id, session_id, kind, title, body, href, created_at FROM attention_items WHERE owner_email = ? AND seen_at IS NULL AND (kind IS NULL OR kind NOT IN (${ACTIONABLE_KIND_PLACEHOLDERS})) ORDER BY created_at DESC LIMIT 10`;
+  const actionableTotalSql = `SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL AND kind IN (${ACTIONABLE_KIND_PLACEHOLDERS})`;
+  const informationalTotalSql = `SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL AND (kind IS NULL OR kind NOT IN (${ACTIONABLE_KIND_PLACEHOLDERS}))`;
+
+  const [
+    actionableSample,
+    informationalSample,
+    jobs,
+    openRuns,
+    completedRuns,
+    failedRuns,
+    attentionTotal,
+    actionableTotal,
+    informationalTotal,
+    activeJobsTotal,
+    openRunsTotal,
+    completedRunsTotal,
+    failedRunsTotal,
+  ] = await Promise.all([
+    env.DB.prepare(actionableSampleSql).bind(owner, ...ACTIONABLE_KIND_BINDS).all<CheckInSources["attention"][number]>(),
+    env.DB.prepare(informationalSampleSql).bind(owner, ...ACTIONABLE_KIND_BINDS).all<CheckInSources["attention"][number]>(),
     env.DB.prepare("SELECT id, name, status, next_run_at, last_error FROM jobs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT 20").bind(owner).all<CheckInSources["jobs"][number]>(),
     env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status IN ('open', 'running') ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
     env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status = 'completed' ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
     env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status = 'failed' ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(owner).first<{ count: number }>(),
+    env.DB.prepare(actionableTotalSql).bind(owner, ...ACTIONABLE_KIND_BINDS).first<{ count: number }>(),
+    env.DB.prepare(informationalTotalSql).bind(owner, ...ACTIONABLE_KIND_BINDS).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM jobs WHERE owner_email = ? AND status = 'active'").bind(owner).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status IN ('open', 'running')").bind(owner).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status = 'completed'").bind(owner).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status = 'failed'").bind(owner).first<{ count: number }>(),
   ]);
   return composeOwnerCheckIn({
-    attention: attention.results ?? [],
+    attention: actionableSample.results ?? [],
+    informationalAttention: informationalSample.results ?? [],
     jobs: jobs.results ?? [],
     runs: [...(failedRuns.results ?? []), ...(openRuns.results ?? []), ...(completedRuns.results ?? [])],
     totals: {
       attention: attentionTotal?.count ?? 0,
+      attentionActionable: actionableTotal?.count ?? 0,
+      attentionInformational: informationalTotal?.count ?? 0,
       activeJobs: activeJobsTotal?.count ?? 0,
       openRuns: openRunsTotal?.count ?? 0,
       completedRuns: completedRunsTotal?.count ?? 0,

@@ -23,7 +23,8 @@
     } catch {}
   }
 
-  const BUCKET_PRIORITY = ["failedRuns", "attention", "openRuns", "activeJobs", "completedRuns"];
+  // Actionable attention outranks informational updates; informational sits above completedRuns.
+  const BUCKET_PRIORITY = ["failedRuns", "attention", "openRuns", "activeJobs", "informationalAttention", "completedRuns"];
 
   function primaryBucket(buckets?: Bucket[]): Bucket | null {
     const actionable = (buckets ?? []).filter((bucket) => bucket.total > 0 && bucket.steer);
