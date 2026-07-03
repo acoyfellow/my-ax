@@ -38,7 +38,7 @@ shareable_feature:
   one_sentence: what changed
   owner_visible_surface: check-in | attention | settings | chat | proof | other
   production_proof: exact command or journey proving it
-  why_exciting: why this is worth telling another builder
+  measured_owner_loop_improvement: concrete metric delta, new receipt/proof, or newly possible owner action
   next_recipe: what this makes cheaper, safer, or possible next
 ```
 
@@ -52,12 +52,12 @@ At the start of every round, explicitly list the atomic questions or work packag
 
 Default round shape:
 
-1. Run one tiny explicit runner canary if the current runner has not already succeeded in this campaign.
-2. Launch **6–12 bounded read-only scouts/critics in parallel** for independent external, internal, local, production-evidence, security, UX, historical, and testability questions. Use fewer only when fewer independent atoms exist, and record why.
+1. Run one tiny explicit runner canary if the current runner has not already succeeded in this campaign. A returned verified receipt is green. A timeout is red unless `terrarium_status` proves the exact canary worker is alive and producing output; otherwise retry once with the alternate explicit runner. Two equivalent zero-output stalls trigger the inline fallback and are recorded.
+2. Launch as many bounded read-only scouts/critics as there are truly independent external, internal, local, production-evidence, security, UX, historical, and testability atoms, up to a soft cap of 12. A broad discovery round normally exposes 6–12 real atoms, but never fabricate work to satisfy a lower bound.
 3. As soon as evidence freezes viable outcomes, launch **2–4 isolated prototype/build lanes in parallel** when candidates or implementations do not touch the same files/state. Each lane uses `isolation: "worktree"` or `"copy"`, a narrow ownership envelope, and a receipt contract.
-4. Launch independent test, adversarial review, public-leak review, and production-proof-plan lanes concurrently with builds whenever they do not depend on the final patch.
+4. Launch independent test, adversarial review, public-leak review, and production-proof-plan lanes concurrently with builds whenever they do not depend on the final patch. Use `allSettled` for research, review, and disjoint builds; `race`/`any` is allowed only for explicitly competing disposable prototypes.
 5. Reconcile the whole returned set once per round. Parent-verifies-child is mandatory.
-6. Launch the next smallest parallel batch immediately from reconciled evidence. Sequential execution is allowed only for a named dependency, shared-file integration, irreversible production mutation, deployment ordering, or proof against the exact deployed revision.
+6. Launch the next smallest parallel batch immediately from reconciled evidence. Sequential execution is allowed only for a named dependency, shared-file integration, irreversible production mutation, deployment ordering, or proof against the exact deployed revision. Every serialization receipt names the exact conflicting file path, revision, or DO/D1/external resource; category-only prose is invalid.
 
 Do not busy-poll or sleep. Background batches return through terminal callbacks and `/loop` ticks. Use `allSettled` for research/review so one flaky child does not discard the round. Bound every child with explicit paths, timeout, PASS criteria, prohibited mutations, and a machine-verifiable receipt.
 
@@ -221,7 +221,9 @@ Demo/video work is optional after production proof and does not block operationa
 
 For normal `/loop`, after each proved feature decide whether the run has two meaningful/exciting features to share. If not, repeat with a new wide parallel research/experiment batch. Maintain one parent-controlled landing/integration lane at a time, while disjoint isolated writers, research scouts, proof designers, and critics continue concurrently.
 
-Before declaring completion, spawn a fresh independent read-only Terrarium auditor that did not author a selected patch or the round reconciliation. It must inspect artifacts and return `PASS`, `FAIL`, or `INCONCLUSIVE` against the stop gate. `INCONCLUSIVE` is not completion. The parent may emit a completion candidate, but only an auditor `PASS` closes the campaign. Delete the `loops_task` driver immediately when the gate passes or a named human/unreachable dependency is the only remaining blocker.
+Before declaring completion, spawn a fresh independent read-only Terrarium auditor that did not author a selected patch or the round reconciliation. It must inspect artifacts and return `PASS`, `FAIL`, or `INCONCLUSIVE` against the stop gate. `INCONCLUSIVE` is not completion. Retry an inconclusive auditor at most once; a second inconclusive result stops the driver with a named human-review blocker rather than auditor shopping. The parent may emit a completion candidate, but only an auditor `PASS` closes the campaign. Delete the `loops_task` driver immediately when the gate passes or a named human/unreachable dependency is the only remaining blocker.
+
+Deployment and production proof of feature two begin only after feature one's exact-revision production proof and release summary are recorded. This is an intentional exact-deployment dependency; research, disjoint builds, and proof-plan work for feature two continue in parallel.
 
 ## Invariants
 
@@ -233,11 +235,11 @@ Before declaring completion, spawn a fresh independent read-only Terrarium audit
 - D1 is the human/search/export projection; Think owns execution/model state.
 - Restore and ownership checks fail closed. Never print, persist, or commit credentials.
 - Preserve the seven-minute repository rules in [`docs/loop/repository-standard.md`](docs/loop/repository-standard.md).
-- Browser/PWA steering uses cmux or owner-authenticated My AX APIs/MCP. Do not use standalone CDP, Chrome For Testing, or browser-specific bypass tools unless the user explicitly overrides this standing rule.
+- Browser/PWA steering uses cmux or owner-authenticated My AX APIs/MCP. The repository's approved `cmux-browser` proof wrapper is allowed; standalone CDP, direct Chrome For Testing, or browser-specific bypass tools are not unless the user explicitly overrides this standing rule.
 
 ## Terrarium + `/loop` driver behavior
 
-- At campaign start, create `.context/loops/myax-speed-terraloop/STATE.md`, then create a recurring `loops_task` driver with the goal, state path, active run/group IDs, reconciliation rule, stop gate, and instruction to delete itself on terminal PASS/blocker.
+- At campaign start, create `.context/loops/myax-speed-terraloop/STATE.md`, then create a recurring `loops_task` driver with the goal, state path, active run/group IDs, reconciliation rule, stop gate, and instruction to delete itself on terminal PASS/blocker. Every campaign has a hard budget of at most 12 reconciled rounds or 24 hours, whichever comes first; at the boundary, emit verified-disproved/no-change or a named blocker and stop rather than spinning.
 - Terrarium is mandatory. Use `terrarium_spawn_batch` for independent atoms and `terrarium_spawn` only for a truly single bounded dependency or the independent final audit.
 - Prefer background fanout plus callback-driven continuation. The Pi `terrarium-autocontinue` extension tracks spawned run IDs and resumes the parent on terminal callback delivery.
 - Do not sleep or busy-poll after a background spawn. End the turn and handle terminal callbacks or the next `/loop` tick.
