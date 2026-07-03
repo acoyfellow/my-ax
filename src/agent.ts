@@ -38,7 +38,7 @@ import { autoTrustMode, initialStatusForPromotion } from "./auto-trust";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
-import { recipeApprovalDecision } from "./recipe-approval-policy";
+import { recipeApprovalDecision, shouldPersistSuggestedRecipe } from "./recipe-approval-policy";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -1071,12 +1071,19 @@ export class MyAgent extends Think<Env> {
       const auto = trustMode === "auto";
       const status = initialStatusForPromotion(this.env);
       const raw = parsed.suggestedRecipe as Record<string, unknown>;
+      const capabilities = Array.isArray(raw.capabilities) ? raw.capabilities.map(String) : [];
+      const decision = recipeApprovalDecision({
+        autoTrust: auto,
+        capabilities,
+        portable: typeof raw.portable === "boolean" ? raw.portable : undefined,
+      });
+      if (!shouldPersistSuggestedRecipe(decision)) continue;
       const recipe = await new SavedRecipeService(this.env, identity.email).create({
         name: typeof raw.name === "string" ? raw.name : `WorkCodeRecipe_${Date.now()}`,
         description: typeof raw.description === "string" ? raw.description : "Promoted from a successful work_code run.",
         inputSchema: raw.inputSchema && typeof raw.inputSchema === "object" ? raw.inputSchema : { type: "object", properties: {} },
         code: typeof raw.code === "string" ? raw.code : "return null;",
-        capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : [],
+        capabilities,
         sourceRunId: this.name,
         status,
       });
@@ -1094,11 +1101,6 @@ export class MyAgent extends Think<Env> {
         }
       }
       this.recipesSavedThisTurn.push({ id: recipe.id, name: recipe.name, status: recipe.status, trustMode });
-      const decision = recipeApprovalDecision({
-        autoTrust: auto,
-        capabilities: Array.isArray(raw.capabilities) ? raw.capabilities.map(String) : [],
-        portable: typeof raw.portable === "boolean" ? raw.portable : undefined,
-      });
       if (decision.notify) {
         await notifyOwner(this.env, identity.email, {
           kind: "recipe.approval",
