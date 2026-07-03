@@ -59,6 +59,36 @@ export const MODELS: ModelEntry[] = [
     vision: true,
     label: "GPT-5.5",
   },
+  {
+    id: "gpt-5.6-luna",
+    route: "gateway-openai",
+    owned_by: "openai",
+    context: 400_000,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "GPT-5.6 Luna",
+  },
+  {
+    id: "gpt-5.6-sol",
+    route: "gateway-openai",
+    owned_by: "openai",
+    context: 400_000,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "GPT-5.6 Sol",
+  },
+  {
+    id: "gpt-5.6-terra",
+    route: "gateway-openai",
+    owned_by: "openai",
+    context: 400_000,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "GPT-5.6 Terra",
+  },
 ];
 
 export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
