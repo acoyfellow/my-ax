@@ -36,9 +36,15 @@ export class SavedRecipeError extends Error {
 
 export function savedRecipeExecutionCode(recipeCode: string, input: Record<string, unknown>): string {
   const trimmed = recipeCode.trim().replace(/;+$/, "");
+  // Candidate metadata is an auditable source comment, not part of the arrow
+  // expression. Remove only that first-line marker before detecting/wrapping
+  // a saved async arrow; legacy body-style recipes remain unchanged.
+  const executable = trimmed
+    .replace(/^[\uFEFF \t]*\/\/[ \t]*reusable-tool[ \t]*:[^\r\n]*(?:\r?\n|$)/, "")
+    .trimStart();
   const inputJson = JSON.stringify(input);
-  if (/^(async\s*)?(\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(trimmed)) {
-    return `async () => { const input = ${inputJson}; return await (${trimmed})(input); }`;
+  if (/^(async\s*)?(\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(executable)) {
+    return `async () => { const input = ${inputJson}; return await (${executable})(input); }`;
   }
   return `async () => { const input = ${inputJson};\n${recipeCode}\n}`;
 }
@@ -71,7 +77,10 @@ export function validateSavedRecipeInput(input: unknown): SavedRecipeInput {
   const cleanCapabilities = capabilities.map((capability) => typeof capability === "string" ? capability.trim() : "");
   const invalid = cleanCapabilities.filter((capability) => !CAPABILITY_PATTERN.test(capability));
   if (invalid.length) throw new SavedRecipeError("InvalidInput", `invalid capabilities: ${invalid.join(", ")}`);
-  const status = body.status === "pending" ? "pending" : body.status === "disabled" ? "disabled" : "enabled";
+  // Creation is owner-gated by default. Existing explicit auto-trust/native
+  // callers may still request enabled, but omitted or unknown status can never
+  // make unreviewed code runnable.
+  const status = body.status === "enabled" ? "enabled" : body.status === "disabled" ? "disabled" : "pending";
   const sourceRunId = typeof body.sourceRunId === "string" && body.sourceRunId.trim() ? body.sourceRunId.trim() : null;
   return { name, description, inputSchema, code, capabilities: [...new Set(cleanCapabilities)].sort(), sourceRunId, status };
 }
