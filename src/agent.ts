@@ -31,10 +31,11 @@ import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
 import { delegateCompletionNotification } from "./delegate-receipt";
-import { SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
+import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { resolveBridgeOrigin } from "./bridge-origin";
 import { autoTrustMode, initialStatusForPromotion } from "./auto-trust";
+import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
@@ -50,7 +51,7 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 
 Computer work is exposed through two tools:
 - work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and cloudbox.* is clean bounded repository work with receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, cloudbox, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved saved snippet when an enabled snippet clearly matches the task. Saved snippets are projected from the owner-curated D1 saved_recipes table into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every snippet today carries projected provenance. Snippet runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code.
+- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, cloudbox, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved saved snippet when an enabled snippet clearly matches the task. Saved snippets are projected from the owner-curated D1 saved_recipes table into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every snippet today carries projected provenance. Snippet runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner sees marked candidates as pending recipes in Settings → Recipes and approves them one-by-one; unmarked runs stay inline forever. Do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Cloudbox are needed.
@@ -1059,60 +1060,117 @@ export class MyAgent extends Think<Env> {
   private async promoteSuggestedRecipe(result: ChatResponseResult): Promise<void> {
     const identity = this.identity();
     if (!identity || result.status !== "completed") return;
-    const toolOutputs = result.message.parts.flatMap((part) => {
-      const candidate = part as { type?: string; output?: unknown; state?: string };
-      if (!candidate.type?.startsWith("tool-") || candidate.state !== "output-available") return [];
-      return [candidate.output];
+    // Only work_code outputs are candidates for promotion. Every other tool's
+    // JSON output is opaque to this policy — a match on suggestedRecipe there
+    // would let an unrelated tool payload smuggle a recipe onto the shelf.
+    // The tool-name filter narrows the search to work_code parts only.
+    const workCodeOutputs = result.message.parts.flatMap((part) => {
+      const candidate = part as { type?: string; toolName?: string; output?: unknown; state?: string };
+      if (candidate.state !== "output-available") return [];
+      // Think surfaces AI SDK parts as either type "tool-work_code" (name in
+      // the type suffix) or type "tool-call" with a toolName field. Accept
+      // both so upstream tool-part shape drift doesn't silently drop
+      // promotions.
+      const isWorkCode = candidate.type === "tool-work_code"
+        || (candidate.type?.startsWith("tool-") && candidate.toolName === "work_code");
+      return isWorkCode ? [candidate.output] : [];
     });
-    for (const output of toolOutputs) {
+    // Auto-trust mode is still read so recipesSavedThisTurn keeps its
+    // historical shape and any deploy that had RECIPE_AUTOTRUST=1 still logs
+    // that fact — but the frozen contract forces every eligible candidate to
+    // pending regardless, so an eligible suggestion is *always* owner-gated.
+    // The legacy auto-trust helpers (autoTrustMode, initialStatusForPromotion,
+    // shouldAutoTrust) remain intact for other call sites and future policy.
+    const trustMode = autoTrustMode(this.env);
+    for (const output of workCodeOutputs) {
       const text = typeof output === "string" ? output : JSON.stringify(output);
-      let parsed: { ok?: boolean; suggestedRecipe?: unknown } | null = null;
+      let parsed:
+        | {
+            ok?: boolean;
+            suggestedRecipe?: unknown;
+            reusableToolCandidate?: unknown;
+            portable?: unknown;
+            inferredCapabilities?: unknown;
+          }
+        | null = null;
       try { parsed = JSON.parse(text); } catch { parsed = null; }
       if (!parsed?.ok || !parsed.suggestedRecipe) continue;
-      // Reusable auto-trust predicate (Round 02 objection #8) — shared
-      // with any future native snippet promotion path so trust mode is
-      // not re-implemented as inline literal env checks.
-      const trustMode = autoTrustMode(this.env);
-      const auto = trustMode === "auto";
-      const status = initialStatusForPromotion(this.env);
+      // Marker-driven eligibility gate (frozen contract). A work_code result
+      // without an eligible reusableToolCandidate is inline-only, no matter
+      // what suggestedRecipe looks like.
+      const candidate = parsed.reusableToolCandidate as ReusableToolCandidate | undefined;
+      if (!candidate || !candidate.eligible) continue;
       const raw = parsed.suggestedRecipe as Record<string, unknown>;
       const capabilities = Array.isArray(raw.capabilities) ? raw.capabilities.map(String) : [];
+      // High-authority machine./cloudbox. code with portable=false stays
+      // inline. This is the same rule recipeApprovalDecision has always
+      // enforced; the marker gate is additive, not a replacement.
       const decision = recipeApprovalDecision({
-        autoTrust: auto,
+        // Force autoTrust=false into the decision so notify/persist logic is
+        // identical to the owner-gated path. The trustMode value is preserved
+        // for the recipesSavedThisTurn receipt below.
+        autoTrust: false,
         capabilities,
         portable: typeof raw.portable === "boolean" ? raw.portable : undefined,
       });
       if (!shouldPersistSuggestedRecipe(decision)) continue;
-      const recipe = await new SavedRecipeService(this.env, identity.email).create({
-        name: typeof raw.name === "string" ? raw.name : `WorkCodeRecipe_${Date.now()}`,
-        description: typeof raw.description === "string" ? raw.description : "Promoted from a successful work_code run.",
-        inputSchema: raw.inputSchema && typeof raw.inputSchema === "object" ? raw.inputSchema : { type: "object", properties: {} },
-        code: typeof raw.code === "string" ? raw.code : "return null;",
-        capabilities,
-        sourceRunId: this.name,
-        status,
-      });
-      // Project to cm_snippets fail-soft so the codemode-native snippet
-      // surface stays in sync with newly-promoted recipes without coupling
-      // promotion success to the projection.
-      if (recipe.status === "enabled") {
-        try {
-          const row = await this.env.DB.prepare("SELECT * FROM saved_recipes WHERE id = ? AND owner_email = ?")
-            .bind(recipe.id, identity.email.toLowerCase())
-            .first<import("./saved-recipes").SavedRecipe>();
-          if (row) await projectSavedRecipe(this.env, row);
-        } catch (error) {
-          console.error("cm_snippet_projection_failed", { recipeId: recipe.id, err: error instanceof Error ? error.message : String(error) });
+      // Pending-only promotion (frozen contract). Every eligible candidate
+      // lands as pending regardless of MY_AX_RECIPE_AUTOTRUST/RECIPE_AUTOTRUST —
+      // the marker itself is the model's opt-in, not blanket auto-trust. The
+      // legacy env flags are read (trustMode above) only to keep the receipt
+      // shape stable; they no longer bypass approval for the marker path.
+      const status: "pending" = "pending";
+      // Conflict fail-soft per iteration. A duplicate name from a previous
+      // turn must not abort promotion of every later candidate in this same
+      // result — catch InvalidInput / Conflict inside the loop, log, and
+      // continue with the next candidate.
+      let recipe;
+      try {
+        recipe = await new SavedRecipeService(this.env, identity.email).create({
+          name: typeof raw.name === "string" && raw.name.trim() ? raw.name : `WorkCodeRecipe_${Date.now()}`,
+          description: typeof raw.description === "string" ? raw.description : "Promoted from a successful work_code run.",
+          inputSchema: raw.inputSchema && typeof raw.inputSchema === "object" ? raw.inputSchema : { type: "object", properties: {} },
+          code: typeof raw.code === "string" ? raw.code : "return null;",
+          capabilities,
+          sourceRunId: this.name,
+          status,
+        });
+      } catch (error) {
+        if (error instanceof SavedRecipeError) {
+          console.error("recipe_promotion_skipped", {
+            sessionId: this.name,
+            fingerprint: candidate.fingerprint,
+            code: error.code,
+            err: error.message,
+          });
+          this.recipesSavedThisTurn.push({
+            ok: false,
+            fingerprint: candidate.fingerprint,
+            reason: error.code,
+            error: error.message,
+          });
+          continue;
         }
+        throw error;
       }
-      this.recipesSavedThisTurn.push({ id: recipe.id, name: recipe.name, status: recipe.status, trustMode });
+      this.recipesSavedThisTurn.push({
+        id: recipe.id,
+        name: recipe.name,
+        status: recipe.status,
+        trustMode,
+        fingerprint: candidate.fingerprint,
+      });
       if (decision.notify) {
+        // Owner notification uses the rendered Settings deep-link (not the
+        // legacy /api/recipes/<id>/approval JSON endpoint) so a tap lands on
+        // the Recipes list where the owner can review, edit, and enable the
+        // pending candidate — the single approval surface for the marker path.
         await notifyOwner(this.env, identity.email, {
           kind: "recipe.approval",
           sessionId: this.name,
           title: `Approve recipe: ${recipe.name}`,
           body: `${recipe.description} Pending recipes are not runnable until approved.`,
-          href: `/api/recipes/${encodeURIComponent(recipe.id)}/approval`,
+          href: `/?action=settings&section=recipes`,
         }).catch((error) => console.error("recipe_approval_attention_failed", { sessionId: this.name, err: String(error) }));
       }
     }
