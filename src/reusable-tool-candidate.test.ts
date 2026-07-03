@@ -40,9 +40,10 @@ test("parseReusableMarker returns null when the marker name is empty or punctuat
   assert.equal(parseReusableMarker("// reusable-tool: !!!\nasync () => ({})"), null);
 });
 
-test("parseReusableMarker returns the cleaned snake_case name", () => {
+test("parseReusableMarker returns the cleaned first-line marker name", () => {
   assert.equal(parseReusableMarker("// reusable-tool: Disk Health Check\nasync () => ({})"), "disk_health_check");
   assert.equal(parseReusableMarker("//reusable-tool:disk-health-check\nasync () => ({})"), "disk_health_check");
+  assert.equal(parseReusableMarker("async () => {\n// reusable-tool: too late\nreturn {};\n}"), null);
 });
 
 test("reusableToolNameFromMarker prefers the marker name over the heuristic fallback", () => {
@@ -54,9 +55,9 @@ test("reusableToolNameFromMarker prefers the marker name over the heuristic fall
 // Normalization + fingerprint stability
 // ---------------------------------------------------------------------------
 
-test("normalizeReusableSource strips comments and collapses whitespace", () => {
-  const raw = "// reusable-tool: fx\n/* block */ async  (ctx)   =>\n  ({ ok: true }) // trailing";
-  assert.equal(normalizeReusableSource(raw), "async (ctx) => ({ ok: true })");
+test("normalizeReusableSource removes only marker metadata and preserves program text", () => {
+  const raw = "// reusable-tool: fx\r\n/* block */ async  (ctx)   =>  \r\n  ({ ok: true }) // trailing;;;";
+  assert.equal(normalizeReusableSource(raw), "/* block */ async  (ctx)   =>\n  ({ ok: true }) // trailing");
 });
 
 test("normalizeReusableSource preserves URLs in string literals (does not strip //)", () => {
@@ -64,10 +65,16 @@ test("normalizeReusableSource preserves URLs in string literals (does not strip 
   assert.match(normalizeReusableSource(raw), /https:\/\/example\.com/);
 });
 
-test("reusableToolFingerprint is stable across whitespace/comment noise", () => {
-  const a = "// reusable-tool: fx\nasync (ctx) => { return await ctx.workspace.list({ path: '/x' }); }";
-  const b = "//   reusable-tool:  fx  \n\nasync   (ctx)   =>   {   return await ctx.workspace.list({ path: '/x' });   }";
+test("reusableToolFingerprint is stable across marker, line-ending, and trailing-semicolon noise", () => {
+  const a = "// reusable-tool: fx\nasync (ctx) => { return await ctx.workspace.list({ path: '/x' }); };";
+  const b = "//   reusable-tool:  renamed  \r\nasync (ctx) => { return await ctx.workspace.list({ path: '/x' }); };;;";
   assert.equal(reusableToolFingerprint(a, ["workspace.list"]), reusableToolFingerprint(b, ["workspace.list"]));
+});
+
+test("reusableToolFingerprint does not collapse distinct program text", () => {
+  const a = "// reusable-tool: fx\nasync () => { return\n{ ok: true }; }";
+  const b = "// reusable-tool: fx\nasync () => { return { ok: true }; }";
+  assert.notEqual(reusableToolFingerprint(a, []), reusableToolFingerprint(b, []));
 });
 
 test("reusableToolFingerprint is sensitive to inferred capabilities", () => {
@@ -111,6 +118,17 @@ test("isValidSuggestedShape accepts a well-formed suggestion", () => {
 // ---------------------------------------------------------------------------
 // Full eligibility gate
 // ---------------------------------------------------------------------------
+
+test("evaluateReusableToolCandidate: failed execution is never eligible", () => {
+  const decision = evaluateReusableToolCandidate({
+    executionSucceeded: false,
+    sourceCode: nonTrivialCode,
+    inferredCapabilities: ["workspace.list"],
+    suggestedRecipe: validShape,
+  });
+  assert.equal(decision.eligible, false);
+  assert.equal(decision.reason, "execution_failed");
+});
 
 test("evaluateReusableToolCandidate: no marker => not eligible (no_marker)", () => {
   const decision = evaluateReusableToolCandidate({
