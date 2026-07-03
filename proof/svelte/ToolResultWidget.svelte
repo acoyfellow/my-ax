@@ -103,27 +103,54 @@
   {/if}
 {:else if widget.kind === "inline-raster-image"}
   <img class="tool-call__inline-image" src={widget.src} alt={widget.alt} loading="lazy" data-tool-widget="inline-raster-image" />
-{:else if widget.kind === "saved-recipe-candidate"}
-  <section class="tool-call__result recipe-candidate" data-tool-widget="saved-recipe-candidate" data-ok={widget.ok ? "1" : "0"}>
-    <div class="recipe-candidate__head">
-      <strong>{widget.ok ? "Snippet candidate" : "Review before saving"}</strong>
-      <code title="Compatibility API endpoint">{widget.saveEndpoint}</code>
+{:else if widget.kind === "reusable-tool-candidate"}
+  <section
+    class="tool-call__result reusable-tool-candidate"
+    data-tool-widget="reusable-tool-candidate"
+    data-fingerprint={widget.fingerprint}
+  >
+    <div class="reusable-tool-candidate__head">
+      <strong>Reusable tool</strong>
+      <span class="reusable-tool-candidate__name">{widget.proposedName}</span>
     </div>
-    <p>Save this reviewed work_code source as a snippet you approve. It stays disabled until you enable it.</p>
+    {#if widget.proposedDescription}
+      <p class="reusable-tool-candidate__desc">{widget.proposedDescription}</p>
+    {/if}
     {#if widget.capabilities.length}
-      <div class="recipe-candidate__caps" aria-label="Inferred capabilities">
+      <div class="reusable-tool-candidate__caps" aria-label="Inferred capabilities">
         {#each widget.capabilities as capability}
           <code>{capability}</code>
         {/each}
       </div>
     {:else}
-      <p class="recipe-candidate__muted">No host capabilities were used.</p>
+      <p class="reusable-tool-candidate__muted">No host capabilities were used.</p>
     {/if}
-    <details>
+    <details class="reusable-tool-candidate__review">
       <summary>Review source and result</summary>
+      <div class="reusable-tool-candidate__source-label" aria-label="Source">{widget.source}</div>
       <pre>{widget.sourceCode}</pre>
       {#if widget.resultPreview}<pre>{widget.resultPreview}</pre>{/if}
     </details>
+    <!--
+      No API write or auto-enable in the chat surface: the button only hands off
+      to Settings, where the owner can inspect, edit, and enable the reusable
+      tool themselves. The dispatched CustomEvent detail carries the proposed
+      name so Settings can scroll to it.
+    -->
+    <button
+      type="button"
+      class="reusable-tool-candidate__action inline-flex items-center justify-center rounded-md bg-brand text-bg text-sm font-semibold px-4 py-2.5 min-h-[44px] w-full sm:w-auto hover:bg-brand/90 active:bg-brand/80 focus:outline-none focus:ring-2 focus:ring-brand/60 transition-colors"
+      aria-label={`Review reusable tool ${widget.proposedName}`}
+      data-tool-widget-action="review-reusable-tool"
+      onclick={() => {
+        if (typeof window === "undefined") return;
+        window.dispatchEvent(new CustomEvent("my-ax:settings-open", {
+          detail: { section: "recipes", recipeName: widget.proposedName },
+        }));
+      }}
+    >
+      Review reusable tool
+    </button>
   </section>
 {:else}
   <pre class="tool-call__result" data-tool-widget="raw-text">{widget.text}</pre>

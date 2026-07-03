@@ -6,7 +6,7 @@
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import ToolResultWidget from "./ToolResultWidget.svelte";
-  import { resolveToolResultWidget } from "./tool-result-widgets";
+  import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
@@ -134,6 +134,28 @@
     }
     return blocks;
   }
+
+  // Reusable-tool candidate receipts are noisy when the model re-runs the same
+  // work_code call — every run emits an identical card. Within the currently
+  // loaded conversation, keep only the newest card per fingerprint; older
+  // occurrences keep their receipt row but downgrade to the ordinary inert
+  // raw-text preview so a second card never appears. Historical results
+  // without the metadata continue to render whatever they resolve to.
+  const visibleReusableCandidateIds = $derived.by<Set<string>>(() => {
+    const receipts: CandidateReceipt[] = [];
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+      for (const part of message.parts) {
+        if (part.kind !== "tool") continue;
+        const tool = part.tool;
+        if (tool.state !== "done") continue;
+        const widget = resolveToolResultWidget(tool.result, tool.name);
+        const fingerprint = widget.kind === "reusable-tool-candidate" ? widget.fingerprint : undefined;
+        receipts.push({ id: tool.id, widgetKind: widget.kind, fingerprint });
+      }
+    }
+    return selectVisibleReusableToolCandidates(receipts);
+  });
   interface MessageView {
     id: string;
     clientMsgId?: string;
@@ -1887,8 +1909,17 @@
                            row with internal separators (see .msg-tools--group). -->
                       <div class="msg-tools msg-tools--group" data-count={block.tools.length}>
                         {#each block.tools as tool (tool.id)}
-                          {@const resultWidget = resolveToolResultWidget(tool.result, tool.name)}
-                          <details class="tool-call" data-tool-id={tool.id} data-state={tool.state} data-tool-widget={resultWidget.kind} open={toolIsOpen(tool, resultWidget.kind)} ontoggle={(e) => setToolOpen(tool.id, (e.currentTarget as HTMLDetailsElement).open)}>
+                          {@const resolved = resolveToolResultWidget(tool.result, tool.name)}
+                          <!--
+                            Duplicate collapse: preserve every underlying receipt
+                            container, but if this receipt resolves to a reusable-tool
+                            candidate and a newer receipt for the same fingerprint
+                            exists in this conversation, render it as an inert raw
+                            receipt instead of emitting another candidate card.
+                          -->
+                          {@const isSuppressedCandidate = resolved.kind === "reusable-tool-candidate" && !visibleReusableCandidateIds.has(tool.id)}
+                          {@const effectiveKind = isSuppressedCandidate ? "raw-text" : resolved.kind}
+                          <details class="tool-call" data-tool-id={tool.id} data-state={tool.state} data-tool-widget={effectiveKind} data-suppressed-candidate={isSuppressedCandidate ? "1" : "0"} open={!isSuppressedCandidate && toolIsOpen(tool, effectiveKind)} ontoggle={(e) => setToolOpen(tool.id, (e.currentTarget as HTMLDetailsElement).open)}>
                             <summary class="tool-call__summary">
                               <span class="tool-call__pip" aria-hidden="true"></span>
                               <span class="tool-call__name">{tool.name}</span>
@@ -1901,6 +1932,8 @@
                             <pre class="tool-call__argsfull">{JSON.stringify(tool.arguments, null, 2)}</pre>
                             {#if tool.state === "pending"}
                               <pre class="tool-call__result">(awaiting result…)</pre>
+                            {:else if isSuppressedCandidate}
+                              <pre class="tool-call__result" data-tool-widget="raw-text">{typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result, null, 2)}</pre>
                             {:else}
                               <ToolResultWidget result={tool.result} toolName={tool.name} />
                             {/if}
