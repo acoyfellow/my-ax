@@ -41,7 +41,22 @@ export type ToolResultWidget =
     }
   | { kind: "inline-raster-image"; src: string; alt: string }
   | { kind: "svelte-artifact"; src: string; title: string; artifactId: string }
-  | { kind: "saved-recipe-candidate"; ok: boolean; sourceCode: string; capabilities: string[]; resultPreview?: string; saveEndpoint: string }
+  | {
+      kind: "reusable-tool-candidate";
+      /** Nonempty, model-adjacent identity used to collapse duplicate cards within one conversation. */
+      fingerprint: string;
+      /** Proposed identity as suggested by the producer — the owner edits it in Settings before enabling. */
+      proposedName: string;
+      proposedDescription: string;
+      /** Exact capabilities the sandboxed run actually used (allowlisted strings). */
+      capabilities: string[];
+      /** Short label naming the source of the code (currently always the work_code call itself). */
+      source: string;
+      /** Bounded raw source preview for the disclosure panel. Never HTML. */
+      sourceCode: string;
+      /** Bounded JSON preview of result or error, for the disclosure panel. */
+      resultPreview?: string;
+    }
   | { kind: "raw-text"; text: string };
 
 function decodeJsonOnce(value: unknown): unknown {
@@ -164,16 +179,85 @@ function browserRunWidget(value: unknown): ToolResultWidget | null {
   };
 }
 
-function savedRecipeCandidateWidget(value: unknown, toolName: string): ToolResultWidget | null {
+/** Recognized capability namespace prefixes, gate-kept so we never surface arbitrary
+ *  producer-supplied strings on the owner-visible card. */
+const CAPABILITY_ALLOWED_PREFIXES = ["workspace.", "machine.", "cloudbox.", "codemode."];
+const CAPABILITY_MAX = 24;
+const PROPOSED_NAME_MAX = 80;
+const PROPOSED_DESCRIPTION_MAX = 240;
+const SOURCE_LABEL_MAX = 60;
+const SOURCE_CODE_MAX = 32_000;
+const RESULT_PREVIEW_MAX = 1_000;
+const FINGERPRINT_MAX = 128;
+
+function safeCapability(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (value.length === 0 || value.length > 64) return false;
+  if (!/^[a-z][a-z0-9]*\.[a-z_][a-z0-9_]*$/i.test(value)) return false;
+  return CAPABILITY_ALLOWED_PREFIXES.some((prefix) => value.startsWith(prefix));
+}
+
+/**
+ * Resolve a work_code tool result into a reusable-tool candidate card.
+ *
+ * Fails closed and returns null unless ALL of these hold:
+ *   - toolName === "work_code"
+ *   - ok === true (no error in the sandboxed run)
+ *   - reusableToolCandidate.eligible === true
+ *   - reusableToolCandidate.fingerprint is a nonempty, bounded string
+ *   - suggestedRecipe is a well-formed object with a nonempty proposed name
+ *   - inferredCapabilities is an array of allowlisted capability strings
+ *
+ * Any other shape falls through to the ordinary inert raw-text receipt.
+ */
+function reusableToolCandidateWidget(value: unknown, toolName: string): ToolResultWidget | null {
   if (toolName !== "work_code") return null;
   const decoded = decodeJsonOnce(value);
   if (typeof decoded !== "object" || decoded === null) return null;
   const result = decoded as Record<string, unknown>;
-  if (typeof result.sourceCode !== "string" || !Array.isArray(result.inferredCapabilities) || !("suggestedRecipe" in result)) return null;
-  const capabilities = result.inferredCapabilities.filter((item): item is string => typeof item === "string").slice(0, 24);
+
+  if (result.ok !== true) return null;
+
+  const candidate = result.reusableToolCandidate;
+  if (typeof candidate !== "object" || candidate === null) return null;
+  const meta = candidate as Record<string, unknown>;
+  if (meta.eligible !== true) return null;
+  if (typeof meta.fingerprint !== "string") return null;
+  const fingerprint = meta.fingerprint.trim();
+  if (!fingerprint || fingerprint.length > FINGERPRINT_MAX) return null;
+
+  const suggested = result.suggestedRecipe;
+  if (typeof suggested !== "object" || suggested === null) return null;
+  const recipe = suggested as Record<string, unknown>;
+  const proposedName = boundedText(recipe.name, PROPOSED_NAME_MAX);
+  if (!proposedName) return null;
+  const proposedDescription = boundedText(recipe.description, PROPOSED_DESCRIPTION_MAX) ?? "";
+
+  if (!Array.isArray(result.inferredCapabilities)) return null;
+  const capabilities = (result.inferredCapabilities as unknown[])
+    .filter(safeCapability)
+    .slice(0, CAPABILITY_MAX);
+  // Every reported capability must survive the allowlist — a producer that
+  // slips an unrecognized capability in should not silently render at all.
+  if (capabilities.length !== result.inferredCapabilities.length) return null;
+
+  if (typeof result.sourceCode !== "string" || result.sourceCode.length === 0) return null;
+
+  const sourceLabel = boundedText(result.source, SOURCE_LABEL_MAX) ?? "work_code";
+
   let resultPreview: string | undefined;
-  try { resultPreview = JSON.stringify(result.result ?? result.error ?? null, null, 2).slice(0, 1_000); } catch {}
-  return { kind: "saved-recipe-candidate", ok: result.ok !== false, sourceCode: result.sourceCode.slice(0, 32_000), capabilities, resultPreview, saveEndpoint: "/api/recipes" };
+  try { resultPreview = JSON.stringify(result.result ?? null, null, 2).slice(0, RESULT_PREVIEW_MAX); } catch {}
+
+  return {
+    kind: "reusable-tool-candidate",
+    fingerprint,
+    proposedName,
+    proposedDescription,
+    capabilities,
+    source: sourceLabel,
+    sourceCode: result.sourceCode.slice(0, SOURCE_CODE_MAX),
+    resultPreview,
+  };
 }
 
 function rawText(value: unknown): string {
@@ -207,8 +291,46 @@ export function resolveToolResultWidget(value: unknown, toolName = "tool"): Tool
   const imageSrc = inlineRasterImageSrc(value);
   if (imageSrc) return { kind: "inline-raster-image", src: imageSrc, alt: `${toolName} screenshot` };
 
-  const savedRecipeCandidate = savedRecipeCandidateWidget(value, toolName);
-  if (savedRecipeCandidate) return savedRecipeCandidate;
+  const reusableToolCandidate = reusableToolCandidateWidget(value, toolName);
+  if (reusableToolCandidate) return reusableToolCandidate;
 
   return { kind: "raw-text", text: rawText(value) };
+}
+
+/**
+ * Given a chronological list of tool-call receipts, decide which reusable-tool
+ * candidate cards should render as candidate cards vs. collapse to their inert
+ * raw receipt.
+ *
+ * Rule: within one conversation, only the newest call for each fingerprint
+ * renders a candidate card. Older duplicates keep their receipt container but
+ * their widget kind is downgraded so no second card is emitted.
+ *
+ * Pure and deterministic — the list order is authoritative; the caller passes
+ * whatever order it renders in.
+ */
+export interface CandidateReceipt {
+  /** Stable id for this receipt (typically the tool-call id). */
+  id: string;
+  /** Widget kind resolved by resolveToolResultWidget for this receipt. */
+  widgetKind: ToolResultWidget["kind"];
+  /** Fingerprint from a resolved reusable-tool-candidate widget, if any. */
+  fingerprint?: string;
+}
+
+/**
+ * Return the set of receipt ids that should render as reusable-tool candidate
+ * cards. Every receipt is preserved by the caller; this only says which of them
+ * are the "newest per fingerprint" card. Non-candidates are never in the set.
+ */
+export function selectVisibleReusableToolCandidates(receipts: readonly CandidateReceipt[]): Set<string> {
+  const newest = new Map<string, string>();
+  for (const receipt of receipts) {
+    if (receipt.widgetKind !== "reusable-tool-candidate") continue;
+    if (!receipt.fingerprint) continue;
+    // Later receipts overwrite earlier ones — the last iteration wins, i.e. the
+    // newest chronological occurrence for each fingerprint.
+    newest.set(receipt.fingerprint, receipt.id);
+  }
+  return new Set(newest.values());
 }

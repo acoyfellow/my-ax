@@ -45,7 +45,7 @@
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
-    { id: "recipes" as const, label: "Snippets", hint: "Saved Code Mode shortcuts" },
+    { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
     { id: "connections" as const, label: "Connections", hint: "Runtime and services" },
   ];
@@ -56,7 +56,7 @@
       summary: "Available in a normal chat.",
       items: [
         { name: "Workspace", tools: "work_search · work_code", description: "Read files, search, edit, and run bounded commands in your workspace." },
-        { name: "Saved snippets", tools: "codemode.search · codemode.run", description: "Run owner-approved Code Mode shortcuts from work_code." },
+        { name: "Reusable tools", tools: "codemode.search · codemode.run", description: "Run owner-approved Code Mode shortcuts from work_code." },
         { name: "Recurring work", tools: "manage_jobs", description: "Create and inspect scheduled prompts." },
       ],
     },
@@ -98,14 +98,29 @@
       activeSection = visibleSections[0].id;
     }
   });
-  function openDrawer() {
+  function openDrawer(event?: Event) {
     lastActiveElement = document.activeElement as HTMLElement | null;
+    const detail = event instanceof CustomEvent ? event.detail as { section?: string; recipeName?: string } : undefined;
+    const query = new URL(window.location.href).searchParams;
+    const requestedSection = detail?.section ?? query.get("section");
+    const requestedRecipeName = detail?.recipeName ?? query.get("recipe");
+    if (requestedSection === "recipes") activeSection = "recipes";
     open = true;
     refreshJobs();
-    refreshRecipes();
+    void refreshRecipes().then(async () => {
+      if (!requestedRecipeName) return;
+      const match = recipes.find((recipe) => recipe.name === requestedRecipeName);
+      if (!match) {
+        recipeStatusText = `Pending reusable tool ${requestedRecipeName} is not available yet. Try reopening review.`;
+        return;
+      }
+      await editRecipe(match);
+      await tick();
+      document.getElementById(`reusable-tool-${match.id}`)?.scrollIntoView({ block: "nearest" });
+    });
     tick().then(() => {
       if (dialogEl && !dialogEl.open) dialogEl.showModal();
-      searchInput?.focus();
+      if (requestedSection !== "recipes") searchInput?.focus();
     });
   }
   function closeDrawer() {
@@ -412,7 +427,7 @@
     await refreshJobs();
   }
 
-  // ── Saved snippets ─────────────────────────────────────────────────
+  // ── Reusable tools (saved_recipes compatibility storage) ───────────
   interface Recipe {
     id: string;
     name: string;
@@ -420,7 +435,7 @@
     inputSchema: Record<string, unknown>;
     capabilities: string[];
     sourceRunId?: string | null;
-    status: "enabled" | "disabled";
+    status: "pending" | "enabled" | "disabled";
     updatedAt?: string;
   }
   let recipes = $state<Recipe[]>([]);
@@ -471,10 +486,10 @@
     try {
       const response = await fetch("/api/recipes", { credentials: "include" });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Recipes unavailable.");
+      if (!response.ok) throw new Error(body?.error?.message || "Reusable tools unavailable.");
       recipes = body?.result?.recipes ?? [];
     } catch (err: any) {
-      recipeStatusText = err?.message || "Recipes unavailable.";
+      recipeStatusText = err?.message || "Reusable tools unavailable.";
     }
   }
   function resetRecipeForm() {
@@ -492,7 +507,7 @@
     recipeInputSchema = JSON.stringify(template.inputSchema, null, 2);
     recipeCode = template.code;
     recipeCapabilities = template.capabilities.join("\n");
-    recipeStatusText = `Template loaded: ${template.title}. Review it, then save.`;
+    recipeStatusText = `Template loaded: ${template.title}. Review it, then save as a pending reusable tool.`;
   }
   async function editRecipe(recipe: Recipe) {
     editingRecipeId = recipe.id;
@@ -504,10 +519,10 @@
     try {
       const response = await fetch(`/api/recipes/${encodeURIComponent(recipe.id)}`, { credentials: "include" });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Could not load recipe.");
+      if (!response.ok) throw new Error(body?.error?.message || "Could not load reusable tool.");
       recipeCode = body.result.recipe.code ?? "";
     } catch (err: any) {
-      recipeStatusText = err?.message || "Could not load recipe.";
+      recipeStatusText = err?.message || "Could not load reusable tool.";
     }
   }
   function recipePayload() {
@@ -529,26 +544,26 @@
       const url = editingRecipeId ? `/api/recipes/${encodeURIComponent(editingRecipeId)}` : "/api/recipes";
       const response = await fetch(url, { method: editingRecipeId ? "PATCH" : "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Could not save recipe.");
-      recipeStatusText = editingRecipeId ? "Recipe updated." : "Recipe saved.";
+      if (!response.ok) throw new Error(body?.error?.message || "Could not save reusable tool.");
+      recipeStatusText = editingRecipeId ? "Reusable tool updated." : "Reusable tool saved as Pending. Review it before enabling.";
       resetRecipeForm();
       await refreshRecipes();
     } catch (err: any) {
-      recipeStatusText = err?.message || "Could not save recipe.";
+      recipeStatusText = err?.message || "Could not save reusable tool.";
     }
   }
-  async function recipeAction(id: string, operation: "status" | "delete" | "run", request: () => Promise<Response>, success?: string) {
+  async function recipeAction(id: string, operation: "status" | "approve" | "delete" | "run", request: () => Promise<Response>, success?: string) {
     const key = `${id}:${operation}`;
     if (recipeBusy[key]) return;
     recipeBusy[key] = true;
     try {
       const response = await request();
       const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.error?.message || `Recipe ${operation} failed.`);
-      recipeStatusText = success ?? "Recipe updated.";
+      if (!response.ok) throw new Error(body?.error?.message || `Reusable tool ${operation} failed.`);
+      recipeStatusText = success ?? "Reusable tool updated.";
       await refreshRecipes();
     } catch (err: any) {
-      recipeStatusText = err?.message || `Could not ${operation} recipe.`;
+      recipeStatusText = err?.message || `Could not ${operation} reusable tool.`;
     } finally {
       recipeBusy[key] = false;
     }
@@ -556,18 +571,26 @@
   async function toggleRecipe(recipe: Recipe) {
     await recipeAction(recipe.id, "status", () => fetch(`/api/recipes/${encodeURIComponent(recipe.id)}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: recipe.status === "enabled" ? "disabled" : "enabled" }) }));
   }
+  async function approveRecipe(recipe: Recipe) {
+    await recipeAction(recipe.id, "approve", () => fetch(`/api/recipes/${encodeURIComponent(recipe.id)}/approval`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    }), "Reusable tool approved and enabled.");
+  }
   async function deleteRecipe(id: string) {
-    if (!confirm("Delete this saved recipe? Existing run receipts stay, but Code Mode can no longer use it.")) return;
-    await recipeAction(id, "delete", () => fetch(`/api/recipes/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }), "Recipe deleted.");
+    if (!confirm("Delete this reusable tool? Existing run receipts stay, but Code Mode can no longer use it.")) return;
+    await recipeAction(id, "delete", () => fetch(`/api/recipes/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }), "Reusable tool deleted.");
     if (editingRecipeId === id) resetRecipeForm();
   }
   async function runRecipe(recipe: Recipe) {
     const sessionId = localStorage.getItem(SESSION_KEY);
     if (!sessionId) {
-      recipeStatusText = "Start a conversation before running a recipe.";
+      recipeStatusText = "Start a conversation before running a reusable tool.";
       return;
     }
-    await recipeAction(recipe.id, "run", () => fetch(`/api/recipes/${encodeURIComponent(recipe.id)}/run`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, input: {} }) }), "Recipe run queued; Check-in will show the receipt.");
+    await recipeAction(recipe.id, "run", () => fetch(`/api/recipes/${encodeURIComponent(recipe.id)}/run`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, input: {} }) }), "Reusable tool run queued; Check-in will show the receipt.");
   }
 
   // ── Model picker + catalog search ──────────────────────────────────
@@ -914,33 +937,40 @@
 
       <div hidden={activeSection !== "recipes"} class="space-y-4">
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Saved snippets</span>
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Reusable tools</span>
           <p class="mb-3 text-xs text-fg-mut">
-            Owner-approved Code Mode snippets. Enabled snippets appear inside <code>work_code</code> through <code>codemode.search()</code>, <code>codemode.describe(...)</code>, and <code>codemode.run(...)</code>; every run creates a receipt.
+            Review source and exact capabilities before approval. Enabled reusable tools appear inside <code>work_code</code> through <code>codemode.search()</code>, <code>codemode.describe(...)</code>, and <code>codemode.run(...)</code>; every run creates a receipt.
           </p>
           <div class="grid gap-2">
             {#if recipes.length === 0}
-              <p class="text-xs text-fg-mut">No saved snippets yet. Promote a successful work_code run, or create one below.</p>
+              <p class="text-xs text-fg-mut">No reusable tools yet. A deliberately marked successful work_code run appears here as Pending, or you can create one below.</p>
             {:else}
               {#each recipes as recipe (recipe.id)}
-                <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
+                <article id={`reusable-tool-${recipe.id}`} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
                   <div class="flex min-w-0 items-start justify-between gap-3">
                     <div class="min-w-0">
                       <strong class="break-words text-sm text-fg">{recipe.name}</strong>
                       <p class="mt-1 text-fg-mut line-clamp-2">{recipe.description}</p>
                     </div>
-                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{recipe.status}</span>
+                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] font-semibold text-fg-mut">{recipe.status === "pending" ? "Pending" : recipe.status === "enabled" ? "Enabled" : "Disabled"}</span>
                   </div>
-                  <div class="mt-2 flex flex-wrap gap-1">
+                  <div class="mt-2 flex flex-wrap gap-1" aria-label={`Capabilities for ${recipe.name}`}>
                     {#each recipe.capabilities as capability}
                       <code class="rounded-full bg-bg px-2 py-1 text-[10px] text-brand">{capability}</code>
                     {/each}
                   </div>
-                  <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${recipe.name}`}>
-                    <button type="button" onclick={() => runRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:run`] || recipe.status !== "enabled"} aria-busy={recipeBusy[`${recipe.id}:run`]} aria-label={`Run ${recipe.name}`} title="Run" class="settings-icon-action text-brand hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">▶</span></button>
-                    <button type="button" onclick={() => editRecipe(recipe)} aria-label={`Edit ${recipe.name}`} title="Edit" class="settings-icon-action hover:border-brand/60"><span aria-hidden="true">✎</span></button>
-                    <button type="button" onclick={() => toggleRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:status`]} aria-busy={recipeBusy[`${recipe.id}:status`]} aria-label={recipe.status === "enabled" ? `Disable ${recipe.name}` : `Enable ${recipe.name}`} title={recipe.status === "enabled" ? "Disable" : "Enable"} class="settings-icon-action hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">{recipe.status === "enabled" ? "⏸" : "⏵"}</span></button>
-                    <button type="button" onclick={() => deleteRecipe(recipe.id)} disabled={recipeBusy[`${recipe.id}:delete`]} aria-busy={recipeBusy[`${recipe.id}:delete`]} aria-label={`Delete ${recipe.name}`} title="Delete" class="settings-icon-action text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40"><span aria-hidden="true">×</span></button>
+                  {#if recipe.status === "pending"}
+                    <p class="mt-2 text-fg-mut">Not runnable until you review its source and capabilities, then approve it.</p>
+                  {/if}
+                  <div class="mt-3 flex flex-wrap justify-end gap-1.5" aria-label={`Actions for ${recipe.name}`}>
+                    <button type="button" onclick={() => runRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:run`] || recipe.status !== "enabled"} aria-busy={recipeBusy[`${recipe.id}:run`]} class="job-action-button min-h-[44px] text-brand hover:border-brand/60 disabled:opacity-40">Run</button>
+                    <button type="button" onclick={() => editRecipe(recipe)} class="job-action-button min-h-[44px] hover:border-brand/60">Review</button>
+                    {#if recipe.status === "pending"}
+                      <button type="button" onclick={() => approveRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:approve`]} aria-busy={recipeBusy[`${recipe.id}:approve`]} class="job-action-button reusable-tool-approve min-h-[44px] hover:border-brand/60 disabled:opacity-40">Approve &amp; enable</button>
+                    {:else}
+                      <button type="button" onclick={() => toggleRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:status`]} aria-busy={recipeBusy[`${recipe.id}:status`]} class="job-action-button min-h-[44px] hover:border-brand/60 disabled:opacity-40">{recipe.status === "enabled" ? "Disable" : "Enable"}</button>
+                    {/if}
+                    <button type="button" onclick={() => deleteRecipe(recipe.id)} disabled={recipeBusy[`${recipe.id}:delete`]} aria-busy={recipeBusy[`${recipe.id}:delete`]} class="job-action-button min-h-[44px] text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40">Delete</button>
                   </div>
                 </article>
               {/each}
@@ -950,8 +980,8 @@
         </section>
 
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter snippets</span>
-          <p class="mb-3 text-xs text-fg-mut">Pick a generic snippet, review the code and capabilities, then save your own copy. Templates are never enabled automatically.</p>
+          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter reusable tools</span>
+          <p class="mb-3 text-xs text-fg-mut">Pick a generic tool, review its code and capabilities, then save your own pending copy. Templates are never enabled automatically.</p>
           <div class="grid gap-2 sm:grid-cols-2">
             {#each recipeTemplates as template}
               <button type="button" onclick={() => useRecipeTemplate(template)} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-left hover:border-brand/60">
@@ -967,7 +997,7 @@
 
         <form onsubmit={submitRecipe} class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4 grid gap-2">
           <div class="flex items-center justify-between gap-3">
-            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingRecipeId ? "Edit recipe" : "Create manually"}</span>
+            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingRecipeId ? "Review reusable tool" : "Create reusable tool manually"}</span>
             {#if editingRecipeId}<button type="button" onclick={resetRecipeForm} class="text-xs text-fg-mut hover:text-fg">Cancel edit</button>{/if}
           </div>
           <input type="text" maxlength={64} placeholder="name_like_this" bind:value={recipeName} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
@@ -975,7 +1005,7 @@
           <textarea rows={4} placeholder="return input;" bind:value={recipeCode} class="font-mono w-full min-h-[112px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
           <textarea rows={3} placeholder="Input schema JSON" bind:value={recipeInputSchema} class="font-mono w-full min-h-[88px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
           <textarea rows={2} placeholder="workspace.read" bind:value={recipeCapabilities} class="font-mono w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-xs px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
-          <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">{editingRecipeId ? "Update recipe" : "Save recipe"}</button>
+          <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">{editingRecipeId ? "Update reusable tool" : "Save pending reusable tool"}</button>
         </form>
       </div>
 
@@ -1007,9 +1037,9 @@
                 <div data-job-result={job.last_error ? "error" : "ok"}>last {lastRun} · {result}</div>
               </div>
               <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${job.name}`}>
-                <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} aria-label={`Run ${job.name} now`} title="Run now" class="settings-icon-action text-brand hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">▶</span></button>
-                <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} aria-label={job.status === "paused" ? `Resume ${job.name}` : `Pause ${job.name}`} title={job.status === "paused" ? "Resume" : "Pause"} class="settings-icon-action hover:border-brand/60 disabled:opacity-40"><span aria-hidden="true">{job.status === "paused" ? "⏵" : "⏸"}</span></button>
-                <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} aria-label={`Delete ${job.name}`} title="Delete" class="settings-icon-action text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40"><span aria-hidden="true">×</span></button>
+                <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} aria-label={`Run ${job.name} now`} title="Run now" class="job-action-button text-brand hover:border-brand/60 disabled:opacity-40">Run now</button>
+                <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} aria-label={job.status === "paused" ? `Resume ${job.name}` : `Pause ${job.name}`} title={job.status === "paused" ? "Resume" : "Pause"} class="job-action-button hover:border-brand/60 disabled:opacity-40">{job.status === "paused" ? "Resume" : "Pause"}</button>
+                <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} aria-label={`Delete ${job.name}`} title="Delete" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40">Delete</button>
               </div>
             </article>
           {/each}
@@ -1263,6 +1293,36 @@
     width: 2px;
     border-radius: 2px;
     background: var(--brand);
+  }
+
+  .job-action-button {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: border-color 120ms, color 120ms, background 120ms;
+  }
+
+  .job-action-button:hover { background: var(--surface-2); }
+
+  .job-action-button.reusable-tool-approve {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: white;
+  }
+
+  .job-action-button.reusable-tool-approve:hover { background: #d96d16; }
+
+  .job-action-button:focus-visible {
+    outline: 2px solid rgba(246, 130, 31, 0.7);
+    outline-offset: 2px;
   }
 
   .settings-icon-action {
