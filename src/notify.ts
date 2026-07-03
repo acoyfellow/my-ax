@@ -17,6 +17,23 @@ type DeliveryOutcome =
 
 export type NotificationKind = "session.update" | "session.dead" | "job.complete" | "job.needs_input" | "delegate.complete" | "delegate.needs_input" | "watch.fired" | "deploy.gate" | "recipe.approval";
 
+/** Notification kinds that must drive the owner's "needs your attention" headline. */
+export const ACTIONABLE_NOTIFICATION_KINDS: ReadonlyArray<NotificationKind> = [
+  "session.dead",
+  "job.needs_input",
+  "delegate.needs_input",
+  "deploy.gate",
+  "recipe.approval",
+];
+
+const ACTIONABLE_KIND_SET: ReadonlySet<string> = new Set(ACTIONABLE_NOTIFICATION_KINDS);
+
+/** Pure predicate: unknown/null/undefined kinds are conservatively informational. */
+export function isActionableNotificationKind(kind: string | null | undefined): boolean {
+  if (typeof kind !== "string" || kind.length === 0) return false;
+  return ACTIONABLE_KIND_SET.has(kind);
+}
+
 export interface OwnerNotification {
   kind: NotificationKind;
   sessionId?: string;
