@@ -5,6 +5,8 @@
   let { result, toolName = "tool" }: { result: unknown; toolName?: string } = $props();
   let widget = $derived(resolveToolResultWidget(result, toolName));
   let fullscreen = $state(false);
+  let reusableToolAction = $state<"idle" | "approving" | "enabled" | "error">("idle");
+  let reusableToolMessage = $state("");
 
   function openFullscreen() {
     fullscreen = true;
@@ -16,6 +18,34 @@
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape" && fullscreen) closeFullscreen();
+  }
+
+  function openReusableTools(recipeName: string) {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("my-ax:settings-open", {
+      detail: { section: "recipes", recipeName },
+    }));
+  }
+
+  async function approveReusableTool(recipeName: string, sourceCode: string) {
+    if (reusableToolAction === "approving" || reusableToolAction === "enabled") return;
+    reusableToolAction = "approving";
+    reusableToolMessage = "Enabling reusable tool…";
+    try {
+      const response = await fetch("/api/recipes/by-name/approval", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: recipeName, sourceCode, action: "approve" }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error?.message || "Could not enable this reusable tool.");
+      reusableToolAction = "enabled";
+      reusableToolMessage = "Enabled. My AX can now use this reusable tool in future tasks.";
+    } catch (error) {
+      reusableToolAction = "error";
+      reusableToolMessage = error instanceof Error ? error.message : "Could not enable this reusable tool.";
+    }
   }
 
   // Lock body scroll while fullscreen so mobile can't get stuck behind the artifact.
@@ -113,8 +143,13 @@
       <strong>Reusable tool</strong>
       <span class="reusable-tool-candidate__name">{widget.proposedName}</span>
     </div>
+    {#if widget.approvalMode === "auto"}
+      <p class="reusable-tool-candidate__desc">Auto-enable is on. My AX will enable this tool when the response finishes; you can review, disable, or delete it in Reusable tools.</p>
+    {:else}
+      <p class="reusable-tool-candidate__desc">My AX thinks this code could be useful again. Enable it now, or review the source and permissions first.</p>
+    {/if}
     {#if widget.proposedDescription}
-      <p class="reusable-tool-candidate__desc">{widget.proposedDescription}</p>
+      <p class="reusable-tool-candidate__muted">{widget.proposedDescription}</p>
     {/if}
     {#if widget.capabilities.length}
       <div class="reusable-tool-candidate__caps" aria-label="Inferred capabilities">
@@ -131,26 +166,32 @@
       <pre>{widget.sourceCode}</pre>
       {#if widget.resultPreview}<pre>{widget.resultPreview}</pre>{/if}
     </details>
-    <!--
-      No API write or auto-enable in the chat surface: the button only hands off
-      to Settings, where the owner can inspect, edit, and enable the reusable
-      tool themselves. The dispatched CustomEvent detail carries the proposed
-      name so Settings can scroll to it.
-    -->
-    <button
-      type="button"
-      class="reusable-tool-candidate__action inline-flex items-center justify-center rounded-md bg-brand text-bg text-sm font-semibold px-4 py-2.5 min-h-[44px] w-full sm:w-auto hover:bg-brand/90 active:bg-brand/80 focus:outline-none focus:ring-2 focus:ring-brand/60 transition-colors"
-      aria-label={`Review reusable tool ${widget.proposedName}`}
-      data-tool-widget-action="review-reusable-tool"
-      onclick={() => {
-        if (typeof window === "undefined") return;
-        window.dispatchEvent(new CustomEvent("my-ax:settings-open", {
-          detail: { section: "recipes", recipeName: widget.proposedName },
-        }));
-      }}
-    >
-      Review reusable tool
-    </button>
+    <div class="reusable-tool-candidate__actions">
+      {#if widget.approvalMode === "review"}
+        <button
+          type="button"
+          class="reusable-tool-candidate__action inline-flex items-center justify-center rounded-md bg-brand text-bg text-sm font-semibold px-4 py-2.5 min-h-[44px] w-full sm:w-auto hover:bg-brand/90 active:bg-brand/80 focus:outline-none focus:ring-2 focus:ring-brand/60 transition-colors disabled:opacity-50"
+          aria-label={`Approve and enable reusable tool ${widget.proposedName}`}
+          data-tool-widget-action="approve-reusable-tool"
+          disabled={reusableToolAction === "approving" || reusableToolAction === "enabled"}
+          onclick={() => approveReusableTool(widget.proposedName, widget.sourceCode)}
+        >
+          {reusableToolAction === "approving" ? "Enabling…" : reusableToolAction === "enabled" ? "Enabled" : "Approve & enable"}
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="reusable-tool-candidate__secondary inline-flex items-center justify-center rounded-md border border-line bg-bg text-fg text-sm font-semibold px-4 py-2.5 min-h-[44px] w-full sm:w-auto hover:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand/60 transition-colors"
+        aria-label={`Open reusable tool settings for ${widget.proposedName}`}
+        data-tool-widget-action="review-reusable-tool"
+        onclick={() => openReusableTools(widget.proposedName)}
+      >
+        Open Reusable tools
+      </button>
+    </div>
+    {#if reusableToolMessage}
+      <p class:reusable-tool-candidate__error={reusableToolAction === "error"} class="reusable-tool-candidate__status" role="status" aria-live="polite">{reusableToolMessage}</p>
+    {/if}
   </section>
 {:else}
   <pre class="tool-call__result" data-tool-widget="raw-text">{widget.text}</pre>

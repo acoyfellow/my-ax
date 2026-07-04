@@ -107,6 +107,7 @@
     if (requestedSection === "recipes") activeSection = "recipes";
     open = true;
     refreshJobs();
+    void refreshRecipePreferences();
     void refreshRecipes().then(async () => {
       if (!requestedRecipeName) return;
       const match = recipes.find((recipe) => recipe.name === requestedRecipeName);
@@ -441,6 +442,8 @@
   let recipes = $state<Recipe[]>([]);
   let recipeStatusText = $state("");
   let recipeBusy = $state<Record<string, boolean>>({});
+  let recipeApprovalMode = $state<"review" | "auto">("review");
+  let recipePreferenceBusy = $state(false);
   let editingRecipeId = $state<string | null>(null);
   let recipeName = $state("");
   let recipeDescription = $state("");
@@ -482,6 +485,40 @@
     },
   ];
 
+  async function refreshRecipePreferences() {
+    try {
+      const response = await fetch("/api/recipes/preferences", { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Could not load approval preference.");
+      recipeApprovalMode = body?.result?.approvalMode === "auto" ? "auto" : "review";
+    } catch (err: any) {
+      recipeStatusText = err?.message || "Could not load approval preference.";
+    }
+  }
+  async function setRecipeApprovalMode(approvalMode: "review" | "auto") {
+    if (recipePreferenceBusy || approvalMode === recipeApprovalMode) return;
+    const previous = recipeApprovalMode;
+    recipeApprovalMode = approvalMode;
+    recipePreferenceBusy = true;
+    try {
+      const response = await fetch("/api/recipes/preferences", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalMode }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Could not save approval preference.");
+      recipeStatusText = approvalMode === "auto"
+        ? "New qualifying reusable tools will be enabled automatically. You can review, disable, or delete them here anytime."
+        : "New reusable tools will wait for your approval.";
+    } catch (err: any) {
+      recipeApprovalMode = previous;
+      recipeStatusText = err?.message || "Could not save approval preference.";
+    } finally {
+      recipePreferenceBusy = false;
+    }
+  }
   async function refreshRecipes() {
     try {
       const response = await fetch("/api/recipes", { credentials: "include" });
@@ -939,8 +976,19 @@
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
           <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Reusable tools</span>
           <p class="mb-3 text-xs text-fg-mut">
-            Review source and exact capabilities before approval. Enabled reusable tools appear inside <code>work_code</code> through <code>codemode.search()</code>, <code>codemode.describe(...)</code>, and <code>codemode.run(...)</code>; every run creates a receipt.
+            Reusable tools are saved pieces of successful <code>work_code</code> that My AX can use again. Enabled tools can run in future tasks; every run creates a receipt.
           </p>
+          <fieldset class="mb-3 rounded-lg border border-line bg-bg-alt/40 p-3" disabled={recipePreferenceBusy}>
+            <legend class="px-1 text-xs font-semibold text-fg">When My AX suggests a new reusable tool</legend>
+            <label class="mt-2 flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-surface-2/60">
+              <input type="radio" name="reusable-tool-approval-mode" value="review" checked={recipeApprovalMode === "review"} onchange={() => setRecipeApprovalMode("review")} class="mt-1" />
+              <span><strong class="block text-xs text-fg">Let me review it first</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">New tools stay Pending until you choose <b>Approve &amp; enable</b>.</span></span>
+            </label>
+            <label class="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-surface-2/60">
+              <input type="radio" name="reusable-tool-approval-mode" value="auto" checked={recipeApprovalMode === "auto"} onchange={() => setRecipeApprovalMode("auto")} class="mt-1" />
+              <span><strong class="block text-xs text-fg">Enable new tools automatically</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">Qualifying tools can be reused immediately. Come back here anytime to review, disable, or delete them. Host-bound machine and Cloudbox code is never auto-saved.</span></span>
+            </label>
+          </fieldset>
           <div class="grid gap-2">
             {#if recipes.length === 0}
               <p class="text-xs text-fg-mut">No reusable tools yet. A deliberately marked successful work_code run appears here as Pending, or you can create one below.</p>
