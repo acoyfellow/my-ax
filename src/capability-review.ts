@@ -42,7 +42,7 @@ export interface CapabilityReviewProof {
 
 const constraints = { allowSearch: false, allowAdjacent: false, allowWrite: false } as const;
 export const childTools = ["capability_list", "capability_read", "capability_request_more"] as const;
-export const forbiddenTools = ["cfi", "cf-portal", "ax-mcp", "shell", "browser", "fetch_url", "wiki.search", "jira.search", "gitlab.search", "list-all"] as const;
+export const forbiddenTools = ["cfi", "cf-portal", "shell", "browser", "fetch_url", "wiki.search", "jira.search", "gitlab.search", "list-all"] as const;
 
 export function stableHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -82,15 +82,6 @@ export function parseResourceUrl(raw: string): ParsedResource {
   if (url.hostname === "portal.mcp.cfdata.org") {
     if (url.pathname !== "/mcp") throw new Error("unsupported cf-portal URL: expected /mcp");
     return { system: "cf-portal", kind: "cf-portal.server.tools.list", id: "portal.mcp.cfdata.org/mcp", url: raw.trim() };
-  }
-  // ax-mcp: AX-owned MCP portal (mcp.ax.cloudflare.dev), a separate tenant of the same
-  // MCP Server Portal product as cf-portal, standing alongside it (does not replace it).
-  // Scoped to the one live upstream today (cloudflare-docs, unauthenticated/public); the
-  // remaining upstreams (backstage, gitlab, jira, wiki, sentry, google-workspace) activate
-  // as ax-mcp's Phase 4 lands per docs/dashboard-state.md — do not assume more than what's live.
-  if (url.hostname === "mcp.ax.cloudflare.dev") {
-    if (url.pathname !== "/mcp") throw new Error("unsupported ax-mcp URL: expected /mcp");
-    return { system: "ax-mcp", kind: "ax-mcp.server.tools.list", id: "mcp.ax.cloudflare.dev/mcp", url: raw.trim() };
   }
   throw new Error(`unsupported host: ${url.hostname}`);
 }
