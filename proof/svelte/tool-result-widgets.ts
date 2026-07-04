@@ -47,6 +47,8 @@ export type ToolResultWidget =
       fingerprint: string;
       /** Proposed identity as suggested by the producer — the owner edits it in Settings before enabling. */
       proposedName: string;
+      /** Owner-scoped behavior in effect for this candidate. */
+      approvalMode: "review" | "auto";
       proposedDescription: string;
       /** Exact capabilities the sandboxed run actually used (allowlisted strings). */
       capabilities: string[];
@@ -232,6 +234,7 @@ function reusableToolCandidateWidget(value: unknown, toolName: string): ToolResu
   const proposedName = boundedText(recipe.name, PROPOSED_NAME_MAX);
   if (!proposedName) return null;
   const proposedDescription = boundedText(recipe.description, PROPOSED_DESCRIPTION_MAX) ?? "";
+  const approvalMode = result.reusableToolApprovalMode === "auto" ? "auto" : "review";
 
   if (!Array.isArray(result.inferredCapabilities)) return null;
   const capabilities = (result.inferredCapabilities as unknown[])
@@ -253,6 +256,7 @@ function reusableToolCandidateWidget(value: unknown, toolName: string): ToolResu
     fingerprint,
     proposedName,
     proposedDescription,
+    approvalMode,
     capabilities,
     source: sourceLabel,
     sourceCode: result.sourceCode.slice(0, SOURCE_CODE_MAX),

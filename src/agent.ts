@@ -34,7 +34,7 @@ import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { resolveBridgeOrigin } from "./bridge-origin";
-import { autoTrustMode } from "./auto-trust";
+import { reusableToolApprovalMode } from "./reusable-tool-preferences";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
@@ -51,7 +51,7 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 
 Computer work is exposed through two tools:
 - work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and cloudbox.* is clean bounded repository work with receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, cloudbox, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved reusable tool when an enabled reusable tool clearly matches the task. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner sees marked candidates as pending reusable tools in Settings → Reusable tools and approves them one-by-one; unmarked runs stay inline forever. Do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
+- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, cloudbox, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Cloudbox for clean clones, isolated verification, continuation without the laptop, and proof-producing runs. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input); use codemode.run to invoke an owner-approved reusable tool when an enabled reusable tool clearly matches the task. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner controls whether marked candidates wait as Pending or are enabled automatically in Settings → Reusable tools; unmarked runs stay inline forever. Do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Cloudbox are needed.
@@ -1075,13 +1075,11 @@ export class MyAgent extends Think<Env> {
         || (candidate.type?.startsWith("tool-") && candidate.toolName === "work_code");
       return isWorkCode ? [candidate.output] : [];
     });
-    // Auto-trust mode is still read so recipesSavedThisTurn keeps its
-    // historical shape and any deploy that had RECIPE_AUTOTRUST=1 still logs
-    // that fact — but the frozen contract forces every eligible candidate to
-    // pending regardless, so an eligible suggestion is *always* owner-gated.
-    // Legacy auto-trust helpers remain intact for other call sites and future
-    // policy, but they never bypass this owner-review gate.
-    const trustMode = autoTrustMode(this.env);
+    // The owner chooses whether qualifying reusable tools wait for review or
+    // become enabled immediately. The stored owner preference wins; the legacy
+    // deploy variable remains a migration-safe fallback when no choice exists.
+    const trustMode = await reusableToolApprovalMode(this.env, identity.email);
+    const autoEnable = trustMode === "auto";
     for (const output of workCodeOutputs) {
       const text = typeof output === "string" ? output : JSON.stringify(output);
       let parsed:
@@ -1106,20 +1104,15 @@ export class MyAgent extends Think<Env> {
       // inline. This is the same rule recipeApprovalDecision has always
       // enforced; the marker gate is additive, not a replacement.
       const decision = recipeApprovalDecision({
-        // Force autoTrust=false into the decision so notify/persist logic is
-        // identical to the owner-gated path. The trustMode value is preserved
-        // for the recipesSavedThisTurn receipt below.
-        autoTrust: false,
+        autoTrust: autoEnable,
         capabilities,
         portable: typeof raw.portable === "boolean" ? raw.portable : undefined,
       });
       if (!shouldPersistSuggestedRecipe(decision)) continue;
-      // Pending-only promotion (frozen contract). Every eligible candidate
-      // lands as pending regardless of MY_AX_RECIPE_AUTOTRUST/RECIPE_AUTOTRUST —
-      // the marker itself is the model's opt-in, not blanket auto-trust. The
-      // legacy env flags are read (trustMode above) only to keep the receipt
-      // shape stable; they no longer bypass approval for the marker path.
-      const status: "pending" = "pending";
+      // Review mode is the safe default. Auto-enable is an explicit owner
+      // preference and still cannot bypass the high-authority inline-only rule
+      // enforced by recipeApprovalDecision above.
+      const status = autoEnable ? "enabled" as const : "pending" as const;
       // Conflict fail-soft per iteration. A duplicate name from a previous
       // turn must not abort promotion of every later candidate in this same
       // result — catch InvalidInput / Conflict inside the loop, log, and
@@ -1153,6 +1146,12 @@ export class MyAgent extends Think<Env> {
         }
         throw error;
       }
+      // Enabled tools must enter the Code Mode projection immediately. Review
+      // mode projects later through the explicit approval route.
+      if (recipe.status === "enabled") {
+        await projectSavedRecipe(this.env, await new SavedRecipeService(this.env, identity.email).get(recipe.id))
+          .catch((error) => console.error("cm_snippet_projection_failed", { recipeId: recipe.id, err: error instanceof Error ? error.message : String(error) }));
+      }
       this.recipesSavedThisTurn.push({
         id: recipe.id,
         name: recipe.name,
@@ -1169,7 +1168,7 @@ export class MyAgent extends Think<Env> {
           kind: "recipe.approval",
           sessionId: this.name,
           title: `Review reusable tool: ${recipe.name}`,
-          body: `${recipe.description} Pending reusable tools are not runnable until approved.`,
+          body: `${recipe.description} Review its source and capabilities, then approve it if you want My AX to reuse it.`,
           href: `/?action=settings&section=recipes&recipe=${encodeURIComponent(recipe.name)}`,
         }).catch((error) => console.error("recipe_approval_attention_failed", { sessionId: this.name, err: String(error) }));
       }
