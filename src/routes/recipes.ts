@@ -4,6 +4,8 @@ import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { getSessionAgent } from "../agent-stub";
 import { publicRecipe, SavedRecipeError, SavedRecipeService, validateRecipeRunInput } from "../saved-recipes";
+import { projectSavedRecipe } from "../cm-snippets";
+import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences";
 import { requireOwnedSession } from "../session-ownership";
 
 function body(c: Context<AppEnv>): Promise<Record<string, unknown>> {
@@ -38,6 +40,59 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
     catch (error) { return failure(c, command, error); }
   });
 
+  app.get("/api/recipes/preferences", async (c) => {
+    const command = "GET /api/recipes/preferences";
+    try {
+      return ok(c, command, { approvalMode: await reusableToolApprovalMode(c.env, c.get("identity").email) });
+    } catch (error) { return failure(c, command, error); }
+  });
+
+  app.post("/api/recipes/preferences", async (c) => {
+    const command = "POST /api/recipes/preferences";
+    try {
+      const request = await body(c);
+      if (request.approvalMode !== "review" && request.approvalMode !== "auto") {
+        throw new SavedRecipeError("InvalidInput", "approvalMode must be review or auto");
+      }
+      return ok(c, command, {
+        approvalMode: await setReusableToolApprovalMode(c.env, c.get("identity").email, request.approvalMode),
+      });
+    } catch (error) { return failure(c, command, error); }
+  });
+
+  app.post("/api/recipes/by-name/approval", async (c) => {
+    const command = "POST /api/recipes/by-name/approval";
+    try {
+      const request = await body(c);
+      const action = request.action === "reject" ? "reject" : request.action === "approve" ? "approve" : "";
+      const name = typeof request.name === "string" ? request.name : "";
+      const sourceCode = typeof request.sourceCode === "string" ? request.sourceCode.trim() : "";
+      if (!action) throw new SavedRecipeError("InvalidInput", "action must be approve or reject");
+      if (!sourceCode) throw new SavedRecipeError("InvalidInput", "sourceCode is required");
+      // The card becomes visible as soon as work_code returns, while promotion
+      // is finalized at the end of the assistant turn. Bridge that brief race
+      // so an owner can click the button immediately instead of seeing a false
+      // "not found" error and having to try again.
+      let existing;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          existing = await service(c).getByName(name);
+          break;
+        } catch (error) {
+          if (!(error instanceof SavedRecipeError) || error.code !== "NotFound" || attempt === 9) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      }
+      if (!existing) throw new SavedRecipeError("NotFound", "reusable tool not found");
+      if (existing.code.trim() !== sourceCode) {
+        throw new SavedRecipeError("Conflict", "This card no longer matches the saved reusable tool. Open Reusable tools to review the current version.");
+      }
+      const recipe = await service(c).update(existing.id, { status: action === "approve" ? "enabled" : "disabled" });
+      if (action === "approve") await projectSavedRecipe(c.env, await service(c).get(existing.id));
+      return ok(c, command, { recipe, action });
+    } catch (error) { return failure(c, command, error); }
+  });
+
   app.get("/api/recipes/:id", async (c) => {
     const command = `GET /api/recipes/${c.req.param("id")}`;
     try {
@@ -63,6 +118,7 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const action = request.action === "reject" ? "reject" : request.action === "approve" ? "approve" : "";
       if (!action) throw new SavedRecipeError("InvalidInput", "action must be approve or reject");
       const recipe = await service(c).update(c.req.param("id"), { status: action === "approve" ? "enabled" : "disabled" });
+      if (action === "approve") await projectSavedRecipe(c.env, await service(c).get(c.req.param("id")));
       return ok(c, command, { recipe, action });
     }
     catch (error) { return failure(c, command, error); }

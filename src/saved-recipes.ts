@@ -188,6 +188,13 @@ export class SavedRecipeService {
     return row;
   }
 
+  async getByName(name: string): Promise<SavedRecipe> {
+    const clean = cleanName(name);
+    const row = await this.env.DB.prepare("SELECT * FROM saved_recipes WHERE name = ? AND owner_email = ?").bind(clean, this.owner()).first<SavedRecipe>();
+    if (!row) throw new SavedRecipeError("NotFound", "reusable tool not found");
+    return row;
+  }
+
   async create(input: unknown) {
     const parsed = validateSavedRecipeInput(input);
     const row: SavedRecipe = {

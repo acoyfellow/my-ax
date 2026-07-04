@@ -9,6 +9,13 @@ test("auto-trusted recipes do not create approval attention", () => {
   });
 });
 
+test("auto-enable never bypasses the high-authority inline-only boundary", () => {
+  assert.deepEqual(recipeApprovalDecision({ autoTrust: true, capabilities: ["machine.shell"], portable: false }), {
+    notify: false,
+    reason: "high_authority_inline_only",
+  });
+});
+
 test("portable workspace recipes still ask for owner review when not auto-trusted", () => {
   assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["workspace.read"], portable: true }), {
     notify: true,

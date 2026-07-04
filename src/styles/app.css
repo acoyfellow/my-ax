@@ -458,47 +458,63 @@
   stroke-width: 2.2;
   stroke-linecap: round;
 }
-.recipe-candidate {
+.reusable-tool-candidate {
   display: grid;
-  gap: .55rem;
+  gap: .65rem;
   border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
   background: color-mix(in srgb, var(--brand) 5%, var(--bg));
 }
-.recipe-candidate__head {
+.reusable-tool-candidate__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: .75rem;
   flex-wrap: wrap;
 }
-.recipe-candidate__head code,
-.recipe-candidate__caps code {
+.reusable-tool-candidate__name,
+.reusable-tool-candidate__caps code {
   font-size: .72rem;
   color: var(--fg-mut);
   overflow-wrap: anywhere;
 }
-.recipe-candidate p {
+.reusable-tool-candidate p {
   margin: 0;
   color: var(--fg-mut);
   font-size: .82rem;
 }
-.recipe-candidate__caps {
+.reusable-tool-candidate__desc {
+  color: var(--fg) !important;
+  line-height: 1.45;
+}
+.reusable-tool-candidate__caps,
+.reusable-tool-candidate__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: .35rem;
+  gap: .45rem;
 }
-.recipe-candidate__caps code {
+.reusable-tool-candidate__caps code {
   padding: .15rem .4rem;
   border-radius: 999px;
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
-.recipe-candidate details pre {
+.reusable-tool-candidate details pre {
   max-height: 14rem;
   overflow: auto;
   white-space: pre-wrap;
 }
-.recipe-candidate__muted {
-  font-style: italic;
+.reusable-tool-candidate__source-label,
+.reusable-tool-candidate__muted {
+  color: var(--fg-mut);
+  font-size: .75rem;
+}
+.reusable-tool-candidate__status {
+  font-weight: 600;
+}
+.reusable-tool-candidate__error {
+  color: #ef4444 !important;
+}
+@media (max-width: 639px) {
+  .reusable-tool-candidate__actions > button { flex: 1 1 100%; }
 }
 .svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-frame {
   width: 100vw;

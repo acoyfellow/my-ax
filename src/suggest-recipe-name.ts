@@ -40,5 +40,5 @@ export function suggestRecipeDescription(code: string, caps: string[]): string {
   const verb = code.match(/return\s+(?:JSON\.stringify\()?\{\s*(\w+)/)?.[1];
   if (verb && hostCap) return `Computes { ${verb}, ... } via ${hostCap}. Review before enabling.`;
   if (verb) return `Computes { ${verb}, ... } from its input. Portable. Review before enabling.`;
-  return "Promoted from a work_code run. Rename and review before enabling.";
+  return "Reusable code from a successful work_code run.";
 }

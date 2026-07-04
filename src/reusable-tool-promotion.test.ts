@@ -49,22 +49,20 @@ test("promotion loop only persists candidates whose reusableToolCandidate.eligib
 });
 
 // ---------------------------------------------------------------------------
-// Pending-only status
+// Owner-selectable approval mode
 // ---------------------------------------------------------------------------
 
-test("promotion loop forces every eligible candidate to pending regardless of legacy RECIPE_AUTOTRUST", () => {
+test("promotion loop uses the owner-scoped approval preference", () => {
   const slice = promotionSlice(agent);
-  // A literal "pending" status must be assigned into the create() call, not
-  // routed through initialStatusForPromotion, so the frozen contract can't
-  // regress when an owner sets RECIPE_AUTOTRUST=1.
-  assert.match(slice, /status:\s*"pending"/, "promotion must assign pending status literally");
-  // Belt-and-braces: ensure initialStatusForPromotion is not the source of
-  // the status field for marker-eligible candidates.
-  assert.doesNotMatch(
-    slice.slice(0, slice.indexOf("status: \"pending\"") + 24),
-    /initialStatusForPromotion\(this\.env\)\s*;\s*[^]*?status:\s*status/,
-    "marker path must not derive status from initialStatusForPromotion",
-  );
+  assert.match(slice, /reusableToolApprovalMode\(this\.env, identity\.email\)/, "promotion must read the owner setting");
+  assert.match(slice, /autoEnable\s*\?\s*"enabled"[\s\S]*?:\s*"pending"/, "review mode stays pending while auto mode enables");
+  assert.match(slice, /autoTrust:\s*autoEnable/, "approval policy must receive the selected mode");
+});
+
+test("auto-enabled candidates are projected into Code Mode immediately", () => {
+  const slice = promotionSlice(agent);
+  assert.match(slice, /recipe\.status === "enabled"/);
+  assert.match(slice, /projectSavedRecipe\(/);
 });
 
 // ---------------------------------------------------------------------------
@@ -99,12 +97,12 @@ test("promotion loop catches SavedRecipeError inside each iteration so a duplica
 });
 
 // ---------------------------------------------------------------------------
-// Legacy auto-trust helpers still intact (frozen: don't delete)
+// Preference service keeps the legacy deploy fallback outside the agent path
 // ---------------------------------------------------------------------------
 
-test("legacy auto-trust mode remains observable without controlling candidate status", () => {
-  assert.match(agent, /import \{ autoTrustMode \} from "\.\/auto-trust"/, "auto-trust mode remains available for receipt compatibility");
-  assert.match(agent, /autoTrustMode\(this\.env\)/, "autoTrustMode must still be read (receipt shape stability)");
+test("agent delegates approval-mode resolution to the owner preference service", () => {
+  assert.match(agent, /import \{ reusableToolApprovalMode \} from "\.\/reusable-tool-preferences"/);
+  assert.doesNotMatch(promotionSlice(agent), /autoTrustMode\(this\.env\)/);
 });
 
 // ---------------------------------------------------------------------------
@@ -116,6 +114,7 @@ test("legacy auto-trust mode remains observable without controlling candidate st
 test("executeWorkCode now returns a reusableToolCandidate alongside suggestedRecipe (compat preserved)", () => {
   assert.match(workTools, /suggestedRecipe,/, "suggestedRecipe compatibility field must remain");
   assert.match(workTools, /reusableToolCandidate,/, "reusableToolCandidate must be added");
+  assert.match(workTools, /reusableToolApprovalMode,/, "owner approval mode must be included for truthful card actions");
   assert.match(workTools, /evaluateReusableToolCandidate\(/);
   assert.match(workTools, /reusableToolNameFromMarker\(code,/, "marker name must win over the fallback heuristic");
 });

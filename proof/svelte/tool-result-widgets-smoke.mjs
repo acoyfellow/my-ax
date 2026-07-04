@@ -51,6 +51,7 @@ try {
       capabilities: ["workspace.write"],
     },
     reusableToolCandidate: { eligible: true, fingerprint: "fp-write-tmp-note", reason: "portable" },
+    reusableToolApprovalMode: "review",
     source: "work_code",
   };
   const candidate = resolve(goodCandidateInput, "work_code");
@@ -58,6 +59,9 @@ try {
   if (candidate.fingerprint !== "fp-write-tmp-note") throw new Error("candidate fingerprint must be preserved");
   if (candidate.proposedName !== "WriteTmpNote") throw new Error("candidate proposedName must come from suggestedRecipe.name");
   if (candidate.proposedDescription !== "Writes a small note to /tmp for later review.") throw new Error("candidate proposedDescription must come from suggestedRecipe.description");
+  if (candidate.approvalMode !== "review") throw new Error("candidate must carry the owner approval mode");
+  const autoCandidate = resolve({ ...goodCandidateInput, reusableToolApprovalMode: "auto" }, "work_code");
+  if (autoCandidate.kind !== "reusable-tool-candidate" || autoCandidate.approvalMode !== "auto") throw new Error("auto-enabled candidates must render their selected mode");
   if (candidate.capabilities.length !== 1 || candidate.capabilities[0] !== "workspace.write") throw new Error("candidate capabilities must reflect the exact inferred capabilities");
   if (typeof candidate.source !== "string" || !candidate.source.length) throw new Error("candidate source label must be a bounded string");
   if (typeof candidate.sourceCode !== "string" || !candidate.sourceCode.includes("workspace.write")) throw new Error("candidate sourceCode preview must be present");
@@ -141,12 +145,14 @@ try {
   if (!widgetSource.includes("Reusable tool")) throw new Error("reusable-tool card must use the 'Reusable tool' label");
   if (/\bSnippet(\s|,|\.)/.test(widgetSource) || /\bsnippet(\s|,|\.)/.test(widgetSource)) throw new Error("owner-visible card must not use snippet copy");
   if (/\brecipe\b/i.test(widgetSource) && !widgetSource.includes("reusable-tool-candidate")) throw new Error("owner-visible card must not use raw recipe copy");
-  if (widgetSource.includes("/api/recipes")) throw new Error("compatibility API endpoint must not appear on the owner-visible card");
-  if (widgetSource.includes("saveEndpoint")) throw new Error("owner-visible card must not reference the compatibility endpoint field");
-  if (!widgetSource.includes("Review reusable tool")) throw new Error("card must expose a 'Review reusable tool' action");
-  if (!/min-h-\[44px\]/.test(widgetSource)) throw new Error("Review reusable tool button must reserve a >=44px touch target");
-  if (!widgetSource.includes("my-ax:settings-open")) throw new Error("Review action must dispatch my-ax:settings-open");
-  if (!/section:\s*"recipes"/.test(widgetSource) || !/recipeName:\s*widget\.proposedName/.test(widgetSource)) throw new Error("Review action must carry {section:'recipes', recipeName:<proposed name>} detail");
+  if (!widgetSource.includes("/api/recipes/by-name/approval")) throw new Error("card must call the owner-scoped direct approval endpoint");
+  if (!widgetSource.includes('action: "approve"')) throw new Error("card must send an explicit approval action");
+  if (!widgetSource.includes("name: recipeName, sourceCode")) throw new Error("direct approval must bind the card to the exact saved source");
+  if (!widgetSource.includes("Approve & enable")) throw new Error("card must expose a direct 'Approve & enable' action");
+  if (!widgetSource.includes("Open Reusable tools")) throw new Error("card must expose a Settings management action");
+  if (!/min-h-\[44px\]/.test(widgetSource)) throw new Error("reusable-tool actions must reserve >=44px touch targets");
+  if (!widgetSource.includes("my-ax:settings-open")) throw new Error("Settings action must dispatch my-ax:settings-open");
+  if (!/section:\s*"recipes"/.test(widgetSource) || !/recipeName\s*}/.test(widgetSource)) throw new Error("Settings action must carry {section:'recipes', recipeName} detail");
 
   const chatSource = readFileSync("proof/svelte/Chat.svelte", "utf8");
   // Every underlying tool-call receipt container must remain — the collapse
