@@ -55,5 +55,9 @@ assertIncludes(chat, 'Offline — tap to retry', "offline send control offers an
 assertIncludes(sw, 'my-ax:navigate-ack', "service worker waits for an in-page navigate ack before hard navigation");
 assertIncludes(sw, 'if (!acked) await existing.navigate(absolute);', "service worker only hard-navigates when the app did not ack");
 assertIncludes(chat, 'type: "my-ax:navigate-ack"', "chat acks service-worker navigation to prevent double-navigation");
+// Voice half-duplex: the mic is gated on agent speaking-state to stop the
+// mobile loudspeaker self-feedback loop.
+assertIncludes(chat, 'applyVoiceGate(status)', "voice statuschange drives the half-duplex mic gate");
+assertIncludes(chat, 'voiceClient.toggleMute()', "half-duplex gate suppresses the mic via the voice client mute");
 
 console.log("✓ semantic guards smoke: durable deletes and no-op renames are explicit");
