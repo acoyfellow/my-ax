@@ -462,7 +462,18 @@ app.all("/agents/*", async (c) => {
       const stub = await getAgentByName(c.env.VoiceThinkAgent, voiceName);
       await stub.seedSession(identity, sessionId);
       const routedUrl = new URL(c.req.url);
-      routedUrl.pathname = `/agents/voice-think-agent/${encodeURIComponent(voiceName)}`;
+      // CRITICAL: route with the RAW voiceName, not encodeURIComponent(voiceName).
+      // routeAgentRequest/routePartykitRequest resolve the target DO with
+      // idFromName(rawPathSegment) WITHOUT decoding it. Percent-encoding the
+      // "email:sessionId" name here routed the socket to idFromName("email%3A…")
+      // — a DIFFERENT DO than the idFromName("email:sessionId") instance we just
+      // seeded — so every turn saw empty state and the "%3A" name also broke the
+      // parseVoiceThinkAgentName fallback (no literal ':'), yielding
+      // "Voice session is not linked to a conversation yet." The ':' and '@' in
+      // voiceName are valid, unencoded path-segment characters preserved by the
+      // URL.pathname setter, so the routed DO now matches the seeded one and the
+      // name-parse fallback works as defense-in-depth.
+      routedUrl.pathname = `/agents/voice-think-agent/${voiceName}`;
       const routedRequest = new Request(routedUrl, c.req.raw);
       return (await routeAgentRequest(routedRequest, c.env)) ?? c.text("voice route not found", 404);
     } catch (err) {
