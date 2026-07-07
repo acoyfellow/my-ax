@@ -342,6 +342,37 @@
   border-radius: 6px;
   background: #0b0d12;
 }
+
+/* Audio Messages: inline TTS clip player, rendered like an artifact card. */
+.audio-message {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.audio-message__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.audio-message__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
+}
+.audio-message__icon svg { width: 18px; height: 18px; }
+.audio-message__meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.audio-message__meta strong { color: var(--color-fg); }
+.audio-message__voice { color: var(--color-fg-mut); font-size: 12px; }
+.audio-message__player {
+  width: 100%;
+  height: 40px;
+}
 .svelte-artifact-stage {
   position: relative;
   margin-top: 8px;
