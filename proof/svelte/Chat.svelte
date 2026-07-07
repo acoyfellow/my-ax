@@ -11,6 +11,7 @@
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { createReconnectingSocket } from "./reconnecting-socket";
+  import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import {
     agentStatusFor,
     idleStreamingTurnState,
@@ -33,6 +34,8 @@
     RESUME_SESSION_ONCE_KEY,
     FIRST_SEND_SESSION_ONCE_KEY,
     setActiveSession,
+    captureTitleEpoch,
+    isTitleEpochCurrent,
   } from "@my-ax/store";
 
   // Markdown ships in the application bundle so the first streamed token can
@@ -408,6 +411,13 @@
       if (Date.now() - lastSocketActivityAt > 10_000) {
         responseRecoveryPending = false;
         dispatchTurn({ type: "visibility-stale" });
+        // A backgrounded PWA can return to foreground with a half-open socket:
+        // readyState says OPEN but the pipe is dead. Do not trust it — mark
+        // reconnecting and force a fresh connection so the pill is truthful.
+        if (ws) {
+          setConn("reconnecting");
+          (ws as any)?.forceReconnect?.();
+        }
       }
       requestActiveResponseRecovery();
     }
@@ -595,6 +605,12 @@
       if (!response.ok) throw new Error(body?.error?.message || `Fork failed (${response.status})`);
       const forkId = body?.result?.sessionId;
       if (!forkId) throw new Error("Fork did not return a conversation ID");
+      // Retire the parent conversation's turn before navigating: cancel any
+      // in-flight request (best-effort) and clear its active-turn latch so the
+      // fork does not inherit a stale "thinking" state, and re-opening the
+      // parent later does not either.
+      if (activeRequestId) { try { ws?.send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId })); } catch {} }
+      forgetActiveTurnFor(sessionId);
       localStorage.setItem(SESSION_KEY, forkId);
       setActiveSession(forkId, body?.result?.name);
       sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1");
@@ -796,23 +812,30 @@
   let connectionWatchdogId: ReturnType<typeof setInterval> | null = null;
   const ACTIVE_TURN_KEY_PREFIX = "my-ax-active-turn:";
 
-  function activeTurnKey() {
-    return ACTIVE_TURN_KEY_PREFIX + (localStorage.getItem(SESSION_KEY) || "unknown");
-  }
+  function currentSessionId() { return localStorage.getItem(SESSION_KEY) || "unknown"; }
+  function activeTurnKeyFor(sessionId: string) { return ACTIVE_TURN_KEY_PREFIX + sessionId; }
+  function activeTurnKey() { return activeTurnKeyFor(currentSessionId()); }
   function rememberActiveTurn(id: string, clientMsgId: string) {
-    localStorage.setItem(activeTurnKey(), JSON.stringify({ id, clientMsgId, at: Date.now() }));
+    const sessionId = currentSessionId();
+    localStorage.setItem(activeTurnKeyFor(sessionId), JSON.stringify({ id, clientMsgId, at: Date.now(), sessionId }));
   }
   function forgetActiveTurn() { localStorage.removeItem(activeTurnKey()); }
+  function forgetActiveTurnFor(sessionId: string) { localStorage.removeItem(activeTurnKeyFor(sessionId)); }
   function restoreActiveTurn() {
+    const currentId = currentSessionId();
     try {
-      const saved = JSON.parse(localStorage.getItem(activeTurnKey()) || "null");
-      if (saved?.id && Date.now() - Number(saved.at || 0) < 86400000) {
+      const saved = JSON.parse(localStorage.getItem(activeTurnKeyFor(currentId)) || "null");
+      // Fail closed: only restore a latch that is bound to the mounted session
+      // and fresh (<24h). A legacy latch without sessionId or one that belongs
+      // to another conversation is stale and must be discarded so the next
+      // mount does not falsely enter "thinking".
+      if (activeTurnIsRestorable(saved, currentId)) {
         activeRequestId = saved.id;
         restoredActiveTurn = true;
         dispatchTurn({ type: "restore", requestId: saved.id });
         applyStatus("thinking");
-      } else if (saved) forgetActiveTurn();
-    } catch { forgetActiveTurn(); }
+      } else if (saved) forgetActiveTurnFor(currentId);
+    } catch { forgetActiveTurnFor(currentId); }
   }
 
   // Connector banner state (in-chat red banner).
@@ -869,6 +892,9 @@
     onboardingHidden = true;
     resumingExistingSession = true;
     sessionResumeVisible = true;
+    // Clear the leaving session's active-turn latch so a retired turn cannot
+    // pin "thinking" the next time that conversation is opened.
+    forgetActiveTurn();
     localStorage.setItem(SESSION_KEY, id);
     setActiveSession(id);
     void refreshPendingDecision(id);
@@ -882,10 +908,13 @@
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
 
   async function refreshActiveSessionTitle(id: string) {
+    const epoch = captureTitleEpoch();
     try {
       const body = await fetch("/api/sessions?limit=100", { credentials: "include" }).then((response) => response.json());
       const row = body?.result?.sessions?.find((session: any) => session.id === id);
-      if (row?.name && localStorage.getItem(SESSION_KEY) === id) setActiveSession(id, row.name);
+      // Drop the server title if the active session changed or a newer local
+      // title (rename/fork) landed while this fetch was in flight.
+      if (row?.name && localStorage.getItem(SESSION_KEY) === id && isTitleEpochCurrent(epoch)) setActiveSession(id, row.name);
     } catch {}
   }
 
@@ -969,7 +998,17 @@
         lastSocketActivityAt = Date.now();
         onMessage(data);
       },
-    });
+      // Bounded give-up: after repeated failed reconnects, stop spinning
+      // "Reconnecting…" forever and show a truthful offline state with Retry.
+      onExhausted() {
+        setConn("offline");
+      },
+    }, undefined, { maxAttempts: 8 });
+  }
+
+  function retryConnection() {
+    setConn("reconnecting");
+    (ws as any)?.resume?.();
   }
 
   function onOpen() {
@@ -981,9 +1020,19 @@
     requestActiveResponseRecovery();
     const pendingFirst = sessionStorage.getItem("my-ax-pending-first-message");
     const pendingFirstAttachments = sessionStorage.getItem("my-ax-pending-first-attachments");
-    if (pendingFirst || pendingFirstAttachments) {
+    const pendingFirstSession = sessionStorage.getItem("my-ax-pending-first-session");
+    // Fail closed: only adopt a pending first-message that was typed for the
+    // session now mounted. A payload bound to a different (or missing) session
+    // is dropped so it cannot leak across conversations.
+    const pendingBelongsHere = pendingFirstBelongsHere(pendingFirstSession, currentSessionId());
+    if ((pendingFirst || pendingFirstAttachments) && !pendingBelongsHere) {
       sessionStorage.removeItem("my-ax-pending-first-message");
       sessionStorage.removeItem("my-ax-pending-first-attachments");
+      sessionStorage.removeItem("my-ax-pending-first-session");
+    } else if (pendingFirst || pendingFirstAttachments) {
+      sessionStorage.removeItem("my-ax-pending-first-message");
+      sessionStorage.removeItem("my-ax-pending-first-attachments");
+      sessionStorage.removeItem("my-ax-pending-first-session");
       composerText = pendingFirst || "Describe the attached image.";
       if (pendingFirstAttachments) {
         try {
@@ -1443,6 +1492,9 @@
       }
       sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1");
       sessionStorage.setItem(FIRST_SEND_SESSION_ONCE_KEY, "1");
+      // Bind the pending payload to the session it was typed for so a later
+      // session's onOpen cannot adopt a message meant for a different one.
+      sessionStorage.setItem("my-ax-pending-first-session", currentSessionId());
       sessionStorage.setItem("my-ax-pending-first-message", text || "Describe the attached image.");
       sessionStorage.setItem("my-ax-pending-first-attachments", JSON.stringify(pendingAttachments));
       location.reload();
@@ -1698,7 +1750,14 @@
       }
       if (event.data?.type !== "my-ax:navigate" || typeof event.data.href !== "string") return;
       const target = parseMyAxDeepLink(event.data.href, location.href);
-      if (target) followDeepLink(target);
+      if (target) {
+        // Ack so the service worker does not also hard-navigate this open PWA
+        // (which would double-navigate / remount). The in-page switch owns the
+        // happy path; the SW only falls back to .navigate() if no ack arrives.
+        try { (event.source as any)?.postMessage?.({ type: "my-ax:navigate-ack", href: event.data.href }); } catch {}
+        try { navigator.serviceWorker?.controller?.postMessage({ type: "my-ax:navigate-ack", href: event.data.href }); } catch {}
+        followDeepLink(target);
+      }
     };
     window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
     window.addEventListener("my-ax:navigate", onNavigate as EventListener);
@@ -2059,16 +2118,16 @@
           >＋</button>
           <button
             type="submit"
-            onclick={onSendClick}
+            onclick={wsState.conn === "offline" ? retryConnection : onSendClick}
             data-status={sendStatus}
-            disabled={sendStatus === "offline"}
+            disabled={sendStatus === "offline" && wsState.conn !== "offline"}
             class="flex-none flex items-center justify-center rounded-lg w-11 h-11 transition-all duration-150 border border-transparent
               data-[status=idle]:bg-brand/10 data-[status=idle]:text-brand data-[status=idle]:border-brand/25 data-[status=idle]:hover:bg-brand/20 data-[status=idle]:hover:border-brand/40 data-[status=idle]:active:bg-brand/25
               data-[status=thinking]:bg-brand data-[status=thinking]:text-white data-[status=thinking]:hover:bg-brand/90
               data-[status=running]:bg-brand data-[status=running]:text-white data-[status=running]:hover:bg-brand/90
               data-[status=offline]:bg-surface-1 data-[status=offline]:text-fg-mut/50 data-[status=offline]:cursor-not-allowed"
-            aria-label={sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send message"}
-            title={sendStatus === "offline" ? (wsState.conn === "reconnecting" ? "Reconnecting…" : "Offline") : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send (⌘↵)"}
+            aria-label={wsState.conn === "offline" ? "Offline — tap to retry" : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send message"}
+            title={sendStatus === "offline" ? (wsState.conn === "reconnecting" ? "Reconnecting…" : "Offline — tap to retry") : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send (⌘↵)"}
           >
             {#if sendStatus === "idle" || sendStatus === "offline"}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
