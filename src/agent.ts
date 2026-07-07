@@ -25,6 +25,7 @@ import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact } from "./artifacts";
+import { createAudioMessage } from "./audio-messages";
 import type { Attachment } from "./types";
 import { makeOAuthClientStore } from "./oauth-store";
 import { getBuiltinConnectors } from "./connectors";
@@ -828,6 +829,19 @@ export class MyAgent extends Think<Env> {
         return result.results ?? [];
       },
       createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
+      sendVoiceMessage: async (input) => {
+        const clip = await createAudioMessage(env, identity, sessionId, input);
+        // Deliver a push deep-linking back to this conversation so the owner can
+        // open the inline player, mirroring artifact/ask_user delivery.
+        await notifyOwner(env, identity.email, {
+          kind: "session.update",
+          sessionId,
+          title: "my · ax voice message",
+          body: clip.title,
+          href: `/?session=${encodeURIComponent(sessionId)}`,
+        }).catch((error) => console.error("voice_message_push_failed", { sessionId, err: error instanceof Error ? error.message : String(error) }));
+        return clip;
+      },
       listSavedRecipes: async () => {
         // Dual-read from cm_snippets projection first, falling back to an
         // in-memory projection of enabled saved_recipes when the

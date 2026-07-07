@@ -141,6 +141,8 @@ export interface ToolContext {
   searchConversations: (query: string, limit?: number) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
   /** Compile and persist one owner-scoped Svelte artifact attached to this conversation. */
   createSvelteArtifact: (input: { title: string; source: string }) => Promise<{ kind: "svelte-artifact"; artifactId: string; title: string; src: string; sourceHash: string }>;
+  /** Generate a short TTS clip, store it (7-day TTL), and deliver a push notification. */
+  sendVoiceMessage: (input: { text: string; voice?: string }) => Promise<{ kind: "audio-message"; audioId: string; title: string; voice: string; src: string; bytes: number; createdAt: string; expiresAt: string }>;
   /** Optional saved-recipe execution guard. Undefined means unrestricted normal Code Mode. */
   allowedWorkCapabilities?: string[];
   /** Disabled while running a saved recipe so saved recipes cannot recursively call saved recipes. */

@@ -32,6 +32,13 @@ try {
   const svelteArtifact = resolve({ kind: "svelte-artifact", artifactId: "44444444-4444-4444-8444-444444444444", title: "Counter", src: "/api/artifacts/44444444-4444-4444-8444-444444444444/preview" }, "create_svelte_artifact");
   const mismatchedSvelteArtifact = resolve({ kind: "svelte-artifact", artifactId: "44444444-4444-4444-8444-444444444444", title: "Bad", src: "/api/artifacts/55555555-5555-4555-8555-555555555555/preview" }, "create_svelte_artifact");
   const externalSvelteArtifact = resolve({ kind: "svelte-artifact", artifactId: "55555555-5555-4555-8555-555555555555", title: "Bad", src: "https://evil.example/widget" }, "create_svelte_artifact");
+  // ── Audio messages: same-origin /api/audio/<uuid> src with matching id. ──
+  const audio = resolve({ kind: "audio-message", audioId: "66666666-6666-4666-8666-666666666666", title: "Standup summary", voice: "nova", src: "/api/audio/66666666-6666-4666-8666-666666666666" }, "send_voice_message");
+  const audioEnvelope = resolve({ result: { kind: "audio-message", audioId: "77777777-7777-4777-8777-777777777777", title: "Envelope", voice: "alloy", src: "/api/audio/77777777-7777-4777-8777-777777777777" } }, "send_voice_message");
+  const audioMismatch = resolve({ kind: "audio-message", audioId: "66666666-6666-4666-8666-666666666666", title: "Bad", voice: "nova", src: "/api/audio/88888888-8888-4888-8888-888888888888" }, "send_voice_message");
+  const audioExternal = resolve({ kind: "audio-message", audioId: "99999999-9999-4999-8999-999999999999", title: "Bad", voice: "nova", src: "https://evil.example/clip.mp3" }, "send_voice_message");
+  const audioBadVoice = resolve({ kind: "audio-message", audioId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", title: "Voice fallback", voice: "villain", src: "/api/audio/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, "send_voice_message");
+
   const svg = resolve("data:image/svg+xml;base64,PHN2Zz4=", "machinectl_call");
   const arbitrary = resolve({ html: "<script>alert(1)</script>", component: "Anything" }, "tool");
 
@@ -133,6 +140,11 @@ try {
   if (codemodeArtifact.kind !== "inline-raster-image") throw new Error("machinectl_code raster result envelope missing");
   if (externalArtifact.kind !== "raw-text") throw new Error("external raster artifact URL must remain inert raw text");
   if (svelteArtifact.kind !== "svelte-artifact") throw new Error("same-origin Svelte artifact preview missing");
+  if (audio.kind !== "audio-message" || audio.src !== "/api/audio/66666666-6666-4666-8666-666666666666" || audio.voice !== "nova" || audio.title !== "Standup summary") throw new Error("same-origin audio message widget missing");
+  if (audioEnvelope.kind !== "audio-message" || audioEnvelope.audioId !== "77777777-7777-4777-8777-777777777777") throw new Error("audio message result envelope must unwrap");
+  if (audioMismatch.kind !== "raw-text") throw new Error("audio message id and src path must match");
+  if (audioExternal.kind !== "raw-text") throw new Error("external audio message URL must remain inert raw text");
+  if (audioBadVoice.kind !== "audio-message" || audioBadVoice.voice !== "alloy") throw new Error("unknown audio voice must fall back to alloy");
   if (mismatchedSvelteArtifact.kind !== "raw-text") throw new Error("Svelte artifact id and preview path must match");
   if (externalSvelteArtifact.kind !== "raw-text") throw new Error("external Svelte artifact URL must remain inert raw text");
   if (svg.kind !== "raw-text") throw new Error("SVG must remain inert raw text");
@@ -143,6 +155,9 @@ try {
   // ── Widget copy + action + receipt preservation contract ────────────────
   const widgetSource = readFileSync("proof/svelte/ToolResultWidget.svelte", "utf8");
   if (!widgetSource.includes("Reusable tool")) throw new Error("reusable-tool card must use the 'Reusable tool' label");
+  if (!widgetSource.includes('data-tool-widget="audio-message"')) throw new Error("audio message card must render its widget container");
+  if (!/<audio[^>]*\bcontrols\b/.test(widgetSource)) throw new Error("audio message card must render a native <audio controls> player");
+  if (!widgetSource.includes("widget.src")) throw new Error("audio player must bind the validated same-origin clip src");
   if (/\bSnippet(\s|,|\.)/.test(widgetSource) || /\bsnippet(\s|,|\.)/.test(widgetSource)) throw new Error("owner-visible card must not use snippet copy");
   if (/\brecipe\b/i.test(widgetSource) && !widgetSource.includes("reusable-tool-candidate")) throw new Error("owner-visible card must not use raw recipe copy");
   if (!widgetSource.includes("/api/recipes/by-name/approval")) throw new Error("card must call the owner-scoped direct approval endpoint");

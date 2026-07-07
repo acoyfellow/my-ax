@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { getRasterArtifact, getUploadObject, storeImageUpload } from "../uploads";
+import { getAudioMessageObject } from "../audio-messages";
 
 export function registerUploadRoutes(app: Hono<AppEnv>) {
   app.post("/api/uploads", async (c) => {
@@ -32,6 +33,22 @@ export function registerUploadRoutes(app: Hono<AppEnv>) {
       return new Response(obj.body, { headers });
     } catch {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+    }
+  });
+
+  app.get("/api/audio/:id", async (c) => {
+    try {
+      const obj = await getAudioMessageObject(c.env, c.get("identity"), c.req.param("id"));
+      if (!obj) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Audio message not found or expired" }, next_actions: [] }, 404);
+      const headers = new Headers();
+      obj.writeHttpMetadata(headers);
+      headers.set("Content-Type", "audio/mpeg");
+      // Clips are immutable and owner-private; cache within the TTL window.
+      headers.set("Cache-Control", "private, max-age=86400");
+      headers.set("Accept-Ranges", "bytes");
+      return new Response(obj.body, { headers });
+    } catch {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Audio message not found" }, next_actions: [] }, 404);
     }
   });
 

@@ -109,6 +109,19 @@ export const TOOLS: ToolDef[] = [
     },
     execute: async (args, ctx) => JSON.stringify(await ctx.createSvelteArtifact({ title: args.title as string, source: args.source as string })),
   },
+  {
+    name: "send_voice_message",
+    description: "Generate a short spoken audio clip (text-to-speech) and deliver it to the owner as an inline audio player in this conversation, plus a push notification deep-linking here. Use when a spoken message is more natural than text — a summary to listen to, an audible heads-up, or when the user asks you to 'say' or 'read' something aloud. Keep clips under a minute (roughly 1000 characters). Each call creates one new clip.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "The text to speak. Keep it under ~1000 characters (under a minute of speech). No secrets." },
+        voice: { type: "string", enum: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"], description: "Optional TTS voice. Defaults to alloy." },
+      },
+      required: ["text"],
+    },
+    execute: async (args, ctx) => JSON.stringify(await ctx.sendVoiceMessage({ text: args.text as string, voice: args.voice as string | undefined })),
+  },
 ];
 
 /**
