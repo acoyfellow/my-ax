@@ -14,7 +14,7 @@ type GatewayEnv = {
   LLM_GATEWAY_AUTH_HEADER?: string;
 };
 
-function gatewayConfig(env: Env) {
+export function gatewayConfig(env: Env) {
   const e = env as unknown as GatewayEnv;
   const baseURL = e.LLM_GATEWAY_URL?.trim();
   const token = e.LLM_GATEWAY_TOKEN;

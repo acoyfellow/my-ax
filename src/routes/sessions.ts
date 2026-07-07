@@ -7,6 +7,7 @@ import { mintBridgeTicket } from "../bridge";
 import { clampEntriesLimit, pageConversationEntries, parseEntriesCursor, type ConversationEntryRow } from "../session-entries";
 import { getSessionAgent } from "../agent-stub";
 import { deleteSessionArtifacts } from "../artifacts";
+import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 
@@ -233,6 +234,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       for (const job of jobs.results ?? []) await cancelJobSchedule(c.env, job);
       await c.env.DB.prepare("DELETE FROM jobs WHERE session_id = ? AND owner_email = ?").bind(id, email).run();
       await deleteSessionArtifacts(c.env, c.get("identity"), id);
+      await deleteSessionAudioMessages(c.env, c.get("identity"), id);
       await c.env.DB.prepare(
         "DELETE FROM sessions WHERE id = ? AND owner_email = ?",
       )

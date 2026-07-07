@@ -106,6 +106,19 @@
       ></iframe>
     </div>
   </section>
+{:else if widget.kind === "audio-message"}
+  <section class="tool-call__result audio-message" data-tool-widget="audio-message" data-audio-id={widget.audioId}>
+    <div class="audio-message__head">
+      <span class="audio-message__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4h4l5 5V5L7 10H3z"/><path d="M16 8a5 5 0 0 1 0 8"/></svg>
+      </span>
+      <div class="audio-message__meta">
+        <strong>{widget.title}</strong>
+        <span class="audio-message__voice">Voice message · {widget.voice}</span>
+      </div>
+    </div>
+    <audio class="audio-message__player" controls preload="metadata" src={widget.src}></audio>
+  </section>
 {:else if widget.kind === "browser-run"}
   <div class="tool-call__result tool-call__browser-summary" data-tool-widget="browser-run">
     <strong>{widget.heading}</strong>

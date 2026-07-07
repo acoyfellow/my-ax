@@ -12,6 +12,8 @@ const MAX_INLINE_IMAGE_URL_CHARS = 32_000_000;
 const INTERNAL_BROWSER_REPLAY_RE = /^\/browser\/replay\/[A-Za-z0-9._~%+-]+$/;
 const INTERNAL_RASTER_ARTIFACT_RE = /^\/api\/artifacts\/[0-9a-f-]{36}$/i;
 const INTERNAL_SVELTE_ARTIFACT_RE = /^\/api\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preview$/i;
+const INTERNAL_AUDIO_MESSAGE_RE = /^\/api\/audio\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+const AUDIO_VOICES = new Set(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
 const MAX_BROWSER_TEXT_CHARS = 2_000;
 
 export type ToolResultWidget =
@@ -41,6 +43,7 @@ export type ToolResultWidget =
     }
   | { kind: "inline-raster-image"; src: string; alt: string }
   | { kind: "svelte-artifact"; src: string; title: string; artifactId: string }
+  | { kind: "audio-message"; src: string; title: string; audioId: string; voice: string }
   | {
       kind: "reusable-tool-candidate";
       /** Nonempty, model-adjacent identity used to collapse duplicate cards within one conversation. */
@@ -117,6 +120,18 @@ function svelteArtifactWidget(value: unknown): ToolResultWidget | null {
   const match = typeof result.src === "string" ? result.src.match(INTERNAL_SVELTE_ARTIFACT_RE) : null;
   if (result.kind !== "svelte-artifact" || !match || typeof result.artifactId !== "string" || result.artifactId.toLowerCase() !== match[1].toLowerCase()) return null;
   return { kind: "svelte-artifact", src: result.src as string, title: boundedText(result.title, 120) ?? "Interactive artifact", artifactId: result.artifactId };
+}
+
+function audioMessageWidget(value: unknown): ToolResultWidget | null {
+  const decoded = decodeJsonOnce(value);
+  if (typeof decoded !== "object" || decoded === null) return null;
+  if ("content" in decoded) return audioMessageWidget((decoded as { content?: unknown }).content);
+  if ("result" in decoded) return audioMessageWidget((decoded as { result?: unknown }).result);
+  const result = decoded as Record<string, unknown>;
+  const match = typeof result.src === "string" ? result.src.match(INTERNAL_AUDIO_MESSAGE_RE) : null;
+  if (result.kind !== "audio-message" || !match || typeof result.audioId !== "string" || result.audioId.toLowerCase() !== match[1].toLowerCase()) return null;
+  const voice = typeof result.voice === "string" && AUDIO_VOICES.has(result.voice) ? result.voice : "alloy";
+  return { kind: "audio-message", src: result.src as string, title: boundedText(result.title, 120) ?? "Voice message", audioId: result.audioId, voice };
 }
 
 function delegationGroupWidget(value: unknown, toolName: string): ToolResultWidget | null {
@@ -285,6 +300,9 @@ export function resolveToolResultWidget(value: unknown, toolName = "tool"): Tool
 
   const svelteArtifact = svelteArtifactWidget(value);
   if (svelteArtifact) return svelteArtifact;
+
+  const audioMessage = audioMessageWidget(value);
+  if (audioMessage) return audioMessage;
 
   const browserRun = browserRunWidget(value);
   if (browserRun) return browserRun;
