@@ -5,6 +5,7 @@
   import { onMount, tick } from "svelte";
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
+  import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
@@ -207,15 +208,61 @@
   let voiceError = $state<string | null>(null);
   let voiceClient: VoiceClient | null = null;
 
+  // ── Half-duplex acoustic gate ──────────────────────────────────────
+  // On a phone loudspeaker the mic hears the agent's own TTS; browser echo
+  // cancellation can't remove it, so STT transcribes the agent and it replies
+  // to itself forever. While the agent produces audio we suppress the mic from
+  // the STT pipeline, then re-arm after a short debounce once playback ends.
+  // See ./voice-half-duplex.ts for the pure state machine.
+  let voiceGate = initialVoiceGateState();
+  let voiceMicSuppressed = false; // mirrors VoiceClient's internal mute flag
+  let voiceRearmTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearVoiceRearmTimer() {
+    if (voiceRearmTimer !== null) { clearTimeout(voiceRearmTimer); voiceRearmTimer = null; }
+  }
+  // VoiceClient.toggleMute() is a flip, and it starts unmuted. Only toggle when
+  // the desired suppression state differs from the client's actual mute state.
+  function setVoiceMicSuppressed(suppressed: boolean) {
+    if (!voiceClient) return;
+    if (voiceMicSuppressed === suppressed) return;
+    voiceClient.toggleMute();
+    voiceMicSuppressed = suppressed;
+  }
+  function applyVoiceGate(status: VoiceStatus) {
+    const { state, action } = onStatusChange(voiceGate, status);
+    voiceGate = state;
+    if (action.type === "suppress-mic") {
+      clearVoiceRearmTimer(); // onStatusChange already cleared gate.rearmTimer
+      setVoiceMicSuppressed(true);
+    } else if (action.type === "cancel-rearm") {
+      clearVoiceRearmTimer(); // agent resumed audio before the debounce fired
+    } else if (action.type === "schedule-rearm") {
+      clearVoiceRearmTimer();
+      voiceRearmTimer = setTimeout(() => {
+        voiceRearmTimer = null;
+        voiceGate = rearm(voiceGate);
+        setVoiceMicSuppressed(false);
+      }, action.delayMs);
+      // Mark the in-flight debounce so a repeated listening status won't
+      // schedule a second timer (withRearmTimer stores a non-null marker).
+      voiceGate = withRearmTimer(voiceGate, 1);
+    }
+  }
+
   function resetVoiceState() {
     voiceStarting = false;
     voiceStatus = "idle";
     voiceInterim = null;
     voiceAudioLevel = 0;
     voiceError = null;
+    clearVoiceRearmTimer();
+    voiceGate = initialVoiceGateState();
+    voiceMicSuppressed = false;
   }
 
   async function stopVoiceMode() {
+    clearVoiceRearmTimer();
     voiceClient?.endCall();
     voiceClient?.disconnect();
     voiceClient = null;
@@ -235,6 +282,10 @@
     client.addEventListener("statuschange", (status) => {
       voiceStatus = status;
       voiceStarting = false;
+      // Half-duplex: suppress the mic while the agent produces audio, re-arm
+      // after a debounce once it returns to listening. Stops the loudspeaker
+      // self-feedback loop on mobile PWAs.
+      applyVoiceGate(status);
     });
     client.addEventListener("transcriptchange", () => {});
     client.addEventListener("interimtranscript", (text) => { voiceInterim = text; });
