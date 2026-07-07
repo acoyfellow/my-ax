@@ -93,9 +93,21 @@ self.addEventListener("notificationclick", (event) => {
     if (existing) {
       // Navigating an already-open standalone PWA can restore its cached
       // conversation before the query-string target reaches Chat bootstrap.
-      // Let the live app switch sessions explicitly instead.
-      existing.postMessage({ type: "my-ax:navigate", href: absolute });
-      await existing.navigate(absolute);
+      // Prefer the live in-page switch: post the target and wait briefly for
+      // the app to ack. Only fall back to a hard .navigate() when the app is
+      // not listening (e.g. mid-load), so we never double-navigate.
+      const acked = await new Promise((resolve) => {
+        const onAck = (ev) => {
+          if (ev.data?.type === "my-ax:navigate-ack" && ev.data?.href === absolute) {
+            self.removeEventListener("message", onAck);
+            resolve(true);
+          }
+        };
+        self.addEventListener("message", onAck);
+        existing.postMessage({ type: "my-ax:navigate", href: absolute });
+        setTimeout(() => { self.removeEventListener("message", onAck); resolve(false); }, 400);
+      });
+      if (!acked) await existing.navigate(absolute);
       return existing.focus();
     }
     return clients.openWindow(absolute);

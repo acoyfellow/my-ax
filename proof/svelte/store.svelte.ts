@@ -29,8 +29,16 @@ export const sessionState = $state({
   id: initialActiveSessionId,
   title: storedSessionTitle(initialActiveSessionId) || (initialActiveSessionId ? `Session ${initialActiveSessionId.slice(0, 8)}` : "New conversation"),
 });
+// Monotonic epoch bumped on every title-affecting change (id change or a
+// local title write). Async title refreshes capture the epoch before their
+// fetch and drop their result if a newer local title landed meanwhile, so a
+// slow server list cannot clobber a fresh rename/fork title.
+let sessionTitleEpoch = 0;
+export function captureTitleEpoch(): number { return sessionTitleEpoch; }
+export function isTitleEpochCurrent(epoch: number): boolean { return epoch === sessionTitleEpoch; }
 export function setActiveSession(id: string | null, title?: string | null) {
   const nextTitle = title?.trim();
+  sessionTitleEpoch += 1;
   sessionState.id = id;
   sessionState.title = nextTitle || storedSessionTitle(id) || (id ? `Session ${id.slice(0, 8)}` : "New conversation");
   if (id && nextTitle) try { localStorage.setItem(`my-ax-session-title:${id}`, nextTitle); } catch {}

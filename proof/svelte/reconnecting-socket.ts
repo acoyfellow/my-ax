@@ -22,11 +22,23 @@ export type ReconnectingSocketCallbacks = {
   onClose(event: CloseEvent): void;
   onError(): void;
   onMessage(data: string): void;
+  // Fired once when the transport gives up after maxAttempts consecutive
+  // failed connects. The transport stops scheduling retries; the UI can show a
+  // truthful terminal offline state and call resume() to try again.
+  onExhausted?(info: { attempts: number }): void;
+};
+
+export type ReconnectingSocketOptions = {
+  // Cap on consecutive failed connects before onExhausted fires. Omit for the
+  // default unbounded retry behavior (preserves the pre-existing contract).
+  maxAttempts?: number;
 };
 
 export type ReconnectingSocket = {
   send(data: string): void;
   forceReconnect(): void;
+  // Resume reconnection after terminal exhaustion (from a Retry affordance).
+  resume(): void;
   close(): void;
   readonly readyState: number;
 };
@@ -50,9 +62,12 @@ export function createReconnectingSocket(
   url: string,
   callbacks: ReconnectingSocketCallbacks,
   dependencies: ReconnectingSocketDependencies = browserDependencies,
+  options: ReconnectingSocketOptions = {},
 ): ReconnectingSocket {
+  const maxAttempts = options.maxAttempts;
   let attempt = 0;
   let manuallyClosed = false;
+  let exhausted = false;
   let socket: ReconnectingSocketLike | null = null;
   let retryTimer: TimerHandle | null = null;
   const queue: string[] = [];
@@ -62,7 +77,7 @@ export function createReconnectingSocket(
   }
 
   function connect() {
-    if (manuallyClosed) return;
+    if (manuallyClosed || exhausted) return;
     retryTimer = null;
     const candidate = dependencies.createSocket(url);
     socket = candidate;
@@ -70,13 +85,23 @@ export function createReconnectingSocket(
     candidate.addEventListener("open", () => {
       if (!isCurrent(candidate)) return;
       attempt = 0;
+      exhausted = false;
       while (queue.length) candidate.send(queue.shift()!);
       callbacks.onOpen();
     });
     candidate.addEventListener("close", (event) => {
       if (!isCurrent(candidate)) return;
       callbacks.onClose(event);
-      const baseDelay = Math.min(10_000, 500 * Math.pow(1.5, attempt++));
+      attempt += 1;
+      // Bounded give-up: after maxAttempts consecutive failed connects, stop
+      // retrying and signal terminal exhaustion so the UI can stop lying with
+      // an infinite "Reconnecting…" and offer an explicit Retry.
+      if (maxAttempts !== undefined && attempt >= maxAttempts) {
+        exhausted = true;
+        callbacks.onExhausted?.({ attempts: attempt });
+        return;
+      }
+      const baseDelay = Math.min(10_000, 500 * Math.pow(1.5, attempt - 1));
       const delay = baseDelay * (0.85 + dependencies.random() * 0.3);
       retryTimer = dependencies.schedule(connect, delay);
     });
@@ -101,6 +126,13 @@ export function createReconnectingSocket(
     forceReconnect() {
       if (manuallyClosed) return;
       socket?.close(4000, "stale connection");
+    },
+    resume() {
+      if (manuallyClosed || !exhausted) return;
+      exhausted = false;
+      attempt = 0;
+      if (retryTimer !== null) { dependencies.cancel(retryTimer); retryTimer = null; }
+      connect();
     },
     close() {
       if (manuallyClosed) return;

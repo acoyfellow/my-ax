@@ -66,6 +66,8 @@ function harness() {
   return { sockets, clock, deps };
 }
 
+const noops = { onOpen: () => {}, onClose: () => {}, onError: () => {}, onMessage: () => {} };
+
 test("manual retirement suppresses every late callback from the old conversation", () => {
   const { sockets, clock, deps } = harness();
   const events: string[] = [];
@@ -153,6 +155,76 @@ test("send after manual close is dropped, not queued", () => {
   conn.close();
   conn.send("late");
   assert.deepEqual(sockets[0].sent, []);
+});
+
+test("exhaustion fires onExhausted after maxAttempts and stops scheduling", () => {
+  const { sockets, clock, deps } = harness();
+  let exhausted = 0;
+  createReconnectingSocket("wss://a", { ...noops, onExhausted: () => { exhausted++; } }, deps, { maxAttempts: 3 });
+  for (let i = 0; i < 3; i++) {
+    sockets[i].emit("close", { wasClean: false });
+    if (clock.pendingCount()) clock.advance(20_000);
+  }
+  assert.equal(exhausted, 1);
+  assert.equal(clock.pendingCount(), 0);
+  assert.equal(sockets.length, 3);
+});
+
+test("resume() after exhaustion reconnects and resets the attempt counter", () => {
+  const { sockets, clock, deps } = harness();
+  const conn = createReconnectingSocket("wss://a", { ...noops, onExhausted: () => {} }, deps, { maxAttempts: 2 });
+  sockets[0].emit("close", { wasClean: false });
+  clock.advance(20_000);
+  sockets[1].emit("close", { wasClean: false }); // attempt 2 -> exhausted
+  assert.equal(clock.pendingCount(), 0);
+  conn.resume();
+  assert.equal(sockets.length, 3);
+  sockets[2].emit("close", { wasClean: false }); // fresh retry, not immediate exhaustion
+  assert.equal(clock.pendingCount(), 1);
+});
+
+test("a successful open before maxAttempts resets attempt so exhaustion cannot fire prematurely", () => {
+  const { sockets, clock, deps } = harness();
+  let exhausted = 0;
+  createReconnectingSocket("wss://a", { ...noops, onExhausted: () => exhausted++ }, deps, { maxAttempts: 2 });
+  sockets[0].emit("close", { wasClean: false }); // attempt -> 1
+  clock.advance(20_000);
+  sockets[1].emit("open");                        // resets attempt
+  sockets[1].emit("close", { wasClean: false });  // attempt -> 1 again, not 2
+  assert.equal(exhausted, 0);
+  assert.equal(clock.pendingCount(), 1);
+});
+
+test("resume() while not exhausted is a no-op", () => {
+  const { sockets, deps } = harness();
+  const conn = createReconnectingSocket("wss://a", noops, deps, { maxAttempts: 5 });
+  sockets[0].emit("open");
+  conn.resume();
+  assert.equal(sockets.length, 1);
+});
+
+test("omitting maxAttempts preserves unbounded retry", () => {
+  const { sockets, clock, deps } = harness();
+  let exhausted = 0;
+  createReconnectingSocket("wss://a", { ...noops, onExhausted: () => exhausted++ }, deps);
+  for (let i = 0; i < 20; i++) {
+    sockets[i].emit("close", { wasClean: false });
+    assert.equal(clock.pendingCount(), 1); // always reschedules, never exhausts
+    clock.advance(20_000);
+  }
+  assert.equal(exhausted, 0);
+  assert.equal(sockets.length, 21); // each retry created a fresh socket
+});
+
+test("send during exhaustion queues; resume then open flushes in order", () => {
+  const { sockets, clock, deps } = harness();
+  const conn = createReconnectingSocket("wss://a", { ...noops, onExhausted: () => {} }, deps, { maxAttempts: 1 });
+  sockets[0].emit("close", { wasClean: false }); // exhausted immediately
+  conn.send("x");
+  conn.send("y");
+  conn.resume();
+  sockets[1].emit("open");
+  assert.deepEqual(sockets[1].sent, ["x", "y"]);
 });
 
 test("forceReconnect retires the current socket with code 4000 and preserves the queue", () => {

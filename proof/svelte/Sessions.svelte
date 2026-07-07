@@ -16,7 +16,7 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
-  import { FIRST_SEND_SESSION_ONCE_KEY, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState } from "@my-ax/store";
+  import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState } from "@my-ax/store";
 
   type SessionRow = {
     id: string;
@@ -101,6 +101,7 @@
     loading = true;
     errorText = null;
     cursor = null;
+    const titleEpoch = captureTitleEpoch();
     try {
       const requestedId = localStorage.getItem(SESSION_KEY);
       const r = await fetch(`/api/sessions?limit=${PAGE_SIZE}`, {
@@ -113,7 +114,9 @@
       // Chat bootstrap can choose the latest server session while this eager
       // sidebar fetch is in flight. Do not let a stale pre-bootstrap null reset
       // clobber the newly selected app-bar title.
-      if (requestedId === localStorage.getItem(SESSION_KEY)) setActiveSession(requestedId, active?.name);
+      // Only push the server title if the active session is unchanged AND no
+      // newer local title (rename/fork) landed while this list was in flight.
+      if (requestedId === localStorage.getItem(SESSION_KEY) && isTitleEpochCurrent(titleEpoch)) setActiveSession(requestedId, active?.name);
       cursor = d?.result?.nextCursor ?? null;
       // Scroll the active row into view after the next paint.
       if (open) setTimeout(scrollActiveIntoView, 100);
