@@ -10,6 +10,7 @@
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
+  import { createReconnectingSocket } from "./reconnecting-socket";
   import {
     agentStatusFor,
     idleStreamingTurnState,
@@ -873,6 +874,7 @@
     void refreshPendingDecision(id);
     void refreshActiveSessionTitle(id);
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    setConn("reconnecting");
     ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${id}`);
     queueMicrotask(() => { void hydrateHistoryTimestamps(); });
   }
@@ -952,52 +954,22 @@
   }
 
   function makeReconnectingSocket(url: string) {
-    let attempt = 0;
-    let manuallyClosed = false;
-    let socket: WebSocket | null = null;
-    const queue: string[] = [];
-    const target = new EventTarget();
-
-    function connect() {
-      socket = new WebSocket(url);
-      socket.addEventListener("open", () => {
+    return createReconnectingSocket(url, {
+      onOpen() {
         lastSocketActivityAt = Date.now();
-        attempt = 0;
-        while (queue.length) socket!.send(queue.shift()!);
         onOpen();
-      });
-      socket.addEventListener("close", (e) => {
+      },
+      onClose(e) {
         onClose(e);
-        if (manuallyClosed) return;
-        const delay = Math.min(10_000, 500 * Math.pow(1.5, attempt++)) * (0.85 + Math.random() * 0.3);
-        setTimeout(connect, delay);
-      });
-      socket.addEventListener("error", () => {
+      },
+      onError() {
         setConn("reconnecting");
-      });
-      socket.addEventListener("message", (e) => {
+      },
+      onMessage(data) {
         lastSocketActivityAt = Date.now();
-        target.dispatchEvent(new MessageEvent("message", { data: e.data }));
-        onMessage(e.data);
-      });
-    }
-    connect();
-    return {
-      send(data: string) {
-        if (socket && socket.readyState === WebSocket.OPEN) socket.send(data);
-        else queue.push(data);
+        onMessage(data);
       },
-      forceReconnect() {
-        socket?.close(4000, "stale connection");
-      },
-      close() {
-        manuallyClosed = true;
-        socket?.close();
-      },
-      get readyState() {
-        return socket?.readyState ?? WebSocket.CONNECTING;
-      },
-    };
+    });
   }
 
   function onOpen() {
@@ -1024,9 +996,11 @@
       pendingFirstReady = true;
     }
   }
-  function onClose(e: CloseEvent) {
+  function onClose(_e: CloseEvent) {
     dispatchTurn({ type: "connection-close" });
-    setConn(e.wasClean ? "offline" : "reconnecting");
+    // A non-manual close always schedules a retry. Manual closes are retired
+    // inside createReconnectingSocket and never reach this callback.
+    setConn("reconnecting");
     // Do not discard an active request here. Think persists stream chunks and
     // can replay a response after reconnect, including a response that
     // completed while this tab was suspended in the background.
