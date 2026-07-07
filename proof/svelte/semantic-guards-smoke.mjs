@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const appShell = readFileSync(new URL("./AppShell.svelte", import.meta.url), "utf8");
 const settings = readFileSync(new URL("./Settings.svelte", import.meta.url), "utf8");
 const sessions = readFileSync(new URL("./Sessions.svelte", import.meta.url), "utf8");
+const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
+const reconnectingSocket = readFileSync(new URL("./reconnecting-socket.ts", import.meta.url), "utf8");
 
 function assertIncludes(haystack, needle, label) {
   if (!haystack.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
@@ -25,5 +27,10 @@ assertIncludes(settings, 'class="job-action-button min-h-[44px]', "reusable-tool
 assertIncludes(appShell, 'if (title === sessionState.title) return cancelRename();', "unchanged conversation rename does not PATCH");
 assertIncludes(sessions, 'return "reconnecting";', "session row distinguishes reconnecting from agent running");
 assertIncludes(sessions, 'return "Reconnecting";', "session reconnecting label is honest about transport state");
+assertIncludes(reconnectingSocket, 'return !manuallyClosed && socket === candidate;', "reconnecting transport gates every callback on the current, non-retired socket");
+assertIncludes(reconnectingSocket, 'if (retryTimer !== null) dependencies.cancel(retryTimer);', "manual close cancels any scheduled reconnect timer");
+assertIncludes(sessions, 'if (id === localStorage.getItem(SESSION_KEY)) {', "sidebar no-op switch compares against synchronous localStorage, not a stale snapshot");
+assertIncludes(sessions, 'let currentId = $derived(sessionState.id);', "sidebar active identity is driven by the shared session store");
+assertIncludes(chat, 'setConn("reconnecting");\n    ws = makeReconnectingSocket(', "in-place switch marks reconnecting synchronously until the new socket opens");
 
 console.log("✓ semantic guards smoke: durable deletes and no-op renames are explicit");

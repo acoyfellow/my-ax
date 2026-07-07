@@ -16,7 +16,7 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
-  import { FIRST_SEND_SESSION_ONCE_KEY, RESUME_SESSION_ONCE_KEY, SESSION_KEY, setActiveSession, wsState } from "@my-ax/store";
+  import { FIRST_SEND_SESSION_ONCE_KEY, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState } from "@my-ax/store";
 
   type SessionRow = {
     id: string;
@@ -34,7 +34,7 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let errorText = $state<string | null>(null);
-  let currentId = $state<string | null>(null);
+  let currentId = $derived(sessionState.id);
 
   let scrollEl = $state<HTMLDivElement | undefined>(undefined);
 
@@ -102,18 +102,18 @@
     errorText = null;
     cursor = null;
     try {
-      currentId = localStorage.getItem(SESSION_KEY);
+      const requestedId = localStorage.getItem(SESSION_KEY);
       const r = await fetch(`/api/sessions?limit=${PAGE_SIZE}`, {
         credentials: "include",
       });
       if (!r.ok) throw new Error("HTTP " + r.status);
       const d = await r.json();
       sessions = uniqueSessions(d?.result?.sessions ?? []);
-      const active = sessions.find((row) => row.id === currentId);
+      const active = sessions.find((row) => row.id === requestedId);
       // Chat bootstrap can choose the latest server session while this eager
       // sidebar fetch is in flight. Do not let a stale pre-bootstrap null reset
       // clobber the newly selected app-bar title.
-      if (currentId === localStorage.getItem(SESSION_KEY)) setActiveSession(currentId, active?.name);
+      if (requestedId === localStorage.getItem(SESSION_KEY)) setActiveSession(requestedId, active?.name);
       cursor = d?.result?.nextCursor ?? null;
       // Scroll the active row into view after the next paint.
       if (open) setTimeout(scrollActiveIntoView, 100);
@@ -159,7 +159,10 @@
 
   // ── actions ───────────────────────────────────────────────────────
   function switchTo(id: string) {
-    if (id === currentId) {
+    // localStorage is updated synchronously by Chat.svelte's switch handler;
+    // unlike the sidebar's previous refresh-time snapshot, it cannot lag across
+    // rapid in-place switches.
+    if (id === localStorage.getItem(SESSION_KEY)) {
       close();
       return;
     }
