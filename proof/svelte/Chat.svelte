@@ -6,6 +6,7 @@
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
+  import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
@@ -250,6 +251,43 @@
     }
   }
 
+  // ── Turn-boundary chime ────────────────────────────────────────────
+  // A short chime when the agent's turn begins ("stop talking now") and a soft
+  // cue when the mic returns to the owner ("your turn"). Plays through a small
+  // dedicated AudioContext. The turn-start chime fires while the half-duplex
+  // gate already has the mic suppressed, so it can't feed back. See
+  // ./voice-chime.ts for the pure transition logic.
+  let chimeCtx: AudioContext | null = null;
+  let prevChimeStatus: VoiceChimeStatus = "idle";
+  function playChime(cue: "turn-start" | "your-turn") {
+    try {
+      const Ctor = (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+      if (!Ctor) return;
+      if (!chimeCtx) chimeCtx = new Ctor();
+      void chimeCtx.resume?.();
+      const ctx = chimeCtx;
+      const now = ctx.currentTime;
+      for (const tone of chimeTones(cue)) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = tone.freq;
+        // Short attack/decay envelope so notes are soft, not clicky.
+        gain.gain.setValueAtTime(0.0001, now + tone.start);
+        gain.gain.exponentialRampToValueAtTime(tone.gain, now + tone.start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + tone.start + tone.duration);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + tone.start);
+        osc.stop(now + tone.start + tone.duration + 0.02);
+      }
+    } catch { /* chime is best-effort; never block the turn */ }
+  }
+  function maybeChime(next: VoiceChimeStatus) {
+    const cue = chimeForTransition(prevChimeStatus, next);
+    prevChimeStatus = next;
+    if (cue) playChime(cue);
+  }
+
   // Hands-free audio state label (no client-side transcript). Communicates the
   // agent's talking/working/done/listening state audibly-adjacent in text.
   function voiceActiveLabel(status: VoiceStatus, starting: boolean): string {
@@ -269,6 +307,7 @@
     clearVoiceRearmTimer();
     voiceGate = initialVoiceGateState();
     voiceMicSuppressed = false;
+    prevChimeStatus = "idle";
   }
 
   async function stopVoiceMode() {
@@ -278,6 +317,8 @@
     voiceClient = null;
     voiceEnabled = false;
     localStorage.setItem("my-ax-voice-mode", "0");
+    try { await chimeCtx?.close?.(); } catch { /* ignore */ }
+    chimeCtx = null;
     resetVoiceState();
   }
 
@@ -296,6 +337,9 @@
       // after a debounce once it returns to listening. Stops the loudspeaker
       // self-feedback loop on mobile PWAs.
       applyVoiceGate(status);
+      // Turn-boundary chime: "stop talking" when the agent starts, "your turn"
+      // when the mic returns. Fires on the edge only.
+      maybeChime(status);
     });
     client.addEventListener("transcriptchange", () => {});
     client.addEventListener("interimtranscript", (text) => { voiceInterim = text; });
