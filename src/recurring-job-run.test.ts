@@ -87,3 +87,37 @@ test("completeRecurringJobRun uses the explicit destination for failed scheduled
   assert.match(inserted[0]?.body ?? "", /failed with detail/);
   assert.match(inserted[0]?.body ?? "", /Next action: open the existing conversation and retry or update the job\./);
 });
+
+test("completeRecurringJobRun suppresses the failure push for a transient gateway rate limit", async () => {
+  const { env, calls, inserted } = envMock();
+  await completeRecurringJobRun(env, {
+    jobId: "job-rl",
+    ownerEmail: "owner@example.com",
+    sessionId: "session-rl",
+    threadMode: "same_session",
+    ranAt: new Date("2026-06-24T12:00:00.000Z"),
+    error: "3021: rate limiting: inference request per min rate reached",
+  });
+  // last_error is still persisted for diagnostics.
+  assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET last_run_at") && call.binds.some((b) => String(b).includes("3021"))));
+  // But the owner sees a single coalesced heads-up, NOT a "<job> failed" receipt.
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0]?.kind, "session.update");
+  assert.match(inserted[0]?.title ?? "", /rate limit/i);
+  assert.doesNotMatch(inserted[0]?.body ?? "", /3021/);
+  assert.doesNotMatch(inserted[0]?.title ?? "", /failed/i);
+});
+
+test("a non-rate-limit error still pushes a normal failure receipt", async () => {
+  const { env, inserted } = envMock();
+  await completeRecurringJobRun(env, {
+    jobId: "job-err",
+    ownerEmail: "owner@example.com",
+    sessionId: "session-err",
+    threadMode: "same_session",
+    ranAt: new Date("2026-06-24T12:00:00.000Z"),
+    error: "TypeError: cannot read property of undefined",
+  });
+  assert.equal(inserted[0]?.kind, "job.complete");
+  assert.match(inserted[0]?.title ?? "", /failed/i);
+});
