@@ -19,6 +19,7 @@
     SESSION_KEY,
   } from "@my-ax/store";
   import { MODELS, DEFAULT_MODEL_ID } from "../../src/models";
+  import { classifyJobHealth, jobResultAttr } from "./job-health";
 
   interface Props {
     identityEmail?: string | null;
@@ -1070,7 +1071,8 @@
           {#each jobs as job (job.id)}
             {@const lastRun = jobTimeLabel(job.last_run_at, "never run")}
             {@const nextRun = job.status === "paused" ? "paused" : jobTimeLabel(job.next_run_at, "not scheduled")}
-            {@const result = job.last_error ? `failed · ${job.last_error}` : job.last_run_at ? "ok" : "waiting"}
+            {@const health = classifyJobHealth(job)}
+            {@const result = health.label}
             {@const state = job.status === "paused" ? "paused" : "active"}
             {@const threadMode = job.thread_mode ?? "same_session"}
             <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
@@ -1082,7 +1084,7 @@
               <div class="mt-2 grid gap-0.5 font-mono text-[11px] text-fg-mut">
                 <div>{state} · next {nextRun}</div>
                 <div>{threadMode === "new_session_per_run" ? "starts a new conversation each run" : "runs in this conversation"}</div>
-                <div data-job-result={job.last_error ? "error" : "ok"}>last {lastRun} · {result}</div>
+                <div data-job-result={jobResultAttr(health)} data-job-health={health.state} data-job-tone={health.tone}>last {lastRun} · {result}</div>
               </div>
               <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${job.name}`}>
                 <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} aria-label={`Run ${job.name} now`} title="Run now" class="job-action-button text-brand hover:border-brand/60 disabled:opacity-40">Run now</button>
