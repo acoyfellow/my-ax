@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { parseMyAxDeepLink } from "./deep-links";
+  import { classifyAttentionItem } from "./attention-item-affordance";
   import { reconcileSeen } from "./attention-state";
   import CheckIn from "./CheckIn.svelte";
 
   interface Item {
     id: string;
+    kind?: string | null;
     title: string;
     body: string;
     href: string;
@@ -307,10 +309,14 @@
                 {:else}
                   <ul class="grid gap-2">
                     {#each items as item (item.id)}
-                      <li class="attention-owner-card">
+                      {@const affordance = classifyAttentionItem(item)}
+                      <li class="attention-owner-card" data-attention-tone={affordance.tone}>
                         <a href={item.href} onclick={(event) => follow(event, item.href)} class="block">
-                          <span class="flex gap-2 justify-between">
-                            <strong class="min-w-0 truncate text-sm font-semibold text-fg">{item.title}</strong>
+                          <span class="flex gap-2 justify-between items-start">
+                            <span class="flex min-w-0 items-center gap-2">
+                              {#if affordance.badge}<span class="attention-badge" data-tone={affordance.tone}>{affordance.badge}</span>{/if}
+                              <strong class="min-w-0 truncate text-sm font-semibold text-fg">{item.title}</strong>
+                            </span>
                             <time class="shrink-0 text-[10px] text-fg-mut">{age(item.created_at)}</time>
                           </span>
                           <span class="mt-1 block text-xs leading-relaxed text-fg-mut">{item.body}</span>
@@ -329,6 +335,31 @@
 </div>
 
 <style>
+  /* #9 inbox affordance: a small pill classifying a ping. Retrying = benign
+     self-healing (rate limit); Needs you = actionable. */
+  .attention-badge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--color-line);
+    color: var(--color-fg-mut);
+  }
+  .attention-badge[data-tone="retrying"] {
+    border-color: color-mix(in srgb, #f59e0b 45%, var(--color-line));
+    color: #f59e0b;
+    background: color-mix(in srgb, #f59e0b 10%, transparent);
+  }
+  .attention-badge[data-tone="attention"] {
+    border-color: color-mix(in srgb, var(--color-brand) 50%, var(--color-line));
+    color: var(--color-brand);
+    background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  }
   .attention-owner-panel {
     position: fixed;
     inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;

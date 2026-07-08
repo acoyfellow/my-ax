@@ -48,4 +48,11 @@ assertNotIncludes(attention, "fixed inset-0 z-40", "Attention must not reintrodu
 assertNotIncludes(attention, "fixed left-1/2 top-2", "Attention modal must not use unsafe top-2 mobile placement");
 assertNotIncludes(attention, "flex h-8 w-8", "Attention close button must not regress to a tiny target");
 
+// #9 inbox polish: pings are classified so a rate-limit heads-up reads as
+// benign 'Retrying' and actionable kinds as 'Needs you'.
+assertIncludes(attention, 'import { classifyAttentionItem } from "./attention-item-affordance";', "inbox imports the ping classifier");
+assertIncludes(attention, 'const affordance = classifyAttentionItem(item)', "each recent ping is classified");
+assertIncludes(attention, 'data-attention-tone={affordance.tone}', "pings expose their classified tone");
+assertIncludes(attention, 'class="attention-badge" data-tone={affordance.tone}', "a classified badge renders for retrying/needs-you pings");
+
 console.log("✓ attention modal smoke: Check-in/notifications modal uses native Settings-style dialog/backdrop geometry");
