@@ -93,9 +93,34 @@ function safeHref(notification: OwnerNotification, baseUrl: string): string {
   }
 }
 
+/** How long an identical dedupeKey suppresses a resend. Recurring jobs (min
+ *  cadence 60s), dead-session rechecks, and delegate receipts re-fire the SAME
+ *  logical event repeatedly; without suppression each hits the push provider
+ *  and eventually earns a 429. One hour comfortably covers recheck loops while
+ *  still letting a genuinely new occurrence through. */
+export const DEDUPE_WINDOW_MS = 60 * 60 * 1000;
+
+/** A suppressed (deduped) delivery: no push was sent because the identical
+ *  event was already delivered within the window. */
+export function dedupedReceipt(): NotificationReceipt {
+  return { delivered: 0, expired: 0, failed: 0, devices: 0 };
+}
+
 /** Deliver a same-owner agent notification to every subscribed installed app. */
 export async function notifyOwner(env: Env, ownerEmail: string, notification: OwnerNotification): Promise<NotificationReceipt> {
   const email = ownerEmail.toLowerCase();
+  // De-duplicate: if the caller supplied a dedupeKey and we already recorded
+  // that exact event for this owner within the window, do NOT send another
+  // push. This is the fix for provider 429s: the key was accepted but ignored,
+  // so repeated rechecks/ticks flooded the same subscription.
+  const dedupeKey = notification.dedupeKey?.trim() || null;
+  if (dedupeKey) {
+    const cutoff = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+    const recent = await env.DB.prepare(
+      "SELECT id FROM attention_items WHERE owner_email = ? AND dedupe_key = ? AND created_at >= ? LIMIT 1",
+    ).bind(email, dedupeKey, cutoff).first<{ id: string }>().catch(() => null);
+    if (recent) return dedupedReceipt();
+  }
   const result = await env.DB.prepare(
     "SELECT endpoint, subscription_json FROM push_subscriptions WHERE owner_email = ? ORDER BY updated_at DESC",
   ).bind(email).all<{ endpoint: string; subscription_json: string }>();
@@ -103,10 +128,10 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   const receipt: NotificationReceipt = { delivered: 0, expired: 0, failed: 0, devices: rows.length };
   const href = safeHref(notification, env.BRIDGE_BASE_URL);
   const attentionId = crypto.randomUUID();
-  await env.DB.prepare(`INSERT INTO attention_items(id, owner_email, session_id, kind, title, body, href, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(
+  await env.DB.prepare(`INSERT INTO attention_items(id, owner_email, session_id, kind, title, body, href, created_at, dedupe_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
       attentionId, email, notification.sessionId ?? null, notification.kind,
-      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), href,
+      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), href, dedupeKey,
     ).run();
   // Keep the tiny recent-attention surface bounded. Push is a wake-up hint,
   // not an unbounded activity-log product.
