@@ -674,15 +674,29 @@
   background-color: #ffffff;
 }
 
-.safe-area-composer {
-  /* Clear the iPhone's curved home-indicator area while the keyboard is shut. */
-  padding-bottom: calc(env(safe-area-inset-bottom) + 45px);
-}
+/* Composer footer bottom padding.
+ *
+ * Desktop keeps the tight, uniform base padding from the `py-2.5 sm:py-3`
+ * utility (no artificial bottom gap). The extra home-indicator buffer is
+ * applied ONLY where a real safe-area inset can exist: an installed/standalone
+ * PWA, or a touch (coarse-pointer) device — i.e. iPhone/iPad installs. This
+ * fixes the long-standing desktop over-padding without ever removing the iOS
+ * curvature clearance. `@supports` guards browsers that don't understand the
+ * env() function at all.
+ */
+@supports (padding: env(safe-area-inset-bottom)) {
+  @media (display-mode: standalone), (pointer: coarse) {
+    .safe-area-composer {
+      /* Clear the iPhone's curved home-indicator area while the keyboard is shut. */
+      padding-bottom: calc(env(safe-area-inset-bottom) + 45px);
+    }
 
-/* The keyboard already provides its own inset. Remove the entire footer buffer
- * while it is visible so the composer sits directly above it like native UI. */
-.keyboard-open .safe-area-composer {
-  padding-bottom: 0;
+    /* The keyboard already provides its own inset. Remove the entire footer
+     * buffer while it is visible so the composer sits directly above it. */
+    .keyboard-open .safe-area-composer {
+      padding-bottom: 0;
+    }
+  }
 }
 
 

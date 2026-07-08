@@ -36,5 +36,17 @@ assertNotIncludes(chat, 'Authorization failed for ${connector}${reason', "OAuth 
 assertIncludes(chatPage, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled");
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");
 assertNotIncludes(appCss, '#theme-cycle', "global CSS must not define stale #theme-cycle selectors");
+// Composer safe-area padding is iOS/standalone/touch-only, never desktop.
+assertIncludes(appCss, '@media (display-mode: standalone), (pointer: coarse) {', "composer safe-area buffer must be gated to standalone/touch contexts");
+assertIncludes(appCss, 'padding-bottom: calc(env(safe-area-inset-bottom) + 45px);', "iOS home-indicator clearance must be preserved inside the gate");
+{
+  // The safe-area buffer must live INSIDE the responsive gate, not as an
+  // unconditional rule that over-pads desktop.
+  const gateIndex = appCss.indexOf('@media (display-mode: standalone), (pointer: coarse) {');
+  const bufferIndex = appCss.indexOf('padding-bottom: calc(env(safe-area-inset-bottom) + 45px);');
+  if (!(gateIndex >= 0 && bufferIndex > gateIndex)) {
+    throw new Error("composer safe-area padding must be nested within the standalone/coarse media gate");
+  }
+}
 
 console.log("✓ chat composer smoke: action button is Send or Stop; connector reauth waits for owner CTA");
