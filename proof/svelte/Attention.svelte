@@ -161,10 +161,28 @@
     event.preventDefault();
     activeSection = "receipts";
   }
+  function runReceiptId(href: string): string | null {
+    try {
+      const url = new URL(href, location.origin);
+      if (url.origin !== location.origin) return null;
+      const match = /^\/runs\/([^/?#]+)$/.exec(url.pathname);
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch {
+      return null;
+    }
+  }
   function follow(event: MouseEvent, href: string) {
     if (isFailedRunsHref(href)) {
       event.preventDefault();
       activeSection = "receipts";
+      return;
+    }
+    // A run receipt opens as a NESTED modal above this panel — do not close the
+    // panel and do not fall through to a full-page navigation.
+    const receipt = runReceiptId(href);
+    if (receipt) {
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: receipt } }));
       return;
     }
     const target = parseMyAxDeepLink(href, location.href);
