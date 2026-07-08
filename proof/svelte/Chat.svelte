@@ -250,6 +250,16 @@
     }
   }
 
+  // Hands-free audio state label (no client-side transcript). Communicates the
+  // agent's talking/working/done/listening state audibly-adjacent in text.
+  function voiceActiveLabel(status: VoiceStatus, starting: boolean): string {
+    if (starting) return "Connecting audio…";
+    if (status === "listening") return "Listening…";
+    if (status === "thinking") return "Working…";
+    if (status === "speaking") return "Speaking…";
+    return "Audio active";
+  }
+
   function resetVoiceState() {
     voiceStarting = false;
     voiceStatus = "idle";
@@ -2125,13 +2135,18 @@
             {/if}
           </button>
           <div class="flex-1 min-w-0">
-            {#if voiceEnabled && voiceInterim}
-              <div class="voice-mode-interim" aria-live="polite">
-                <span class="voice-mode-interim__state">{voiceStatus}</span>
-                <span>{voiceInterim}</span>
+            {#if voiceEnabled}
+              <!-- Voice mode is hands-free and server-driven: the client input is
+                   disabled and NO client-side transcript is shown. This is an
+                   "audio active" state indicating the mic stream is going to the
+                   server, not a live transcript. See
+                   .context/loops/myax-10-loop-drive/designs/1-audio-agent-overhaul.md -->
+              <div class="voice-mode-active" data-voice-status={voiceStatus} aria-live="polite" role="status">
+                <span class="voice-mode-active__pulse" aria-hidden="true"></span>
+                <span class="voice-mode-active__label">{voiceActiveLabel(voiceStatus, voiceStarting)}</span>
               </div>
             {/if}
-            {#if pendingAttachments.length > 0}
+            {#if !voiceEnabled && pendingAttachments.length > 0}
               <div class="mb-2 flex flex-wrap gap-2">
                 {#each pendingAttachments as a, idx (`${a.key}-${idx}`)}
                   <span class="inline-flex items-center gap-2 rounded-md border border-line bg-bg px-2 py-1 text-xs text-fg">
@@ -2145,17 +2160,19 @@
                 {/each}
               </div>
             {/if}
-            <textarea
-              bind:this={inputEl}
-              bind:value={composerText}
-              oninput={onInputInput}
-              onkeydown={onInputKeydown}
-              onpaste={onInputPaste}
-              rows={1}
-              placeholder="…"
-              class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
-              aria-label="Message"
-            ></textarea>
+            {#if !voiceEnabled}
+              <textarea
+                bind:this={inputEl}
+                bind:value={composerText}
+                oninput={onInputInput}
+                onkeydown={onInputKeydown}
+                onpaste={onInputPaste}
+                rows={1}
+                placeholder="…"
+                class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+                aria-label="Message"
+              ></textarea>
+            {/if}
           </div>
           <input
             id="svelte-image-file"
