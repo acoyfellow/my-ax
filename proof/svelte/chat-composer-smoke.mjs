@@ -26,6 +26,9 @@ assertIncludes(chat, '{#if voiceEnabled}', "voice mode renders a distinct hands-
 assertIncludes(chat, 'class="voice-mode-active"', "voice mode shows an audio-active affordance, not a transcript");
 assertIncludes(chat, '{#if !voiceEnabled}\n              <textarea', "the text input is removed/disabled while voice is active");
 assertNotIncludes(chat, 'class="voice-mode-interim"', "the old client-side interim transcript strip must be gone");
+// #1 C2: turn-boundary chime wired on the voice statuschange edge.
+assertIncludes(chat, 'maybeChime(status)', "voice statuschange drives the turn-boundary chime");
+assertIncludes(chat, 'chimeForTransition(prevChimeStatus, next)', "chime fires only on a status edge");
 assertNotIncludes(chat, 'data-[status=done]', "composer must not carry dedicated done/checkmark styling");
 assertNotIncludes(chat, '{:else if sendStatus === "done"}', "composer must not render a done/checkmark branch");
 assertNotIncludes(chat, 'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">\n                <polyline points="20 6 9 17 4 12" />', "composer must not render a checkmark as its action glyph");
