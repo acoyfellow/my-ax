@@ -17,7 +17,7 @@
 
   import { onMount } from "svelte";
   import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState } from "@my-ax/store";
-  import { planKeyboardStep, reorderAnnouncement, splitPinned } from "./pinned-reorder";
+  import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
 
   type SessionRow = {
     id: string;
@@ -292,6 +292,36 @@
     }
   }
 
+  // ── HTML5 drag-and-drop reorder (pinned group; pointer parity with keyboard) ──
+  let dragId = $state<string | null>(null);
+  let dragOverId = $state<string | null>(null);
+  function onPinDragStart(e: DragEvent, row: SessionRow) {
+    dragId = row.id;
+    if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", row.id); } catch {} }
+  }
+  function onPinDragOver(e: DragEvent, row: SessionRow) {
+    if (!dragId || dragId === row.id) return;
+    e.preventDefault(); // allow drop
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    dragOverId = row.id;
+  }
+  function onPinDrop(e: DragEvent, target: SessionRow) {
+    e.preventDefault();
+    const moved = dragId;
+    dragId = null; dragOverId = null;
+    if (!moved || moved === target.id) return;
+    const order = pinnedRows.map((r) => r.id);
+    const toIndex = order.indexOf(target.id);
+    if (toIndex < 0) return;
+    const plan = planReorder(order, moved, toIndex);
+    if (!plan) return;
+    // Optimistic local order; server refresh replaces with real fractional keys.
+    plan.order.forEach((id, i) => { const s = sessions.find((x) => x.id === id); if (s) s.pin_rank = String(i).padStart(6, "0"); });
+    sessions = [...sessions];
+    void sendReorder(moved, plan.beforeId);
+  }
+  function onPinDragEnd() { dragId = null; dragOverId = null; }
+
   // Accessible keyboard reorder within the pinned group. Up/Down move one slot.
   function reorderPinnedByKey(row: SessionRow, direction: "up" | "down") {
     const order = pinnedRows.map((r) => r.id);
@@ -457,6 +487,13 @@
           data-session-id={row.id}
           data-active={active ? "1" : "0"}
           data-pinned={row.pinned === 1 ? "1" : "0"}
+          data-drag-over={pinnedGroup && dragOverId === row.id ? "1" : "0"}
+          data-dragging={pinnedGroup && dragId === row.id ? "1" : "0"}
+          draggable={pinnedGroup ? true : undefined}
+          ondragstart={pinnedGroup ? (e) => onPinDragStart(e, row) : undefined}
+          ondragover={pinnedGroup ? (e) => onPinDragOver(e, row) : undefined}
+          ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}
+          ondragend={pinnedGroup ? onPinDragEnd : undefined}
         >
           <span
             class="session-row__signal"
@@ -714,6 +751,12 @@
     border-left: 2px solid color-mix(in srgb, var(--color-brand) 55%, transparent);
     background: color-mix(in srgb, var(--color-brand) 4%, transparent);
   }
+  /* Drag-and-drop feedback for the pinned group. */
+  :global(.session-row[data-dragging="1"]) { opacity: 0.45; }
+  :global(.session-row[data-drag-over="1"]) {
+    box-shadow: inset 0 2px 0 0 var(--color-brand);
+  }
+  :global(.session-row[data-pinned="1"] .session-row__reorder) { cursor: grab; }
   .session-group-header {
     padding: 8px 10px 3px;
     font-size: 10px;
