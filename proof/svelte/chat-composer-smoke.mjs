@@ -26,6 +26,13 @@ assertIncludes(chat, '{#if voiceEnabled}', "voice mode renders a distinct hands-
 assertIncludes(chat, 'class="voice-mode-active"', "voice mode shows an audio-active affordance, not a transcript");
 assertIncludes(chat, '{#if !voiceEnabled}\n              <textarea', "the text input is removed/disabled while voice is active");
 assertNotIncludes(chat, 'class="voice-mode-interim"', "the old client-side interim transcript strip must be gone");
+// #10 webcam vision: camera capture routes through the shared upload path so a
+// frame becomes a normal (removable) attachment the agent can see.
+assertIncludes(chat, 'data-camera-button="1"', "composer exposes a webcam capture control");
+assertIncludes(chat, 'onclick={cameraOn ? captureFrame : toggleCamera}', "camera button toggles on, then captures a frame");
+assertIncludes(chat, 'await addImageFile(new File([blob], frameFilename()', "a captured frame is attached via the shared upload path");
+assertIncludes(chat, 'getUserMedia({ video: { facingMode: "user" }, audio: false })', "camera opens video-only in an explicit gesture (privacy)");
+assertIncludes(chat, 'data-camera-preview="1"', "a live preview shows what will be captured before sending");
 // #1 C2: turn-boundary chime wired on the voice statuschange edge.
 assertIncludes(chat, 'maybeChime(status)', "voice statuschange drives the turn-boundary chime");
 assertIncludes(chat, 'chimeForTransition(prevChimeStatus, next)', "chime fires only on a status edge");

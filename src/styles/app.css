@@ -606,6 +606,45 @@
   50% { opacity: 1; transform: scale(1.1); }
 }
 
+/* Webcam vision (#10): a small live preview shown while the camera is on, so
+ * the owner always sees exactly what a captured frame will contain before it
+ * is attached and sent to the agent. */
+.webcam-preview {
+  position: relative;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+.webcam-preview__video {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror like a selfie preview */
+}
+.webcam-preview__hint {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--color-fg-mut);
+  background: var(--color-bg-alt);
+}
+.webcam-preview__stop {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 /* iOS Safari auto-zooms when a focused text control's font-size is < 16px.
  * Enforce a 16px floor for every text-entry control on phone-width screens.
  * Unlayered + !important so it wins over component styles (e.g. the 15px
