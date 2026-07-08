@@ -10,6 +10,7 @@ import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
+import { reorderPinnedSession, setSessionPinned } from "../session-pinning";
 
 export function registerSessionRoutes(app: Hono<AppEnv>) {
   // ─── Session lifecycle ─────────────────────────────────────────────────────
@@ -29,17 +30,28 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const before = url.searchParams.get("before"); // ISO-ish; passed through as-is to D1
 
     try {
+      const email = c.get("identity").email;
+      // Pinned conversations are a small, always-loaded group ordered by their
+      // fractional rank (server-authoritative). They are returned first on the
+      // FIRST page only; keyset pagination applies to the unpinned tail, which
+      // stays ordered by recency exactly as before.
+      const pinned = before
+        ? []
+        : ((await c.env.DB.prepare(
+            "SELECT id, name, status, created_at, updated_at, pinned, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 1 ORDER BY pin_rank ASC, updated_at DESC LIMIT 100",
+          ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? "SELECT id, name, status, created_at, updated_at FROM sessions WHERE owner_email = ? AND updated_at < ? ORDER BY updated_at DESC LIMIT ?"
-        : "SELECT id, name, status, created_at, updated_at FROM sessions WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?";
+        ? "SELECT id, name, status, created_at, updated_at, pinned, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?"
+        : "SELECT id, name, status, created_at, updated_at, pinned, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 0 ORDER BY updated_at DESC LIMIT ?";
       const stmt = before
-        ? c.env.DB.prepare(query).bind(c.get("identity").email, before, limit)
-        : c.env.DB.prepare(query).bind(c.get("identity").email, limit);
+        ? c.env.DB.prepare(query).bind(email, before, limit)
+        : c.env.DB.prepare(query).bind(email, limit);
       const result = await stmt.all();
-      const sessions = result.results as Array<{ updated_at: string }>;
-      // Cursor only if we filled the page — otherwise we're at the tail.
+      const unpinned = (result.results ?? []) as Array<{ updated_at: string }>;
+      const sessions = [...pinned, ...unpinned];
+      // Cursor tracks the UNPINNED tail only, so pinned rows never affect paging.
       const nextCursor =
-        sessions.length === limit ? sessions[sessions.length - 1]?.updated_at ?? null : null;
+        unpinned.length === limit ? unpinned[unpinned.length - 1]?.updated_at ?? null : null;
 
       return c.json<ApiResponse>({
         ok: true,
@@ -118,6 +130,43 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       result: { id, name },
       next_actions: [],
     });
+  });
+
+  // POST /api/sessions/:id/pin  { pinned: boolean }
+  // Pin (to the top of the pinned group) or unpin a conversation. Server holds
+  // the authoritative pinned flag + fractional rank so it syncs across devices.
+  app.post("/api/sessions/:id/pin", async (c) => {
+    const id = c.req.param("id");
+    const command = `POST /api/sessions/${id}/pin`;
+    const body = (await c.req.json<{ pinned?: unknown }>().catch(() => ({}))) as { pinned?: unknown };
+    if (typeof body.pinned !== "boolean") {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "pinned must be a boolean" }, next_actions: [] }, 400);
+    }
+    try {
+      const result = await setSessionPinned(c.env, c.get("identity").email, id, body.pinned);
+      if (!result) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
+      return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
+    } catch (err) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
+    }
+  });
+
+  // POST /api/sessions/:id/rank  { beforeId: string | null }
+  // Reorder a pinned conversation to sit immediately before `beforeId` (or to
+  // the bottom of the pinned group when null). The client sends neighbor
+  // INTENT; the server computes the fractional key so it stays authoritative.
+  app.post("/api/sessions/:id/rank", async (c) => {
+    const id = c.req.param("id");
+    const command = `POST /api/sessions/${id}/rank`;
+    const body = (await c.req.json<{ beforeId?: unknown }>().catch(() => ({}))) as { beforeId?: unknown };
+    const beforeId = typeof body.beforeId === "string" && body.beforeId.trim() ? body.beforeId : null;
+    try {
+      const result = await reorderPinnedSession(c.env, c.get("identity").email, id, beforeId);
+      if (!result) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "pinned session not found or not owned" }, next_actions: [] }, 404);
+      return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
+    } catch (err) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
+    }
   });
 
   app.post("/api/sessions", async (c) => {
