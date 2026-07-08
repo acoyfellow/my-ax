@@ -5,6 +5,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createWorkersAI } from "workers-ai-provider";
+import { createRetryFetch } from "./gateway-retry-fetch";
 import type { Env } from "./types";
 import { DEFAULT_MODEL_ID, findModel, resolveAvailableModelId } from "./models";
 
@@ -60,6 +61,10 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       baseURL: anthropicGatewayURL(gateway.baseURL),
       apiKey: "",
       headers: gateway.headers,
+      // Transparently retry transient gateway rate limits (3021 / 429) with
+      // bounded backoff so a per-minute cap blip self-heals instead of failing
+      // the turn. See src/gateway-retry-fetch.ts (#6).
+      fetch: createRetryFetch({ fetch: globalThis.fetch }),
     })(modelId);
   } else {
     const gateway = gatewayConfig(env);
@@ -68,6 +73,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       baseURL: gateway.baseURL,
       apiKey: "",
       headers: gateway.headers,
+      fetch: createRetryFetch({ fetch: globalThis.fetch }),
     }).responses(modelId);
   }
 
