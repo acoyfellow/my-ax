@@ -146,6 +146,8 @@
   {/if}
 {:else if widget.kind === "inline-raster-image"}
   <img class="tool-call__inline-image" src={widget.src} alt={widget.alt} loading="lazy" data-tool-widget="inline-raster-image" />
+{:else if widget.kind === "inline-video"}
+  <video class="tool-call__inline-video" src={widget.src} controls preload="metadata" playsinline aria-label={widget.label} data-tool-widget="inline-video"></video>
 {:else if widget.kind === "reusable-tool-candidate"}
   <section
     class="tool-call__result reusable-tool-candidate"

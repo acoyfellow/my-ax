@@ -42,6 +42,7 @@ export type ToolResultWidget =
       replaySrc?: string;
     }
   | { kind: "inline-raster-image"; src: string; alt: string }
+  | { kind: "inline-video"; src: string; label: string }
   | { kind: "svelte-artifact"; src: string; title: string; artifactId: string }
   | { kind: "audio-message"; src: string; title: string; audioId: string; voice: string }
   | {
@@ -109,6 +110,18 @@ function rasterArtifactWidget(value: unknown, toolName: string): ToolResultWidge
   const result = decoded as Record<string, unknown>;
   if (result.kind !== "raster-artifact" || typeof result.src !== "string" || !INTERNAL_RASTER_ARTIFACT_RE.test(result.src)) return null;
   return { kind: "inline-raster-image", src: result.src, alt: `${toolName} screenshot` };
+}
+
+function videoArtifactWidget(value: unknown, toolName: string): ToolResultWidget | null {
+  const decoded = decodeJsonOnce(value);
+  if (typeof decoded !== "object" || decoded === null) return null;
+  if ("content" in decoded) return videoArtifactWidget((decoded as { content?: unknown }).content, toolName);
+  if ("result" in decoded) return videoArtifactWidget((decoded as { result?: unknown }).result, toolName);
+  const result = decoded as Record<string, unknown>;
+  // storeInlineMediaArtifact emits { kind: "video-artifact", src: "/api/artifacts/<uuid>" }.
+  // Only same-origin owner-scoped artifact routes may become a <video> src.
+  if (result.kind !== "video-artifact" || typeof result.src !== "string" || !INTERNAL_RASTER_ARTIFACT_RE.test(result.src)) return null;
+  return { kind: "inline-video", src: result.src, label: `${toolName} screen recording` };
 }
 
 function svelteArtifactWidget(value: unknown): ToolResultWidget | null {
@@ -309,6 +322,9 @@ export function resolveToolResultWidget(value: unknown, toolName = "tool"): Tool
 
   const rasterArtifact = rasterArtifactWidget(value, toolName);
   if (rasterArtifact) return rasterArtifact;
+
+  const videoArtifact = videoArtifactWidget(value, toolName);
+  if (videoArtifact) return videoArtifact;
 
   const imageSrc = inlineRasterImageSrc(value);
   if (imageSrc) return { kind: "inline-raster-image", src: imageSrc, alt: `${toolName} screenshot` };
