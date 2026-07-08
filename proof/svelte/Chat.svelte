@@ -15,6 +15,7 @@
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
+  import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import {
     agentStatusFor,
     idleStreamingTurnState,
@@ -1587,6 +1588,47 @@
   function openImageFile() {
     (document.getElementById("svelte-image-file") as HTMLInputElement)?.click();
   }
+
+  // ── Webcam vision (#10): capture a still and attach it so the agent can see ──
+  let cameraOn = $state(false);
+  let cameraEl = $state<HTMLVideoElement | undefined>(undefined);
+  let cameraStream: MediaStream | null = null;
+  async function toggleCamera() {
+    if (cameraOn) { stopCamera(); return; }
+    try {
+      // Explicit user-gesture camera open (privacy): never automatic.
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      cameraOn = true;
+      await tick();
+      if (cameraEl) { cameraEl.srcObject = cameraStream; await cameraEl.play().catch(() => {}); }
+    } catch (error) {
+      cameraOn = false;
+      pushError(`Camera access is required to share your webcam: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  function stopCamera() {
+    cameraStream?.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+    if (cameraEl) cameraEl.srcObject = null;
+    cameraOn = false;
+  }
+  // Draw the current frame to an offscreen canvas and attach it as a JPEG via
+  // the same owner-scoped upload path as any image, so it becomes a removable
+  // pending attachment the owner sees before sending.
+  async function captureFrame() {
+    if (!cameraOn || !cameraEl) return;
+    const dims = frameDimensions(cameraEl.videoWidth, cameraEl.videoHeight);
+    if (!dims) { pushError("Camera is still warming up — try again in a moment."); return; }
+    const cfg = captureConfig();
+    const canvas = document.createElement("canvas");
+    canvas.width = dims.width; canvas.height = dims.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(cameraEl, 0, 0, dims.width, dims.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, cfg.mimeType, cfg.quality));
+    if (!blob) { pushError("Could not capture a webcam frame."); return; }
+    await addImageFile(new File([blob], frameFilename(), { type: cfg.mimeType }));
+  }
   async function onImageInputChange(e: Event) {
     const files = (e.target as HTMLInputElement).files;
     if (!files) return;
@@ -1901,6 +1943,7 @@
       void wakeLockSentinel?.release?.();
       wakeLockSentinel = null;
       void stopVoiceMode();
+      stopCamera();
       if (elapsedTickerId) clearInterval(elapsedTickerId);
     };
   });
@@ -2197,6 +2240,14 @@
             {/if}
           </button>
           <div class="flex-1 min-w-0">
+            {#if cameraOn}
+              <div class="webcam-preview" data-camera-preview="1">
+                <!-- svelte-ignore a11y_media_has_caption -->
+                <video bind:this={cameraEl} class="webcam-preview__video" muted playsinline autoplay aria-label="Your webcam preview"></video>
+                <div class="webcam-preview__hint">Camera on — tap the camera button to capture a frame for the agent.</div>
+                <button type="button" class="webcam-preview__stop" onclick={stopCamera} aria-label="Turn off webcam" title="Turn off camera">×</button>
+              </div>
+            {/if}
             {#if voiceEnabled}
               <!-- Voice mode is hands-free and server-driven: the client input is
                    disabled and NO client-side transcript is shown. This is an
@@ -2251,6 +2302,19 @@
             aria-label="Attach image"
             title="Attach image"
           >＋</button>
+          <button
+            type="button"
+            onclick={cameraOn ? captureFrame : toggleCamera}
+            class="flex-none flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg-mut hover:text-fg hover:border-brand/60 data-[on='1']:border-brand/60 data-[on='1']:text-brand data-[on='1']:bg-brand/10"
+            data-on={cameraOn ? "1" : "0"}
+            data-camera-button="1"
+            aria-label={cameraOn ? "Capture a webcam frame for the agent" : "Turn on your webcam so the agent can see"}
+            title={cameraOn ? "Capture frame" : "Show webcam to agent"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+          </button>
           <button
             type="submit"
             onclick={wsState.conn === "offline" ? retryConnection : onSendClick}
