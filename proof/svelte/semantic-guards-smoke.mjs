@@ -59,5 +59,10 @@ assertIncludes(chat, 'type: "my-ax:navigate-ack"', "chat acks service-worker nav
 // mobile loudspeaker self-feedback loop.
 assertIncludes(chat, 'applyVoiceGate(status)', "voice statuschange drives the half-duplex mic gate");
 assertIncludes(chat, 'voiceClient.toggleMute()', "half-duplex gate suppresses the mic via the voice client mute");
+// #5 hardening: fail-closed transcript-acceptance guard so assistant audio
+// can never become user input, even across status-frame latency / re-arm tail.
+assertIncludes(chat, 'if (voiceTranscriptAllowed()) voiceInterim = text;', "interim transcripts are gated by the fail-closed echo guard");
+assertIncludes(chat, 'transcriptGuard = guardSuppress(transcriptGuard)', "the transcript guard suppresses on the agent-audio edge");
+assertIncludes(chat, 'transcriptGuard = guardReArm(transcriptGuard, Date.now())', "the transcript guard re-arms only after the debounce fires");
 
 console.log("✓ semantic guards smoke: durable deletes and no-op renames are explicit");
