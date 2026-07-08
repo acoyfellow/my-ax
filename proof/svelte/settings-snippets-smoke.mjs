@@ -34,4 +34,10 @@ assertNotIncludes(settings, 'tools: "recipe.list', "Capabilities card must not a
 assertIncludes(settings, 'What the agent can use', "Capabilities tab uses plain purpose copy");
 assertIncludes(settings, 'These are callable tools. They are not raw credentials.', "Capabilities tab separates mechanism from credentials");
 
+// #7 Job health surface: recurring jobs classify last outcome so a transient
+// gateway rate limit reads as a benign 'rate-limited' state, not a hard failure.
+assertIncludes(settings, 'import { classifyJobHealth, jobResultAttr } from "./job-health";', "jobs use the shared health classifier");
+assertIncludes(settings, 'const health = classifyJobHealth(job)', "each job row is health-classified");
+assertIncludes(settings, 'data-job-result={jobResultAttr(health)} data-job-health={health.state} data-job-tone={health.tone}', "job result exposes classified health state/tone");
+
 console.log("✓ reusable tools settings smoke: owner-selectable approval mode, explicit approval, and labeled mobile actions");
