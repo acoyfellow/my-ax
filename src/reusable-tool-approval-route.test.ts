@@ -7,7 +7,7 @@ const routes = readFileSync(new URL("./routes/recipes.ts", import.meta.url), "ut
 function directApprovalSlice() {
   const start = routes.indexOf('app.post("/api/recipes/by-name/approval"');
   assert.ok(start >= 0, "direct chat approval route must exist");
-  return routes.slice(start, start + 2200);
+  return routes.slice(start, start + 2800);
 }
 
 test("direct chat approval is owner-scoped and source-bound", () => {

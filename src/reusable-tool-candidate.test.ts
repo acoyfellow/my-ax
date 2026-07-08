@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   evaluateReusableToolCandidate,
+  isHighAuthorityInlineOnly,
   isValidSuggestedShape,
   normalizeReusableSource,
   parseReusableMarker,
@@ -202,4 +203,52 @@ test("evaluateReusableToolCandidate: fingerprint is present even when ineligible
   });
   assert.match(decision.fingerprint, /^rtc_/);
   assert.equal(decision.eligible, false);
+});
+
+// ---------------------------------------------------------------------------
+// High-authority inline-only gate (dogfood bug: cmux_session_status)
+// ---------------------------------------------------------------------------
+
+const machineBoundCode = `// reusable-tool: cmux session status
+async (ctx) => {
+  const status = await ctx.machine.shell({ command: "cmux status" });
+  return { status };
+}`;
+
+test("isHighAuthorityInlineOnly: machine-bound code is inline-only", () => {
+  assert.equal(isHighAuthorityInlineOnly(["machine.shell"]), true);
+  assert.equal(isHighAuthorityInlineOnly(["cloudbox.exec"]), true);
+});
+
+test("isHighAuthorityInlineOnly: portable and workspace-only code is NOT inline-only", () => {
+  assert.equal(isHighAuthorityInlineOnly([]), false);
+  assert.equal(isHighAuthorityInlineOnly(["workspace.read"]), false);
+  assert.equal(isHighAuthorityInlineOnly(["codemode.search"]), false);
+  // A `.none` sentinel means no host binding => not inline-only even if the
+  // namespace is machine.
+  assert.equal(isHighAuthorityInlineOnly(["machine.none"]), false);
+});
+
+test("evaluateReusableToolCandidate: machine-bound candidate is NOT eligible (high_authority_inline_only)", () => {
+  // This is the exact dogfood failure: a well-formed, marked, non-trivial
+  // candidate that the promotion policy refuses to persist. It must fail
+  // closed here so no approvable card is ever rendered.
+  const decision = evaluateReusableToolCandidate({
+    sourceCode: machineBoundCode,
+    inferredCapabilities: ["machine.shell"],
+    suggestedRecipe: { ...validShape, code: machineBoundCode, capabilities: ["machine.shell"], portable: false },
+  });
+  assert.equal(decision.eligible, false);
+  assert.equal(decision.reason, "high_authority_inline_only");
+  assert.match(decision.fingerprint, /^rtc_/);
+});
+
+test("evaluateReusableToolCandidate: workspace-bound candidate remains eligible", () => {
+  const decision = evaluateReusableToolCandidate({
+    sourceCode: nonTrivialCode,
+    inferredCapabilities: ["workspace.list"],
+    suggestedRecipe: validShape,
+  });
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.reason, "eligible");
 });

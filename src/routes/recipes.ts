@@ -83,7 +83,16 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
       }
-      if (!existing) throw new SavedRecipeError("NotFound", "reusable tool not found");
+      if (!existing) {
+        // A card can only be missing its saved row if promotion refused to
+        // persist it. The dominant cause is host-bound machine/cloudbox code,
+        // which is inline-only by policy. Give the owner an actionable reason
+        // instead of a bare "not found" they cannot resolve by retrying.
+        throw new SavedRecipeError(
+          "NotFound",
+          "This reusable tool was not saved and cannot be enabled. Machine- or Cloudbox-bound tools run inline only and are never persisted as reusable tools.",
+        );
+      }
       if (existing.code.trim() !== sourceCode) {
         throw new SavedRecipeError("Conflict", "This card no longer matches the saved reusable tool. Open Reusable tools to review the current version.");
       }
