@@ -49,7 +49,8 @@ export type ReusableToolCandidate = {
     | "empty_marker_name"
     | "trivial_source"
     | "invalid_shape"
-    | "empty_source";
+    | "empty_source"
+    | "high_authority_inline_only";
 };
 
 export type ReusableToolCandidateInput = {
@@ -174,6 +175,24 @@ export function isValidSuggestedShape(shape: SuggestedRecipeShape | undefined): 
   return true;
 }
 
+/** High-authority host namespaces that can never be persisted as a portable,
+ *  replayable reusable tool. Must match recipe-approval-policy.ts. */
+const HIGH_AUTHORITY_PREFIXES = ["machine.", "cloudbox."] as const;
+
+/** True when a capability set is high-authority AND host-bound (non-portable).
+ *  Such code is inline-only: the promotion policy refuses to persist it, so it
+ *  must NOT be presented as an approvable reusable-tool candidate. A `.none`
+ *  sentinel means "needs no host binding" and does not count as host-bound. */
+export function isHighAuthorityInlineOnly(capabilities: string[]): boolean {
+  const highAuthority = capabilities.some((cap) => HIGH_AUTHORITY_PREFIXES.some((prefix) => cap.startsWith(prefix)));
+  if (!highAuthority) return false;
+  const hostBound = capabilities.some((cap) => {
+    const [ns, method] = cap.split(".");
+    return (ns === "machine" || ns === "cloudbox" || ns === "workspace") && method !== "none";
+  });
+  return hostBound;
+}
+
 /**
  * Full candidate evaluation. Returns the fingerprint alongside the eligibility
  * decision so callers can render/store both in a single sync step.
@@ -182,9 +201,17 @@ export function isValidSuggestedShape(shape: SuggestedRecipeShape | undefined): 
  *   - source is non-empty and normalizes to >= REUSABLE_TOOL_MIN_SOURCE_LENGTH
  *   - marker present with a meaningful cleaned name
  *   - suggested-recipe shape is structurally valid
+ *   - the capabilities are NOT high-authority-inline-only (machine/cloudbox
+ *     host-bound code that the promotion policy will refuse to persist)
  *
  * Any other outcome sets eligible=false with a specific reason so the
  * promotion path can log/skip without guessing.
+ *
+ * The high-authority gate is the fix for the dogfood bug where an eligible
+ * card was shown for a machine-bound tool (e.g. cmux_session_status): the
+ * Approve button called by-name/approval, but promotion had refused to persist
+ * the row, so getByName never resolved and the button silently reverted to
+ * "Enable". Failing closed here means no un-approvable card is ever rendered.
  */
 export function evaluateReusableToolCandidate(input: ReusableToolCandidateInput): ReusableToolCandidate {
   const source = typeof input.sourceCode === "string" ? input.sourceCode : "";
@@ -204,6 +231,11 @@ export function evaluateReusableToolCandidate(input: ReusableToolCandidateInput)
   }
   if (!isValidSuggestedShape(input.suggestedRecipe)) {
     return { eligible: false, fingerprint, reason: "invalid_shape" };
+  }
+  // Fail closed: host-bound machine/cloudbox code is inline-only and cannot be
+  // persisted, so it must not surface an approvable candidate card.
+  if (isHighAuthorityInlineOnly(caps)) {
+    return { eligible: false, fingerprint, reason: "high_authority_inline_only" };
   }
   return { eligible: true, fingerprint, reason: "eligible" };
 }
