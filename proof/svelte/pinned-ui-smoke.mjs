@@ -25,6 +25,11 @@ has('e.key === "ArrowDown"', "reorder handle moves down with ArrowDown");
 // a11y live region
 has('aria-live="polite" role="status">{pinAnnounce}', "an aria-live region announces pin/reorder changes");
 has('class="session-row__reorder"', "pinned rows render a reorder handle");
+// HTML5 drag-and-drop (C4): pointer parity, reuses planReorder + /rank.
+has('draggable={pinnedGroup ? true : undefined}', "pinned rows are draggable (pointer reorder)");
+has('ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}', "pinned rows accept drops");
+has('planReorder(order, moved, toIndex)', "drop maps to a beforeId via the shared pure planner");
+has('void sendReorder(moved, plan.beforeId)', "drop persists the reorder via the same /rank path as keyboard");
 // Optimistic + reconcile
 has('refresh();', "server refresh reconciles optimistic pin/reorder changes");
 
