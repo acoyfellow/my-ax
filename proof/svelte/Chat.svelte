@@ -7,6 +7,7 @@
   import { VoiceClient } from "@cloudflare/voice/client";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
+  import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
@@ -230,25 +231,38 @@
     voiceClient.toggleMute();
     voiceMicSuppressed = suppressed;
   }
+  // Fail-closed backstop: never accept a transcript that arrives while the
+  // agent is speaking or in the re-arm tail (assistant audio -> user input).
+  let transcriptGuard: TranscriptGuardState = initialTranscriptGuard();
+  let voiceEchoRejects = 0;
   function applyVoiceGate(status: VoiceStatus) {
     const { state, action } = onStatusChange(voiceGate, status);
     voiceGate = state;
     if (action.type === "suppress-mic") {
       clearVoiceRearmTimer(); // onStatusChange already cleared gate.rearmTimer
       setVoiceMicSuppressed(true);
+      transcriptGuard = guardSuppress(transcriptGuard);
     } else if (action.type === "cancel-rearm") {
       clearVoiceRearmTimer(); // agent resumed audio before the debounce fired
+      transcriptGuard = guardSuppress(transcriptGuard);
     } else if (action.type === "schedule-rearm") {
       clearVoiceRearmTimer();
       voiceRearmTimer = setTimeout(() => {
         voiceRearmTimer = null;
         voiceGate = rearm(voiceGate);
         setVoiceMicSuppressed(false);
+        transcriptGuard = guardReArm(transcriptGuard, Date.now());
       }, action.delayMs);
       // Mark the in-flight debounce so a repeated listening status won't
       // schedule a second timer (withRearmTimer stores a non-null marker).
       voiceGate = withRearmTimer(voiceGate, 1);
     }
+  }
+  // True iff a transcript observed now may be treated as a real user turn.
+  function voiceTranscriptAllowed(): boolean {
+    const decision = acceptTranscript(transcriptGuard, Date.now());
+    if (!decision.accept) { voiceEchoRejects += 1; console.info("[voice] rejected probable self-echo transcript", decision.reason); }
+    return decision.accept;
   }
 
   // ── Turn-boundary chime ────────────────────────────────────────────
@@ -308,6 +322,7 @@
     voiceGate = initialVoiceGateState();
     voiceMicSuppressed = false;
     prevChimeStatus = "idle";
+    transcriptGuard = initialTranscriptGuard();
   }
 
   async function stopVoiceMode() {
@@ -342,7 +357,10 @@
       maybeChime(status);
     });
     client.addEventListener("transcriptchange", () => {});
-    client.addEventListener("interimtranscript", (text) => { voiceInterim = text; });
+    // Fail-closed: ignore interim transcripts observed while the gate is
+    // suppressed or in the re-arm tail — those are probable loudspeaker
+    // self-echo of the agent's own TTS, not user speech.
+    client.addEventListener("interimtranscript", (text) => { if (voiceTranscriptAllowed()) voiceInterim = text; });
     client.addEventListener("audiolevelchange", (level) => { voiceAudioLevel = level; });
     client.addEventListener("error", (error) => { voiceError = error; if (error) pushError(`Voice mode: ${error}`); });
     client.addEventListener("metricschange", (metrics) => { if (metrics) console.info("[voice] pipeline metrics", metrics); });
