@@ -17,12 +17,15 @@
 
   import { onMount } from "svelte";
   import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState } from "@my-ax/store";
+  import { planKeyboardStep, reorderAnnouncement, splitPinned } from "./pinned-reorder";
 
   type SessionRow = {
     id: string;
     name?: string | null;
     updated_at: string;
     status?: string | null;
+    pinned?: number | null;
+    pin_rank?: string | null;
   };
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -35,6 +38,11 @@
   let loadingMore = $state(false);
   let errorText = $state<string | null>(null);
   let currentId = $derived(sessionState.id);
+  // Pinned/unpinned split (server order is authoritative; splitPinned is a
+  // defensive re-sort). See ./pinned-reorder.ts.
+  let pinnedRows = $derived(splitPinned(sessions).pinned);
+  let unpinnedRows = $derived(splitPinned(sessions).unpinned);
+  let pinAnnounce = $state("");
 
   let scrollEl = $state<HTMLDivElement | undefined>(undefined);
 
@@ -240,6 +248,70 @@
     }
   }
 
+  // Pin/unpin: server holds the authoritative pinned flag + fractional rank so
+  // it syncs across devices. Optimistic local update, reconciled by refresh().
+  async function togglePin(row: SessionRow) {
+    const nextPinned = row.pinned === 1 ? false : true;
+    const prev = row.pinned;
+    row.pinned = nextPinned ? 1 : 0;
+    sessions = [...sessions];
+    try {
+      const r = await fetch(`/api/sessions/${encodeURIComponent(row.id)}/pin`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: nextPinned }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      pinAnnounce = nextPinned ? `Pinned ${row.name || "conversation"}.` : `Unpinned ${row.name || "conversation"}.`;
+      refresh();
+    } catch (err: any) {
+      row.pinned = prev; // roll back the optimistic flip
+      sessions = [...sessions];
+      console.error("togglePin failed:", err);
+      (window as any).__appendError?.("Couldn't change pin: " + (err?.message || err));
+    }
+  }
+
+  // Reorder a pinned conversation. `beforeId` is neighbor intent; the server
+  // computes the fractional key. Used by both keyboard and (later) DnD.
+  async function sendReorder(movedId: string, beforeId: string | null) {
+    try {
+      const r = await fetch(`/api/sessions/${encodeURIComponent(movedId)}/rank`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ beforeId }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      refresh();
+    } catch (err: any) {
+      console.error("reorderPinned failed:", err);
+      (window as any).__appendError?.("Couldn't reorder: " + (err?.message || err));
+      refresh(); // resync to server truth
+    }
+  }
+
+  // Accessible keyboard reorder within the pinned group. Up/Down move one slot.
+  function reorderPinnedByKey(row: SessionRow, direction: "up" | "down") {
+    const order = pinnedRows.map((r) => r.id);
+    const plan = planKeyboardStep(order, row.id, direction);
+    if (!plan) return; // at the edge
+    // Optimistic: reflect the new order locally by nudging pin_rank ordering.
+    const moved = sessions.find((s) => s.id === row.id);
+    if (moved) {
+      // Renumber local pin_rank to the planned order so the derived split
+      // re-sorts immediately; server refresh replaces these with real keys.
+      plan.order.forEach((id, i) => {
+        const s = sessions.find((x) => x.id === id);
+        if (s) s.pin_rank = String(i).padStart(6, "0");
+      });
+      sessions = [...sessions];
+    }
+    pinAnnounce = reorderAnnouncement(row.name || "Conversation", plan.toIndex, order.length);
+    void sendReorder(row.id, plan.beforeId);
+  }
+
   function newConversation() {
     // "New" = blank composer, not "persist an empty DB session". The
     // first SEND creates the durable session row.
@@ -374,78 +446,121 @@
         Send a message to start one.
       </div>
     {:else}
-      <ul class="flex flex-col gap-0.5" aria-live="polite">
-        {#each sessions as row (row.id)}
-          {@const title = row.name || "Untitled"}
-          {@const active = row.id === currentId}
-          {@const meta = formatSessionTime(row.updated_at)}
-          {@const signal = sessionSignal(row, active)}
-          {@const fullTime = parseServerTime(row.updated_at)?.toLocaleString() || ""}
-          <li
-            class="session-row"
-            data-session-id={row.id}
-            data-active={active ? "1" : "0"}
+      {#snippet sessionRowItem(row: SessionRow, pinnedGroup: boolean, indexInGroup: number, groupTotal: number)}
+        {@const title = row.name || "Untitled"}
+        {@const active = row.id === currentId}
+        {@const meta = formatSessionTime(row.updated_at)}
+        {@const signal = sessionSignal(row, active)}
+        {@const fullTime = parseServerTime(row.updated_at)?.toLocaleString() || ""}
+        <li
+          class="session-row"
+          data-session-id={row.id}
+          data-active={active ? "1" : "0"}
+          data-pinned={row.pinned === 1 ? "1" : "0"}
+        >
+          <span
+            class="session-row__signal"
+            data-signal={signal}
+            aria-label={sessionSignalLabel(signal)}
+            title={sessionSignalLabel(signal)}
+          ></span>
+          <div
+            class="session-row__main"
+            tabindex="0"
+            role="button"
+            aria-label={`Switch to ${title}`}
+            onclick={() => switchTo(row.id)}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); switchTo(row.id); }
+            }}
           >
-            <span
-              class="session-row__signal"
-              data-signal={signal}
-              aria-label={sessionSignalLabel(signal)}
-              title={sessionSignalLabel(signal)}
-            ></span>
-            <div
-              class="session-row__main"
-              tabindex="0"
-              role="button"
-              aria-label={`Switch to ${title}`}
-              onclick={() => switchTo(row.id)}
-              onkeydown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  switchTo(row.id);
-                }
-              }}
+            <span class="session-row__title">{title}</span>
+            <span class="session-row__meta" title={`${fullTime} · ${row.id}`}>{meta} · {row.id.slice(0, 8)}</span>
+          </div>
+          <div class="session-row__actions">
+            <button
+              type="button"
+              class="session-row__pin"
+              data-pinned={row.pinned === 1 ? "1" : "0"}
+              aria-pressed={row.pinned === 1}
+              aria-label={row.pinned === 1 ? `Unpin ${title}` : `Pin ${title}`}
+              title={row.pinned === 1 ? "Unpin" : "Pin to top"}
+              onclick={(e) => { e.stopPropagation(); togglePin(row); }}
             >
-              <span class="session-row__title">{title}</span>
-              <span class="session-row__meta" title={`${fullTime} · ${row.id}`}>{meta} · {row.id.slice(0, 8)}</span>
-            </div>
-            <div class="session-row__actions">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={row.pinned === 1 ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 21.5 12 17.5 5.5 21.5 7 14.5 2 9.5 9 9" />
+              </svg>
+            </button>
+            {#if pinnedGroup}
               <button
                 type="button"
-                class="session-row__rename"
-                aria-label={`Rename ${title}`}
-                title="Rename"
-                onclick={(e) => { e.stopPropagation(); rename(row); }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                </svg>
-              </button>
-              <a
-                class="session-row__export"
-                href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`}
-                aria-label={`Export ${title}`}
-                title="Export markdown"
+                class="session-row__reorder"
+                aria-label={`Reorder ${title}. Use arrow up and down to move; ${indexInGroup + 1} of ${groupTotal}.`}
+                title="Reorder (↑/↓)"
+                onkeydown={(e) => {
+                  if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); reorderPinnedByKey(row, "up"); }
+                  else if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); reorderPinnedByKey(row, "down"); }
+                }}
                 onclick={(e) => e.stopPropagation()}
               >
-                ↓
-              </a>
-              <button
-                type="button"
-                class="session-row__delete"
-                aria-label={`Delete ${title}`}
-                title="Delete"
-                onclick={(e) => { e.stopPropagation(); del(row); }}
-              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6M14 11v6" />
-                  <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                  <circle cx="4" cy="6" r="0.5" /><circle cx="4" cy="12" r="0.5" /><circle cx="4" cy="18" r="0.5" />
                 </svg>
               </button>
-            </div>
-          </li>
+            {/if}
+            <button
+              type="button"
+              class="session-row__rename"
+              aria-label={`Rename ${title}`}
+              title="Rename"
+              onclick={(e) => { e.stopPropagation(); rename(row); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+            <a
+              class="session-row__export"
+              href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`}
+              aria-label={`Export ${title}`}
+              title="Export markdown"
+              onclick={(e) => e.stopPropagation()}
+            >
+              ↓
+            </a>
+            <button
+              type="button"
+              class="session-row__delete"
+              aria-label={`Delete ${title}`}
+              title="Delete"
+              onclick={(e) => { e.stopPropagation(); del(row); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          </div>
+        </li>
+      {/snippet}
+
+      <div class="sr-only" aria-live="polite" role="status">{pinAnnounce}</div>
+      {#if pinnedRows.length > 0}
+        <div class="session-group-header" aria-hidden="true">Pinned</div>
+        <ul class="flex flex-col gap-0.5" aria-label="Pinned conversations">
+          {#each pinnedRows as row, i (row.id)}
+            {@render sessionRowItem(row, true, i, pinnedRows.length)}
+          {/each}
+        </ul>
+        {#if unpinnedRows.length > 0}<div class="session-group-header" aria-hidden="true">Recent</div>{/if}
+      {/if}
+      <ul class="flex flex-col gap-0.5" aria-live="polite">
+        {#each unpinnedRows as row (row.id)}
+          {@render sessionRowItem(row, false, 0, 0)}
         {/each}
       </ul>
       {#if cursor}
@@ -549,7 +664,9 @@
   }
   :global(.session-row__rename),
   :global(.session-row__export),
-  :global(.session-row__delete) {
+  :global(.session-row__delete),
+  :global(.session-row__pin),
+  :global(.session-row__reorder) {
     flex-shrink: 0;
     width: 28px;
     height: 28px;
@@ -568,10 +685,21 @@
   :global(.session-row:hover .session-row__rename),
   :global(.session-row:hover .session-row__export),
   :global(.session-row:hover .session-row__delete),
+  :global(.session-row:hover .session-row__pin),
+  :global(.session-row:hover .session-row__reorder),
   :global(.session-row:focus-within .session-row__rename),
   :global(.session-row:focus-within .session-row__export),
-  :global(.session-row:focus-within .session-row__delete) {
+  :global(.session-row:focus-within .session-row__delete),
+  :global(.session-row:focus-within .session-row__pin),
+  :global(.session-row:focus-within .session-row__reorder) {
     opacity: 1;
+  }
+  /* A pinned row keeps its star visible (filled) so its state is always clear. */
+  :global(.session-row[data-pinned="1"] .session-row__pin) { opacity: 1; color: var(--color-brand); }
+  :global(.session-row__pin:hover),
+  :global(.session-row__reorder:hover) {
+    background: var(--color-surface-2);
+    color: var(--fg);
   }
   :global(.session-row__rename:hover) {
     background: var(--color-surface-2);
@@ -581,9 +709,32 @@
     background: rgba(239, 68, 68, 0.15);
     color: rgb(248, 113, 113);
   }
+  /* Pinned group: a subtle left accent + header. */
+  :global(.session-row[data-pinned="1"]) {
+    border-left: 2px solid color-mix(in srgb, var(--color-brand) 55%, transparent);
+    background: color-mix(in srgb, var(--color-brand) 4%, transparent);
+  }
+  .session-group-header {
+    padding: 8px 10px 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-mut);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0);
+    white-space: nowrap; border: 0;
+  }
   @media (max-width: 767px) {
     :global(.session-row__rename),
     :global(.session-row__export),
-    :global(.session-row__delete) { opacity: 0.6; }
+    :global(.session-row__delete),
+    :global(.session-row__pin),
+    :global(.session-row__reorder) { opacity: 0.6; }
+    :global(.session-row[data-pinned="1"] .session-row__pin) { opacity: 1; }
   }
 </style>
