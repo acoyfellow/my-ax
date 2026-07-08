@@ -5,6 +5,7 @@
   import { tick } from "svelte";
   import { sessionState, setActiveSession, wsState } from "@my-ax/store";
   import Attention from "./Attention.svelte";
+  import RunReceiptModal from "./RunReceiptModal.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -117,3 +118,5 @@
     </svg>
   </button>
 </header>
+
+<RunReceiptModal />

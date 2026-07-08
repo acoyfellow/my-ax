@@ -1787,6 +1787,11 @@
       }
       if (target.action === "attention") { window.dispatchEvent(new Event("my-ax:attention-open")); return; }
       if (target.action === "settings") { window.dispatchEvent(new Event("my-ax:settings-open")); return; }
+      // A run receipt (/runs/<id>) opens as a nested modal above this
+      // conversation rather than a full-page navigation that would replace the
+      // conversation context. The modal owns its own history/Back semantics.
+      const receiptMatch = /^\/runs\/([^/?#]+)$/.exec(target.href.split("?")[0].split("#")[0]);
+      if (receiptMatch) { window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: decodeURIComponent(receiptMatch[1]) } })); return; }
       location.assign(target.href);
     };
     const onNavigate = (event: Event) => {
