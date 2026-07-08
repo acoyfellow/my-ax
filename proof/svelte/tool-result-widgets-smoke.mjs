@@ -26,6 +26,8 @@ try {
   const safeReplay = resolve({ kind: "browser-run", status: "done", replayUrl: "/browser/replay/abc-123", screenshotSrc: "/api/artifacts/22222222-2222-4222-8222-222222222222" }, "browser_open");
   const externalReplay = resolve({ kind: "browser-run", status: "done", replayUrl: "https://evil.example/replay", screenshotSrc: "https://evil.example/screenshot.png" }, "browser_open");
   const raster = resolve({ content: png }, "machinectl_call");
+  const video = resolve({ result: { kind: "video-artifact", src: "/api/artifacts/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", mime: "video/quicktime" } }, "screen_record");
+  const videoExternal = resolve({ kind: "video-artifact", src: "https://evil.example/clip.mov" }, "screen_record");
   const artifact = resolve({ content: { kind: "raster-artifact", src: "/api/artifacts/11111111-1111-4111-8111-111111111111" } }, "machinectl_call");
   const codemodeArtifact = resolve({ ok: true, result: { kind: "raster-artifact", src: "/api/artifacts/33333333-3333-4333-8333-333333333333" }, logs: [] }, "machinectl_code");
   const externalArtifact = resolve({ kind: "raster-artifact", src: "https://evil.example/screenshot.png" }, "machinectl_call");
@@ -136,6 +138,8 @@ try {
   if (safeReplay.kind !== "browser-run" || safeReplay.replaySrc !== "/browser/replay/abc-123?embed=1" || safeReplay.screenshotSrc !== "/api/artifacts/22222222-2222-4222-8222-222222222222") throw new Error("safe same-origin replay/screenshot missing");
   if (externalReplay.kind !== "browser-run" || externalReplay.replaySrc || externalReplay.screenshotSrc) throw new Error("external replay/screenshot URL was not blocked");
   if (raster.kind !== "inline-raster-image") throw new Error("safe raster widget missing");
+  if (video.kind !== "inline-video" || video.src !== "/api/artifacts/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb") throw new Error("same-origin video artifact must render an inline-video widget");
+  if (videoExternal.kind !== "raw-text") throw new Error("external video artifact URL must remain inert raw text");
   if (artifact.kind !== "inline-raster-image") throw new Error("safe same-origin raster artifact missing");
   if (codemodeArtifact.kind !== "inline-raster-image") throw new Error("machinectl_code raster result envelope missing");
   if (externalArtifact.kind !== "raw-text") throw new Error("external raster artifact URL must remain inert raw text");
@@ -157,6 +161,8 @@ try {
   if (!widgetSource.includes("Reusable tool")) throw new Error("reusable-tool card must use the 'Reusable tool' label");
   if (!widgetSource.includes('data-tool-widget="audio-message"')) throw new Error("audio message card must render its widget container");
   if (!/<audio[^>]*\bcontrols\b/.test(widgetSource)) throw new Error("audio message card must render a native <audio controls> player");
+  if (!widgetSource.includes('data-tool-widget="inline-video"')) throw new Error("video artifact must render an inline-video element");
+  if (!/<video[^>]*\bcontrols\b/.test(widgetSource)) throw new Error("video artifact must render a native <video controls> player");
   if (!widgetSource.includes("widget.src")) throw new Error("audio player must bind the validated same-origin clip src");
   if (/\bSnippet(\s|,|\.)/.test(widgetSource) || /\bsnippet(\s|,|\.)/.test(widgetSource)) throw new Error("owner-visible card must not use snippet copy");
   if (/\brecipe\b/i.test(widgetSource) && !widgetSource.includes("reusable-tool-candidate")) throw new Error("owner-visible card must not use raw recipe copy");

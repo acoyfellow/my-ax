@@ -291,6 +291,14 @@ const chatPageStyles = `
     background: #0a0a0a;
     border-top: 1px solid var(--line);
   }
+  .tool-call__inline-video {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-height: 32rem;
+    background: #0a0a0a;
+    border-top: 1px solid var(--line);
+  }
 
   .msg-user[data-pending="1"] .msg-body { opacity: 0.75; }
   .msg-user[data-pending="0"] .msg-body { opacity: 1; transition: opacity 120ms; }
