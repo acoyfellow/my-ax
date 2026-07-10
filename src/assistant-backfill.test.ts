@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { shouldBackfillAssistant, assistantBackfillCandidates } from "./assistant-backfill";
+
+const mk = (over: Partial<{ id: string; role: string; text: string; reasoning: string }> = {}) => ({
+  id: over.id ?? "m1", role: over.role ?? "assistant", text: over.text ?? "", reasoning: over.reasoning ?? "",
+});
+
+test("assistant message with visible text is a backfill candidate", () => {
+  assert.equal(shouldBackfillAssistant(mk({ text: "Here is the plan." })), true);
+});
+
+test("assistant message with only reasoning still backfills", () => {
+  assert.equal(shouldBackfillAssistant(mk({ text: "", reasoning: "thinking..." })), true);
+});
+
+test("empty assistant placeholder is skipped", () => {
+  assert.equal(shouldBackfillAssistant(mk({ text: "   ", reasoning: "" })), false);
+});
+
+test("non-assistant roles are never backfilled here", () => {
+  assert.equal(shouldBackfillAssistant(mk({ role: "user", text: "hi" })), false);
+  assert.equal(shouldBackfillAssistant(mk({ role: "tool", text: "result" })), false);
+});
+
+test("candidates filters to only content-bearing assistant messages", () => {
+  const out = assistantBackfillCandidates([
+    mk({ id: "a", text: "reply one" }),
+    mk({ id: "b", text: "" }),
+    mk({ id: "u", role: "user", text: "prompt" }),
+    mk({ id: "c", text: "", reasoning: "reasoned" }),
+  ]);
+  assert.deepEqual(out.map((m) => m.id), ["a", "c"]);
+});
