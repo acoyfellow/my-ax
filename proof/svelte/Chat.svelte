@@ -1837,28 +1837,26 @@
   }
 
   // ── Onboarding cards ──────────────────────────────────────────────
-  const prompts = [
-    {
-      title: "Inspect my workspace",
-      hint: "Uses the persistent My AX Workspace.",
-      prompt: "What's in /home/user? Pick anything interesting and tell me about it.",
-    },
-    {
-      title: "Add an MCP server",
-      hint: "Settings → Connectors → Add MCP server (BYO OAuth).",
-      prompt: "How do I add a new MCP server here? Walk me through Settings → Connectors.",
-    },
-    {
-      title: "Quick research question",
-      hint: "Plain reasoning, no tool calls.",
-      prompt: "Explain the difference between Cloudflare Sandbox SDK and Containers in 5 bullets.",
-    },
-    {
-      title: "Script + run end-to-end",
-      hint: "Exercises workspace.write + workspace.exec through Work Code Mode.",
-      prompt: "Write a small Python script to /home/user/hello.py that prints the date, then run it.",
-    },
-  ];
+  // Owner-editable conversation starters. Seeded with sensible defaults so the
+  // empty state is never blank; replaced by the owner's saved list (Settings
+  // or the manage_starters agent tool) once /api/starters resolves. Kept in
+  // sync across devices server-side.
+  type Starter = { title: string; hint?: string; prompt: string };
+  let prompts = $state<Starter[]>([
+    { title: "Inspect my workspace", hint: "Uses the persistent My AX Workspace.", prompt: "What's in /home/user? Pick anything interesting and tell me about it." },
+    { title: "Add an MCP server", hint: "Settings → Connectors → Add MCP server (BYO OAuth).", prompt: "How do I add a new MCP server here? Walk me through Settings → Connectors." },
+    { title: "Quick research question", hint: "Plain reasoning, no tool calls.", prompt: "Explain the difference between Cloudflare Sandbox SDK and Containers in 5 bullets." },
+    { title: "Script + run end-to-end", hint: "Exercises workspace.write + workspace.exec through Work Code Mode.", prompt: "Write a small Python script to /home/user/hello.py that prints the date, then run it." },
+  ]);
+  async function loadStarters() {
+    try {
+      const r = await fetch("/api/starters", { credentials: "include" });
+      if (!r.ok) return;
+      const body = await r.json();
+      const list = body?.result?.starters;
+      if (Array.isArray(list) && list.length) prompts = list;
+    } catch { /* keep defaults on failure */ }
+  }
   function pickPrompt(p: string) {
     composerText = p;
     autoGrow();
@@ -1947,6 +1945,7 @@
     // required by browser permission and audio playback policies.
     localStorage.setItem("my-ax-voice-mode", "0");
     restoreDeployRefreshDraft();
+    void loadStarters();
     bootstrap();
     connectionWatchdogId = setInterval(() => {
       if (!ws || document.visibilityState !== "visible") return;
@@ -2005,11 +2004,14 @@
         followDeepLink(target);
       }
     };
+    const onStartersRefresh = () => { void loadStarters(); };
     window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
     window.addEventListener("my-ax:navigate", onNavigate as EventListener);
+    window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
     navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
     return () => {
       window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
+      window.removeEventListener("my-ax:starters-refresh", onStartersRefresh);
       document.removeEventListener("keydown", onGlobalKeydown);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("my-ax:switch-session", onSwitch as EventListener);
