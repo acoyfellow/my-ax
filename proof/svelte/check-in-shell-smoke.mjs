@@ -35,14 +35,11 @@ assertIncludes(buildConfig, "checkin: here(\"CheckIn.svelte\")", "Svelte build c
 assertIncludes(generatedBundles, "checkin", "generated Svelte bundles");
 assertIncludes(generatedBundles, "data-check-in-raw-href", "generated Check-in raw API href marker");
 assertNotIncludes(chatPage, "hydrateAs=\"checkin\"", "Chat shell Check-in mount that steals composer space");
-assertIncludes(attention, 'import CheckIn from "./CheckIn.svelte"', "Attention popup Check-in import");
-assertIncludes(attention, "<CheckIn embedded />", "Attention popup embeds Check-in in modal mode");
-assertIncludes(attention, "aria-label=\"Attention and Check-in\"", "Attention popup combined owner panel label");
-assertIncludes(attention, ".attention-owner-panel::backdrop", "Attention owner modal uses native Settings-style backdrop");
-assertIncludes(attention, "background: rgb(0 0 0 / 0.56);", "Attention owner modal backdrop dimming matches Settings");
-assertIncludes(attention, "w-[min(760px,calc(100vw-1rem))]", "Attention owner modal width matches Settings modal");
-assertIncludes(attention, "height: min(760px, calc(100dvh - 1rem));", "Attention owner modal height matches Settings modal");
-assertIncludes(attention, "Close Check-in panel", "Attention owner modal close control");
+// B redesign: CheckIn is DECOUPLED from the notifications panel (the panel is
+// now a pure notification stream). The CheckIn component + bundle are preserved
+// for its own surface; it must no longer be embedded in Attention.
+assertNotIncludes(attention, 'import CheckIn from "./CheckIn.svelte"', "Notifications panel no longer imports CheckIn");
+assertNotIncludes(attention, "<CheckIn", "Notifications panel no longer embeds CheckIn");
 assertIncludes(checkIn, "@container/checkin", "Check-in Tailwind named container");
 assertIncludes(checkIn, "@min-[24rem]/checkin", "Check-in Tailwind container query");
 assertIncludes(checkIn, "data-check-in-root", "Check-in component root marker");

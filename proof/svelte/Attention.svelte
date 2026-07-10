@@ -1,45 +1,28 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { parseMyAxDeepLink } from "./deep-links";
-  import { classifyAttentionItem } from "./attention-item-affordance";
   import { reconcileSeen } from "./attention-state";
-  import CheckIn from "./CheckIn.svelte";
-
-  interface Item {
-    id: string;
-    kind?: string | null;
-    title: string;
-    body: string;
-    href: string;
-    created_at: string;
-    seen_at: string | null;
-  }
-
-  interface RunItem {
-    id: string;
-    status: string;
-    title?: string | null;
-    task_summary?: string | null;
-    updated_at?: string | null;
-  }
-
-  type SectionId = "now" | "receipts";
+  import {
+    buildNotificationStream,
+    unreadCount,
+    type AttentionItem,
+    type FailedRun,
+    type Notification,
+  } from "./notification-stream";
 
   let open = $state(false);
   let unread = $state(0);
-  let items = $state<Item[]>([]);
+  let items = $state<AttentionItem[]>([]);
+  let failedRuns = $state<FailedRun[]>([]);
+  let dismissedRuns = $state<Set<string>>(new Set());
   let loading = $state(false);
   let clearing = $state(false);
   let error = $state<string | null>(null);
-  let failedRuns = $state<RunItem[]>([]);
-  let failedRunsError = $state<string | null>(null);
-  let activeSection = $state<SectionId>("now");
   let dialogEl: HTMLDialogElement | null = null;
 
-  const sections: { id: SectionId; title: string; summary: string }[] = [
-    { id: "now", title: "Now", summary: "What needs you" },
-    { id: "receipts", title: "Receipts", summary: "Failed work and pings" },
-  ];
+  // The single unified, reverse-chronological stream (attention pings + failed
+  // runs), with owner-dismissed runs filtered out. See notification-stream.ts.
+  const stream = $derived(buildNotificationStream(items, failedRuns, dismissedRuns));
 
   function updateBadge() {
     if (unread > 0) void (navigator as any).setAppBadge?.(unread).catch?.(() => {});
@@ -48,14 +31,14 @@
   async function refresh() {
     try {
       const r = await fetch("/api/attention", { credentials: "include" });
-      if (!r.ok) throw new Error("Attention unavailable");
+      if (!r.ok) throw new Error("Notifications unavailable");
       const body = await r.json();
       unread = Number(body?.result?.unread ?? 0);
       items = body?.result?.items ?? [];
       error = null;
       updateBadge();
     } catch (err: any) {
-      error = err?.message || "Attention unavailable";
+      error = err?.message || "Notifications unavailable";
     }
   }
   async function refreshFailedRuns() {
@@ -64,9 +47,8 @@
       if (!r.ok) throw new Error("Failed runs unavailable");
       const body = await r.json();
       failedRuns = Array.isArray(body?.result?.runs) ? body.result.runs : [];
-      failedRunsError = null;
-    } catch (err: any) {
-      failedRunsError = err?.message || "Failed runs unavailable";
+    } catch {
+      // A failed-runs fetch error is non-fatal for the stream; pings still show.
     }
   }
   async function markSeen() {
@@ -79,39 +61,80 @@
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ids }),
       });
-      if (!response.ok) throw new Error("Could not mark attention as seen");
+      if (!response.ok) throw new Error("Could not mark notifications as seen");
       const body = await response.json();
       const serverUnread = Number(body?.result?.unread);
-      if (!Number.isFinite(serverUnread)) throw new Error("Could not reconcile attention state");
-      const reconciled = reconcileSeen(items, serverUnread, ids, new Date().toISOString());
+      if (!Number.isFinite(serverUnread)) throw new Error("Could not reconcile notification state");
+      const reconciled = reconcileSeen(items as any, serverUnread, ids, new Date().toISOString());
       unread = reconciled.unread;
-      items = reconciled.items;
+      items = reconciled.items as any;
       error = null;
       updateBadge();
     } catch (err: any) {
-      error = err?.message || "Could not mark attention as seen";
+      error = err?.message || "Could not mark notifications as seen";
     }
   }
   async function clearAll() {
-    if (!items.length || clearing) return;
-    if (!window.confirm(`Clear all ${items.length} recent Attention items? This removes notification receipts, not their source conversations or jobs.`)) return;
+    if (!stream.length || clearing) return;
+    if (!window.confirm("Clear all notifications? This removes the notification entries (including failed-run alerts), not the source conversations or runs.")) return;
     clearing = true;
     try {
-      const response = await fetch("/api/attention", { method: "DELETE", credentials: "include" });
-      if (!response.ok) throw new Error("Could not clear Attention");
-      const body = await response.json();
+      // Clear attention pings and dismiss listed failed runs together.
+      const hasRuns = failedRuns.some((run) => !dismissedRuns.has(`run:${run.id}`));
+      const requests: Promise<Response>[] = [fetch("/api/attention", { method: "DELETE", credentials: "include" })];
+      if (hasRuns) requests.push(fetch("/api/runs/dismiss-all", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "failed" }) }));
+      const [attnRes] = await Promise.all(requests);
+      if (!attnRes.ok) throw new Error("Could not clear notifications");
+      const body = await attnRes.json();
       const serverItems = body?.result?.items;
       const serverUnread = Number(body?.result?.unread);
-      if (!Array.isArray(serverItems) || !Number.isFinite(serverUnread)) throw new Error("Could not reconcile Attention state");
+      if (!Array.isArray(serverItems) || !Number.isFinite(serverUnread)) throw new Error("Could not reconcile notification state");
       items = serverItems;
       unread = serverUnread;
+      failedRuns = [];
+      dismissedRuns = new Set();
       error = null;
       updateBadge();
     } catch (err: any) {
-      error = err?.message || "Could not clear Attention";
+      error = err?.message || "Could not clear notifications";
     } finally {
       clearing = false;
     }
+  }
+  async function dismiss(event: MouseEvent, note: Notification) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (note.source === "run") {
+      const runId = note.id.slice("run:".length);
+      // Optimistic removal, then persist.
+      dismissedRuns = new Set([...dismissedRuns, note.id]);
+      try {
+        const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/dismiss`, { method: "POST", credentials: "include" });
+        if (!res.ok) throw new Error("dismiss failed");
+      } catch {
+        // Roll back on failure so the item reappears rather than silently vanish.
+        const next = new Set(dismissedRuns);
+        next.delete(note.id);
+        dismissedRuns = next;
+        error = "Could not dismiss that failed run.";
+      }
+    } else {
+      // Attention pings clear as a group today (no per-item DELETE endpoint);
+      // dismissing one marks it seen so it stops counting toward unread.
+      items = items.map((item) => (item.id === note.id ? { ...item, seen_at: item.seen_at ?? new Date().toISOString() } : item));
+      const target = items.find((item) => item.id === note.id);
+      if (target) void markSeenOne(note.id);
+    }
+  }
+  async function markSeenOne(id: string) {
+    try {
+      const response = await fetch("/api/attention/seen", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
+      if (response.ok) {
+        const body = await response.json();
+        const serverUnread = Number(body?.result?.unread);
+        if (Number.isFinite(serverUnread)) { unread = serverUnread; updateBadge(); }
+      }
+    } catch {}
   }
   function closePanel() {
     open = false;
@@ -127,41 +150,8 @@
     await markSeen();
   }
   async function toggle() {
-    if (open) {
-      closePanel();
-    } else {
-      await openPanel();
-    }
-  }
-  function activateSection(section: SectionId) {
-    activeSection = section;
-  }
-  function runTitle(run: RunItem) {
-    return run.title || run.task_summary || run.id;
-  }
-  function runSummary(run: RunItem) {
-    const title = run.title?.trim();
-    const summary = run.task_summary?.trim();
-    if (summary && summary !== title) return summary;
-    return "Failed run receipt is ready for review.";
-  }
-  function age(value: string) {
-    const ms = Date.now() - new Date(value.replace(" ", "T") + (value.includes("Z") ? "" : "Z")).getTime();
-    if (!Number.isFinite(ms) || ms < 60_000) return "now";
-    if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
-    if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
-    return `${Math.floor(ms / 86_400_000)}d`;
-  }
-  function isFailedRunsHref(href: string) {
-    return href === "/runs?status=failed" || href === "/api/runs?status=failed" || href.startsWith("/runs?status=failed&") || href.startsWith("/api/runs?status=failed&");
-  }
-  function handlePanelClick(event: MouseEvent) {
-    const link = (event.target as Element)?.closest?.("a[href]") as HTMLAnchorElement | null;
-    if (!link) return;
-    const href = link.getAttribute("href") || "";
-    if (!isFailedRunsHref(href)) return;
-    event.preventDefault();
-    activeSection = "receipts";
+    if (open) closePanel();
+    else await openPanel();
   }
   function runReceiptId(href: string): string | null {
     try {
@@ -173,14 +163,20 @@
       return null;
     }
   }
-  function follow(event: MouseEvent, href: string) {
-    if (isFailedRunsHref(href)) {
-      event.preventDefault();
-      activeSection = "receipts";
+  // Secondary action: open the run receipt / artifact as a nested modal.
+  function openWidget(event: MouseEvent, href: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    const receipt = runReceiptId(href);
+    if (receipt) {
+      window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: receipt } }));
       return;
     }
-    // A run receipt opens as a NESTED modal above this panel — do not close the
-    // panel and do not fall through to a full-page navigation.
+    follow(event, href);
+  }
+  // Primary action: go to the conversation (or the deep-link target).
+  function follow(event: MouseEvent, href: string | null) {
+    if (!href) return;
     const receipt = runReceiptId(href);
     if (receipt) {
       event.preventDefault();
@@ -192,6 +188,13 @@
     event.preventDefault();
     closePanel();
     window.dispatchEvent(new CustomEvent("my-ax:navigate", { detail: target }));
+  }
+  function age(ts: number) {
+    const ms = Date.now() - ts;
+    if (!Number.isFinite(ms) || ms < 60_000) return "now";
+    if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
+    if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
+    return `${Math.floor(ms / 86_400_000)}d`;
   }
   onMount(() => {
     void refresh();
@@ -210,134 +213,185 @@
 </script>
 
 <div class="relative h-10 w-10 flex-shrink-0" data-attention-root>
-  <button type="button" onclick={toggle} class="relative flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors" aria-label={unread ? `${unread} unread attention items` : "Attention"} aria-haspopup="dialog" aria-expanded={open} title="Attention">
+  <button type="button" onclick={toggle} class="relative flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors" aria-label={unread ? `${unread} unread notifications` : "Notifications"} aria-haspopup="dialog" aria-expanded={open} title="Notifications">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     {#if unread > 0}<span class="absolute top-0.5 right-0.5 min-w-3 h-3 px-0.5 rounded-full bg-brand text-white text-[8px] leading-3 text-center">{unread > 9 ? "9+" : unread}</span>{/if}
   </button>
   {#if open}
     <dialog
       bind:this={dialogEl}
-      class="attention-owner-panel z-50 w-[min(760px,calc(100vw-1rem))] max-h-[min(760px,calc(100dvh-1rem))] overflow-hidden border border-line bg-bg-alt p-0 text-fg"
-      aria-label="Attention and Check-in"
+      class="notif-panel z-50 overflow-hidden border border-line bg-bg-alt p-0 text-fg"
+      aria-label="Notifications"
       onclick={(event) => event.target === event.currentTarget && closePanel()}
       oncancel={(event) => { event.preventDefault(); closePanel(); }}
       onclose={() => { if (open) closePanel(); }}
       data-attention-owner-panel
     >
-      <div class="attention-owner-header safe-area-appbar">
-        <div>
-          <h2 class="text-sm font-semibold text-fg">Check-in</h2>
-          <p class="text-[11px] text-fg-mut">What needs you, then receipts.</p>
-        </div>
-        <button type="button" onclick={closePanel} class="attention-owner-close" aria-label="Close Check-in panel">×</button>
-      </div>
-      <div class="attention-owner-layout grid flex-1 min-h-0 overflow-hidden">
-        <nav aria-label="Check-in sections" class="attention-owner-nav flex gap-1 overflow-x-auto border-b border-line p-2 sm:flex-col sm:border-b-0 sm:border-r">
-          {#each sections as section}
-            <button
-              type="button"
-              onclick={() => activateSection(section.id)}
-              aria-current={activeSection === section.id ? "page" : undefined}
-              class:attention-owner-nav-active={activeSection === section.id}
-              class="attention-owner-nav-item min-w-max px-3 py-2 text-left sm:min-w-0"
-            >
-              <span class="block text-sm font-semibold">{section.title}</span>
-              <span class="mt-0.5 block text-[11px] leading-snug text-fg-mut">{section.summary}</span>
-            </button>
-          {/each}
-        </nav>
-        <div class="attention-owner-content min-h-0 max-h-full overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin] p-4 sm:p-5" onclick={handlePanelClick} data-attention-owner-content>
-          {#if activeSection === "now"}
-            <section class="attention-owner-section">
-              <header class="attention-owner-section-header">
-                <span class="attention-owner-eyebrow">Now</span>
-                <h3 class="attention-owner-title">What needs you</h3>
-                <p class="attention-owner-description">A single owner-return summary. The primary action stays here unless you open a specific source receipt.</p>
-              </header>
-              <div class="attention-owner-card overflow-hidden p-0">
-                <CheckIn embedded />
-              </div>
-            </section>
-          {:else}
-            <section class="attention-owner-section">
-              <header class="attention-owner-section-header">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <span class="attention-owner-eyebrow">Receipts</span>
-                    <h3 class="attention-owner-title">Failed work and recent pings</h3>
-                    <p class="attention-owner-description">One receipt stream for work that wanted your attention. Failed runs are called out first; source receipts stay secondary.</p>
-                  </div>
-                  {#if items.length > 0}
-                    <button type="button" onclick={clearAll} disabled={clearing} class="attention-owner-secondary-action">
-                      {clearing ? "Clearing…" : "Clear all"}
-                    </button>
-                  {/if}
-                </div>
-              </header>
-
-              <section class="attention-owner-subsection" aria-label="Failed run receipts">
-                <h4 class="attention-owner-subtitle">Failed runs</h4>
-                {#if loading}<p class="attention-owner-card attention-owner-muted">Loading failed runs…</p>
-                {:else if failedRunsError}<p class="attention-owner-card text-bad">{failedRunsError}</p>
-                {:else if failedRuns.length === 0}<p class="attention-owner-card attention-owner-muted">No failed runs need review.</p>
-                {:else}
-                  <ul class="grid gap-2">
-                    {#each failedRuns as run (run.id)}
-                      <li class="attention-owner-card">
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="min-w-0">
-                            <strong class="block truncate text-sm font-semibold text-fg">{runTitle(run)}</strong>
-                            <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-fg-mut">{runSummary(run)}</p>
-                          </div>
-                          <span class="attention-owner-status-bad">Failed</span>
-                        </div>
-                        <div class="mt-3 flex items-center justify-between gap-3">
-                          <code class="min-w-0 truncate font-mono text-[10px] text-fg-mut">{run.id}</code>
-                          <a href={`/runs/${run.id}`} class="shrink-0 text-xs font-semibold text-brand hover:underline" onclick={(event) => follow(event, `/runs/${run.id}`)}>Open source receipt</a>
-                        </div>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-              </section>
-
-              <section class="attention-owner-subsection" aria-label="Recent notifications">
-                <h4 class="attention-owner-subtitle">Recent pings</h4>
-                {#if loading}<p class="attention-owner-card attention-owner-muted">Loading notifications…</p>
-                {:else if error}<p class="attention-owner-card text-bad">{error}</p>
-                {:else if items.length === 0}<p class="attention-owner-card attention-owner-muted">No recent pings.</p>
-                {:else}
-                  <ul class="grid gap-2">
-                    {#each items as item (item.id)}
-                      {@const affordance = classifyAttentionItem(item)}
-                      <li class="attention-owner-card" data-attention-tone={affordance.tone}>
-                        <a href={item.href} onclick={(event) => follow(event, item.href)} class="block">
-                          <span class="flex gap-2 justify-between items-start">
-                            <span class="flex min-w-0 items-center gap-2">
-                              {#if affordance.badge}<span class="attention-badge" data-tone={affordance.tone}>{affordance.badge}</span>{/if}
-                              <strong class="min-w-0 truncate text-sm font-semibold text-fg">{item.title}</strong>
-                            </span>
-                            <time class="shrink-0 text-[10px] text-fg-mut">{age(item.created_at)}</time>
-                          </span>
-                          <span class="mt-1 block text-xs leading-relaxed text-fg-mut">{item.body}</span>
-                        </a>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-              </section>
-            </section>
+      <div class="notif-header safe-area-appbar">
+        <h2 class="text-sm font-semibold text-fg">Notifications</h2>
+        <div class="flex items-center gap-1">
+          {#if stream.length > 0}
+            <button type="button" onclick={clearAll} disabled={clearing} class="notif-clear-all">{clearing ? "Clearing…" : "Clear all"}</button>
           {/if}
+          <button type="button" onclick={closePanel} class="notif-close" aria-label="Close notifications">×</button>
         </div>
+      </div>
+      <div class="notif-body" data-attention-owner-content>
+        {#if loading && stream.length === 0}
+          <p class="notif-empty">Loading…</p>
+        {:else if error && stream.length === 0}
+          <p class="notif-empty text-bad">{error}</p>
+        {:else if stream.length === 0}
+          <p class="notif-empty">You're all caught up.</p>
+        {:else}
+          <ul class="notif-list">
+            {#each stream as note (note.id)}
+              <li class="notif-item" data-tone={note.tone} data-unread={note.unread ? "1" : undefined}>
+                <a class="notif-item-main" href={note.href ?? "#"} onclick={(event) => follow(event, note.href)}>
+                  <span class="notif-row">
+                    <span class="notif-pill" data-tone={note.tone}>{note.label}</span>
+                    <strong class="notif-title">{note.title}</strong>
+                    <time class="notif-time">{age(note.ts)}</time>
+                  </span>
+                  {#if note.body}<span class="notif-body-text">{note.body}</span>{/if}
+                </a>
+                <div class="notif-actions">
+                  {#if note.widgetHref}
+                    <button type="button" class="notif-action" onclick={(event) => openWidget(event, note.widgetHref!)}>View</button>
+                  {/if}
+                  <button type="button" class="notif-dismiss" aria-label="Dismiss notification" title="Dismiss" onclick={(event) => dismiss(event, note)}>×</button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
     </dialog>
   {/if}
 </div>
 
 <style>
-  /* #9 inbox affordance: a small pill classifying a ping. Retrying = benign
-     self-healing (rate limit); Needs you = actionable. */
-  .attention-badge {
+  .notif-panel {
+    position: fixed;
+    inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;
+    width: min(460px, calc(100vw - 1rem));
+    height: auto;
+    max-height: min(680px, calc(100dvh - 1rem));
+    margin: 0;
+    transform: translateX(-50%);
+    border-radius: 16px;
+    box-shadow: 0 28px 80px rgb(0 0 0 / 0.32), 0 2px 10px rgb(0 0 0 / 0.12);
+  }
+  .notif-panel[open] { display: flex; flex-direction: column; }
+  .notif-panel::backdrop { background: rgb(0 0 0 / 0.56); backdrop-filter: blur(3px); }
+
+  .notif-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 56px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-alt);
+  }
+  .notif-clear-all {
+    border: 1px solid var(--line);
+    border-radius: 0.375rem;
+    color: var(--fg-mut);
+    padding: 0.3rem 0.55rem;
+    font-size: 0.75rem;
+    transition: color 120ms, background 120ms;
+  }
+  .notif-clear-all:hover { color: var(--fg); background: var(--surface-2); }
+  .notif-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    min-width: 36px;
+    color: var(--fg-mut);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg);
+    font-size: 14px;
+    line-height: 1;
+  }
+  .notif-close:hover { color: var(--fg); background: var(--surface-2); }
+
+  .notif-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    background: var(--bg-alt);
+  }
+  .notif-empty {
+    padding: 2.5rem 1.25rem;
+    text-align: center;
+    color: var(--fg-mut);
+    font-size: 0.875rem;
+  }
+  .notif-list { display: flex; flex-direction: column; }
+  .notif-item {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 10px 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    position: relative;
+  }
+  .notif-item[data-unread="1"]::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 16px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--brand);
+  }
+  .notif-item-main { display: block; min-width: 0; flex: 1; }
+  .notif-row { display: flex; align-items: center; gap: 7px; }
+  .notif-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; font-weight: 600; color: var(--fg); }
+  .notif-time { flex: none; margin-left: auto; font-size: 10px; color: var(--fg-mut); }
+  .notif-body-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 2px;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--fg-mut);
+  }
+  .notif-actions { display: flex; flex: none; align-items: center; gap: 4px; }
+  .notif-action {
+    border: 1px solid var(--line);
+    border-radius: 0.375rem;
+    color: var(--fg-mut);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .notif-action:hover { color: var(--fg); background: var(--surface-2); }
+  .notif-dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    color: var(--fg-mut);
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .notif-dismiss:hover { color: var(--fg); background: var(--surface-2); }
+
+  /* Type pill — colour by tone. */
+  .notif-pill {
     flex: none;
     display: inline-flex;
     align-items: center;
@@ -346,230 +400,27 @@
     font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    border: 1px solid var(--color-line);
-    color: var(--color-fg-mut);
-  }
-  .attention-badge[data-tone="retrying"] {
-    border-color: color-mix(in srgb, #f59e0b 45%, var(--color-line));
-    color: #f59e0b;
-    background: color-mix(in srgb, #f59e0b 10%, transparent);
-  }
-  .attention-badge[data-tone="attention"] {
-    border-color: color-mix(in srgb, var(--color-brand) 50%, var(--color-line));
-    color: var(--color-brand);
-    background: color-mix(in srgb, var(--color-brand) 10%, transparent);
-  }
-  .attention-owner-panel {
-    position: fixed;
-    inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;
-    height: min(760px, calc(100dvh - 1rem));
-    margin: 0;
-    transform: translateX(-50%);
-    border-radius: 18px;
-    box-shadow: 0 28px 80px rgb(0 0 0 / 0.32), 0 2px 10px rgb(0 0 0 / 0.12);
-  }
-
-  .attention-owner-panel[open] {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .attention-owner-panel::backdrop {
-    background: rgb(0 0 0 / 0.56);
-    backdrop-filter: blur(3px);
-  }
-
-  .attention-owner-header {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-height: 68px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--line);
-    background: var(--bg-alt);
-  }
-
-  .attention-owner-close {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    min-height: 36px;
-    padding: 0 11px;
-    color: var(--fg-mut);
+    letter-spacing: 0.05em;
     border: 1px solid var(--line);
-    border-radius: 7px;
-    background: var(--bg);
-    font-family: inherit;
-    font-size: 12px;
-    line-height: 1;
-    box-shadow: 0 1px 1px rgb(0 0 0 / 0.05);
-    transition: color 120ms, border-color 120ms, background 120ms;
-  }
-
-  .attention-owner-close:hover {
-    color: var(--fg);
-    border-color: color-mix(in srgb, var(--fg-mut) 55%, var(--line));
-    background: var(--surface-2);
-  }
-
-  .attention-owner-layout {
-    grid-template-rows: auto minmax(0, 1fr);
-    background: var(--bg-alt);
-  }
-
-  .attention-owner-nav {
-    background: color-mix(in srgb, var(--bg) 68%, var(--bg-alt));
-    scrollbar-width: none;
-  }
-
-  .attention-owner-nav::-webkit-scrollbar { display: none; }
-
-  .attention-owner-nav-item {
-    position: relative;
     color: var(--fg-mut);
-    border: 1px solid transparent;
-    border-radius: 9px;
-    transition: color 120ms, border-color 120ms, background 120ms, box-shadow 120ms;
   }
+  .notif-pill[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+  .notif-pill[data-tone="attention"] { border-color: color-mix(in srgb, var(--brand) 50%, var(--line)); color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+  .notif-pill[data-tone="retrying"] { border-color: color-mix(in srgb, #f59e0b 45%, var(--line)); color: #f59e0b; background: color-mix(in srgb, #f59e0b 10%, transparent); }
+  .notif-pill[data-tone="ok"] { border-color: color-mix(in srgb, #16a34a 45%, var(--line)); color: #16a34a; background: color-mix(in srgb, #16a34a 10%, transparent); }
 
-  .attention-owner-nav-item:hover {
-    color: var(--fg);
-    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-  }
+  @media (min-width: 640px) { .notif-panel { top: 6vh; } }
 
-  .attention-owner-nav-item.attention-owner-nav-active {
-    color: var(--fg);
-    border-color: var(--line);
-    background: var(--bg-alt);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
-  }
-
-  .attention-owner-nav-item.attention-owner-nav-active::before {
-    content: "";
-    position: absolute;
-    top: 9px;
-    bottom: 9px;
-    left: -1px;
-    width: 2px;
-    border-radius: 2px;
-    background: var(--brand);
-  }
-
-  .attention-owner-content {
-    background: var(--bg-alt);
-    scrollbar-gutter: stable;
-  }
-
-  .attention-owner-section {
-    display: grid;
-    gap: 0.875rem;
-  }
-
-  .attention-owner-subsection {
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  .attention-owner-subtitle {
-    color: var(--fg);
-    font-size: 12px;
-    font-weight: 650;
-  }
-
-  .attention-owner-section-header {
-    display: grid;
-    gap: 0.25rem;
-  }
-
-  .attention-owner-eyebrow {
-    color: var(--fg-mut);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .attention-owner-title {
-    color: var(--fg);
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.25;
-  }
-
-  .attention-owner-description {
-    max-width: 58ch;
-    color: var(--fg-mut);
-    font-size: 12px;
-    line-height: 1.6;
-  }
-
-  .attention-owner-card {
-    border: 1px solid var(--line);
-    border-radius: 0.5rem;
-    background: var(--bg);
-    padding: 0.75rem;
-    color: var(--fg);
-    font-size: 0.875rem;
-    line-height: 1.45;
-  }
-
-  .attention-owner-muted {
-    color: var(--fg-mut);
-    font-size: 0.875rem;
-  }
-
-  .attention-owner-status-bad {
-    flex: none;
-    border: 1px solid color-mix(in srgb, var(--bad) 32%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bad) 10%, transparent);
-    color: var(--bad);
-    padding: 0.125rem 0.5rem;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .attention-owner-secondary-action {
-    flex: none;
-    border: 1px solid var(--line);
-    border-radius: 0.375rem;
-    color: var(--fg-mut);
-    padding: 0.375rem 0.625rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    transition: color 120ms, background 120ms;
-  }
-
-  .attention-owner-secondary-action:hover {
-    color: var(--fg);
-    background: var(--surface-2);
-  }
-
-  @media (min-width: 640px) {
-    .attention-owner-panel { top: 6vh; }
-    .attention-owner-layout {
-      grid-template-columns: 190px minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr);
-    }
-  }
-
+  /* Mobile: full-width bottom-anchored sheet, one scroll region. */
   @media (max-width: 639px) {
-    .attention-owner-panel {
-      width: calc(100vw - 1rem);
-      height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
-      max-height: calc(100dvh - max(1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
-      border-radius: 14px;
+    .notif-panel {
+      inset: auto auto 0 50%;
+      transform: translateX(-50%);
+      width: 100vw;
+      max-height: calc(100dvh - max(2.5rem, env(safe-area-inset-top)));
+      border-radius: 16px 16px 0 0;
     }
-    .attention-owner-header { min-height: 60px; padding: 9px; gap: 8px; }
-    .attention-owner-close { min-height: 40px; }
-    .attention-owner-nav-item.attention-owner-nav-active::before { display: none; }
+    .notif-header { min-height: 52px; }
+    .notif-close { min-height: 40px; min-width: 40px; }
   }
 </style>
-
