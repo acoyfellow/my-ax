@@ -18,6 +18,7 @@ function isVoiceEnabled(env: Env): boolean {
 import { getUserWorkspace } from "./workspace";
 import { ChatPage } from "./views/ChatPage";
 import type { AppEnv } from "./app-env";
+import { deploymentVersionResponse } from "./deploy-version";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
@@ -34,6 +35,7 @@ import { registerModelRoutes } from "./routes/models";
 import { registerConnectorRoutes } from "./routes/connectors";
 import { registerMcpsCrudRoutes } from "./routes/mcps";
 import { registerThemeRoutes } from "./routes/theme";
+import { registerStarterRoutes } from "./routes/starters";
 import { registerMachinectlRoutes } from "./routes/machinectl";
 import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
@@ -190,6 +192,13 @@ app.use("/jobs", accessMiddleware());
 app.use("/capabilities", accessMiddleware());
 
 // ─── Health / discovery ────────────────────────────────────────────────────
+// Bodyless, storage-free probe for open clients. Version Metadata makes this
+// cheaper than /api/health, which intentionally performs schema checks.
+app.get("/api/version", (c) => deploymentVersionResponse(
+  c.env.CF_VERSION_METADATA,
+  c.req.header("If-None-Match"),
+));
+
 app.get("/api", async (c) => {
   try {
   // Show connector authorization status to the user. Built-ins + this
@@ -278,6 +287,7 @@ registerModelRoutes(app);
 registerConnectorRoutes(app);
 registerMcpsCrudRoutes(app);
 registerThemeRoutes(app);
+registerStarterRoutes(app);
 registerMachinectlRoutes(app);
 registerRunRoutes(app);
 registerRecipeRoutes(app);
@@ -506,6 +516,7 @@ app.get("/", (c) => {
     <ChatPage
       identityEmail={identity?.email ?? null}
       buildId={buildId}
+      buildTimestamp={c.env.CF_VERSION_METADATA?.timestamp ?? undefined}
       theme={theme}
       appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
     />,

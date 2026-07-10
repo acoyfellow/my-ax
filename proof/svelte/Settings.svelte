@@ -41,13 +41,14 @@
   let dialogEl = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
   let settingsQuery = $state("");
-  let activeSection = $state<"general" | "capabilities" | "recipes" | "jobs" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "recipes" | "jobs" | "starters" | "connections">("general");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
     { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
+    { id: "starters" as const, label: "Starters", hint: "New-conversation suggestions" },
     { id: "connections" as const, label: "Connections", hint: "Runtime and services" },
   ];
 
@@ -106,8 +107,10 @@
     const requestedSection = detail?.section ?? query.get("section");
     const requestedRecipeName = detail?.recipeName ?? query.get("recipe");
     if (requestedSection === "recipes") activeSection = "recipes";
+    if (requestedSection === "starters") activeSection = "starters";
     open = true;
     refreshJobs();
+    void refreshStarters();
     void refreshRecipePreferences();
     void refreshRecipes().then(async () => {
       if (!requestedRecipeName) return;
@@ -331,6 +334,51 @@
   let jobCadence = $state("60");
   let jobThreadMode = $state<"same_session" | "new_session_per_run">("new_session_per_run");
   let jobActionBusy = $state<Record<string, boolean>>({});
+
+  // ── Conversation starters (new-conversation suggestion cards) ────────────
+  interface Starter { title: string; hint?: string; prompt: string }
+  let starters = $state<Starter[]>([]);
+  let startersStatus = $state("");
+  let startersSaving = $state(false);
+  async function refreshStarters() {
+    try {
+      const r = await fetch("/api/starters", { credentials: "include" });
+      if (!r.ok) return;
+      const body = await r.json();
+      starters = Array.isArray(body?.result?.starters) ? body.result.starters.map((s: Starter) => ({ title: s.title ?? "", hint: s.hint ?? "", prompt: s.prompt ?? "" })) : [];
+    } catch { /* keep current */ }
+  }
+  function addStarter() {
+    if (starters.length >= 8) { startersStatus = "Up to 8 starters."; return; }
+    starters = [...starters, { title: "", hint: "", prompt: "" }];
+  }
+  function removeStarter(idx: number) { starters = starters.filter((_, i) => i !== idx); }
+  function moveStarter(idx: number, dir: -1 | 1) {
+    const to = idx + dir;
+    if (to < 0 || to >= starters.length) return;
+    const next = [...starters];
+    [next[idx], next[to]] = [next[to], next[idx]];
+    starters = next;
+  }
+  async function saveStarters() {
+    startersSaving = true;
+    startersStatus = "";
+    try {
+      const payload = starters
+        .map((s) => ({ title: (s.title || "").trim(), hint: (s.hint || "").trim(), prompt: (s.prompt || "").trim() }))
+        .filter((s) => s.title && s.prompt);
+      const r = await fetch("/api/starters", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ starters: payload }) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const body = await r.json();
+      starters = (body?.result?.starters ?? []).map((s: Starter) => ({ title: s.title ?? "", hint: s.hint ?? "", prompt: s.prompt ?? "" }));
+      startersStatus = "Saved.";
+      window.dispatchEvent(new Event("my-ax:starters-refresh"));
+    } catch (err: any) {
+      startersStatus = "Couldn't save: " + (err?.message || err);
+    } finally {
+      startersSaving = false;
+    }
+  }
 
   function cadenceLabel(seconds: number) {
     return seconds === 60
@@ -1133,6 +1181,37 @@
       <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{jobsStatusText}</p>
     </section>
 
+      </div>
+
+      <!-- Conversation starters: the suggestion cards on a new conversation. -->
+      <div hidden={activeSection !== "starters"} class="space-y-4">
+        <section>
+          <h3 class="text-sm font-semibold text-fg">Conversation starters</h3>
+          <p class="mt-1 text-xs text-fg-mut">The suggestion cards shown when you start a new conversation. Edit, reorder, add, or remove them — they sync across your devices. Leave the list empty and save to restore the defaults. (The agent can also change these if you ask it to.)</p>
+          <ul class="mt-3 grid gap-3">
+            {#each starters as starter, i (i)}
+              <li class="rounded-lg border border-line bg-bg-alt/40 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[11px] font-medium text-fg-mut">Starter {i + 1}</span>
+                  <div class="flex gap-1">
+                    <button type="button" class="job-action-button" aria-label={`Move starter ${i + 1} up`} title="Move up" disabled={i === 0} onclick={() => moveStarter(i, -1)}>↑</button>
+                    <button type="button" class="job-action-button" aria-label={`Move starter ${i + 1} down`} title="Move down" disabled={i === starters.length - 1} onclick={() => moveStarter(i, 1)}>↓</button>
+                    <button type="button" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500" aria-label={`Remove starter ${i + 1}`} title="Remove" onclick={() => removeStarter(i)}>Remove</button>
+                  </div>
+                </div>
+                <input class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg" placeholder="Title (shown on the card)" bind:value={starter.title} maxlength="60" aria-label={`Starter ${i + 1} title`} />
+                <input class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-xs text-fg-mut" placeholder="Hint (optional subtitle)" bind:value={starter.hint} maxlength="120" aria-label={`Starter ${i + 1} hint`} />
+                <textarea class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg min-h-[60px]" placeholder="Prompt inserted into the composer when tapped" bind:value={starter.prompt} maxlength="2000" aria-label={`Starter ${i + 1} prompt`}></textarea>
+              </li>
+            {/each}
+          </ul>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" class="job-action-button text-brand hover:border-brand/60" onclick={addStarter} disabled={starters.length >= 8}>Add starter</button>
+            <button type="button" class="job-action-button hover:border-brand/60" onclick={saveStarters} disabled={startersSaving} aria-busy={startersSaving}>{startersSaving ? "Saving…" : "Save"}</button>
+            <button type="button" class="job-action-button text-fg-mut hover:border-brand/60" onclick={() => { starters = []; }} title="Clear all, then Save to restore defaults">Clear</button>
+          </div>
+          <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{startersStatus}</p>
+        </section>
       </div>
 
       <!-- Health + Connectors panels live in other Svelte mounts and are
