@@ -4,6 +4,7 @@ import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { JobService } from "./job-service";
 import { limitModelToolOutput } from "./tool-output-limit";
+import { getConversationStarters, setConversationStarters } from "./conversation-starters";
 
 export const ASK_USER_TOOL: ToolDef = {
   name: "ask_user",
@@ -121,6 +122,27 @@ export const TOOLS: ToolDef[] = [
       required: ["text"],
     },
     execute: async (args, ctx) => JSON.stringify(await ctx.sendVoiceMessage({ text: args.text as string, voice: args.voice as string | undefined })),
+  },
+  {
+    name: "manage_starters",
+    description: "List or replace the owner's conversation starters — the suggestion cards shown when starting a new conversation. Use when the owner asks to change, add, remove, or reset their starters (e.g. 'make my starters about X, Y, Z'). action 'list' returns the current starters; action 'set' replaces the whole list with the provided starters (each { title, prompt, hint? }); an empty set resets to defaults. Owner-scoped and synced across devices.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["list", "set"] },
+        starters: { type: "array", description: "For set: the full replacement list.", items: { type: "object", properties: { title: { type: "string" }, prompt: { type: "string" }, hint: { type: "string" } }, required: ["title", "prompt"] } },
+      },
+      required: ["action"],
+    },
+    execute: async (args, ctx) => {
+      const email = ctx.identity.email;
+      if (args.action === "set") {
+        const starters = await setConversationStarters(ctx.env, email, args.starters);
+        return JSON.stringify({ ok: true, action: "set", starters });
+      }
+      const starters = await getConversationStarters(ctx.env, email);
+      return JSON.stringify({ ok: true, action: "list", starters });
+    },
   },
 ];
 
