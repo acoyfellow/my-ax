@@ -414,9 +414,13 @@
   /* Mobile: full-width bottom-anchored sheet, one scroll region. */
   @media (max-width: 639px) {
     .notif-panel {
-      inset: auto auto 0 50%;
-      transform: translateX(-50%);
+      /* Bottom sheet: pin to both edges. Also override the UA
+         dialog:modal max-width (calc(100% - 6px - 2em)) which otherwise
+         clamps the sheet ~38px narrower than the viewport. */
+      inset: auto 0 0 0;
+      transform: none;
       width: 100vw;
+      max-width: 100vw;
       max-height: calc(100dvh - max(2.5rem, env(safe-area-inset-top)));
       border-radius: 16px 16px 0 0;
     }
