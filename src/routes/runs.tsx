@@ -167,12 +167,14 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     const url = new URL(c.req.url);
     const { limit, status, invalidStatus } = parseRunListQuery(url);
     if (invalidStatus) return c.json(errorResponse("GET /api/runs", "BAD_RUN_STATUS", `unsupported run status: ${invalidStatus}`), 400);
+    // Dismissed runs are hidden from list views (notifications stream) but the
+    // rows/receipts are preserved. Reversible via clearing dismissed_at.
     const rows = status
       ? await c.env.DB.prepare(
-        "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT ?",
+        "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND status = ? AND dismissed_at IS NULL ORDER BY updated_at DESC LIMIT ?",
       ).bind(identity.email, status, limit).all()
       : await c.env.DB.prepare(
-        "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?",
+        "SELECT id, status, title, task_summary, created_at, updated_at FROM runs WHERE owner_email = ? AND dismissed_at IS NULL ORDER BY updated_at DESC LIMIT ?",
       ).bind(identity.email, limit).all();
     return c.json(jsonResponse("GET /api/runs", { runs: rows.results ?? [], limit, status }));
   });
@@ -224,6 +226,32 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
       if (error instanceof RunReceiptTerminalError) return c.json(errorResponse(c.req.path, "RUN_TERMINAL", error.message), 409);
       throw error;
     }
+  });
+
+  // Notifications redesign (B-C2): clear a failed/terminal run from the stream.
+  app.post("/api/runs/:id/dismiss", async (c) => {
+    const identity = c.get("identity");
+    const runId = c.req.param("id");
+    const result = await c.env.DB.prepare(
+      "UPDATE runs SET dismissed_at = datetime('now') WHERE id = ? AND owner_email = ? AND dismissed_at IS NULL",
+    ).bind(runId, identity.email).run();
+    if ((result.meta?.changes ?? 0) === 0) {
+      // Idempotent: unknown run -> 404; already-dismissed -> ok:true no-op.
+      const exists = await c.env.DB.prepare("SELECT 1 AS ok FROM runs WHERE id = ? AND owner_email = ?").bind(runId, identity.email).first<{ ok: number }>();
+      if (!exists) return c.json(errorResponse(c.req.path, "RUN_NOT_FOUND", "run not found or not owned"), 404);
+    }
+    return c.json(jsonResponse(c.req.path, { runId, dismissed: true }));
+  });
+
+  // Clear all currently-listed dismissable runs (optionally scoped by status).
+  app.post("/api/runs/dismiss-all", async (c) => {
+    const identity = c.get("identity");
+    const body = (await c.req.json<{ status?: RunStatus }>().catch(() => ({}))) as { status?: RunStatus };
+    const status = body.status && ["open", "running", "completed", "failed", "aborted"].includes(body.status) ? body.status : null;
+    const result = status
+      ? await c.env.DB.prepare("UPDATE runs SET dismissed_at = datetime('now') WHERE owner_email = ? AND status = ? AND dismissed_at IS NULL").bind(identity.email, status).run()
+      : await c.env.DB.prepare("UPDATE runs SET dismissed_at = datetime('now') WHERE owner_email = ? AND dismissed_at IS NULL").bind(identity.email).run();
+    return c.json(jsonResponse(c.req.path, { dismissed: Number(result.meta?.changes ?? 0) }));
   });
 
   app.post("/api/runs/:id/stop", async (c) => {
