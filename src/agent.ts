@@ -22,6 +22,7 @@ import { shouldSendCompletionNotification, visibleAssistantContent, visibleCompl
 import { createMyAxBrowserTools } from "./browser-tools";
 import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
+import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact } from "./artifacts";
@@ -558,6 +559,41 @@ export class MyAgent extends Think<Env> {
     await statement.run().catch((error) => console.error("think_session_touch_failed", { err: String(error) }));
   }
 
+  /**
+   * Symmetric to logAcceptedUsers, for the ASSISTANT side. logAssistantMessage
+   * only runs in onChatResponse (normal completion); a turn that is interrupted,
+   * replaced, or recovery-exhausted never lands its reply in the durable D1
+   * transcript, so the restored history shows only the owner's messages (the
+   * 186-user vs 2-assistant Master session). Think's in-memory this.messages IS
+   * authoritative and retains those assistant turns, so we idempotently backfill
+   * any missing assistant rows from it on the same triggers that sync users.
+   * uiMessageId dedup in appendConversationLog makes this safe to call anytime.
+   * Best-effort: never throws, never touches session activity time/order.
+   */
+  private async reconcileAssistantHistory(): Promise<void> {
+    const identity = this.identity();
+    if (!identity) return;
+    const candidates = assistantBackfillCandidates(
+      this.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        text: textParts(message),
+        reasoning: reasoningParts(message),
+      })),
+    );
+    for (const message of candidates) {
+      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'assistant' AND json_extract(meta_json, '$.uiMessageId') = ? LIMIT 1")
+        .bind(this.name, identity.email, message.id).first<{ id: number }>().catch(() => null);
+      if (existing) continue;
+      await logAssistantMessage(this.env, identity, this.name, message.text, {
+        uiMessageId: message.id,
+        model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID,
+        ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+        backfilled: true,
+      }).catch((error) => console.error("think_assistant_backfill_failed", { sessionId: this.name, err: String(error) }));
+    }
+  }
+
   async onChatResponse(result: ChatResponseResult) {
     const identity = this.identity();
     if (!identity) return;
@@ -642,6 +678,7 @@ export class MyAgent extends Think<Env> {
     // the request's convenience email header as an authorization principal.
     super.onConnect(connection, ctx);
     this.logAcceptedUsers().catch((error) => console.error("think_user_log_sync_failed", { err: String(error) }));
+    this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_sync_failed", { err: String(error) }));
   }
 
   async onMessage(connection: Parameters<Think<Env>["onMessage"]>[0], message: unknown) {
@@ -916,6 +953,9 @@ export class MyAgent extends Think<Env> {
     // Persist the inbound user message before the model call so stalled turns
     // remain available when the client resyncs. logAcceptedUsers is idempotent.
     await this.logAcceptedUsers().catch((error) => console.error("think_user_log_before_turn_failed", { err: String(error) }));
+    // Symmetric backfill: recover any assistant turn from a prior interrupted/
+    // replaced turn that never reached onChatResponse. Idempotent.
+    await this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_before_turn_failed", { err: String(error) }));
     const identity = this.identity();
     if (identity) {
       await this.env.DB.prepare("UPDATE sessions SET status = 'running', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
