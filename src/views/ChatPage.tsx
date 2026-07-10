@@ -29,6 +29,7 @@ interface ChatPageProps {
   identityEmail?: string | null;
   /** Worker version id, threaded through to Layout for asset cache-busting. */
   buildId?: string;
+  buildTimestamp?: string;
   /** Server-resolved theme preference from the `myax-theme` cookie. */
   theme?: ThemePref;
   appOrigin?: string;
@@ -41,6 +42,7 @@ export const ChatPage: FC<ChatPageProps> = (props) => {
       identityEmail={props.identityEmail}
       bodyClass="h-dvh overflow-hidden"
       buildId={props.buildId}
+      buildTimestamp={props.buildTimestamp}
       theme={props.theme}
       appOrigin={props.appOrigin}
     >

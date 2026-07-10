@@ -46,6 +46,8 @@ interface LayoutProps {
   /** Build sha for cache-busting static assets. Wired up by index.tsx from
    *  CF_VERSION_METADATA.id; falls back to a fixed string in dev. */
   buildId?: string;
+  /** Version Metadata timestamp prevents backward reloads during rolling deploys. */
+  buildTimestamp?: string;
   /** Server-resolved theme preference. Drives the class on <html> and the
    *  anti-flash script. Defaults to "system" if the cookie is missing. */
   theme?: ThemePref;
@@ -115,7 +117,10 @@ const ANTI_FLASH_SCRIPT = `(function(){try{var h=document.documentElement;if(!h.
 /** Register the root-scope service worker and wire installed-app launch
  *  affordances. All of this is progressive enhancement: unsupported browsers
  *  quietly keep the normal web flow. */
-const PWA_BOOT_SCRIPT = `(function(){function q(fn){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn,{once:true});else fn();}function apply(u){try{var url=new URL(u||location.href,location.href);var action=url.searchParams.get('action');if(action==='new'){sessionStorage.setItem('my-ax-start-fresh-once','1');url.searchParams.delete('action');location.href=url.pathname+(url.search||'')+(url.hash||'');return;}if(action==='settings')q(function(){var f=function(){window.dispatchEvent(new Event('my-ax:settings-open'));};f();setTimeout(f,250);});if(action==='attention')q(function(){var f=function(){window.dispatchEvent(new Event('my-ax:attention-open'));};f();setTimeout(f,250);});}catch(e){}}if('serviceWorker'in navigator){addEventListener('load',function(){navigator.serviceWorker.register('/sw.js',{scope:'/'}).then(function(r){r.update();}).catch(function(){});});}if('launchQueue'in window&&'LaunchParams'in window){launchQueue.setConsumer(function(params){var target=params&&params.targetURL;if(target){var url=new URL(target);if(url.pathname!==location.pathname||url.search!==location.search||url.hash!==location.hash){location.href=url.pathname+url.search+url.hash;return;}apply(url.href);}});}apply(location.href);})();`;
+function pwaBootScript(buildId?: string, buildTimestamp?: string): string {
+  const deployed = JSON.stringify({ id: buildId || "", timestamp: buildTimestamp || "" });
+  return '(function(){var current=' + deployed + ',lastCheck=0,checking=false;function q(fn){if(document.readyState===\'loading\')document.addEventListener(\'DOMContentLoaded\',fn,{once:true});else fn();}function apply(u){try{var url=new URL(u||location.href,location.href);var action=url.searchParams.get(\'action\');if(action===\'new\'){sessionStorage.setItem(\'my-ax-start-fresh-once\',\'1\');url.searchParams.delete(\'action\');location.href=url.pathname+(url.search||\'\')+(url.hash||\'\');return;}if(action===\'settings\')q(function(){var f=function(){window.dispatchEvent(new Event(\'my-ax:settings-open\'));};f();setTimeout(f,250);});if(action===\'attention\')q(function(){var f=function(){window.dispatchEvent(new Event(\'my-ax:attention-open\'));};f();setTimeout(f,250);});}catch(e){}}function newer(id,stamp){if(!id||id===current.id)return false;var a=Date.parse(current.timestamp||\'\'),b=Date.parse(stamp||\'\');return !(Number.isFinite(a)&&Number.isFinite(b)&&b<=a);}function check(force){var now=Date.now();if(!current.id||checking||!navigator.onLine||document.visibilityState!==\'visible\'||(!force&&now-lastCheck<60000))return;checking=true;lastCheck=now;fetch(\'/api/version\',{cache:\'no-store\',credentials:\'same-origin\',headers:{\'If-None-Match\':\'"\'+current.id+\'"\'}}).then(function(r){if(r.status===304||!r.ok)return null;var id=r.headers.get(\'X-My-Ax-Version\')||\'\',stamp=r.headers.get(\'X-My-Ax-Version-Timestamp\')||\'\';return newer(id,stamp)?{id:id,timestamp:stamp}:null;}).then(function(next){if(!next)return;current=next;var event=new CustomEvent(\'my-ax:deploy-update\',{cancelable:true,detail:next});if(window.dispatchEvent(event))location.reload();}).catch(function(){}).finally(function(){checking=false;});}if(\'serviceWorker\'in navigator){addEventListener(\'load\',function(){navigator.serviceWorker.register(\'/sw.js\',{scope:\'/\'}).then(function(r){r.update();}).catch(function(){});});}if(current.id){setTimeout(function(){check(false);},60000);setInterval(function(){check(false);},900000);document.addEventListener(\'visibilitychange\',function(){if(document.visibilityState===\'visible\')check(true);});addEventListener(\'online\',function(){check(true);});}if(\'launchQueue\'in window&&\'LaunchParams\'in window){launchQueue.setConsumer(function(params){var target=params&&params.targetURL;if(target){var url=new URL(target);if(url.pathname!==location.pathname||url.search!==location.search||url.hash!==location.hash){location.href=url.pathname+url.search+url.hash;return;}apply(url.href);}});}apply(location.href);})();';
+}
 
 /** iOS standalone Safari keeps a layout viewport larger than the visible
  * keyboard-reduced viewport. Pin the app shell to visualViewport so the
@@ -185,7 +190,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => {
             constant above for the rationale. */}
         <script dangerouslySetInnerHTML={{ __html: ANTI_FLASH_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: VIEWPORT_SYNC_SCRIPT }} />
-        <script dangerouslySetInnerHTML={{ __html: PWA_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: pwaBootScript(props.buildId, props.buildTimestamp) }} />
 
         {/* ── Favicons + PWA manifest ────────────────────────────────────
             Generated by scripts/build-brand.mjs from a single master SVG.
