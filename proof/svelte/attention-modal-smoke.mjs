@@ -42,6 +42,8 @@ assertIncludes(attention, "openWidget", "a secondary 'View' action opens the wid
 // Mobile geometry: single scroll region, bottom sheet, no two-column nav.
 assertIncludes(attention, "overscroll-behavior: contain;", "one bounded scroll region");
 assertIncludes(attention, "border-radius: 16px 16px 0 0;", "mobile bottom-sheet corners");
+assertIncludes(attention, "max-width: 100vw;", "mobile sheet overrides the UA dialog:modal max-width so it is truly full-width");
+assertIncludes(attention, "inset: auto 0 0 0;", "mobile sheet pins to both viewport edges + bottom");
 
 // The old jargon/tabs/CheckIn embed must be gone.
 assertNotIncludes(attention, "attention-owner-nav", "the two-column tab nav is removed");
