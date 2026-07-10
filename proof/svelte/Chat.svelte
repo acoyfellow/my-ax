@@ -198,6 +198,38 @@
   let inputEl = $state<HTMLTextAreaElement | undefined>(undefined);
   let composerText = $state("");
   let pendingAttachments = $state<Attachment[]>([]);
+  const DEPLOY_REFRESH_DRAFT_KEY = "my-ax-deploy-refresh-draft";
+  let deployRefreshPending = $state(false);
+
+  function restoreDeployRefreshDraft() {
+    try {
+      const raw = sessionStorage.getItem(DEPLOY_REFRESH_DRAFT_KEY);
+      sessionStorage.removeItem(DEPLOY_REFRESH_DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { at?: number; sessionId?: string | null; text?: string; attachments?: Attachment[] };
+      if (!draft.at || Date.now() - draft.at > 60 * 60 * 1000) return;
+      if (draft.sessionId !== localStorage.getItem(SESSION_KEY)) return;
+      if (!composerText && typeof draft.text === "string") composerText = draft.text;
+      if (!pendingAttachments.length && Array.isArray(draft.attachments)) pendingAttachments = draft.attachments;
+    } catch { sessionStorage.removeItem(DEPLOY_REFRESH_DRAFT_KEY); }
+  }
+
+  function persistDeployRefreshDraft() {
+    try {
+      sessionStorage.setItem(DEPLOY_REFRESH_DRAFT_KEY, JSON.stringify({
+        at: Date.now(), sessionId: localStorage.getItem(SESSION_KEY),
+        text: composerText, attachments: pendingAttachments,
+      }));
+    } catch {}
+  }
+
+  function refreshForDeploymentWhenSafe() {
+    if (!deployRefreshPending || voiceEnabled || voiceStarting) return;
+    if (wsState.status !== "idle" && wsState.status !== "done") return;
+    deployRefreshPending = false;
+    persistDeployRefreshDraft();
+    location.reload();
+  }
 
   // ── Realtime voice mode (same Think session) ─────────────────────
   // Replaces passive read-aloud: one persistent microphone/TTS call feeds
@@ -995,6 +1027,11 @@
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${sessionId}`);
     void refreshPendingDecision(sessionId);
+    // Resuming an existing session (e.g. tapping a notification deep-link into a
+    // long thread): render the durable D1 transcript eagerly so the messages
+    // appear immediately instead of waiting for the slow WS replay. Skipped for
+    // a first-send bootstrap (no durable history yet). The WS replay reconciles.
+    if (resumingExistingSession) eagerRestoreFromD1(sessionGeneration.capture());
   }
 
   // In-place conversation switch — no full page reload. Closes the current
@@ -1027,6 +1064,28 @@
     setConn("reconnecting");
     ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${id}`);
     queueMicrotask(() => { void hydrateHistoryTimestamps(); });
+    // Eagerly render the durable D1 transcript instead of waiting for the WS
+    // cf_agent_chat_messages replay. On a LONG thread the server's DO wake +
+    // full history replay over the fresh socket can take many seconds, during
+    // which the user saw only their own optimistic messages behind the spinner
+    // (the "put the phone down and come back" bug). The D1 REST read is fast and
+    // paginated; the WS replay reconciles when it lands. Generation-guarded so
+    // a stale switch cannot render into a newer conversation.
+    eagerRestoreFromD1(sessionGeneration.capture());
+  }
+
+  // Fast-path history: render the durable transcript ASAP on resume/switch so a
+  // long thread does not sit behind the spinner waiting for the WS replay.
+  function eagerRestoreFromD1(expected = sessionGeneration.capture()) {
+    if (!expected) return;
+    void restoreD1History(expected, true).then((outcome) => {
+      // Reveal whatever we rendered immediately; the WS cf_agent_chat_messages
+      // (Think's authoritative, possibly-compacted view) will reconcile via
+      // renderThinkHistory when it arrives.
+      if (outcome === "restored" && sessionWorkIsCurrent(expected)) {
+        void revealResumedHistoryAtBottom();
+      }
+    }).catch(() => undefined);
   }
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -1380,7 +1439,7 @@
     messages = messages.map((message) => ({ ...message, timestamp: timestamps.get(message.id) ?? message.timestamp }));
   }
 
-  async function restoreD1History(expected = sessionGeneration.capture()): Promise<RestoreOutcome> {
+  async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
     if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
     const result = await loadSessionEntries(expected, 20);
     if (result.outcome === "stale") return "stale";
@@ -1394,7 +1453,9 @@
     if (!restored.length) return "empty";
     messages = restored;
     onboardingHidden = true;
-    pushSystem("Conversation restored from the durable transcript.");
+    // The eager fast-path load is a normal resume, not a recovery — stay quiet.
+    // The explicit recovery paths (empty Think replay) still surface the notice.
+    if (!quiet) pushSystem("Conversation restored from the durable transcript.");
     return "restored";
   }
 
@@ -1859,6 +1920,14 @@
     }
   });
 
+  // A detected deployment waits for durable turn/voice work to become idle.
+  $effect(() => {
+    void wsState.status;
+    void voiceEnabled;
+    void voiceStarting;
+    if (deployRefreshPending) queueMicrotask(refreshForDeploymentWhenSafe);
+  });
+
   // ── Lifecycle ─────────────────────────────────────────────────────
   onMount(() => {
     ensureMarkedHljs().then(async () => {
@@ -1877,6 +1946,7 @@
     // Do not auto-start the microphone on reload; a fresh user gesture is
     // required by browser permission and audio playback policies.
     localStorage.setItem("my-ax-voice-mode", "0");
+    restoreDeployRefreshDraft();
     bootstrap();
     connectionWatchdogId = setInterval(() => {
       if (!ws || document.visibilityState !== "visible") return;
@@ -1889,6 +1959,12 @@
       if (responseRecoveryPending && age > 15_000) responseRecoveryPending = false;
     }, 5_000);
 
+    const onDeployUpdate = (event: Event) => {
+      event.preventDefault();
+      deployRefreshPending = true;
+      refreshForDeploymentWhenSafe();
+    };
+    window.addEventListener("my-ax:deploy-update", onDeployUpdate);
     window.addEventListener("online", onVisibilityChange);
     document.addEventListener("keydown", onGlobalKeydown);
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -1933,6 +2009,7 @@
     window.addEventListener("my-ax:navigate", onNavigate as EventListener);
     navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
     return () => {
+      window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
       document.removeEventListener("keydown", onGlobalKeydown);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("my-ax:switch-session", onSwitch as EventListener);
