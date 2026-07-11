@@ -22,7 +22,9 @@ export async function requireOwnedSession(
     )
       .bind(sessionId, ownerEmail.toLowerCase())
       .first<{ id: string }>();
-    return row !== null;
+    // Fail closed: require the exact requested row, not merely a non-null value
+    // (an adapter returning undefined would slip past `row !== null`).
+    return row?.id === sessionId;
   } catch (error) {
     throw new SessionOwnershipCheckError(error);
   }

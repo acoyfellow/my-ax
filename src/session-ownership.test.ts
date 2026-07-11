@@ -41,3 +41,13 @@ test("session ownership fails closed with a typed error when the database check 
       && error.cause.message === "D1 unavailable",
   );
 });
+
+test("session ownership fails closed when the adapter returns undefined (not just null)", async () => {
+  const { env } = envWithResult(undefined as unknown as null);
+  assert.equal(await requireOwnedSession(env, "session-1", "owner@example.com"), false);
+});
+
+test("session ownership rejects a row whose id does not match the requested session", async () => {
+  const { env } = envWithResult({ id: "other-session" });
+  assert.equal(await requireOwnedSession(env, "session-1", "owner@example.com"), false);
+});
