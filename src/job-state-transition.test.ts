@@ -42,3 +42,18 @@ test("resume cancels its new schedule when persistence fails", async () => {
   await assert.rejects(transitionJobPaused(pausedRow(), false, deps), /database unavailable/);
   assert.deepEqual(cancelled, ["schedule-new"]);
 });
+
+test("resume cancels its new schedule when nextRun throws (no orphaned schedule)", async () => {
+  const cancelled: Array<string | null> = [];
+  let persistCalls = 0;
+  const deps: JobStateTransitionDeps = {
+    schedule: async () => "schedule-1",
+    cancel: async (row) => { cancelled.push(row.schedule_id); },
+    persist: async () => { persistCalls++; },
+    nextRun: () => { throw new Error("invalid cron"); },
+  };
+
+  await assert.rejects(transitionJobPaused(pausedRow(), false, deps), /invalid cron/);
+  assert.deepEqual(cancelled, ["schedule-1"], "the just-created schedule must be cancelled");
+  assert.equal(persistCalls, 0);
+});
