@@ -19,14 +19,18 @@ interface Props {
   props?: Record<string, unknown>;
   /** Worker deploy id: cache-bust generated hydration modules after release. */
   buildId?: string;
+  /** Class for the mount wrapper. Use "contents" so the wrapper does not break
+   *  a height:100% (h-full) ancestry chain — required for the chat frame where
+   *  the composer footer must sit at the bottom of a fixed-height column. */
+  wrapperClass?: string;
 }
 
-export const SvelteEmbed: FC<Props> = ({ component, hydrateAs, props, buildId }) => {
+export const SvelteEmbed: FC<Props> = ({ component, hydrateAs, props, buildId, wrapperClass }) => {
   const e = embedSvelte(component, hydrateAs, props ?? {}, buildId);
   return (
     <>
       {e.cssUrl ? <link rel="stylesheet" href={e.cssUrl} /> : null}
-      <div dangerouslySetInnerHTML={{ __html: e.html }} />
+      <div class={wrapperClass} dangerouslySetInnerHTML={{ __html: e.html }} />
       <script type="module" dangerouslySetInnerHTML={{ __html: e.scriptBody }} />
     </>
   );

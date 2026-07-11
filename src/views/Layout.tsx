@@ -122,14 +122,12 @@ function pwaBootScript(buildId?: string, buildTimestamp?: string): string {
   return '(function(){var current=' + deployed + ',lastCheck=0,checking=false;function q(fn){if(document.readyState===\'loading\')document.addEventListener(\'DOMContentLoaded\',fn,{once:true});else fn();}function apply(u){try{var url=new URL(u||location.href,location.href);var action=url.searchParams.get(\'action\');if(action===\'new\'){sessionStorage.setItem(\'my-ax-start-fresh-once\',\'1\');url.searchParams.delete(\'action\');location.href=url.pathname+(url.search||\'\')+(url.hash||\'\');return;}if(action===\'settings\')q(function(){var f=function(){window.dispatchEvent(new Event(\'my-ax:settings-open\'));};f();setTimeout(f,250);});if(action===\'attention\')q(function(){var f=function(){window.dispatchEvent(new Event(\'my-ax:attention-open\'));};f();setTimeout(f,250);});}catch(e){}}function newer(id,stamp){if(!id||id===current.id)return false;var a=Date.parse(current.timestamp||\'\'),b=Date.parse(stamp||\'\');return !(Number.isFinite(a)&&Number.isFinite(b)&&b<=a);}function check(force){var now=Date.now();if(!current.id||checking||!navigator.onLine||document.visibilityState!==\'visible\'||(!force&&now-lastCheck<60000))return;checking=true;lastCheck=now;fetch(\'/api/version\',{cache:\'no-store\',credentials:\'same-origin\',headers:{\'If-None-Match\':\'"\'+current.id+\'"\'}}).then(function(r){if(r.status===304||!r.ok)return null;var id=r.headers.get(\'X-My-Ax-Version\')||\'\',stamp=r.headers.get(\'X-My-Ax-Version-Timestamp\')||\'\';return newer(id,stamp)?{id:id,timestamp:stamp}:null;}).then(function(next){if(!next)return;current=next;var event=new CustomEvent(\'my-ax:deploy-update\',{cancelable:true,detail:next});if(window.dispatchEvent(event))location.reload();}).catch(function(){}).finally(function(){checking=false;});}if(\'serviceWorker\'in navigator){addEventListener(\'load\',function(){navigator.serviceWorker.register(\'/sw.js\',{scope:\'/\'}).then(function(r){r.update();}).catch(function(){});});}if(current.id){setTimeout(function(){check(false);},60000);setInterval(function(){check(false);},900000);document.addEventListener(\'visibilitychange\',function(){if(document.visibilityState===\'visible\')check(true);});addEventListener(\'online\',function(){check(true);});}if(\'launchQueue\'in window&&\'LaunchParams\'in window){launchQueue.setConsumer(function(params){var target=params&&params.targetURL;if(target){var url=new URL(target);if(url.pathname!==location.pathname||url.search!==location.search||url.hash!==location.hash){location.href=url.pathname+url.search+url.hash;return;}apply(url.href);}});}apply(location.href);})();';
 }
 
-/** iOS standalone Safari keeps a layout viewport larger than the visible
- * keyboard-reduced viewport. Pin the app shell to visualViewport so the
- * composer stays tappable on load and follows the keyboard without being
- * shoved under the native top bar. */
-// CSS-only mobile viewport model: stable 100svh shell + safe-area footer.
-// The local iOS viewport lab showed this is the only mode that does not clip
-// the composer or leave stale top/bottom offsets after keyboard dismissal.
-const VIEWPORT_SYNC_SCRIPT = `(function(){var root=document.documentElement,vv=window.visualViewport,baseline=vv?vv.height:innerHeight;function editable(){var e=document.activeElement;return e&&(e.tagName==='INPUT'||e.tagName==='TEXTAREA'||e.isContentEditable);}function sync(){var h=vv?vv.height:innerHeight;if(!editable()&&h>baseline)baseline=h;var open=editable()&&baseline-h>100;root.classList.toggle('keyboard-open',open);}function reset(){root.classList.remove('keyboard-open');window.scrollTo(0,0);root.scrollTop=0;document.body.scrollTop=0;setTimeout(sync,0);}if(vv)vv.addEventListener('resize',sync,{passive:true});addEventListener('focusin',function(){setTimeout(sync,50)},{passive:true});addEventListener('focusout',function(){setTimeout(function(){reset();requestAnimationFrame(reset);},100)},{passive:true});addEventListener('orientationchange',function(){baseline=vv?vv.height:innerHeight;sync()},{passive:true});})();`;
+/** The frame is a position:fixed inset:0 flex column (see .app-viewport in
+ * app.css) with height:100dvh, so it follows the mobile URL bar and cannot be
+ * scroll-offset — no JS scroll resets are needed. This script only annotates
+ * the keyboard-open state (via visualViewport) so the composer can drop its
+ * bottom safe-area buffer while the on-screen keyboard is up. */
+const VIEWPORT_SYNC_SCRIPT = `(function(){var root=document.documentElement,vv=window.visualViewport;if(!vv)return;var baseline=vv.height;function editable(){var e=document.activeElement;return e&&(e.tagName==='INPUT'||e.tagName==='TEXTAREA'||e.isContentEditable);}function sync(){var h=vv.height;if(!editable()&&h>baseline)baseline=h;root.classList.toggle('keyboard-open',editable()&&baseline-h>100);}vv.addEventListener('resize',sync,{passive:true});addEventListener('focusin',function(){setTimeout(sync,50)},{passive:true});addEventListener('focusout',function(){root.classList.remove('keyboard-open');},{passive:true});addEventListener('orientationchange',function(){baseline=vv.height;sync()},{passive:true});})();`;
 
 
 /** Resolve which class (if any) goes on <html> for SSR.
@@ -257,7 +255,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => {
             string when no Svelte components are mounted on the worker. */}
         <SvelteHonoHead buildId={v} />
       </head>
-      <body class={`app-viewport min-h-dvh bg-bg text-fg antialiased ${props.bodyClass ?? ""}`}>
+      <body class={`app-viewport bg-bg text-fg antialiased ${props.bodyClass ?? ""}`}>
         {/* Skip link — first focusable element. Visible only when focused.
             href= is a no-op; the inline onclick locates whichever <main>
             this page rendered and focuses it. Works for chat (#log) and
