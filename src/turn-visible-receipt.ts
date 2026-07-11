@@ -1,5 +1,10 @@
 export function stripReasoningArtifacts(content: string): string {
   let sanitized = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // A truncated generation can leave an unmatched opening <think> with no close.
+  // Drop everything from that dangling tag onward so hidden scratchpad reasoning
+  // never leaks into the visible receipt.
+  const danglingOpen = sanitized.toLowerCase().indexOf("<think>");
+  if (danglingOpen !== -1) sanitized = sanitized.slice(0, danglingOpen);
   const close = sanitized.toLowerCase().lastIndexOf("</think>");
   if (close !== -1) {
     const before = sanitized.slice(0, close);
