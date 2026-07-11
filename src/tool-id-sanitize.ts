@@ -71,11 +71,15 @@ export function sanitizeToolCallIds(
     const content = (message.content as Array<Record<string, unknown>>).map((part) => {
       if (
         (part?.type === "tool-call" || part?.type === "tool-result") &&
-        typeof part.toolCallId === "string" &&
         !isValidToolCallId(part.toolCallId)
       ) {
-        const after = sanitizeToolCallId(part.toolCallId);
-        onChange?.(part.toolCallId, after);
+        // isValidToolCallId is false for non-strings too (number/null/undefined).
+        // A provider rejects those exactly like a bad string, and
+        // sanitizeToolCallId maps them to "toolcall_unknown" — so heal them here
+        // instead of skipping on a typeof guard.
+        const before = part.toolCallId;
+        const after = sanitizeToolCallId(before);
+        onChange?.(typeof before === "string" ? before : String(before), after);
         msgChanged = true;
         changed = true;
         return { ...part, toolCallId: after };
