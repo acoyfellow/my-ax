@@ -25,3 +25,14 @@ test("errorConversationMeta handles non-Error throws", () => {
     errorMessage: "boom",
   });
 });
+
+test("errorConversationMeta survives an unserializable thrown value", () => {
+  const thrown = Object.create(null);
+  assert.deepEqual(errorConversationMeta(thrown), {
+    errorName: "object",
+    errorMessage: "[unserializable thrown value]",
+  });
+  const cause = Object.create(null);
+  cause.self = cause;
+  assert.equal(errorConversationMeta(new Error("boom", { cause })).errorCause, "[unserializable error cause]");
+});
