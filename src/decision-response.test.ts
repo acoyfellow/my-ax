@@ -54,3 +54,31 @@ test("failed session resume reopens the decision and removes its answer event", 
   assert.deepEqual(store.events, []);
   assert.equal(await recordDecisionResponse(store, { ...input, choice: "B" }), true);
 });
+
+test("a failed resume deletes the answer event exactly once (no double delete)", async () => {
+  const store = memoryStore();
+  let deleteCalls = 0;
+  const origDelete = store.deleteEvent.bind(store);
+  store.deleteEvent = async (e) => { deleteCalls++; return origDelete(e); };
+  await assert.rejects(
+    recordDecisionResponse(store, { ...input, choice: "A" }, async () => { throw new Error("session unavailable"); }),
+    /session unavailable/,
+  );
+  assert.equal(deleteCalls, 1, "cleanup must delete the event exactly once");
+  assert.deepEqual(store.events, []);
+  assert.equal(store.open, true);
+});
+
+test("a failed resume whose reopen ALSO fails keeps the answer event (never orphans a completed run)", async () => {
+  const store = memoryStore();
+  store.reopenRun = async () => { throw new Error("reopen unavailable"); };
+  let deleteCalls = 0;
+  const origDelete = store.deleteEvent.bind(store);
+  store.deleteEvent = async (e) => { deleteCalls++; return origDelete(e); };
+  await assert.rejects(
+    recordDecisionResponse(store, { ...input, choice: "A" }, async () => { throw new Error("resume boom"); }),
+    /Failed to reopen decision/,
+  );
+  assert.equal(deleteCalls, 0, "must not delete the answer when the rollback is unconfirmed");
+  assert.equal(store.events.length, 1);
+});
