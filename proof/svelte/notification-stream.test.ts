@@ -14,6 +14,15 @@ test("attention items classify into the right stream types", () => {
   assert.equal(attentionToNotification({ id: "4", kind: "session.update", title: "n", body: "b" }).type, "update");
 });
 
+test("an explicit actionable kind outranks a rate-limit mention in the body", () => {
+  // Regression: job.needs_input whose body mentions 3021 must read 'needs-you',
+  // not be softened to 'retrying' by the text heuristic.
+  const n = attentionToNotification({ id: "m", kind: "job.needs_input", title: "Input required", body: "3021: rate limiting: inference request per min rate reached" });
+  assert.equal(n.type, "needs-you");
+  // A pure rate-limit ping with no actionable kind still classifies retrying.
+  assert.equal(attentionToNotification({ id: "r", kind: "session.update", title: "paused", body: "3021: rate limiting" }).type, "retrying");
+});
+
 test("an attention item with a run receipt href exposes a widget action and 'ready' type", () => {
   const n = attentionToNotification({ id: "5", kind: "session.update", title: "Artifact", body: "ready", href: "/runs/abc" });
   assert.equal(n.type, "ready");
