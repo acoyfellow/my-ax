@@ -91,3 +91,9 @@ test("adjacent-digit bounds descend without collision", () => {
   assert.ok(lo < mid && mid < hi, `${lo} < ${mid} < ${hi}`);
   assert.ok(isValidRank(mid));
 });
+
+test("between fails closed (exhaustion) instead of returning an over-long invalid rank", () => {
+  const boundary = `${"0".repeat(63)}1`;
+  assert.equal(isValidRank(boundary), true);
+  assert.throws(() => rankBefore(boundary), /rank space exhausted/i);
+});
