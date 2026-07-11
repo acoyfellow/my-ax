@@ -7,6 +7,8 @@ for (const url of [
   "http://192.0.0.1/", "http://192.0.2.1/", "http://198.18.0.1/", "http://198.51.100.1/", "http://203.0.113.1/",
   "http://[::]/", "http://[::1]/", "https://[fd00::1]/", "https://[::ffff:127.0.0.1]/",
   "https://user:pass@example.com/", "file:///etc/passwd",
+  // Trailing DNS root dot must not bypass the private-host policy.
+  "https://localhost./", "https://api.localhost./", "http://127.0.0.1./", "http://192.168.1.1./",
 ]) assert.equal(safePublicHttpUrl(url), null, url);
 
 assert.equal(safePublicHttpUrl("https://example.com/path")?.hostname, "example.com");
