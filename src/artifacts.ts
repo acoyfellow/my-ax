@@ -119,6 +119,23 @@ export async function createSvelteArtifact(env: Env, identity: AccessIdentity, s
   return { kind: "svelte-artifact" as const, artifactId: id, title, src: `/api/artifacts/${id}/preview`, sourceHash };
 }
 
+function isSvelteArtifactManifest(value: unknown): value is SvelteArtifactManifest {
+  if (typeof value !== "object" || value === null) return false;
+  const m = value as Record<string, unknown>;
+  return (
+    m.schema === "my-ax.svelte-artifact.v1" &&
+    m.kind === "svelte-widget" &&
+    typeof m.id === "string" &&
+    typeof m.title === "string" &&
+    typeof m.source === "string" &&
+    typeof m.sourceHash === "string" &&
+    typeof m.clientJs === "string" &&
+    typeof m.css === "string" &&
+    typeof m.svelteVersion === "string" &&
+    typeof m.createdAt === "string"
+  );
+}
+
 export async function getOwnedArtifactRow(env: Env, identity: AccessIdentity, id: string): Promise<ArtifactRow | null> {
   if (!ARTIFACT_ID_RE.test(id)) return null;
   return env.DB.prepare("SELECT id, owner_email, session_id, kind, title, storage_key, source_hash, created_at FROM artifacts WHERE id = ? AND owner_email = ?")
@@ -137,9 +154,14 @@ export async function readOwnedSvelteArtifact(env: Env, identity: AccessIdentity
   if (!row || row.kind !== "svelte-widget") return null;
   const object = await bucket(env).get(row.storage_key);
   if (!object) return null;
-  const manifest = await object.json<SvelteArtifactManifest>();
-  if (manifest.schema !== "my-ax.svelte-artifact.v1" || manifest.id !== row.id || manifest.kind !== "svelte-widget") return null;
-  return manifest;
+  // object.json<T>() is a compile-time cast only. The manifest is rendered
+  // straight into HTML downstream (css/title/clientJs .replace()), so a stored
+  // object with a missing or non-string field would throw at render time.
+  // Validate every field at the trust boundary and fail closed instead.
+  let parsed: unknown;
+  try { parsed = await object.json(); } catch { return null; }
+  if (!isSvelteArtifactManifest(parsed) || parsed.id !== row.id || parsed.sourceHash !== row.source_hash) return null;
+  return parsed;
 }
 
 export async function deleteSessionArtifacts(env: Env, identity: AccessIdentity, sessionId: string): Promise<{ deleted: number }> {
