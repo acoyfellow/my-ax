@@ -170,8 +170,16 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   const deliverOne = (row: { endpoint: string; subscription_json: string }) =>
     Effect.gen(function* () {
       const host = endpointHost(row.endpoint);
+      // Parse the stored subscription ONCE, outside the retried effect. A
+      // malformed subscription_json is a deterministic, local failure — retrying
+      // it cannot help and just triples the work. Only the async send below is
+      // wrapped in the network-retry schedule.
+      const subscription = yield* Effect.try({
+        try: () => JSON.parse(row.subscription_json) as PushSubscription,
+        catch: (cause) => new PushNetworkError({ cause }),
+      });
       const response = yield* Effect.tryPromise({
-        try: () => sendPush(env, JSON.parse(row.subscription_json) as PushSubscription, payload, 300),
+        try: () => sendPush(env, subscription, payload, 300),
         catch: (cause) => new PushNetworkError({ cause }),
       }).pipe(Effect.timeout(Duration.seconds(25)), Effect.retry(pushRetry));
       if (response.ok) return { kind: "delivered" } as DeliveryOutcome;
