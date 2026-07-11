@@ -59,9 +59,10 @@ assertIncludes(checkIn, "bucket.steer", "Check-in bucket singular steer field");
 assertIncludes(checkIn, "data-check-in-raw-href={bucket.steer.href}", "Check-in raw API href preservation marker");
 assertIncludes(checkIn, "displayCheckInHref", "Check-in rendered owner destination helper");
 assertIncludes(checkIn, "href={displayCheckInHref(bucket.steer.href)}", "Check-in rendered owner destination href");
-assertIncludes(displayHrefHelper, 'href.replace("/api/attention", "/attention")', "Check-in Attention display href preserves query string");
-assertIncludes(displayHrefHelper, 'href.replace("/api/runs", "/runs")', "Check-in Runs display href preserves query string");
-assertIncludes(displayHrefHelper, 'href.replace("/api/jobs", "/jobs")', "Check-in Jobs display href preserves query string");
+// The helper rewrites the three API prefixes on a complete path-segment
+// boundary (not a bare startsWith), preserving query/fragment suffixes.
+assertIncludes(displayHrefHelper, '["attention", "runs", "jobs"]', "Check-in display href maps the three owner destinations");
+assertIncludes(displayHrefHelper, '`/${seg}${href.slice(prefix.length)}`', "Check-in display href preserves the query/fragment suffix");
 assertIncludes(displayHrefTest, '"/api/attention?kind=job.complete"', "Check-in display href query-preservation test");
 assertIncludes(displayHrefTest, '"/api/runs?status=failed"', "Check-in display href query-preservation test");
 assertIncludes(displayHrefTest, '"/api/jobs?status=active"', "Check-in display href query-preservation test");
