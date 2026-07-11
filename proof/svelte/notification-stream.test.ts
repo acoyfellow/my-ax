@@ -100,3 +100,16 @@ test("empty sources -> empty stream", () => {
   assert.deepEqual(buildNotificationStream([], []), []);
   assert.equal(unreadCount([]), 0);
 });
+
+test("a failed recurring-job receipt (job.complete + '<name> failed') reads as Failed, not Done", () => {
+  const n = attentionToNotification({
+    id: "failed-job",
+    kind: "job.complete",
+    title: "Monitor failed",
+    body: "connector timed out",
+  });
+  assert.deepEqual([n.type, n.label, n.tone], ["failed", "Failed", "bad"]);
+  // A genuine success still reads as Done.
+  const ok = attentionToNotification({ id: "ok-job", kind: "job.complete", title: "Monitor completed", body: "all good" });
+  assert.equal(ok.type, "done");
+});
