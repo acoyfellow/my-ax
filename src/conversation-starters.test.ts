@@ -93,3 +93,15 @@ test("getConversationStarters falls back to defaults if stored list is all-inval
   rows.set(`${OWNER.toLowerCase()}|conversation_starters.v1`, JSON.stringify({ starters: [{ title: "", prompt: "" }] }));
   assert.deepEqual(await getConversationStarters(env, OWNER), DEFAULT_STARTERS);
 });
+
+test("normalizeStarters does not split supplementary characters on truncation", () => {
+  const [starter] = normalizeStarters([{ title: "a".repeat(59) + "😀tail", prompt: "run it" }]);
+  assert.equal(starter.title, "a".repeat(59) + "😀");
+  assert.equal(/[\uD800-\uDBFF]$/.test(starter.title), false);
+});
+
+test("normalizeStarters treats zero-width-space-only fields as empty", () => {
+  assert.deepEqual(normalizeStarters([{ title: "\u200B", prompt: "run" }]), []);
+  assert.deepEqual(normalizeStarters([{ title: "Visible", prompt: "\u200B" }]), []);
+  assert.deepEqual(normalizeStarters([{ title: "Visible", hint: "\u200B", prompt: "run" }]), [{ title: "Visible", prompt: "run" }]);
+});
