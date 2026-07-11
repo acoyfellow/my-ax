@@ -39,6 +39,18 @@ export function isValidRank(value: unknown): value is string {
  *   between(a, b)        -> a key between a and b
  */
 export function between(a: string | null, b: string | null): string {
+  // Route every result through a single output guard: a valid boundary rank
+  // (e.g. "0"*63 + "1") can force a 65-char key that isValidRank() rejects.
+  // Fail closed with an explicit exhaustion error so the caller can rebalance
+  // rather than silently persisting a rank its own sanitizer treats as absent.
+  const result = betweenRaw(a, b);
+  if (result.length > 64) {
+    throw new Error(`fractional-index: rank space exhausted between ${JSON.stringify(a)} and ${JSON.stringify(b)}`);
+  }
+  return result;
+}
+
+function betweenRaw(a: string | null, b: string | null): string {
   if (a !== null && b !== null && a >= b) {
     throw new Error(`fractional-index: expected a < b, got ${JSON.stringify(a)} >= ${JSON.stringify(b)}`);
   }
@@ -71,7 +83,7 @@ export function between(a: string | null, b: string | null): string {
     i += 1;
     // From here the upper bound no longer constrains us (we've gone below it),
     // so recurse against an unbounded top.
-    return result + between(i < lower.length ? lower.slice(i) : null, null);
+    return result + betweenRaw(i < lower.length ? lower.slice(i) : null, null);
   }
 }
 
