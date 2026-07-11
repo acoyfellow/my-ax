@@ -39,7 +39,7 @@ test("a deferred (rate-limited) task is benign: complete receipt, not 'needs rev
   assert.equal(notification.kind, "delegate.complete", "deferred must not raise a needs-input alarm");
   assert.equal(notification.title, "Delegation complete");
   assert.match(notification.body, /1 delegated task completed/);
-  assert.match(notification.body, /1 deferred on an inference rate limit and will re-run/);
+  assert.match(notification.body, /1 deferred on an inference rate limit; re-run when it clears/);
 });
 
 test("a real failure alongside a deferred task stays actionable and notes the deferral", () => {
@@ -49,5 +49,5 @@ test("a real failure alongside a deferred task stays actionable and notes the de
   });
   assert.equal(notification.kind, "delegate.needs_input");
   assert.match(notification.body, /1\/2 delegated tasks did not complete/);
-  assert.match(notification.body, /1 deferred on an inference rate limit/);
+  assert.match(notification.body, /1 deferred on an inference rate limit; re-run when it clears/);
 });
