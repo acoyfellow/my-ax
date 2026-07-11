@@ -89,16 +89,19 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
   let totalInformational: number;
   let totalAttention: number;
   if (providedActionable !== undefined || providedInformational !== undefined) {
-    totalActionable = providedActionable ?? needsOwner.length;
-    totalInformational = providedInformational ?? informationalUpdates.length;
+    totalActionable = providedActionable ?? actionableSampleRaw.length;
+    totalInformational = providedInformational ?? informationalSampleRaw.length;
     totalAttention = providedAttention ?? (totalActionable + totalInformational);
   } else if (legacyMode) {
     totalAttention = providedAttention!;
     totalActionable = providedAttention!;
     totalInformational = 0;
   } else {
-    totalActionable = needsOwner.length;
-    totalInformational = informationalUpdates.length;
+    // Fall back to the UNCAPPED partition sizes, not the sliced samples — using
+    // needsOwner/informationalUpdates.length here caps the reported total at 10
+    // and makes the totals lie (11 actionable rows would report 10).
+    totalActionable = actionableSampleRaw.length;
+    totalInformational = informationalSampleRaw.length;
     totalAttention = totalActionable + totalInformational;
   }
 

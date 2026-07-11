@@ -294,3 +294,14 @@ test("check-in does not report non-zero run totals with empty status samples", (
   assert.deepEqual(result.buckets.find((bucket) => bucket.key === "failedRuns")?.sampleIds, ["failed-visible"]);
   assert.deepEqual(result.buckets.find((bucket) => bucket.key === "openRuns")?.sampleIds, ["open-visible"]);
 });
+
+test("uncapped attention totals: 11 actionable rows report total 11 while the sample stays capped at 10", () => {
+  const attention = Array.from({ length: 11 }, (_, i) => ({ id: `a${i}`, kind: "recipe.approval", title: "t", body: "b", href: "/", created_at: "2026-06-24" }));
+  const result = composeOwnerCheckIn({ attention, jobs: [], runs: [] });
+  assert.equal(result.needsOwner.length, 10, "sample stays capped at 10");
+  assert.equal(result.totals.attentionActionable, 11, "total must not be capped by the sample");
+  assert.equal(result.totals.attention, 11);
+  const bucket = result.buckets.find((b) => b.key === "attention");
+  assert.equal(bucket?.sampleCount, 10);
+  assert.equal(bucket?.total, 11);
+});
