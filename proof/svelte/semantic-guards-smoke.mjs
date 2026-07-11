@@ -12,10 +12,14 @@ function assertIncludes(haystack, needle, label) {
   if (!haystack.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
 }
 
-assertIncludes(settings, 'Choose whether each tick continues this conversation or starts a fresh one.', "recurring job copy states explicit thread-mode choice");
-assertIncludes(settings, 'Start a new conversation each run', "recurring job creation defaults to fresh per-run conversations");
-assertIncludes(settings, 'Use this conversation', "recurring job creation still supports standing same-thread loops");
-assertIncludes(settings, 'runs in this conversation', "existing same-session jobs are labeled honestly");
+assertIncludes(settings, 'Pick where each run lands: a new thread, this thread, or a specific thread you name.', "recurring job copy names the three destinations");
+assertIncludes(settings, '<option value="new_session_per_run">New thread each run</option>', "recurring job creation offers New thread (fresh per-run)");
+assertIncludes(settings, '<option value="same_session">This thread</option>', "recurring job creation offers This thread (standing loop)");
+assertIncludes(settings, '<option value="specific_session">Specific thread…</option>', "recurring job creation offers Specific thread");
+// Job cards show a short, honest destination summary from the label map.
+assertIncludes(settings, 'THREAD_MODE_LABELS[threadMode]', "job cards render the short destination label for their thread mode");
+assertIncludes(settings, 'same_session: "This thread"', "same_session maps to the honest 'This thread' label");
+assertIncludes(settings, 'specific_session: "Specific thread"', "specific_session maps to the 'Specific thread' label");
 assertIncludes(settings, 'Delete this recurring job? Existing run receipts stay, but it will not run again.', "recurring job delete has explicit destructive confirmation");
 assertIncludes(settings, 'aria-label={`Run ${job.name} now`}', "recurring job run action is accessible");
 assertIncludes(settings, '>Run now</button>', "recurring job run action has a distinct text label");
