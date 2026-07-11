@@ -20,7 +20,9 @@ function jobStatusClass(status: JobStatus): string {
 }
 
 function jobThreadModeLabel(job: JobRow): string {
-  return job.thread_mode === "new_session_per_run" ? "starts a new conversation each run" : "runs in this conversation";
+  if (job.thread_mode === "new_session_per_run") return "starts a new conversation each run";
+  if (job.thread_mode === "specific_session") return "runs in a specific conversation";
+  return "runs in this conversation";
 }
 
 export function formatRenderedJobsApiReceiptHref(status?: JobStatus | null): string {

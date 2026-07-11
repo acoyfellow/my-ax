@@ -52,6 +52,45 @@ test("recurring job thread mode is now persisted, not prompt convention", () => 
   assert.equal("thread_mode" in row, true);
 });
 
+test("specific_session is a valid third destination and requires a thread id (no guess/fallback)", () => {
+  // Missing id -> actionable error, never silent fallback to current/new.
+  assert.deepEqual(validateJobInput({ name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session" }), {
+    tag: "InvalidInput", field: "sessionId", message: "required",
+  });
+  // Empty-after-trim id with specific -> the specific-specific error.
+  assert.deepEqual(validateJobInput({ sessionId: "   ", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session" }), {
+    tag: "InvalidInput", field: "sessionId", message: "required",
+  });
+  // Valid specific target normalizes and preserves the mode.
+  assert.deepEqual(validateJobInput({ sessionId: " session-x ", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session" }), {
+    sessionId: "session-x", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session",
+  });
+});
+
+test("an unknown thread mode is rejected with all three valid options named", () => {
+  const err = validateJobInput({ sessionId: "s", name: "j", prompt: "p", cadenceSecs: 60, threadMode: "bogus" as never });
+  assert.equal((err as { field: string }).field, "threadMode");
+  assert.match((err as { message: string }).message, /specific_session/);
+});
+
+test("specific_session dispatch reuses the stored (owner-chosen) session, never mints one", async () => {
+  const specificRow: JobRow = { ...row, thread_mode: "specific_session", session_id: "session-chosen" };
+  const env = { DB: { prepare() { throw new Error("specific_session must not create a session"); } } } as unknown as Env;
+  assert.deepEqual(await resolveRecurringJobTargetSession(env, specificRow, new Date("2026-01-01T00:00:00.000Z")), {
+    targetSessionId: "session-chosen",
+    sourceSessionId: "session-chosen",
+    threadMode: "specific_session",
+    created: false,
+  });
+});
+
+test("legacy rows (both existing modes) remain valid after adding the third mode", () => {
+  for (const mode of ["same_session", "new_session_per_run"] as const) {
+    const out = validateJobInput({ sessionId: "s", name: "j", prompt: "p", cadenceSecs: 60, threadMode: mode });
+    assert.equal((out as { threadMode: string }).threadMode, mode);
+  }
+});
+
 test("same-session recurring receipts explain that they open the existing conversation", () => {
   const receipt = recurringJobReceipt({
     jobId: row.id,

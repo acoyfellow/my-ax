@@ -20,7 +20,10 @@ function recurringRunSessionTitle(row: Pick<JobRow, "name">, now: Date): string 
 }
 
 export async function resolveRecurringJobTargetSession(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "thread_mode" | "name">, now: Date): Promise<{ targetSessionId: string; sourceSessionId: string; threadMode: RecurringJobThreadMode; created: boolean }> {
-  if (row.thread_mode === "same_session") return { targetSessionId: row.session_id, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: false };
+  // same_session and specific_session both reuse the stored session id; the
+  // only difference is at create/update time (specific = an owner-chosen id,
+  // validated for ownership). Neither mints a new session per run.
+  if (row.thread_mode === "same_session" || row.thread_mode === "specific_session") return { targetSessionId: row.session_id, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: false };
   const targetSessionId = crypto.randomUUID();
   await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?)")
     .bind(targetSessionId, recurringRunSessionTitle(row, now), row.owner_email, now.toISOString(), now.toISOString()).run();
@@ -34,8 +37,8 @@ export const MAX_NAME_CHARS = 200;
 export const MAX_ACTIVE_JOBS_PER_OWNER = 10;
 
 export type JobStatus = "active" | "paused";
-export type RecurringJobThreadMode = "same_session" | "new_session_per_run";
-export const RECURRING_JOB_THREAD_MODES: readonly RecurringJobThreadMode[] = ["same_session", "new_session_per_run"];
+export type RecurringJobThreadMode = "same_session" | "new_session_per_run" | "specific_session";
+export const RECURRING_JOB_THREAD_MODES: readonly RecurringJobThreadMode[] = ["same_session", "new_session_per_run", "specific_session"];
 
 export interface JobRow {
   id: string;
@@ -85,7 +88,11 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
   }
   const rawThreadMode = typeof (input as Partial<JobInput>).threadMode === "string" ? (input as Partial<JobInput>).threadMode : "new_session_per_run";
   const threadMode = RECURRING_JOB_THREAD_MODES.includes(rawThreadMode as RecurringJobThreadMode) ? rawThreadMode as RecurringJobThreadMode : null;
-  if (!threadMode) return { tag: "InvalidInput", field: "threadMode", message: "must be same_session or new_session_per_run" };
+  if (!threadMode) return { tag: "InvalidInput", field: "threadMode", message: "must be same_session, new_session_per_run, or specific_session" };
+  // "Specific thread" requires the owner to name the target thread id. We never
+  // guess or silently fall back to the current/new thread; existence +
+  // ownership of the id are enforced downstream (JobService create/update).
+  if (threadMode === "specific_session" && !sessionId) return { tag: "InvalidInput", field: "sessionId", message: "a Specific thread requires a thread id" };
   return { sessionId, name: name.slice(0, MAX_NAME_CHARS), prompt: prompt.slice(0, MAX_PROMPT_CHARS), cadenceSecs, threadMode };
 }
 
