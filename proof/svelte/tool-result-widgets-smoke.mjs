@@ -135,6 +135,26 @@ try {
     { runId: "delegate:three", status: "error", error: "must be capped" },
   ], synthesisRequired: true }, "delegate_many");
 
+  // 3021 backpressure surfaces a real "deferred" delegate status; it must be
+  // preserved as a structured run, not filtered out (which dropped it to raw-text).
+  const deferredDelegation = resolve({ results: [
+    { runId: "delegate:queued", status: "deferred", summary: "Waiting on shared inference" },
+    { runId: "delegate:done", status: "completed" },
+  ] }, "delegate_many");
+  if (deferredDelegation.kind !== "delegation-group" || deferredDelegation.runs.length !== 2 || deferredDelegation.runs[0].status !== "deferred") throw new Error("deferred delegate_many runs must be preserved");
+
+  // The internal-artifact allowlist must enforce full UUID structure, not just
+  // 36 chars of [0-9a-f-].
+  for (const src of [
+    "/api/artifacts/1111111-11111-4111-8111-111111111111",
+    "/api/artifacts/11111111-1111-0111-8111-111111111111",
+    "/api/artifacts/11111111-1111-4111-7111-111111111111",
+    "/api/artifacts/------------------------------------",
+  ]) {
+    const rejected = resolve({ kind: "raster-artifact", src }, "machinectl_call");
+    if (rejected.kind !== "raw-text") throw new Error(`malformed artifact UUID must remain inert raw text: ${src}`);
+  }
+
   if (safeReplay.kind !== "browser-run" || safeReplay.replaySrc !== "/browser/replay/abc-123?embed=1" || safeReplay.screenshotSrc !== "/api/artifacts/22222222-2222-4222-8222-222222222222") throw new Error("safe same-origin replay/screenshot missing");
   if (externalReplay.kind !== "browser-run" || externalReplay.replaySrc || externalReplay.screenshotSrc) throw new Error("external replay/screenshot URL was not blocked");
   if (raster.kind !== "inline-raster-image") throw new Error("safe raster widget missing");

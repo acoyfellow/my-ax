@@ -10,7 +10,10 @@ const INLINE_IMAGE_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,\s*([A-Za-z
 // instead of falling back to a massive raw base64 transcript.
 const MAX_INLINE_IMAGE_URL_CHARS = 32_000_000;
 const INTERNAL_BROWSER_REPLAY_RE = /^\/browser\/replay\/[A-Za-z0-9._~%+-]+$/;
-const INTERNAL_RASTER_ARTIFACT_RE = /^\/api\/artifacts\/[0-9a-f-]{36}$/i;
+// Match the RFC-4122 structure (group boundaries + version 1-5 + variant 8-b),
+// same as the Svelte/audio artifact routes below — a bare {36} char class also
+// accepted 36 hyphens or a wrong-boundary string.
+const INTERNAL_RASTER_ARTIFACT_RE = /^\/api\/artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INTERNAL_SVELTE_ARTIFACT_RE = /^\/api\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preview$/i;
 const INTERNAL_AUDIO_MESSAGE_RE = /^\/api\/audio\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const AUDIO_VOICES = new Set(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
@@ -23,7 +26,7 @@ export type ToolResultWidget =
         runId?: string;
         taskFingerprint?: string;
         label?: string;
-        status: "pending" | "completed" | "error" | "interrupted" | "aborted";
+        status: "pending" | "completed" | "error" | "interrupted" | "aborted" | "deferred";
         summary?: string;
         error?: string;
         attempts?: number;
@@ -157,7 +160,7 @@ function delegationGroupWidget(value: unknown, toolName: string): ToolResultWidg
   }
   const results = (decoded as { results?: unknown }).results;
   if (!Array.isArray(results)) return null;
-  const statuses = new Set(["pending", "completed", "error", "interrupted", "aborted"]);
+  const statuses = new Set(["pending", "completed", "error", "interrupted", "aborted", "deferred"]);
   const runs = results.slice(0, 2).flatMap((item) => {
     if (typeof item !== "object" || item === null) return [];
     const run = item as Record<string, unknown>;
@@ -171,7 +174,7 @@ function delegationGroupWidget(value: unknown, toolName: string): ToolResultWidg
       runId: boundedText(run.runId, 200),
       taskFingerprint: boundedText(run.taskFingerprint, 200),
       label: boundedText(run.label, 80),
-      status: run.status as "pending" | "completed" | "error" | "interrupted" | "aborted",
+      status: run.status as "pending" | "completed" | "error" | "interrupted" | "aborted" | "deferred",
       summary: boundedText(run.summary, 500),
       error: boundedText(run.error, 500),
       attempts: typeof run.attempts === "number" && Number.isInteger(run.attempts) ? Math.max(1, Math.min(2, run.attempts)) : undefined,
