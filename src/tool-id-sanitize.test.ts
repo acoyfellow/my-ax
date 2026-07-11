@@ -78,3 +78,25 @@ test("does not mutate the input messages", () => {
   sanitizeToolCallIds(messages);
   assert.equal((messages[0].content as any[])[0].toolCallId, "bad.id");
 });
+
+test("normalizes a non-string tool-call id (number) instead of skipping it", () => {
+  const messages = [
+    { role: "assistant", content: [
+      { type: "tool-call", toolCallId: 17, toolName: "x", input: {} },
+    ] },
+  ] as unknown as ModelMessage[];
+  const out = sanitizeToolCallIds(messages);
+  assert.equal((out[0].content as any[])[0].toolCallId, "toolcall_unknown");
+});
+
+test("normalizes a null tool-result id independently", () => {
+  const messages = [
+    { role: "tool", content: [
+      { type: "tool-result", toolCallId: null, toolName: "x", output: { type: "text", value: "ok" } },
+    ] },
+  ] as unknown as ModelMessage[];
+  const changes: Array<[string, string]> = [];
+  const out = sanitizeToolCallIds(messages, (b, a) => changes.push([b, a]));
+  assert.equal((out[0].content as any[])[0].toolCallId, "toolcall_unknown");
+  assert.deepEqual(changes, [["null", "toolcall_unknown"]]);
+});
