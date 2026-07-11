@@ -72,6 +72,23 @@ assertIncludes(appCss, 'height: 100dvh;', "app-viewport height tracks the dynami
 }
 // 2) The chat mount fills its slot so the composer footer sits at the bottom.
 assertIncludes(appCss, '#svelte-hono-chat-root {', "chat mount must be made a filling flex child (unbroken h-full chain)");
+{
+  // The mount rule is load-bearing for the footer position: require the actual
+  // fill declarations, not just the selector, so silently dropping them fails.
+  const i = appCss.indexOf('#svelte-hono-chat-root {');
+  const block = appCss.slice(i, i + 160);
+  for (const decl of ['flex: 1 1 0%;', 'min-height: 0;', 'display: flex;', 'flex-direction: column;']) {
+    if (!block.includes(decl)) throw new Error(`chat mount fill rule must include ${JSON.stringify(decl)}`);
+  }
+}
+// The chat embed must forward wrapperClass="contents" so the generic mount
+// wrapper does not re-break the height chain the CSS rule depends on.
+assertIncludes(chatPage, 'hydrateAs="chat"', "ChatPage mounts the chat embed");
+{
+  const i = chatPage.indexOf('hydrateAs="chat"');
+  const around = chatPage.slice(Math.max(0, i - 120), i + 160);
+  if (!around.includes('wrapperClass="contents"')) throw new Error("chat embed must forward wrapperClass=\"contents\"");
+}
 // 3) Composer padding is a single device-adaptive rule: max(base, real inset).
 //    0 on desktop / macOS PWA (no curvature), the true inset on notched iOS.
 assertIncludes(appCss, 'padding-bottom: max(0.625rem, env(safe-area-inset-bottom));', "composer padding must be a single max(base, env-inset) rule");
