@@ -139,6 +139,16 @@ test("update to Specific thread persists the new target session id + mode", asyn
   assert.equal(mutableRow.session_id, "session-chosen");
 });
 
+test("switching to Specific thread WITHOUT a new id is rejected (no silent retarget)", async () => {
+  const { env } = fakeEnv();
+  const runtime = { schedule: async () => "s", cancel: async () => undefined, run: async () => ({ ok: true }) } as any;
+  const service = new JobService(env, row.owner_email, () => new Date("2026-01-01T00:00:00Z"), runtime);
+  await assert.rejects(
+    () => service.update(row.id, { threadMode: "specific_session" }),
+    (e: unknown) => e instanceof JobServiceError && e.code === "InvalidInput",
+  );
+});
+
 test("Specific thread with an unowned/unknown id is rejected NotFound (no silent fallback)", async () => {
   const { env } = fakeEnv(true, /* sessionExists */ false);
   const runtime = { schedule: async () => "s", cancel: async () => undefined, run: async () => ({ ok: true }) } as any;

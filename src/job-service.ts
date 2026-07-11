@@ -69,7 +69,13 @@ export class JobService {
   }
   async update(id: string, patch: Partial<JobInput>) {
     const old = await this.owned(id);
-    const parsed = validateJobInput({ sessionId: patch.sessionId ?? old.session_id, threadMode: patch.threadMode ?? old.thread_mode, name: patch.name ?? old.name, prompt: patch.prompt ?? old.prompt, cadenceSecs: patch.cadenceSecs ?? old.cadence_secs });
+    // Switching TO a Specific thread requires an explicit new target id: never
+    // silently retarget by inheriting the old session_id (that would relabel
+    // rather than retarget). Staying on an already-specific job without a new
+    // id keeps its existing target.
+    const switchingToSpecific = patch.threadMode === "specific_session" && old.thread_mode !== "specific_session";
+    const mergedSessionId = switchingToSpecific ? (patch.sessionId ?? "") : (patch.sessionId ?? old.session_id);
+    const parsed = validateJobInput({ sessionId: mergedSessionId, threadMode: patch.threadMode ?? old.thread_mode, name: patch.name ?? old.name, prompt: patch.prompt ?? old.prompt, cadenceSecs: patch.cadenceSecs ?? old.cadence_secs });
     if ("tag" in parsed) throw new JobServiceError("InvalidInput", `${parsed.field}: ${parsed.message}`);
     const session = await this.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(parsed.sessionId, this.owner).first();
     if (!session) throw new JobServiceError("NotFound", "session not found or not owned");
