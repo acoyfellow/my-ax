@@ -89,6 +89,15 @@ assertIncludes(chatPage, 'hydrateAs="chat"', "ChatPage mounts the chat embed");
   const around = chatPage.slice(Math.max(0, i - 120), i + 160);
   if (!around.includes('wrapperClass="contents"')) throw new Error("chat embed must forward wrapperClass=\"contents\"");
 }
+// ...and SvelteEmbed must actually apply that class to the mount wrapper.
+// Forwarding the prop is useless if the wrapper hardcodes/drops the class,
+// which would silently re-break the height chain while this smoke stays green.
+{
+  const svelteEmbed = readFileSync(new URL("./SvelteEmbed.tsx", import.meta.url), "utf8");
+  if (!/<div class=\{wrapperClass\} dangerouslySetInnerHTML=/.test(svelteEmbed)) {
+    throw new Error("SvelteEmbed must apply wrapperClass to its mount wrapper");
+  }
+}
 // 3) Composer padding is a single device-adaptive rule: max(base, real inset).
 //    0 on desktop / macOS PWA (no curvature), the true inset on notched iOS.
 assertIncludes(appCss, 'padding-bottom: max(0.625rem, env(safe-area-inset-bottom));', "composer padding must be a single max(base, env-inset) rule");
