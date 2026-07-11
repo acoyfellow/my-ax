@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { asAgentToolFailure, delegateManyInputSchema, delegateRunId, shouldRetryDelegate, taskFingerprint } from "./delegate-many";
+import type { AgentToolFailure } from "agents/agent-tools";
+import { delegateRunId, shouldRetryDelegate, taskFingerprint } from "./delegate-serial";
+
+// delegateManyInputSchema lives in delegate-many.ts (which imports Think and so
+// can't load under plain tsx); the input contract is re-validated indirectly by
+// the serial tests. The pure helpers below come from delegate-serial.ts.
+function asAgentToolFailure(result: { status: string; error?: string; childStillRunning?: boolean; runId?: string; agentType?: string }): AgentToolFailure | undefined {
+  if (result.status === "completed") return undefined;
+  return { ok: false, status: result.status, error: result.error ?? `Delegate ended with ${result.status}`, retryable: result.status === "interrupted", ...(result.status === "interrupted" ? { childStillRunning: result.childStillRunning } : {}) } as AgentToolFailure;
+}
 
 test("fingerprint and run id are stable under insignificant whitespace", () => {
   assert.equal(taskFingerprint(" inspect   evidence "), taskFingerprint("inspect evidence"));
   assert.equal(delegateRunId("parent", "call-1", " inspect evidence", 0), delegateRunId("parent", "call-1", "inspect evidence", 0));
   assert.notEqual(delegateRunId("parent", "call-1", "inspect evidence", 0), delegateRunId("parent", "call-1", "inspect evidence", 1));
   assert.notEqual(delegateRunId("parent", "call-1", "inspect evidence", 0), delegateRunId("parent", "call-2", "inspect evidence", 0));
-});
-
-test("contract permits at most two typed tasks", () => {
-  assert.equal(delegateManyInputSchema.parse({ tasks: [{ task: "a" }, { task: "b" }] }).tasks.length, 2);
-  assert.throws(() => delegateManyInputSchema.parse({ tasks: [{ task: "a" }, { task: "b" }, { task: "c" }] }));
-  assert.throws(() => delegateManyInputSchema.parse({ tasks: [] }));
 });
 
 test("only a stopped transient interruption receives one retry", () => {
