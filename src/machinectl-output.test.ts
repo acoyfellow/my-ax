@@ -17,3 +17,16 @@ test("machine shell parser preserves unknown content without claiming an exit co
     raw: "plain output",
   });
 });
+
+test("machine shell parser handles CRLF and rejects a false (no-boundary) header", () => {
+  assert.deepEqual(parseMachineShellContent("Exit code: 7\r\nfailed"), {
+    stdout: "failed",
+    exitCode: 7,
+    raw: "Exit code: 7\r\nfailed",
+  });
+  assert.deepEqual(parseMachineShellContent("Exit code: 0oops"), {
+    stdout: "Exit code: 0oops",
+    exitCode: null,
+    raw: "Exit code: 0oops",
+  });
+});
