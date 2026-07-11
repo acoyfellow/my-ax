@@ -19,6 +19,14 @@ export function computeMoveRank(
   movedId: string,
   beforeId: string | null,
 ): string {
+  // Moving a row before itself is a stable no-op: keep its current valid rank.
+  // (Without this, filtering out the moved row makes its own id an "unknown"
+  // anchor and wrongly sends it to the top.)
+  if (beforeId === movedId) {
+    const self = ordered.find((r) => r.id === movedId);
+    const selfRank = sanitize(self?.pin_rank ?? null);
+    if (selfRank) return selfRank;
+  }
   const others = ordered.filter((r) => r.id !== movedId);
   if (beforeId === null) {
     // Move to the bottom: after the last other row.
