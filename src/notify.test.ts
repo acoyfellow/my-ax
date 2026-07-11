@@ -10,7 +10,7 @@ import { notifyOwner, DEDUPE_WINDOW_MS } from "./notify";
 // within the window suppresses the resend, while distinct/expired/keyless
 // notifications still deliver.
 
-type AttentionRow = { id: string; owner_email: string; dedupe_key: string | null; created_at: string };
+type AttentionRow = { id: string; owner_email: string; dedupe_key: string | null; created_at: string; href: string | null };
 
 function makeEnv() {
   const attention: AttentionRow[] = [];
@@ -42,7 +42,7 @@ function makeEnv() {
         async run() {
           if (/^INSERT INTO attention_items/.test(q)) {
             // columns: id, owner_email, session_id, kind, title, body, href, dedupe_key
-            attention.push({ id: String(bound[0]), owner_email: String(bound[1]), dedupe_key: (bound[7] as string | null) ?? null, created_at: nowSql() });
+            attention.push({ id: String(bound[0]), owner_email: String(bound[1]), href: (bound[6] as string | null) ?? null, dedupe_key: (bound[7] as string | null) ?? null, created_at: nowSql() });
             return { meta: { changes: 1 } };
           }
           return { meta: { changes: 0 } };
@@ -103,8 +103,26 @@ test("an identical key older than the window delivers again", async () => {
   try {
     // Seed an old attention row for the key, outside the dedupe window.
     const old = new Date(Date.now() - DEDUPE_WINDOW_MS - 60_000).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
-    h.attention.push({ id: "old", owner_email: OWNER, dedupe_key: "session-dead:S1:E1", created_at: old });
+    h.attention.push({ id: "old", owner_email: OWNER, href: "/", dedupe_key: "session-dead:S1:E1", created_at: old });
     const res = await notifyOwner(h.env, OWNER, { ...base, dedupeKey: "session-dead:S1:E1" });
     assert.equal(res.devices, 1, "an expired dedupe entry must not suppress a fresh occurrence");
+  } finally { h.restore(); }
+});
+
+test("safeHref rejects a scheme-relative (//host) href that would re-navigate cross-origin", async () => {
+  const h = makeEnv();
+  try {
+    await notifyOwner(h.env, OWNER, { ...base, href: "https://my.ax.example//evil.example/open" });
+    assert.equal(h.attention[0]?.href, "/");
+    assert.equal(new URL(h.attention[0]!.href!, "https://my.ax.example").origin, "https://my.ax.example");
+  } finally { h.restore(); }
+});
+
+test("safeHref bounds an oversized fallback href", async () => {
+  const h = makeEnv();
+  try {
+    await notifyOwner(h.env, OWNER, { ...base, href: undefined, sessionId: "x".repeat(100_000) });
+    assert.equal(h.attention[0]?.href, "/");
+    assert.ok((h.attention[0]!.href ?? "").length <= 2048);
   } finally { h.restore(); }
 });
