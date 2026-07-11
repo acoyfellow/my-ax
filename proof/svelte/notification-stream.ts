@@ -82,6 +82,10 @@ function typeForAttention(item: AttentionItem): NotificationType {
   // Explicit kind wins over body text: a job.needs_input whose body merely
   // mentions a rate limit must still read as "Needs you", not "Retrying".
   if (ACTIONABLE_KINDS.has(kind)) return "needs-you";
+  // A recurring-job receipt uses kind:"job.complete" for BOTH success and
+  // failure (see recurringJobReceipt); a failed run's title ends in "failed".
+  // Don't paint it green "Done" — surface it as a failure.
+  if (kind === "job.complete" && /\bfailed$/i.test((item.title ?? "").trim())) return "failed";
   if (DONE_KINDS.has(kind)) return "done";
   if (isTransientRateLimit(text)) return "retrying";
   // An artifact/widget deep-link ready to open.
