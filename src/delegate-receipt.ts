@@ -28,6 +28,10 @@ export function delegateCompletionNotification(input: {
     title,
     body: clip(body, 200),
     href: `/?session=${encodeURIComponent(input.sessionId)}`,
-    dedupeKey: `delegate:${input.sessionId}:${input.results.map((result) => result.runId).join(":")}`,
+    // Run ids are stable across replay, so keying on id alone would let an
+    // initial error receipt suppress the later success (or vice-versa). Fold
+    // the outcome (status + attempts) into the key so a materially different
+    // replay still notifies, while identical re-emits stay deduplicated.
+    dedupeKey: `delegate:${input.sessionId}:${input.results.map((result) => `${result.runId}#${result.status}#${result.attempts ?? 0}`).join(":")}`,
   };
 }
