@@ -14,6 +14,16 @@ test("attention items classify into the right stream types", () => {
   assert.equal(attentionToNotification({ id: "4", kind: "session.update", title: "n", body: "b" }).type, "update");
 });
 
+test("a run-receipt href with a trailing query or fragment still classifies as ready", () => {
+  for (const href of ["/runs/r1?tab=log", "/runs/r1#output"]) {
+    const n = attentionToNotification({ id: href, href });
+    assert.equal(n.type, "ready", href);
+    assert.equal(n.widgetHref, href, href);
+  }
+  // A non-receipt href is still not a widget.
+  assert.equal(attentionToNotification({ id: "x", href: "/settings#jobs" }).widgetHref, null);
+});
+
 test("an explicit actionable kind outranks a rate-limit mention in the body", () => {
   // Regression: job.needs_input whose body mentions 3021 must read 'needs-you',
   // not be softened to 'retrying' by the text heuristic.
