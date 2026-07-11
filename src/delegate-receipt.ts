@@ -18,7 +18,7 @@ export function delegateCompletionNotification(input: {
   const deferred = input.results.filter((result) => result.status === "deferred");
   const completed = input.results.filter((result) => result.status === "completed").length;
   const title = actionable.length ? "Delegation needs review" : "Delegation complete";
-  const deferredNote = deferred.length ? ` ${deferred.length} deferred on an inference rate limit and will re-run.` : "";
+  const deferredNote = deferred.length ? ` ${deferred.length} deferred on an inference rate limit; re-run when it clears.` : "";
   const body = actionable.length
     ? `${actionable.length}/${input.results.length} delegated task${input.results.length === 1 ? "" : "s"} did not complete.${deferredNote} Open the conversation for the parent synthesis and next action.`
     : `${completed} delegated task${completed === 1 ? "" : "s"} completed.${deferredNote} Open the conversation for the parent synthesis and evidence.`;
