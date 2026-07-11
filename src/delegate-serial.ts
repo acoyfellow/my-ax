@@ -63,7 +63,10 @@ export function delegateDeferredRunId(index: number): string {
 }
 
 export function shouldRetryDelegate(failure: AgentToolFailure, attempts: number): boolean {
-  return failure.status === "interrupted" && failure.retryable && !failure.childStillRunning && attempts < 2;
+  // Only retry when the child is CONFIRMED stopped. Unknown liveness
+  // (childStillRunning undefined) must not retry — a still-running child would
+  // be duplicated.
+  return failure.status === "interrupted" && failure.retryable && failure.childStillRunning === false && attempts < 2;
 }
 
 /** A failure whose error text is a transient upstream rate limit (3021 / 429 /
