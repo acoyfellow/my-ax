@@ -53,12 +53,17 @@ test("recurring job thread mode is now persisted, not prompt convention", () => 
 });
 
 test("specific_session is a valid third destination and requires a thread id (no guess/fallback)", () => {
-  // Missing id -> actionable error, never silent fallback to current/new.
+  // Missing id -> actionable, Specific-aware error (not a bare "required"),
+  // never silent fallback to current/new.
   assert.deepEqual(validateJobInput({ name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session" }), {
-    tag: "InvalidInput", field: "sessionId", message: "required",
+    tag: "InvalidInput", field: "sessionId", message: "a Specific thread requires a thread id",
   });
-  // Empty-after-trim id with specific -> the specific-specific error.
+  // Empty-after-trim id with specific -> same actionable message.
   assert.deepEqual(validateJobInput({ sessionId: "   ", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session" }), {
+    tag: "InvalidInput", field: "sessionId", message: "a Specific thread requires a thread id",
+  });
+  // A non-specific mode with a blank id still gets the plain "required".
+  assert.deepEqual(validateJobInput({ name: "job", prompt: "run", cadenceSecs: 60, threadMode: "same_session" }), {
     tag: "InvalidInput", field: "sessionId", message: "required",
   });
   // Valid specific target normalizes and preserves the mode.

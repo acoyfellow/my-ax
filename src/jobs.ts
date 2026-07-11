@@ -74,8 +74,12 @@ export function computeNextRun(base: Date, cadenceSecs: number): string {
 
 /** Validate + normalize JobInput. Returns a tagged error if invalid. */
 export function validateJobInput(input: Partial<JobInput>): ValidationError | JobInput {
+  const rawMode = typeof input.threadMode === "string" ? input.threadMode : "new_session_per_run";
+  const isSpecific = rawMode === "specific_session";
   const sessionId = (input.sessionId ?? "").trim();
-  if (!sessionId) return { tag: "InvalidInput", field: "sessionId", message: "required" };
+  // Give the actionable Specific-thread message instead of a bare "required"
+  // when the owner picked Specific but named no thread.
+  if (!sessionId) return { tag: "InvalidInput", field: "sessionId", message: isSpecific ? "a Specific thread requires a thread id" : "required" };
   const name = (input.name ?? "").trim();
   if (!name) return { tag: "InvalidInput", field: "name", message: "required" };
   const prompt = (input.prompt ?? "").trim();
@@ -89,10 +93,9 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
   const rawThreadMode = typeof (input as Partial<JobInput>).threadMode === "string" ? (input as Partial<JobInput>).threadMode : "new_session_per_run";
   const threadMode = RECURRING_JOB_THREAD_MODES.includes(rawThreadMode as RecurringJobThreadMode) ? rawThreadMode as RecurringJobThreadMode : null;
   if (!threadMode) return { tag: "InvalidInput", field: "threadMode", message: "must be same_session, new_session_per_run, or specific_session" };
-  // "Specific thread" requires the owner to name the target thread id. We never
-  // guess or silently fall back to the current/new thread; existence +
-  // ownership of the id are enforced downstream (JobService create/update).
-  if (threadMode === "specific_session" && !sessionId) return { tag: "InvalidInput", field: "sessionId", message: "a Specific thread requires a thread id" };
+  // "Specific thread" requires the owner to name the target thread id (enforced
+  // above, mode-aware). Existence + ownership are enforced downstream
+  // (JobService create/update).
   return { sessionId, name: name.slice(0, MAX_NAME_CHARS), prompt: prompt.slice(0, MAX_PROMPT_CHARS), cadenceSecs, threadMode };
 }
 
