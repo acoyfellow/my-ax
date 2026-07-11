@@ -5,7 +5,10 @@
 // and must not be implied by this helper.
 
 export function isPrivateHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  // Strip a single trailing DNS root dot: "localhost." / "127.0.0.1." resolve
+  // identically to their dotless forms but would otherwise slip past the
+  // literal-host and IPv4 checks below.
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost") || host === "::" || host === "::1" || host === "0.0.0.0") return true;
   if (/^(?:127|10)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return true;
   const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
