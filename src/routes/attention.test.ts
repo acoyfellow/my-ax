@@ -166,6 +166,9 @@ test("formatRenderedAttentionPageHtml escapes API receipt href attributes", () =
 test("normalizeRenderedAttentionSourceHref keeps only same-origin paths", () => {
   assert.equal(normalizeRenderedAttentionSourceHref("/sessions/abc"), "/sessions/abc");
   assert.equal(normalizeRenderedAttentionSourceHref("//evil.example/path"), "/");
+  // Backslash variant: browsers normalize \ to / so /\host resolves cross-origin.
+  assert.equal(normalizeRenderedAttentionSourceHref("/\\evil.example/path"), "/");
+  assert.equal(new URL(normalizeRenderedAttentionSourceHref("/\\evil.example/path"), "https://my-ax.example").origin, "https://my-ax.example");
   assert.equal(normalizeRenderedAttentionSourceHref("javascript:alert(1)"), "/");
   assert.equal(normalizeRenderedAttentionSourceHref(null), "/");
 });
