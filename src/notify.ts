@@ -78,16 +78,24 @@ async function rejectedReason(response: Response): Promise<string> {
   return cleanText(detail, 300) || response.statusText || "push provider rejected request";
 }
 
+const MAX_HREF_LENGTH = 2048;
+
 function safeHref(notification: OwnerNotification, baseUrl: string): string {
-  const fallback = notification.sessionId
+  const fallbackCandidate = notification.sessionId
     ? `/?session=${encodeURIComponent(notification.sessionId)}`
     : "/";
+  // The fallback is itself unbounded (sessionId is caller-supplied), so bound it too.
+  const fallback = fallbackCandidate.length <= MAX_HREF_LENGTH ? fallbackCandidate : "/";
   if (!notification.href) return fallback;
   try {
     const base = new URL(baseUrl);
     const url = new URL(notification.href, base.origin);
-    if (url.origin !== base.origin) return fallback;
-    return `${url.pathname}${url.search}${url.hash}`;
+    const href = `${url.pathname}${url.search}${url.hash}`;
+    // Reject cross-origin AND scheme-relative (//host) values: the latter parses
+    // same-origin here but re-navigates cross-origin when reparsed. Also bound
+    // the length so an oversized href can't blow the push payload budget.
+    if (url.origin !== base.origin || href.startsWith("//") || href.length > MAX_HREF_LENGTH) return fallback;
+    return href;
   } catch {
     return fallback;
   }
