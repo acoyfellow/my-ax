@@ -128,3 +128,17 @@ test("non-rate-limit error on task 0 does NOT defer task 1 (only 3021 is backpre
   assert.equal(results[0].status, "error");
   assert.equal(results[1].status, "completed");
 });
+
+test("3021 detected via the error channel alone (no structured failure) still defers fan-out", async () => {
+  const { runTask, launches } = launcher((index) => {
+    if (index === 0) {
+      // A runner that surfaces the 3021 text only in `error`, with NO failure object.
+      return { runId: "r0", status: "error", error: RATE_LIMIT_MSG, failure: undefined } as DelegateTaskOutcome;
+    }
+    return outcome("completed", { summary: "should never run" });
+  });
+  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
+  assert.deepEqual(launches, [0], "task 1 never launched — backpressure detected via error channel");
+  assert.equal(results[1].status, "deferred");
+  assert.equal(results[1].attempts, 0);
+});
