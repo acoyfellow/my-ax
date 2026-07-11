@@ -50,3 +50,11 @@ test("candidates filters to only content-bearing assistant messages", () => {
   ]);
   assert.deepEqual(out.map((m) => m.id), ["a", "c"]);
 });
+
+test("invisible-only text (U+2063) is not visible content", () => {
+  assert.equal(shouldBackfillAssistant(mk({ text: "\u2063", reasoning: "" })), false);
+});
+
+test("an invisible-only id is never backfilled (cannot be de-duplicated)", () => {
+  assert.equal(shouldBackfillAssistant(mk({ id: "\u200B", text: "reply" })), false);
+});
