@@ -137,7 +137,10 @@ export async function runDelegatesSerially(
       attempts,
       label: tasks[index].label,
     });
-    if (isRateLimitFailure(out.failure)) deferring = true; // backpressure: stop fan-out
+    // Backpressure: stop fan-out on 3021. The rate-limit signal can arrive on
+    // EITHER channel — a structured `failure` object OR just the `error` string
+    // (some runners surface the 3021 text without a failure), so check both.
+    if (isRateLimitFailure(out.failure) || isTransientRateLimit(out.error)) deferring = true;
   }
   return results;
 }
