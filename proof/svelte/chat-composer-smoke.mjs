@@ -94,5 +94,16 @@ assertIncludes(chatPage, 'hydrateAs="chat"', "ChatPage mounts the chat embed");
 assertIncludes(appCss, 'padding-bottom: max(0.625rem, env(safe-area-inset-bottom));', "composer padding must be a single max(base, env-inset) rule");
 assertNotIncludes(appCss, 'env(safe-area-inset-bottom) + 45px', "the hardcoded +45px composer hack must be gone");
 assertNotIncludes(appCss, '@media (display-mode: standalone), (pointer: coarse) {', "composer padding must not be gated on display-mode/pointer heuristics");
+// 4) Landscape notch/rounded-corner clearance: both the app bar and composer
+//    must reserve the horizontal safe-area insets (0 on non-notched devices).
+for (const [sel, span] of [['.safe-area-appbar {', 480], ['.safe-area-composer {', 480]]) {
+  const i = appCss.indexOf(sel);
+  if (i < 0) throw new Error(`missing ${sel}`);
+  const block = appCss.slice(i, i + span);
+  if (!/padding-left:\s*max\([^;]*env\(safe-area-inset-left\)/.test(block) ||
+      !/padding-right:\s*max\([^;]*env\(safe-area-inset-right\)/.test(block)) {
+    throw new Error(`${sel} must reserve env(safe-area-inset-left/right) for landscape notch clearance`);
+  }
+}
 
 console.log("✓ chat composer smoke: fixed frame, filling chat mount, device-adaptive composer padding");

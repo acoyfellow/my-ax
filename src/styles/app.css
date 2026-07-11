@@ -748,6 +748,10 @@ html {
  * underneath the OS status bar. Reserve the top safe area on chrome. */
 .safe-area-appbar {
   padding-top: max(0.5rem, env(safe-area-inset-top));
+  /* Landscape notch / rounded corners: keep controls clear of the side insets
+   * (0 on non-notched devices, so no visible change there). */
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
   min-height: calc(48px + env(safe-area-inset-top));
 }
 /* macOS installed-app traffic lights sit on native white chrome that web CSS
@@ -767,6 +771,9 @@ html {
  */
 .safe-area-composer {
   padding-bottom: max(0.625rem, env(safe-area-inset-bottom));
+  /* Same landscape side-inset clearance for the composer controls. */
+  padding-left: max(0.625rem, env(safe-area-inset-left));
+  padding-right: max(0.625rem, env(safe-area-inset-right));
 }
 /* The on-screen keyboard already occupies the bottom inset; drop the buffer to
  * the tight base so the composer sits directly on the keyboard. */
