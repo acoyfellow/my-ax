@@ -33,6 +33,14 @@ test("whitespace-only reasoning is not a backfill candidate", () => {
   assert.equal(shouldBackfillAssistant(mk({ text: "", reasoning: " \n\t " })), false);
 });
 
+test("invisible control/zero-width payloads are not treated as content", () => {
+  // JS trim() leaves zero-width space, word joiner, BOM and NUL intact.
+  assert.equal(shouldBackfillAssistant(mk({ text: "\u200B\u2060\u0000", reasoning: "" })), false);
+  assert.equal(shouldBackfillAssistant(mk({ text: "\uFEFF \u200D", reasoning: "" })), false);
+  // A real character mixed with invisibles is still content.
+  assert.equal(shouldBackfillAssistant(mk({ text: "\u200Bhi", reasoning: "" })), true);
+});
+
 test("candidates filters to only content-bearing assistant messages", () => {
   const out = assistantBackfillCandidates([
     mk({ id: "a", text: "reply one" }),
