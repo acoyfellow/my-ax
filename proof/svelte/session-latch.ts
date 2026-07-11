@@ -24,6 +24,10 @@ export function activeTurnIsRestorable(
   now: number = Date.now(),
 ): saved is ActiveTurnLatch {
   if (!saved || !saved.id) return false;
+  // The predicate narrows to ActiveTurnLatch, which promises clientMsgId. A
+  // latch missing it (malformed / legacy) must fail closed rather than being
+  // narrowed to a type it does not satisfy.
+  if (!saved.clientMsgId) return false;
   if (saved.sessionId !== currentSessionId) return false;
   if (now - Number(saved.at || 0) >= ACTIVE_TURN_MAX_AGE_MS) return false;
   return true;
