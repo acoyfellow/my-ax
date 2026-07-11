@@ -97,12 +97,10 @@ mustContain("docs/feature-matrix.md", "data-jobs-api-receipt-href", "feature mat
 mustContain("docs/feature-matrix.md", "per-job history receipt links", "feature matrix Jobs history receipt contract");
 
 mustContain("proof/svelte/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
-mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/attention")', "Check-in attention API display mapping");
-mustContain("proof/svelte/check-in-display-href.ts", 'replace("/api/attention", "/attention")', "Check-in attention rendered display mapping");
-mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/runs")', "Check-in runs API display mapping");
-mustContain("proof/svelte/check-in-display-href.ts", 'replace("/api/runs", "/runs")', "Check-in runs rendered display mapping");
-mustContain("proof/svelte/check-in-display-href.ts", 'href.startsWith("/api/jobs")', "Check-in jobs API display mapping");
-mustContain("proof/svelte/check-in-display-href.ts", 'replace("/api/jobs", "/jobs")', "Check-in jobs rendered display mapping");
+// The helper maps /api/{attention,runs,jobs} to owner routes on a complete
+// path-segment boundary, preserving the query/fragment suffix.
+mustContain("proof/svelte/check-in-display-href.ts", '["attention", "runs", "jobs"]', "Check-in API display mapping covers all three destinations");
+mustContain("proof/svelte/check-in-display-href.ts", '`/${seg}${href.slice(prefix.length)}`', "Check-in rendered display mapping preserves suffix");
 
 if (failures.length) {
   console.error("owner-route smoke failed:");

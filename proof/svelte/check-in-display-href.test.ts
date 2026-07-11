@@ -18,3 +18,12 @@ test("displayCheckInHref leaves non-owner-rendered hrefs unchanged", () => {
   assert.equal(displayCheckInHref("/api/check-in"), "/api/check-in");
   assert.equal(displayCheckInHref("/sessions/abc"), "/sessions/abc");
 });
+
+test("displayCheckInHref requires a complete API path segment (no prefix bleed)", () => {
+  assert.equal(displayCheckInHref("/api/runs-v2/42?status=failed"), "/api/runs-v2/42?status=failed");
+  assert.equal(displayCheckInHref("/api/jobs-old"), "/api/jobs-old");
+  assert.equal(displayCheckInHref("/api/attention-feed"), "/api/attention-feed");
+  // Real segments still rewrite, incl. child paths + fragments.
+  assert.equal(displayCheckInHref("/api/runs/42"), "/runs/42");
+  assert.equal(displayCheckInHref("/api/attention#top"), "/attention#top");
+});
