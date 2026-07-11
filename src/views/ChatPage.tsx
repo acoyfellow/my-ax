@@ -40,7 +40,7 @@ export const ChatPage: FC<ChatPageProps> = (props) => {
     <Layout
       title="My Agent Experience"
       identityEmail={props.identityEmail}
-      bodyClass="h-dvh overflow-hidden"
+      bodyClass="overflow-hidden"
       buildId={props.buildId}
       buildTimestamp={props.buildTimestamp}
       theme={props.theme}
@@ -53,8 +53,8 @@ export const ChatPage: FC<ChatPageProps> = (props) => {
           props={{ identityEmail: props.identityEmail ?? null }}
           buildId={props.buildId}
         />
-        <div class="flex-1 min-h-0">
-          <SvelteEmbed component={ChatComponent} hydrateAs="chat" buildId={props.buildId} />
+        <div class="flex-1 min-h-0 flex flex-col">
+          <SvelteEmbed component={ChatComponent} hydrateAs="chat" buildId={props.buildId} wrapperClass="contents" />
         </div>
       </div>
 
