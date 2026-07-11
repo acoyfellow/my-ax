@@ -147,6 +147,16 @@ test("new-session target resolver creates a fresh owned conversation", async () 
   assert.equal(inserts[0][3], "owner@example.com");
 });
 
+test("an unknown persisted thread_mode fails closed (never mints a new session)", async () => {
+  let prepared = 0;
+  const env = { DB: { prepare() { prepared++; throw new Error("must not touch DB"); } } } as unknown as Env;
+  await assert.rejects(
+    resolveRecurringJobTargetSession(env, { ...row, thread_mode: "bogus" as never }, new Date("2026-01-01T00:00:00.000Z")),
+    /invalid recurring job thread mode: bogus/,
+  );
+  assert.equal(prepared, 0, "a bad mode must not INSERT a session");
+});
+
 test("recurring next-run math is independent of conversation threading mode", () => {
   assert.equal(computeNextRun(new Date("2026-01-01T00:00:00.000Z"), 3600), "2026-01-01T01:00:00.000Z");
 });
