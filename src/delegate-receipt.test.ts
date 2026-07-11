@@ -17,7 +17,7 @@ test("completed delegation receipt sends owner back to the parent synthesis", ()
   assert.equal(notification.title, "Delegation complete");
   assert.match(notification.body, /1 delegated task completed/);
   assert.equal(notification.href, "/?session=session%201");
-  assert.equal(notification.dedupeKey, "delegate:session 1:run-1");
+  assert.equal(notification.dedupeKey, "delegate:session 1:run-1#completed#1");
 });
 
 test("failed delegation receipt is truthful and actionable", () => {
@@ -50,4 +50,16 @@ test("a real failure alongside a deferred task stays actionable and notes the de
   assert.equal(notification.kind, "delegate.needs_input");
   assert.match(notification.body, /1\/2 delegated tasks did not complete/);
   assert.match(notification.body, /1 deferred on an inference rate limit; re-run when it clears/);
+});
+
+test("dedupe key folds in the outcome so an error->success replay is not suppressed", () => {
+  const failed = delegateCompletionNotification({
+    sessionId: "s",
+    results: [{ ...completed, status: "error", error: "boom" }],
+  });
+  const recovered = delegateCompletionNotification({ sessionId: "s", results: [completed] });
+  assert.notEqual(failed.dedupeKey, recovered.dedupeKey, "a materially different replay must still notify");
+  // Identical re-emits still dedupe.
+  const again = delegateCompletionNotification({ sessionId: "s", results: [completed] });
+  assert.equal(recovered.dedupeKey, again.dedupeKey);
 });
