@@ -156,3 +156,8 @@ test("last-writer-wins: two moves of the same row leave the last rank", async ()
   const cRank = tables.sessions.find((x) => x.id === "c")!.pin_rank!;
   assert.ok(cRank > "M", "final rank reflects the last move (bottom)");
 });
+
+test("computeMoveRank: moving a row before itself is a stable no-op", () => {
+  const list = ordered(["a", "A"], ["b", "M"], ["c", "Z"]);
+  assert.equal(computeMoveRank(list, "b", "b"), "M");
+});
