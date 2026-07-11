@@ -24,6 +24,10 @@ export async function resolveRecurringJobTargetSession(env: Env, row: Pick<JobRo
   // only difference is at create/update time (specific = an owner-chosen id,
   // validated for ownership). Neither mints a new session per run.
   if (row.thread_mode === "same_session" || row.thread_mode === "specific_session") return { targetSessionId: row.session_id, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: false };
+  // thread_mode is persisted D1 text, not compiler-checked. Fail closed on any
+  // value that is not the one remaining known mode rather than silently minting
+  // a brand-new conversation and running work in the wrong place.
+  if (row.thread_mode !== "new_session_per_run") throw new Error(`invalid recurring job thread mode: ${row.thread_mode}`);
   const targetSessionId = crypto.randomUUID();
   await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?)")
     .bind(targetSessionId, recurringRunSessionTitle(row, now), row.owner_email, now.toISOString(), now.toISOString()).run();
