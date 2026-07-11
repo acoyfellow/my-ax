@@ -25,15 +25,19 @@ export interface CompleteRecurringJobRunInput {
 export async function completeRecurringJobRun(env: Env, input: CompleteRecurringJobRunInput): Promise<void> {
   const ownerEmail = input.ownerEmail.toLowerCase();
   const error = input.error ? input.error.slice(0, 500) : null;
-  if (input.nextRunAt) {
-    await env.DB.prepare(
-      "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-    ).bind(input.nextRunAt, input.ranAt.toISOString(), error, input.jobId, ownerEmail).run().catch(() => undefined);
-  } else {
-    await env.DB.prepare(
-      "UPDATE jobs SET last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-    ).bind(input.ranAt.toISOString(), error, input.jobId, ownerEmail).run().catch(() => undefined);
-  }
+  const updateResult = input.nextRunAt
+    ? await env.DB.prepare(
+        "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
+      ).bind(input.nextRunAt, input.ranAt.toISOString(), error, input.jobId, ownerEmail).run().catch(() => undefined)
+    : await env.DB.prepare(
+        "UPDATE jobs SET last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
+      ).bind(input.ranAt.toISOString(), error, input.jobId, ownerEmail).run().catch(() => undefined);
+  // The UPDATE is owner-qualified: if it matched no row the job was deleted,
+  // the id is stale, or the owner does not match. In every case the terminal
+  // state was NOT persisted, so we must not emit a receipt/notification for it
+  // (which could otherwise notify the wrong owner about someone else's job).
+  // Fail closed: a failed write (caught above => undefined) also lands here.
+  if (updateResult?.meta?.changes !== 1) return;
   // A transient upstream rate-limit (gateway 3021 / 429 / overloaded) is NOT an
   // actionable job failure: the next tick usually succeeds. We still persisted
   // last_error above for diagnostics, but we must NOT push a "<job> failed"
