@@ -15,8 +15,19 @@ export function errorConversationMeta(error: unknown): Record<string, unknown> {
   }
   return {
     errorName: typeof error,
-    errorMessage: String(error),
+    errorMessage: safeString(error, "[unserializable thrown value]"),
   };
+}
+
+// String(value) can itself throw (e.g. a null-prototype object with no primitive
+// conversion), which would replace the original failure with a TypeError inside
+// an error-reporting helper. Fail soft to a stable placeholder.
+function safeString(value: unknown, fallback: string): string {
+  try {
+    return String(value);
+  } catch {
+    return fallback;
+  }
 }
 
 function serializeErrorCause(cause: unknown): unknown {
@@ -33,6 +44,6 @@ function serializeErrorCause(cause: unknown): unknown {
   try {
     return JSON.parse(JSON.stringify(cause));
   } catch {
-    return String(cause);
+    return safeString(cause, "[unserializable error cause]");
   }
 }
