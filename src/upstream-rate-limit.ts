@@ -13,11 +13,11 @@
 
 const PATTERNS: RegExp[] = [
   /\b3021\b/, // Cloudflare Workers AI gateway rate-limit code
-  /rate[\s_-]?limit/i,
+  /\brate[\s_-]?limit/i,
   /inference request per min/i,
   /too many requests/i,
   /\b429\b/,
-  /overloaded/i,
+  /\boverloaded\b/i,
   /request per min rate reached/i,
 ];
 
