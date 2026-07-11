@@ -41,8 +41,12 @@ export const TOOLS: ToolDef[] = [
       const jobs = new JobService(ctx.env, ctx.identity.email);
       const id = typeof args.id === "string" ? args.id : "";
       const action = args.action;
-      const sessionId = typeof args.sessionId === "string" && args.sessionId.trim() ? args.sessionId : (action === "create" ? ctx.sessionId : undefined);
       const threadMode = typeof args.threadMode === "string" ? args.threadMode as RecurringJobThreadMode : undefined;
+      // A Specific thread must use the explicitly-provided id; never silently
+      // substitute the current conversation. Only new/this thread create falls
+      // back to ctx.sessionId.
+      const explicitSessionId = typeof args.sessionId === "string" && args.sessionId.trim() ? args.sessionId : undefined;
+      const sessionId = explicitSessionId ?? (action === "create" && threadMode !== "specific_session" ? ctx.sessionId : undefined);
       const input = { sessionId, threadMode, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
       const result = action === "list" ? await jobs.list()
         : action === "create" ? await jobs.create(input, args.idempotencyKey as string | undefined)
