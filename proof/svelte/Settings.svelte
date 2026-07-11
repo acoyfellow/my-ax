@@ -324,16 +324,33 @@
     status: "active" | "paused";
     last_run_at?: string | null;
     next_run_at?: string | null;
-    thread_mode?: "same_session" | "new_session_per_run";
+    thread_mode?: JobThreadMode;
+    session_id?: string;
     last_error?: string | null;
   }
+  type JobThreadMode = "same_session" | "new_session_per_run" | "specific_session";
+  // Human labels for the three destinations (kept short for cards + select).
+  const THREAD_MODE_LABELS: Record<JobThreadMode, string> = {
+    new_session_per_run: "New thread",
+    same_session: "This thread",
+    specific_session: "Specific thread",
+  };
   let jobs = $state<Job[]>([]);
   let jobsStatusText = $state("");
   let jobName = $state("");
   let jobPrompt = $state("");
   let jobCadence = $state("60");
-  let jobThreadMode = $state<"same_session" | "new_session_per_run">("new_session_per_run");
+  let jobThreadMode = $state<JobThreadMode>("new_session_per_run");
+  let jobSpecificId = $state("");
   let jobActionBusy = $state<Record<string, boolean>>({});
+  // Inline edit state: which job is open, plus its editable fields.
+  let editingJobId = $state<string | null>(null);
+  let editName = $state("");
+  let editPrompt = $state("");
+  let editCadence = $state("60");
+  let editThreadMode = $state<JobThreadMode>("same_session");
+  let editSpecificId = $state("");
+  let editStatusText = $state("");
 
   // ── Conversation starters (new-conversation suggestion cards) ────────────
   interface Starter { title: string; hint?: string; prompt: string }
@@ -453,12 +470,19 @@
       jobsStatusText = "Start a conversation before adding a job.";
       return;
     }
+    // "Specific thread" targets an owner-supplied thread id instead of the
+    // current conversation. We never guess or fall back silently.
+    const targetSessionId = jobThreadMode === "specific_session" ? jobSpecificId.trim() : sessionId;
+    if (jobThreadMode === "specific_session" && !targetSessionId) {
+      jobsStatusText = "Paste a thread id for a Specific thread.";
+      return;
+    }
     const response = await fetch("/api/jobs", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sessionId,
+        sessionId: targetSessionId,
         name: jobName.trim(),
         prompt: jobPrompt.trim(),
         cadenceSecs: Number(jobCadence),
@@ -473,8 +497,59 @@
     jobName = "";
     jobPrompt = "";
     jobThreadMode = "new_session_per_run";
+    jobSpecificId = "";
     jobsStatusText = "Job added.";
     await refreshJobs();
+  }
+
+  // ── Inline job edit (destination + name/prompt/cadence) ───────────────
+  function openJobEdit(job: Job) {
+    editingJobId = job.id;
+    editName = job.name;
+    editPrompt = job.prompt;
+    editCadence = String(job.cadence_secs);
+    editThreadMode = job.thread_mode ?? "same_session";
+    // Only prefill the id field for Specific; This/New don't expose one.
+    editSpecificId = job.thread_mode === "specific_session" ? (job.session_id ?? "") : "";
+    editStatusText = "";
+  }
+  function closeJobEdit() {
+    editingJobId = null;
+    editStatusText = "";
+  }
+  async function saveJobEdit(job: Job) {
+    const key = `${job.id}:edit`;
+    if (jobActionBusy[key]) return;
+    const patch: Record<string, unknown> = {
+      name: editName.trim(),
+      prompt: editPrompt.trim(),
+      cadenceSecs: Number(editCadence),
+      threadMode: editThreadMode,
+    };
+    if (editThreadMode === "specific_session") {
+      const id = editSpecificId.trim();
+      if (!id) { editStatusText = "Paste a thread id for a Specific thread."; return; }
+      patch.sessionId = id;
+    }
+    jobActionBusy[key] = true;
+    editStatusText = "";
+    try {
+      const response = await fetch(`/api/jobs/${encodeURIComponent(job.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || `Could not save (${response.status}).`);
+      closeJobEdit();
+      jobsStatusText = "Job updated.";
+      await refreshJobs();
+    } catch (err: any) {
+      editStatusText = err?.message || "Could not save job.";
+    } finally {
+      jobActionBusy[key] = false;
+    }
   }
 
   // ── Reusable tools (saved_recipes compatibility storage) ───────────
@@ -1110,7 +1185,7 @@
     <section id="jobs" class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
       <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Recurring jobs</span>
       <p class="mb-3 text-xs text-fg-mut">
-        Choose whether each tick continues this conversation or starts a fresh one. Push notifications explain which destination they open.
+        Pick where each run lands: a new thread, this thread, or a specific thread you name. Push notifications explain which destination they open.
       </p>
       <div class="grid gap-2">
         {#if jobs.length === 0}
@@ -1123,7 +1198,8 @@
             {@const result = health.label}
             {@const state = job.status === "paused" ? "paused" : "active"}
             {@const threadMode = job.thread_mode ?? "same_session"}
-            <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
+            {@const isEditing = editingJobId === job.id}
+            <article class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs" data-job-item={job.id}>
               <div class="flex min-w-0 items-start justify-between gap-3">
                 <strong class="min-w-0 break-words text-sm text-fg">{job.name}</strong>
                 <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{cadenceLabel(job.cadence_secs)}</span>
@@ -1131,14 +1207,58 @@
               <div class="mt-1 text-fg-mut line-clamp-2">{job.prompt}</div>
               <div class="mt-2 grid gap-0.5 font-mono text-[11px] text-fg-mut">
                 <div>{state} · next {nextRun}</div>
-                <div>{threadMode === "new_session_per_run" ? "starts a new conversation each run" : "runs in this conversation"}</div>
+                <div data-job-destination={threadMode}>{THREAD_MODE_LABELS[threadMode]}</div>
                 <div data-job-result={jobResultAttr(health)} data-job-health={health.state} data-job-tone={health.tone}>last {lastRun} · {result}</div>
               </div>
-              <div class="mt-3 flex justify-end gap-1.5" aria-label={`Actions for ${job.name}`}>
-                <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} aria-label={`Run ${job.name} now`} title="Run now" class="job-action-button text-brand hover:border-brand/60 disabled:opacity-40">Run now</button>
-                <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} aria-label={job.status === "paused" ? `Resume ${job.name}` : `Pause ${job.name}`} title={job.status === "paused" ? "Resume" : "Pause"} class="job-action-button hover:border-brand/60 disabled:opacity-40">{job.status === "paused" ? "Resume" : "Pause"}</button>
-                <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} aria-label={`Delete ${job.name}`} title="Delete" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40">Delete</button>
-              </div>
+              {#if !isEditing}
+                <div class="mt-3 flex flex-wrap justify-end gap-1.5" aria-label={`Actions for ${job.name}`}>
+                  <button type="button" onclick={() => openJobEdit(job)} aria-label={`Edit ${job.name}`} title="Edit" class="job-action-button hover:border-brand/60">Edit</button>
+                  <button type="button" onclick={() => runJob(job.id)} disabled={jobActionBusy[`${job.id}:run`]} aria-busy={jobActionBusy[`${job.id}:run`]} aria-label={`Run ${job.name} now`} title="Run now" class="job-action-button text-brand hover:border-brand/60 disabled:opacity-40">Run now</button>
+                  <button type="button" onclick={() => pauseJob(job)} disabled={jobActionBusy[`${job.id}:pause`]} aria-busy={jobActionBusy[`${job.id}:pause`]} aria-label={job.status === "paused" ? `Resume ${job.name}` : `Pause ${job.name}`} title={job.status === "paused" ? "Resume" : "Pause"} class="job-action-button hover:border-brand/60 disabled:opacity-40">{job.status === "paused" ? "Resume" : "Pause"}</button>
+                  <button type="button" onclick={() => deleteJob(job.id)} disabled={jobActionBusy[`${job.id}:delete`]} aria-busy={jobActionBusy[`${job.id}:delete`]} aria-label={`Delete ${job.name}`} title="Delete" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500 disabled:opacity-40">Delete</button>
+                </div>
+              {:else}
+                <div class="mt-3 grid gap-2 border-t border-line pt-3" data-job-edit={job.id}>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium text-fg-mut">Name</span>
+                    <input type="text" maxlength={200} bind:value={editName} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium text-fg-mut">Prompt</span>
+                    <textarea rows={2} maxlength={4000} bind:value={editPrompt} class="w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium text-fg-mut">Cadence</span>
+                    <select bind:value={editCadence} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2">
+                      <option value="60">Every minute</option>
+                      <option value="300">Every 5 minutes</option>
+                      <option value="900">Every 15 minutes</option>
+                      <option value="3600">Every hour</option>
+                      <option value="86400">Every day</option>
+                    </select>
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[11px] font-medium text-fg-mut">Destination</span>
+                    <select bind:value={editThreadMode} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2" aria-label="Run destination">
+                      <option value="new_session_per_run">New thread</option>
+                      <option value="same_session">This thread</option>
+                      <option value="specific_session">Specific thread</option>
+                    </select>
+                  </label>
+                  {#if editThreadMode === "specific_session"}
+                    <label class="grid gap-1">
+                      <span class="text-[11px] font-medium text-fg-mut">Thread id</span>
+                      <input type="text" bind:value={editSpecificId} placeholder="Paste a thread id" aria-describedby={`edit-thread-help-${job.id}`} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 font-mono focus:outline-none focus:border-brand/60" />
+                      <span id={`edit-thread-help-${job.id}`} class="text-[11px] text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
+                    </label>
+                  {/if}
+                  <div class="flex flex-wrap justify-end gap-1.5">
+                    <button type="button" onclick={closeJobEdit} class="job-action-button text-fg-mut hover:border-line">Cancel</button>
+                    <button type="button" onclick={() => saveJobEdit(job)} disabled={jobActionBusy[`${job.id}:edit`]} aria-busy={jobActionBusy[`${job.id}:edit`]} class="job-action-button text-brand hover:border-brand/60 disabled:opacity-40">Save</button>
+                  </div>
+                  {#if editStatusText}<p class="text-[11px] text-red-500" role="alert">{editStatusText}</p>{/if}
+                </div>
+              {/if}
             </article>
           {/each}
         {/if}
@@ -1165,17 +1285,19 @@
           <option value="3600">Every hour</option>
           <option value="86400">Every day</option>
         </select>
-        <fieldset class="rounded-md border border-line bg-bg px-3 py-2">
-          <legend class="px-1 text-[11px] font-medium uppercase tracking-wider text-fg-mut">Conversation</legend>
-          <label class="mt-1 flex gap-2 text-sm text-fg">
-            <input type="radio" bind:group={jobThreadMode} value="new_session_per_run" />
-            <span><strong>Start a new conversation each run</strong><span class="block text-xs text-fg-mut">Best for repeated reports, checks, and independent loop ticks.</span></span>
-          </label>
-          <label class="mt-2 flex gap-2 text-sm text-fg">
-            <input type="radio" bind:group={jobThreadMode} value="same_session" />
-            <span><strong>Use this conversation</strong><span class="block text-xs text-fg-mut">Best for a standing loop where every tick continues this thread.</span></span>
-          </label>
-        </fieldset>
+        <div class="grid gap-1">
+          <label for="job-destination" class="text-[11px] font-medium uppercase tracking-wider text-fg-mut">Destination</label>
+          <select id="job-destination" bind:value={jobThreadMode} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2">
+            <option value="new_session_per_run">New thread each run</option>
+            <option value="same_session">This thread</option>
+            <option value="specific_session">Specific thread…</option>
+          </select>
+          {#if jobThreadMode === "specific_session"}
+            <label for="job-specific-id" class="mt-1 text-[11px] font-medium text-fg-mut">Thread id</label>
+            <input id="job-specific-id" type="text" bind:value={jobSpecificId} placeholder="Paste a thread id" aria-describedby="job-specific-help" class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 font-mono focus:outline-none focus:border-brand/60" />
+            <span id="job-specific-help" class="text-[11px] text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
+          {/if}
+        </div>
         <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">Add recurring job</button>
       </form>
       <p class="mt-2 text-xs text-fg-mut" role="status" aria-live="polite">{jobsStatusText}</p>

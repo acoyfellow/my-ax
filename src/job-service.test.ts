@@ -15,7 +15,7 @@ const row: JobRow = {
   last_error: null, schedule_id: "schedule-1", created_at: "now", updated_at: "now",
 };
 
-function fakeEnv(jobExists = true) {
+function fakeEnv(jobExists = true, sessionExists = true) {
   const events: Array<{ id: string; ok: number; detail_json: string; idempotency_key: string | null }> = [];
   const evidence: Array<{ action: string; ok: number; detail: any }> = [];
   const mutableRow = { ...row };
@@ -26,7 +26,7 @@ function fakeEnv(jobExists = true) {
         bind(...next: unknown[]) { values = next; return this; },
         async first() {
           if (sql.includes("FROM jobs WHERE id")) return jobExists && values[0] === row.id && values[1] === row.owner_email ? { ...mutableRow } : null;
-          if (sql.includes("FROM sessions")) return { id: row.session_id };
+          if (sql.includes("FROM sessions")) return sessionExists ? { id: values[0] } : null;
           if (sql.includes("FROM job_events")) {
             const found = events.find((event) => event.idempotency_key === values[2]);
             return found ? { id: found.id, ok: found.ok, detail_json: found.detail_json } : null;
@@ -128,6 +128,25 @@ test("update retains replacement when retiring the old schedule fails", async ()
   assert.deepEqual(cancelled, ["schedule-1", "schedule-1"]);
   assert.equal(cancelled.includes("replacement"), false);
   assert.deepEqual(evidence[0], { action: "update", ok: 1, detail: { replacement: "replacement", orphanedOldScheduleId: "schedule-1", oldCancelError: "Error: timeout after cancel" } });
+});
+
+test("update to Specific thread persists the new target session id + mode", async () => {
+  const { env, mutableRow } = fakeEnv();
+  const runtime = { schedule: async () => "replacement", cancel: async () => undefined, run: async () => ({ ok: true }) } as any;
+  const service = new JobService(env, row.owner_email, () => new Date("2026-01-01T00:00:00Z"), runtime);
+  const updated = await service.update(row.id, { threadMode: "specific_session", sessionId: "session-chosen" });
+  assert.equal(updated.thread_mode, "specific_session");
+  assert.equal(mutableRow.session_id, "session-chosen");
+});
+
+test("Specific thread with an unowned/unknown id is rejected NotFound (no silent fallback)", async () => {
+  const { env } = fakeEnv(true, /* sessionExists */ false);
+  const runtime = { schedule: async () => "s", cancel: async () => undefined, run: async () => ({ ok: true }) } as any;
+  const service = new JobService(env, row.owner_email, () => new Date("2026-01-01T00:00:00Z"), runtime);
+  await assert.rejects(
+    () => service.update(row.id, { threadMode: "specific_session", sessionId: "not-mine" }),
+    (e: unknown) => e instanceof JobServiceError && e.code === "NotFound",
+  );
 });
 
 test("deleted job history remains available through owner-scoped evidence", async () => {

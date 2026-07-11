@@ -3,6 +3,7 @@ import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { JobService } from "./job-service";
+import type { RecurringJobThreadMode } from "./jobs";
 import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters";
 
@@ -34,14 +35,15 @@ export const TOOLS: ToolDef[] = [
   WORK_CODE_TOOL,
   {
     name: "manage_jobs",
-    description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'.",
-    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string", description: "Target session id. For create, omit to use the current conversation." }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, idempotencyKey: { type: "string" } }, required: ["action"] },
+    description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'. threadMode controls the destination each run: 'new_session_per_run' (a new thread each run), 'same_session' (this thread), or 'specific_session' (a specific thread whose id you must pass in sessionId).",
+    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string", description: "Target session id. For create, omit to use the current conversation. Required when threadMode is 'specific_session'." }, threadMode: { type: "string", enum: ["new_session_per_run", "same_session", "specific_session"], description: "Run destination. specific_session requires a valid owned sessionId." }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, idempotencyKey: { type: "string" } }, required: ["action"] },
     execute: async (args, ctx) => {
       const jobs = new JobService(ctx.env, ctx.identity.email);
       const id = typeof args.id === "string" ? args.id : "";
       const action = args.action;
       const sessionId = typeof args.sessionId === "string" && args.sessionId.trim() ? args.sessionId : (action === "create" ? ctx.sessionId : undefined);
-      const input = { sessionId, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
+      const threadMode = typeof args.threadMode === "string" ? args.threadMode as RecurringJobThreadMode : undefined;
+      const input = { sessionId, threadMode, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
       const result = action === "list" ? await jobs.list()
         : action === "create" ? await jobs.create(input, args.idempotencyKey as string | undefined)
         : action === "update" ? await jobs.update(id, input)
