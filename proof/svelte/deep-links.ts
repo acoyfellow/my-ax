@@ -11,7 +11,10 @@ export function parseMyAxDeepLink(rawHref: string, currentHref: string): MyAxDee
   try {
     const current = new URL(currentHref);
     const target = new URL(rawHref || "/", current.origin);
-    if (target.origin !== current.origin) return null;
+    // Reject cross-origin AND scheme-relative (//host) targets: the latter
+    // parses same-origin here but re-navigates cross-origin when the returned
+    // href is reparsed against the app origin.
+    if (target.origin !== current.origin || target.pathname.startsWith("//")) return null;
     return {
       href: `${target.pathname}${target.search}${target.hash}`,
       sessionId: target.searchParams.get("session"),
