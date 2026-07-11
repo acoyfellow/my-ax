@@ -21,6 +21,16 @@ test("empty assistant placeholder is skipped", () => {
 test("non-assistant roles are never backfilled here", () => {
   assert.equal(shouldBackfillAssistant(mk({ role: "user", text: "hi" })), false);
   assert.equal(shouldBackfillAssistant(mk({ role: "tool", text: "result" })), false);
+  assert.equal(shouldBackfillAssistant(mk({ role: "system", text: "prompt" })), false);
+});
+
+test("a blank id is never backfilled (id is the idempotency key)", () => {
+  assert.equal(shouldBackfillAssistant(mk({ id: "", text: "reply" })), false);
+  assert.equal(shouldBackfillAssistant(mk({ id: "   ", text: "reply" })), false);
+});
+
+test("whitespace-only reasoning is not a backfill candidate", () => {
+  assert.equal(shouldBackfillAssistant(mk({ text: "", reasoning: " \n\t " })), false);
 });
 
 test("candidates filters to only content-bearing assistant messages", () => {

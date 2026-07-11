@@ -18,6 +18,9 @@ export type AssistantLike = {
  *  reasoning. Empty placeholders (streaming stubs, tool-only steps) are skipped. */
 export function shouldBackfillAssistant(message: AssistantLike): boolean {
   if (message.role !== "assistant") return false;
+  // The id is the idempotency key (uiMessageId) for the D1 insert. A blank id
+  // cannot be de-duplicated, so never back-fill one.
+  if (!message.id || !message.id.trim()) return false;
   return message.text.trim().length > 0 || message.reasoning.trim().length > 0;
 }
 
