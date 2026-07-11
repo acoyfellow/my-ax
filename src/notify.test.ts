@@ -126,3 +126,39 @@ test("safeHref bounds an oversized fallback href", async () => {
     assert.ok((h.attention[0]!.href ?? "").length <= 2048);
   } finally { h.restore(); }
 });
+
+test("a malformed stored subscription is a single deterministic failure, not retried", async () => {
+  // subscription_json getter counts how many times the value is read. A parse
+  // failure must be classified once (failed=1) and NOT re-parsed by the network
+  // retry schedule (which would read it 3x).
+  let reads = 0;
+  const attention: AttentionRow[] = [];
+  const badSub = { endpoint: "https://push.example/bad", get subscription_json() { reads += 1; return "{"; } };
+  const db = {
+    prepare(sql: string) {
+      const q = sql.replace(/\s+/g, " ").trim();
+      let bound: unknown[] = [];
+      const stmt = {
+        bind(...args: unknown[]) { bound = args; return stmt; },
+        async first<T = unknown>() {
+          if (/SELECT COUNT\(\*\) AS count FROM attention_items/.test(q)) return { count: attention.length } as T;
+          return null as T;
+        },
+        async all<T = unknown>() {
+          if (/FROM push_subscriptions WHERE owner_email = \?/.test(q)) return { results: [badSub] as unknown as T[] };
+          return { results: [] as T[] };
+        },
+        async run() {
+          if (/^INSERT INTO attention_items/.test(q)) { attention.push({ id: String(bound[0]), owner_email: String(bound[1]), href: null, dedupe_key: null, created_at: nowSql() }); return { meta: { changes: 1 } }; }
+          return { meta: { changes: 0 } };
+        },
+      };
+      return stmt;
+    },
+  };
+  const env = { DB: db, BRIDGE_BASE_URL: "https://my.ax.example" } as unknown as Env;
+  const result = await notifyOwner(env, OWNER, { ...base });
+  assert.equal(result.failed, 1);
+  assert.equal(result.delivered, 0);
+  assert.equal(reads, 1, "a deterministic parse failure is not retried");
+});
