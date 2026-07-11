@@ -76,9 +76,11 @@ const TONES: Record<NotificationType, NotificationTone> = {
 function typeForAttention(item: AttentionItem): NotificationType {
   const kind = (item.kind ?? "").trim();
   const text = `${item.title ?? ""} ${item.body ?? ""}`;
-  if (isTransientRateLimit(text)) return "retrying";
+  // Explicit kind wins over body text: a job.needs_input whose body merely
+  // mentions a rate limit must still read as "Needs you", not "Retrying".
   if (ACTIONABLE_KINDS.has(kind)) return "needs-you";
   if (DONE_KINDS.has(kind)) return "done";
+  if (isTransientRateLimit(text)) return "retrying";
   // An artifact/widget deep-link ready to open.
   if (typeof item.href === "string" && RUN_RECEIPT_RE.test(item.href)) return "ready";
   return "update";
