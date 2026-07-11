@@ -65,3 +65,12 @@ test("storeInlineMediaArtifact stores screen recordings as owner-scoped video ar
   assert.equal(stored[0]?.kind, "tool-video");
   assert.match(stored[0]?.key ?? "", /^artifacts\/owner@example\.com\/[0-9a-f-]+\.mov$/);
 });
+
+test("assertOwnedUploadKey rejects an arbitrary same-owner key that isn't a canonical upload", () => {
+  assert.throws(() => assertOwnedUploadKey(identity, "uploads/owner@example.com/private/cache.bin"), /upload not found/);
+  assert.throws(() => assertOwnedUploadKey(identity, "uploads/owner@example.com/"), /upload not found/);
+  assert.throws(() => assertOwnedUploadKey(identity, "uploads/owner@example.com/sess/not-a-uuid.png"), /upload not found/);
+  // A legitimately generated key still passes.
+  const good = `uploads/owner@example.com/draft/123e4567-e89b-12d3-a456-426614174000.png`;
+  assert.doesNotThrow(() => assertOwnedUploadKey(identity, good));
+});
