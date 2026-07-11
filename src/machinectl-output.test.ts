@@ -30,3 +30,8 @@ test("machine shell parser handles CRLF and rejects a false (no-boundary) header
     raw: "Exit code: 0oops",
   });
 });
+
+test("machine shell parser rejects an exit code outside the safe-integer range", () => {
+  const content = "Exit code: 9007199254740993\noutput";
+  assert.deepEqual(parseMachineShellContent(content), { stdout: content, exitCode: null, raw: content });
+});
