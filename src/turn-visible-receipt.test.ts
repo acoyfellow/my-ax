@@ -63,3 +63,10 @@ test("visible turn receipts strip leaked think artifacts while preserving the an
   assert.doesNotMatch(stripped, /Need also/);
   assert.doesNotMatch(stripped, /<\/think>/);
 });
+
+test("a truncated (unclosed) <think> block never leaks reasoning into the receipt", () => {
+  assert.equal(
+    stripReasoningArtifacts("Visible answer\n<think>I need to inspect credentials first"),
+    "Visible answer",
+  );
+});
