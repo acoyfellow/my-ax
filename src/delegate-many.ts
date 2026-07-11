@@ -4,9 +4,33 @@ import type { AgentToolFailure, RunAgentToolResult } from "agents/agent-tools";
 import { z } from "zod";
 import { resolveMyAxModel } from "./llm";
 import { DEFAULT_MODEL_ID } from "./models";
+import {
+  DELEGATE_MANY_LIMIT,
+  delegateResultSchema,
+  delegateRunId,
+  runDelegatesSerially,
+  shouldRetryDelegate,
+  taskFingerprint,
+  type DelegateResult,
+} from "./delegate-serial";
 import type { Env } from "./types";
 
-export const DELEGATE_MANY_LIMIT = 2;
+// Pure retry/backpressure policy + serial orchestration live in delegate-serial.ts
+// (no @cloudflare/think import) so they are unit-testable. Re-export the pieces
+// other modules/tests already import from here.
+export {
+  DELEGATE_MANY_LIMIT,
+  delegateResultSchema,
+  delegateRunId,
+  isRateLimitFailure,
+  runDelegatesSerially,
+  shouldRetryDelegate,
+  shouldRetryDelegateAttempt,
+  taskFingerprint,
+  type DelegateResult,
+  type DelegateTaskOutcome,
+} from "./delegate-serial";
+
 export const DELEGATE_TTL_MS = 60 * 60 * 1000;
 export const DELEGATE_TIMEOUT_MS = 120_000;
 
@@ -17,37 +41,12 @@ export const delegateTaskSchema = z.object({
 export const delegateManyInputSchema = z.object({
   tasks: z.array(delegateTaskSchema).min(1).max(DELEGATE_MANY_LIMIT),
 });
-export const delegateResultSchema = z.object({
-  runId: z.string(),
-  taskFingerprint: z.string(),
-  label: z.string().max(80).optional(),
-  status: z.enum(["completed", "error", "aborted", "interrupted"]),
-  summary: z.string().optional(),
-  output: z.unknown().optional(),
-  error: z.string().optional(),
-  attempts: z.number().int().min(1).max(2),
-});
 export const delegateManyOutputSchema = z.object({
   results: z.array(delegateResultSchema).max(DELEGATE_MANY_LIMIT),
   synthesisRequired: z.literal(true),
 });
 export type DelegateManyInput = z.infer<typeof delegateManyInputSchema>;
-export type DelegateResult = z.infer<typeof delegateResultSchema>;
 
-/** Stable, non-secret FNV-1a fingerprint. It is an idempotency key, not authentication. */
-export function taskFingerprint(task: string): string {
-  let hash = 0x811c9dc5;
-  for (const byte of new TextEncoder().encode(task.trim().replace(/\s+/g, " "))) {
-    hash ^= byte;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(16).padStart(8, "0");
-}
-export function delegateRunId(parentName: string, delegationId: string, task: string, index: number): string {
-  // The parent tool-call ID is stable across replay but distinct for a later
-  // delegation of the same text, avoiding stale retained-result reuse.
-  return `delegate:${taskFingerprint(parentName)}:${taskFingerprint(delegationId)}:${index}:${taskFingerprint(task)}`;
-}
 export function asAgentToolFailure(result: RunAgentToolResult): AgentToolFailure | undefined {
   if (result.status === "completed") return undefined;
   return {
@@ -57,9 +56,6 @@ export function asAgentToolFailure(result: RunAgentToolResult): AgentToolFailure
     retryable: result.status === "interrupted",
     ...(result.status === "interrupted" ? { reason: result.reason, childStillRunning: result.childStillRunning } : {}),
   };
-}
-export function shouldRetryDelegate(failure: AgentToolFailure, attempts: number): boolean {
-  return failure.status === "interrupted" && failure.retryable && !failure.childStillRunning && attempts < 2;
 }
 
 /** A run-scoped read-only Think facet. It deliberately has no delegation tool. */
@@ -92,27 +88,31 @@ export interface DelegateParent {
 
 export function createDelegateManyTool(parent: DelegateParent) {
   return tool({
-    description: "Delegate one or two independent read-only analysis tasks concurrently. The parent must synthesize the retained child evidence.",
+    // Runs the tasks SERIALLY (not concurrently): two child inferences hitting
+    // the shared per-minute cap at once was the observed 3021 double-failure.
+    // On 3021 the remaining task is deferred (backpressure), not retried.
+    description: "Delegate one or two independent read-only analysis tasks (run sequentially to respect shared inference limits). The parent must synthesize the retained child evidence.",
     inputSchema: delegateManyInputSchema,
     outputSchema: delegateManyOutputSchema,
     execute: async (input, context) => {
       const parsed = delegateManyInputSchema.parse(input);
       const runIds = parsed.tasks.map(({ task }, index) => delegateRunId(parent.name, context.toolCallId, task, index));
-      const results = await Promise.all(parsed.tasks.map(async ({ task }, index): Promise<DelegateResult> => {
-        let attempts = 0;
-        let result: RunAgentToolResult<{ runId: string; summary: string }>;
-        do {
-          attempts++;
-          const timeout = AbortSignal.timeout(DELEGATE_TIMEOUT_MS);
-          const signal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeout]) : timeout;
-          result = await parent.runAgentTool(ReadOnlyDelegateAgent, {
-            input: { task }, runId: runIds[index], displayOrder: index, signal, inputPreview: { task },
-          });
-          const failure = asAgentToolFailure(result);
-          if (!failure || !shouldRetryDelegate(failure, attempts)) break;
-        } while (true);
-        return { runId: result.runId, taskFingerprint: taskFingerprint(task), status: result.status, summary: result.summary, output: result.output, error: result.error, attempts, label: parsed.tasks[index].label };
-      }));
+      const results = await runDelegatesSerially(parsed.tasks, async (index) => {
+        const { task } = parsed.tasks[index];
+        const timeout = AbortSignal.timeout(DELEGATE_TIMEOUT_MS);
+        const signal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeout]) : timeout;
+        const result = await parent.runAgentTool(ReadOnlyDelegateAgent, {
+          input: { task }, runId: runIds[index], displayOrder: index, signal, inputPreview: { task },
+        });
+        return {
+          runId: result.runId,
+          status: result.status,
+          summary: result.summary,
+          output: result.output,
+          error: result.error,
+          failure: asAgentToolFailure(result),
+        };
+      });
       await parent.notifyDelegateManyComplete?.(results);
       await parent.clearAgentToolRuns({ olderThan: Date.now() - DELEGATE_TTL_MS, status: ["completed", "error", "aborted", "interrupted"] });
       return { results, synthesisRequired: true as const };
