@@ -30,3 +30,24 @@ test("failed delegation receipt is truthful and actionable", () => {
   assert.match(notification.body, /1\/2 delegated tasks did not complete/);
   assert.match(notification.body, /next action/);
 });
+
+test("a deferred (rate-limited) task is benign: complete receipt, not 'needs review'", () => {
+  const notification = delegateCompletionNotification({
+    sessionId: "session-3",
+    results: [completed, { ...completed, runId: "run-2", status: "deferred", error: "Deferred: rate limit" }],
+  });
+  assert.equal(notification.kind, "delegate.complete", "deferred must not raise a needs-input alarm");
+  assert.equal(notification.title, "Delegation complete");
+  assert.match(notification.body, /1 delegated task completed/);
+  assert.match(notification.body, /1 deferred on an inference rate limit and will re-run/);
+});
+
+test("a real failure alongside a deferred task stays actionable and notes the deferral", () => {
+  const notification = delegateCompletionNotification({
+    sessionId: "session-4",
+    results: [{ ...completed, runId: "run-1", status: "error", error: "boom" }, { ...completed, runId: "run-2", status: "deferred" }],
+  });
+  assert.equal(notification.kind, "delegate.needs_input");
+  assert.match(notification.body, /1\/2 delegated tasks did not complete/);
+  assert.match(notification.body, /1 deferred on an inference rate limit/);
+});
