@@ -27,7 +27,13 @@ function ownerEmail(value: string): string {
 }
 
 function cleanStr(value: unknown, max: number): string {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+  if (typeof value !== "string") return "";
+  // Collapse whitespace incl. U+200B ZERO WIDTH SPACE (not matched by \s), so a
+  // field that is only invisible characters normalizes to empty and fails the
+  // required-field check. Slice by code point, not UTF-16 unit, so truncation
+  // never severs an astral character into a lone surrogate.
+  const collapsed = value.replace(/[\s\u200B]+/g, " ").trim();
+  return Array.from(collapsed).slice(0, max).join("");
 }
 
 /**
