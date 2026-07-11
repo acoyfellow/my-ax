@@ -17,3 +17,11 @@ test("does not classify ordinary failures as transient rate limits", () => {
   assert.equal(isTransientRateLimit(null), false);
   assert.equal(isTransientRateLimit(undefined), false);
 });
+
+test("word boundaries: substrings that merely contain 'rate limit'/'overloaded' are not transient", () => {
+  assert.equal(isTransientRateLimit("validation failed: prorate_limit must be positive"), false);
+  assert.equal(isTransientRateLimit("field overloadedFlag is invalid"), false);
+  // Documented genuine forms still classify as transient.
+  assert.equal(isTransientRateLimit("rate_limit exceeded"), true);
+  assert.equal(isTransientRateLimit("model overloaded"), true);
+});
