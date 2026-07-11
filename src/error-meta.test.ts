@@ -36,3 +36,30 @@ test("errorConversationMeta survives an unserializable thrown value", () => {
   cause.self = cause;
   assert.equal(errorConversationMeta(new Error("boom", { cause })).errorCause, "[unserializable error cause]");
 });
+
+test("a revoked proxy is classified as a non-Error value, not re-thrown", () => {
+  const top = Proxy.revocable({}, {});
+  top.revoke();
+  assert.deepEqual(errorConversationMeta(top.proxy), {
+    errorName: "object",
+    errorMessage: "[unserializable thrown value]",
+  });
+  const nested = Proxy.revocable({}, {});
+  nested.revoke();
+  assert.equal(
+    errorConversationMeta(new Error("boom", { cause: nested.proxy })).errorCause,
+    "[unserializable error cause]",
+  );
+});
+
+test("a throwing stack accessor does not escape the reporter", () => {
+  const error = new Error("boom");
+  Object.defineProperty(error, "stack", { get() { throw new Error("stack trap"); } });
+  assert.deepEqual(errorConversationMeta(error), { errorName: "Error", errorMessage: "boom" });
+  const cause = new Error("inner");
+  Object.defineProperty(cause, "stack", { get() { throw new Error("cause stack trap"); } });
+  assert.deepEqual(
+    errorConversationMeta(new Error("outer", { cause })).errorCause,
+    { name: "Error", message: "inner" },
+  );
+});
