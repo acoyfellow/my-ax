@@ -30,14 +30,20 @@ export function stripReasoningArtifacts(content: string): string {
 export function visibleAssistantContent(input: { status: string; content: string; error?: string | null; ownerNotified?: boolean }): string {
   const content = stripReasoningArtifacts(input.content);
   if (content.trim()) return content;
-  if (input.status === "error" && input.error?.trim()) return input.error;
+  if (input.status === "error") {
+    // A terminal error must always yield an owner-visible explanation. The
+    // upstream error can be empty/whitespace/null (e.g. a thrown non-Error or a
+    // timeout with no message), so fall back to a fixed sentence rather than
+    // returning a blank receipt the owner can't act on.
+    return input.error?.trim() || "The agent turn failed without a visible error message.";
+  }
   if (input.status === "completed" && input.ownerNotified) {
     return "The agent turn completed after sending an owner notification. Review the notification or conversation for the result.";
   }
   if (input.status === "completed") {
     return "The agent turn completed without a visible response. Review the conversation and retry or steer with a more explicit instruction.";
   }
-  return input.error || "";
+  return input.error?.trim() || "";
 }
 
 export function visibleCompletionNotificationBody(content: string): string {
