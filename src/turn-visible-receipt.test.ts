@@ -70,3 +70,14 @@ test("a truncated (unclosed) <think> block never leaks reasoning into the receip
     "Visible answer",
   );
 });
+
+test("an error status with a blank/null error still yields a visible fallback", () => {
+  assert.equal(
+    visibleAssistantContent({ status: "error", content: "", error: " \n\t " }),
+    "The agent turn failed without a visible error message.",
+  );
+  assert.equal(
+    visibleAssistantContent({ status: "error", content: "", error: null }),
+    "The agent turn failed without a visible error message.",
+  );
+});
