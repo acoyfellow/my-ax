@@ -30,3 +30,10 @@ test("warm PWA and service-worker launches deliver the target instead of reloadi
   assert.match(worker, /existing\.navigate\(absolute\)/);
   assert.doesNotMatch(worker, /existing\.navigate\(href\)/);
 });
+
+test("rejects a scheme-relative (//host) target that would re-navigate cross-origin", () => {
+  assert.equal(parseMyAxDeepLink("https://my.ax.example//evil.example/phish", current), null);
+  assert.equal(parseMyAxDeepLink("//evil.example/phish", current), null);
+  // A normal same-origin path still parses.
+  assert.equal(parseMyAxDeepLink("/?session=abc", current)?.sessionId, "abc");
+});
