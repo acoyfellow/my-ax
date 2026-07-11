@@ -18,22 +18,29 @@ export async function recordDecisionResponse(
   const eventId = `evt-${crypto.randomUUID()}`;
   const eventInput = { ...input, eventId, now };
   await store.insertEvent(eventInput);
+  let completed = false;
   try {
-    const completed = await store.completeRun(input);
-    if (!completed) {
-      await store.deleteEvent(eventInput);
-      return false;
-    }
-    try {
-      await resume();
-    } catch (error) {
-      await store.reopenRun(input);
-      await store.deleteEvent(eventInput);
-      throw error;
-    }
-    return true;
+    completed = await store.completeRun(input);
   } catch (error) {
+    // completeRun itself failed: the claim never took, so drop the event.
     await store.deleteEvent(eventInput).catch(() => undefined);
     throw error;
   }
+  if (!completed) {
+    await store.deleteEvent(eventInput);
+    return false;
+  }
+  try {
+    await resume();
+  } catch (error) {
+    // The run is claimed/completed. Only remove the answer event once the
+    // completion is CONFIRMED rolled back — otherwise a failed reopen would
+    // leave a completed run with no answer. And delete exactly once (the old
+    // outer catch re-deleted after this path already had).
+    const reopened = await store.reopenRun(input).catch(() => false);
+    if (!reopened) throw new Error("Failed to reopen decision after resume error", { cause: error });
+    await store.deleteEvent(eventInput);
+    throw error;
+  }
+  return true;
 }
