@@ -72,7 +72,10 @@ export function formatRenderedAttentionSessionSummary(rows: Array<{ sessionId: s
 
 export function normalizeRenderedAttentionSourceHref(href: unknown): string {
   const value = String(href ?? "").trim();
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/";
+  // Only allow root-relative paths. Reject protocol-relative "//host" AND
+  // "/\\host" — browsers normalize the backslash so /\evil.example resolves to
+  // a cross-origin URL, defeating the internal-path guard (open redirect).
+  return value.startsWith("/") && value[1] !== "/" && value[1] !== "\\" ? value : "/";
 }
 
 export function formatRenderedAttentionListItem(item: { id: string; kind: string | null; title: string; body: string; href: string | null; created_at: string }): string {
