@@ -3,7 +3,8 @@ import test from "node:test";
 import { completeRecurringJobRun } from "./recurring-job-run";
 import type { Env } from "./types";
 
-function envMock() {
+function envMock(opts: { jobUpdateChanges?: number } = {}) {
+  const jobUpdateChanges = opts.jobUpdateChanges ?? 1;
   const calls: { sql: string; binds: unknown[] }[] = [];
   const inserted: { title: string; body: string; href: string; kind: string }[] = [];
   const env = {
@@ -18,6 +19,7 @@ function envMock() {
                 if (sql.includes("INSERT INTO attention_items")) {
                   inserted.push({ title: String(binds[4]), body: String(binds[5]), href: String(binds[6]), kind: String(binds[3]) });
                 }
+                if (sql.includes("UPDATE jobs SET")) return { meta: { changes: jobUpdateChanges } };
                 return {};
               },
               async first() {
@@ -120,4 +122,20 @@ test("a non-rate-limit error still pushes a normal failure receipt", async () =>
   });
   assert.equal(inserted[0]?.kind, "job.complete");
   assert.match(inserted[0]?.title ?? "", /failed/i);
+});
+
+test("completeRecurringJobRun emits nothing when the owner-qualified UPDATE matched no row", async () => {
+  const { env, calls, inserted } = envMock({ jobUpdateChanges: 0 });
+  await completeRecurringJobRun(env, {
+    jobId: "job-1",
+    ownerEmail: "bob@example.com",
+    sessionId: "session-alice",
+    sourceSessionId: "session-alice",
+    threadMode: "same_session",
+    ranAt: new Date("2026-06-24T12:00:00.000Z"),
+    nextRunAt: "2026-06-24T13:00:00.000Z",
+    jobName: "Alice's payroll job",
+  });
+  assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET")), "the UPDATE is still attempted");
+  assert.deepEqual(inserted, [], "no receipt/notification for an unpersisted terminal run");
 });
