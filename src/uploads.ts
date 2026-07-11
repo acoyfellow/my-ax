@@ -14,9 +14,16 @@ function uploadsBucket(env: Env): R2Bucket {
   return bucket;
 }
 
+// Canonical upload keys are exactly `uploads/<owner>/<one session segment>/<uuid>.<ext>`
+// (see storeImageUpload). Guarding only the owner prefix let any same-owner R2
+// key through (e.g. uploads/<owner>/private/cache.bin, or a bare prefix), so we
+// pin the full structure and reject anything else.
+const UPLOAD_KEY_SUFFIX_RE = /^[^/]+\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:png|jpg|jpeg|webp|gif)$/i;
+
 export function assertOwnedUploadKey(identity: AccessIdentity, key: string): void {
   const prefix = `uploads/${identity.email.toLowerCase()}/`;
   if (!key.startsWith(prefix) || key.includes("..")) throw new Error("upload not found");
+  if (!UPLOAD_KEY_SUFFIX_RE.test(key.slice(prefix.length))) throw new Error("upload not found");
 }
 
 function extForType(type: string): string {
