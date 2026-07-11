@@ -57,3 +57,10 @@ test("pending-first payload with no binding is backward-compatible", () => {
   assert.equal(pendingFirstBelongsHere(undefined, "S1"), true);
   assert.equal(pendingFirstBelongsHere("", "S1"), true);
 });
+
+test("a latch missing clientMsgId is not restorable (fail closed, sound narrowing)", () => {
+  const now = 1_000_000;
+  assert.equal(activeTurnIsRestorable({ id: "R1", at: now, sessionId: "S1" }, "S1", now), false);
+  // A complete latch for this session is still restorable.
+  assert.equal(activeTurnIsRestorable({ id: "R1", clientMsgId: "c1", at: now, sessionId: "S1" }, "S1", now), true);
+});
