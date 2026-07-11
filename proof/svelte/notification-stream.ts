@@ -47,7 +47,10 @@ const ACTIONABLE_KINDS = new Set([
   "session.dead", "job.needs_input", "delegate.needs_input", "deploy.gate", "recipe.approval",
 ]);
 const DONE_KINDS = new Set(["job.complete", "delegate.complete"]);
-const RUN_RECEIPT_RE = /^\/runs\/[^/?#]+$/;
+// Accept an optional query/fragment: the UI opens receipts by URL.pathname, so
+// /runs/r1?tab=log and /runs/r1#output are receipts too and must get a View
+// action, not fall through to a plain "Update".
+const RUN_RECEIPT_RE = /^\/runs\/[^/?#]+(?:[?#].*)?$/;
 
 function toEpoch(iso: string | null | undefined): number {
   if (!iso) return 0;
