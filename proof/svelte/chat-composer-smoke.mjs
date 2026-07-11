@@ -59,17 +59,23 @@ assertNotIncludes(chat, 'Authorization failed for ${connector}${reason', "OAuth 
 assertIncludes(chatPage, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled");
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");
 assertNotIncludes(appCss, '#theme-cycle', "global CSS must not define stale #theme-cycle selectors");
-// Composer safe-area padding is iOS/standalone/touch-only, never desktop.
-assertIncludes(appCss, '@media (display-mode: standalone), (pointer: coarse) {', "composer safe-area buffer must be gated to standalone/touch contexts");
-assertIncludes(appCss, 'padding-bottom: calc(env(safe-area-inset-bottom) + 45px);', "iOS home-indicator clearance must be preserved inside the gate");
+// Robust app frame (device-agnostic; no per-device padding hacks).
+// 1) The shell is a fixed, full-viewport box that can't be scroll-offset.
+assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:fixed so it cannot be scroll-offset");
+assertIncludes(appCss, 'height: 100dvh;', "app-viewport height tracks the dynamic viewport (URL bar + keyboard)");
 {
-  // The safe-area buffer must live INSIDE the responsive gate, not as an
-  // unconditional rule that over-pads desktop.
-  const gateIndex = appCss.indexOf('@media (display-mode: standalone), (pointer: coarse) {');
-  const bufferIndex = appCss.indexOf('padding-bottom: calc(env(safe-area-inset-bottom) + 45px);');
-  if (!(gateIndex >= 0 && bufferIndex > gateIndex)) {
-    throw new Error("composer safe-area padding must be nested within the standalone/coarse media gate");
+  const av = appCss.indexOf('.app-viewport {');
+  const block = appCss.slice(av, av + 220);
+  if (!/position:\s*fixed/.test(block) || !/inset:\s*0/.test(block) || !/height:\s*100dvh/.test(block)) {
+    throw new Error("the .app-viewport frame must be position:fixed; inset:0; height:100dvh");
   }
 }
+// 2) The chat mount fills its slot so the composer footer sits at the bottom.
+assertIncludes(appCss, '#svelte-hono-chat-root {', "chat mount must be made a filling flex child (unbroken h-full chain)");
+// 3) Composer padding is a single device-adaptive rule: max(base, real inset).
+//    0 on desktop / macOS PWA (no curvature), the true inset on notched iOS.
+assertIncludes(appCss, 'padding-bottom: max(0.625rem, env(safe-area-inset-bottom));', "composer padding must be a single max(base, env-inset) rule");
+assertNotIncludes(appCss, 'env(safe-area-inset-bottom) + 45px', "the hardcoded +45px composer hack must be gone");
+assertNotIncludes(appCss, '@media (display-mode: standalone), (pointer: coarse) {', "composer padding must not be gated on display-mode/pointer heuristics");
 
-console.log("✓ chat composer smoke: action button is Send or Stop; connector reauth waits for owner CTA");
+console.log("✓ chat composer smoke: fixed frame, filling chat mount, device-adaptive composer padding");

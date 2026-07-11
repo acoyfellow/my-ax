@@ -707,14 +707,41 @@
 }
 
 
-/* Stable iOS Safari/PWA shell. Keep the app in normal flow on the smallest
- * viewport so the footer is visible on initial load; focusout resets any iOS
- * root scroll left behind after keyboard dismissal. */
+/* Robust app frame — one model for every device (desktop, macOS/Windows PWA,
+ * iOS/Android). The shell is pinned to the visual viewport with position:fixed
+ * inset:0 so it can NEVER be scroll-offset: previously the body kept a stray
+ * scrollTop (e.g. 57px from a skip-link/mount sibling or a restored scroll
+ * position) which pushed the fixed-height footer/composer off-screen. Height is
+ * 100dvh so it follows the mobile URL bar and, with
+ * interactive-widget=resizes-content, the on-screen keyboard. No JS scroll
+ * resets and no per-device padding hacks are needed. */
+html {
+  height: 100%;
+}
 .app-viewport {
-  min-height: 100svh;
-  height: 100svh;
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
+}
+/* Fallback for engines without dvh: svh is the smallest stable viewport. */
+@supports not (height: 100dvh) {
+  .app-viewport { height: 100svh; }
+}
+
+/* The chat is hydrated into a generic svelte-hono mount div
+ * (#svelte-hono-chat-root). That wrapper would otherwise be a block box that
+ * breaks the height:100% (h-full) chain between the fixed frame column and the
+ * chat's own header/scroll/footer column — leaving the composer content-sized
+ * and floating mid-screen. Make the mount a flex child that fills its slot so
+ * the composer footer always sits at the frame bottom. */
+#svelte-hono-chat-root {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* apple-mobile-web-app-status-bar-style=black-translucent lets the app draw
@@ -731,27 +758,20 @@
 
 /* Composer footer bottom padding.
  *
- * Desktop keeps the tight, uniform base padding from the `py-2.5 sm:py-3`
- * utility (no artificial bottom gap). The extra home-indicator buffer is
- * applied ONLY where a real safe-area inset can exist: an installed/standalone
- * PWA, or a touch (coarse-pointer) device — i.e. iPhone/iPad installs. This
- * fixes the long-standing desktop over-padding without ever removing the iOS
- * curvature clearance. `@supports` guards browsers that don't understand the
- * env() function at all.
+ * ONE rule for every device: keep the tight base padding, and add ONLY the
+ * real home-indicator inset when the device actually reports one. env(
+ * safe-area-inset-bottom) is 0 on desktop and on macOS/Windows installed PWAs
+ * (no curvature), and ~34px on a notched iPhone — so `max(base, inset)` gives
+ * a clean tight footer everywhere and the exact curvature clearance on iOS,
+ * with no display-mode / pointer heuristics and no hardcoded +45px hack.
  */
-@supports (padding: env(safe-area-inset-bottom)) {
-  @media (display-mode: standalone), (pointer: coarse) {
-    .safe-area-composer {
-      /* Clear the iPhone's curved home-indicator area while the keyboard is shut. */
-      padding-bottom: calc(env(safe-area-inset-bottom) + 45px);
-    }
-
-    /* The keyboard already provides its own inset. Remove the entire footer
-     * buffer while it is visible so the composer sits directly above it. */
-    .keyboard-open .safe-area-composer {
-      padding-bottom: 0;
-    }
-  }
+.safe-area-composer {
+  padding-bottom: max(0.625rem, env(safe-area-inset-bottom));
+}
+/* The on-screen keyboard already occupies the bottom inset; drop the buffer to
+ * the tight base so the composer sits directly on the keyboard. */
+.keyboard-open .safe-area-composer {
+  padding-bottom: 0.625rem;
 }
 
 
