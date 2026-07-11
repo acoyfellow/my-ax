@@ -56,6 +56,14 @@ test("a 3021 is backpressure: shouldRetryDelegateAttempt NEVER retries it in-cal
   assert.equal(shouldRetryDelegate(interrupted, 1), true);
   assert.equal(shouldRetryDelegateAttempt(interrupted, 1), true);
   assert.equal(shouldRetryDelegateAttempt(interrupted, 2), false);
+
+  // Unknown liveness (childStillRunning undefined) must NOT retry: a
+  // still-running child would be duplicated.
+  const unknownLiveness = { ok: false, status: "interrupted", error: "deploy", retryable: true } as AgentToolFailure;
+  assert.equal(shouldRetryDelegate(unknownLiveness, 1), false);
+  // Explicitly-still-running also never retries.
+  const stillRunning = failureFor("interrupted", "deploy", true);
+  assert.equal(shouldRetryDelegate(stillRunning, 1), false);
   assert.equal(shouldRetryDelegateAttempt(undefined, 1), false);
 });
 
