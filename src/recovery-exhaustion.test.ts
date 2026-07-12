@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { recoveryExhaustionContract } from "./recovery-exhaustion-contract";
+import { recoveryExhaustionContract, sequenceRecoveryExhaustion } from "./recovery-exhaustion-contract";
 
 test("recovery exhaustion contract is terminal, actionable, and owner-session linked", () => {
   assert.deepEqual(recoveryExhaustionContract("session/a", {
@@ -23,4 +23,25 @@ test("controlled proof labels the receipt truthfully", () => {
   });
   assert.equal(contract.notification.title, "Recovery receipt proof");
   assert.match(contract.notification.body, /Controlled proof/);
+});
+
+test("sequenceRecoveryExhaustion notifies only AFTER persistence resolves", async () => {
+  const order: string[] = [];
+  await sequenceRecoveryExhaustion(
+    async () => { order.push("log"); },
+    async () => { order.push("update"); },
+    async () => { order.push("notify"); },
+  );
+  assert.equal(order[order.length - 1], "notify", "notify runs last");
+  assert.ok(order.includes("log") && order.includes("update"));
+});
+
+test("sequenceRecoveryExhaustion does NOT notify when persistence throws", async () => {
+  let notified = false;
+  await assert.rejects(() => sequenceRecoveryExhaustion(
+    async () => {},
+    async () => { throw new Error("d1 unavailable"); },
+    async () => { notified = true; },
+  ));
+  assert.equal(notified, false, "no notification for an unpersisted terminal state");
 });
