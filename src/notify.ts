@@ -80,6 +80,23 @@ async function rejectedReason(response: Response): Promise<string> {
 
 const MAX_HREF_LENGTH = 2048;
 
+// Web Push record budget (mirrors push.ts:87 — a 4080-byte record incl. the
+// 1-byte padding delimiter, so JSON payload must be <= 4079 bytes).
+export const MAX_PUSH_PAYLOAD_BYTES = 4_079;
+
+/** Include the optional, caller-supplied sessionId ONLY when the full serialized
+ *  payload stays within the push record budget; otherwise omit it so an oversized
+ *  id cannot make every device's delivery throw. Never truncates the id. Pure. */
+export function boundedPushPayload<T extends Record<string, unknown>>(
+  base: T,
+  sessionId: string | undefined,
+): T | (T & { sessionId: string }) {
+  if (typeof sessionId !== "string") return base;
+  const withSession = { ...base, sessionId };
+  const bytes = new TextEncoder().encode(JSON.stringify(withSession)).length;
+  return bytes <= MAX_PUSH_PAYLOAD_BYTES ? withSession : base;
+}
+
 function safeHref(notification: OwnerNotification, baseUrl: string): string {
   const fallbackCandidate = notification.sessionId
     ? `/?session=${encodeURIComponent(notification.sessionId)}`
@@ -154,16 +171,22 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
       : notification.kind === "delegate.complete" || notification.kind === "delegate.needs_input"
         ? [{ action: "open", title: "Open delegation" }, { action: "attention", title: "Inbox" }]
         : [{ action: "open", title: "Open" }, { action: "attention", title: "Inbox" }];
-  const payload = {
+  const basePayload = {
     title: cleanText(notification.title, 80) || "my · ax",
     body: cleanText(notification.body, 300),
     href,
     kind: notification.kind,
-    sessionId: notification.sessionId,
     attentionId,
     unread: Number(unreadRow?.count ?? 1),
     actions,
   };
+  // sessionId is optional client metadata and is caller-supplied (unbounded).
+  // Include it ONLY when the full serialized payload stays within the Web Push
+  // record budget; otherwise omit it so an oversized id cannot make EVERY
+  // device's delivery throw "Push payload is too large". Never truncate it into
+  // a different (wrong) session id. The bytes budget mirrors push.ts:87
+  // (4080-byte record incl. the 1-byte padding delimiter).
+  const payload = boundedPushPayload(basePayload, notification.sessionId);
   // Deliver to every device concurrently. Each send has a timeout and retries
   // only on transient network errors; provider HTTP rejections are classified,
   // not retried. Replaces a sequential try/catch loop with no timeout/retry.
