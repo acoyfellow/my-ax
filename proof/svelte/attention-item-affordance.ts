@@ -34,8 +34,12 @@ const ACTIONABLE_KINDS = new Set([
 export function classifyAttentionItem(item: AttentionItemInput): AttentionAffordance {
   const kind = (item.kind ?? "").trim();
   const text = `${item.title ?? ""} ${item.body ?? ""}`;
-  // A transient rate-limit heads-up is benign + self-healing.
-  if (isTransientRateLimit(text)) return { tone: "retrying", badge: "Retrying" };
+  // Explicit actionable kind wins over body text, matching notification-stream's
+  // typeForAttention: a job.needs_input / deploy.gate whose body merely mentions
+  // a rate limit still demands the owner act, so it reads "Needs you" — NOT the
+  // benign self-healing "Retrying". (Owner decision 2026-07-12.)
   if (ACTIONABLE_KINDS.has(kind)) return { tone: "attention", badge: "Needs you" };
+  // A transient rate-limit heads-up on a non-actionable kind is benign + self-healing.
+  if (isTransientRateLimit(text)) return { tone: "retrying", badge: "Retrying" };
   return { tone: "info", badge: null };
 }
