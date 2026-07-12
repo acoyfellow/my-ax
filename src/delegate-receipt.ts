@@ -20,7 +20,7 @@ export function delegateCompletionNotification(input: {
   const title = actionable.length ? "Delegation needs review" : "Delegation complete";
   const deferredNote = deferred.length ? ` ${deferred.length} deferred on an inference rate limit; re-run when it clears.` : "";
   const body = actionable.length
-    ? `${actionable.length}/${input.results.length} delegated task${input.results.length === 1 ? "" : "s"} did not complete.${deferredNote} Open the conversation for the parent synthesis and next action.`
+    ? `${actionable.length}/${input.results.length} delegated task${input.results.length === 1 ? "" : "s"} need review.${deferredNote} Open the conversation for the parent synthesis and next action.`
     : `${completed} delegated task${completed === 1 ? "" : "s"} completed.${deferredNote} Open the conversation for the parent synthesis and evidence.`;
   return {
     kind: (actionable.length ? "delegate.needs_input" : "delegate.complete") as NotificationKind,
@@ -32,6 +32,12 @@ export function delegateCompletionNotification(input: {
     // initial error receipt suppress the later success (or vice-versa). Fold
     // the outcome (status + attempts) into the key so a materially different
     // replay still notifies, while identical re-emits stay deduplicated.
-    dedupeKey: `delegate:${input.sessionId}:${input.results.map((result) => `${result.runId}#${result.status}#${result.attempts ?? 0}`).join(":")}`,
+    // Structured (JSON) serialization, not delimiter-joined strings: a session
+    // id or run id that itself contains ':'/'#' must not collide with a
+    // different (sessionId, runId) split that happens to join to the same text.
+    dedupeKey: `delegate:${JSON.stringify([
+      input.sessionId,
+      input.results.map((result) => [result.runId, result.status, result.attempts ?? 0]),
+    ])}`,
   };
 }
