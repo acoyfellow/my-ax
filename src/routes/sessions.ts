@@ -10,7 +10,7 @@ import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
-import { reorderPinnedSession, setSessionPinned } from "../session-pinning";
+import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
 
 export function registerSessionRoutes(app: Hono<AppEnv>) {
   // ─── Session lifecycle ─────────────────────────────────────────────────────
@@ -147,6 +147,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!result) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
       return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
     } catch (err) {
+      if (err instanceof PinLimitError) {
+        return c.json<ApiResponse>({ ok: false, command, error: { code: err.code, message: err.message }, next_actions: [] }, 409);
+      }
       return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
     }
   });
