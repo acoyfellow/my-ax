@@ -38,14 +38,14 @@ test("repeated midpoint insertion stays strictly ordered (no collisions)", () =>
   }
 });
 
-test("spread(n) returns n strictly increasing valid ranks", () => {
-  const ranks = spread(50);
-  assert.equal(ranks.length, 50);
+test("spread(n) returns n strictly increasing valid ranks (incl. past the old 385 one-sided limit)", () => {
+  const ranks = spread(385);
+  assert.equal(ranks.length, 385);
   for (let i = 0; i < ranks.length; i++) {
     assert.ok(isValidRank(ranks[i]), `rank ${i} invalid: ${ranks[i]}`);
     if (i > 0) assert.ok(ranks[i - 1] < ranks[i], `not increasing at ${i}: ${ranks[i - 1]} !< ${ranks[i]}`);
   }
-  assert.deepEqual(spread(50), ranks, "spread must be deterministic");
+  assert.deepEqual(spread(385), ranks, "spread must be deterministic");
   assert.deepEqual(spread(0), []);
 });
 
@@ -71,6 +71,11 @@ test("between rejects inverted bounds", () => {
   const b = between(a, null);
   assert.throws(() => between(b, a), /expected a < b/);
   assert.throws(() => between(a, a), /expected a < b/);
+});
+
+test("between rejects malformed boundary ranks (fail closed)", () => {
+  assert.throws(() => between("A~", "B"), /invalid lower rank/);
+  assert.throws(() => between("A", "A!"), /invalid upper rank/);
 });
 
 test("isValidRank rejects malformed values", () => {
