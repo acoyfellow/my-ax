@@ -2,7 +2,7 @@ export function parseMachineShellContent(content: string): { stdout: string; exi
   // Require the exit-code number to be followed by a real line boundary (CRLF/LF)
   // or end-of-input: "Exit code: 0oops" is ordinary content, not a header, and
   // a leading \r must be consumed so CRLF output doesn't leak "\r\n" into stdout.
-  const match = content.match(/^Exit code:[ \t]*(-?\d+)(?:\r?\n|$)/);
+  const match = content.match(/^Exit code:[ \t]*(-?\d+)[ \t]*(?:\r?\n|$)/);
   if (!match) return { stdout: content, exitCode: null, raw: content };
   // Reject an exit code outside the safe-integer range: Number() would round it
   // (or return Infinity), so we'd report a code that was never sent. Treat the
