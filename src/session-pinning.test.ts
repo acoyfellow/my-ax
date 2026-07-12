@@ -7,6 +7,8 @@ import {
   rankForNewPin,
   setSessionPinned,
   reorderPinnedSession,
+  MAX_PINNED,
+  PinLimitError,
   type PinnedRow,
 } from "./session-pinning";
 
@@ -160,4 +162,16 @@ test("last-writer-wins: two moves of the same row leave the last rank", async ()
 test("computeMoveRank: moving a row before itself is a stable no-op", () => {
   const list = ordered(["a", "A"], ["b", "M"], ["c", "Z"]);
   assert.equal(computeMoveRank(list, "b", "b"), "M");
+});
+
+test("setSessionPinned fails closed at MAX_PINNED for a new pin, but re-pin is idempotent", async () => {
+  const rows: Row[] = Array.from({ length: MAX_PINNED }, (_, i) => ({
+    id: `p${i}`, owner_email: OWNER, pinned: 1, pin_rank: String.fromCharCode(65 + i), updated_at: `t${i}`,
+  }));
+  rows.push({ id: "new", owner_email: OWNER, pinned: 0, pin_rank: null, updated_at: "tn" });
+  const { env } = makeEnv(rows);
+  await assert.rejects(() => setSessionPinned(env, OWNER, "new", true), (e) => e instanceof PinLimitError && e.limit === MAX_PINNED);
+  // Re-pinning one that is already pinned does not trip the cap.
+  const again = await setSessionPinned(env, OWNER, "p0", true);
+  assert.equal(again?.pinned, true);
 });
