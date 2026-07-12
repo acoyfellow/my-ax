@@ -162,3 +162,14 @@ test("a malformed stored subscription is a single deterministic failure, not ret
   assert.equal(result.delivered, 0);
   assert.equal(reads, 1, "a deterministic parse failure is not retried");
 });
+
+test("boundedPushPayload includes a normal sessionId but omits an oversized one", async () => {
+  const { boundedPushPayload, MAX_PUSH_PAYLOAD_BYTES } = await import("./notify");
+  const basePayload = { title: "t", body: "b", href: "/", kind: "job.complete", attentionId: null, unread: 1, actions: [] };
+  const ok = boundedPushPayload(basePayload, "session-123") as Record<string, unknown>;
+  assert.equal(ok.sessionId, "session-123", "a normal id is kept");
+  const huge = boundedPushPayload(basePayload, "x".repeat(100_000)) as Record<string, unknown>;
+  assert.equal("sessionId" in huge, false, "an oversized id is omitted, not truncated");
+  const bytes = new TextEncoder().encode(JSON.stringify(huge)).length;
+  assert.ok(bytes <= MAX_PUSH_PAYLOAD_BYTES, `payload stays within budget: ${bytes}`);
+});
