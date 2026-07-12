@@ -39,6 +39,16 @@ export function isValidRank(value: unknown): value is string {
  *   between(a, b)        -> a key between a and b
  */
 export function between(a: string | null, b: string | null): string {
+  // Reject malformed boundary ranks BEFORE computing a midpoint. digit() maps
+  // any character outside RANK_DIGITS to 0, so a boundary like "A~" or "A!"
+  // would otherwise be silently misread and yield a key that violates the
+  // between-a-and-b ordering contract. Only narrows accepted inputs.
+  if (a !== null && !isValidRank(a)) {
+    throw new Error(`fractional-index: invalid lower rank ${JSON.stringify(a)}`);
+  }
+  if (b !== null && !isValidRank(b)) {
+    throw new Error(`fractional-index: invalid upper rank ${JSON.stringify(b)}`);
+  }
   // Route every result through a single output guard: a valid boundary rank
   // (e.g. "0"*63 + "1") can force a 65-char key that isValidRank() rejects.
   // Fail closed with an explicit exhaustion error so the caller can rebalance
@@ -104,11 +114,19 @@ export function rankBefore(first: string | null): string {
  */
 export function spread(count: number): string[] {
   if (count <= 0) return [];
-  const out: string[] = [];
-  let prev: string | null = null;
-  for (let i = 0; i < count; i++) {
-    prev = between(prev, null);
-    out.push(prev);
-  }
+  const out = new Array<string>(count);
+  // Balanced bisection: place the middle row between (lower, upper), then fill
+  // each half against the tighter bound. This keeps rank depth logarithmic
+  // instead of the old one-sided append that drove every key toward the upper
+  // edge and exhausted the 64-char space after only ~385 rows.
+  const fill = (start: number, end: number, lower: string | null, upper: string | null): void => {
+    if (start >= end) return;
+    const middle = start + Math.floor((end - start) / 2);
+    const rank = between(lower, upper);
+    out[middle] = rank;
+    fill(start, middle, lower, rank);
+    fill(middle + 1, end, rank, upper);
+  };
+  fill(0, count, null, null);
   return out;
 }
