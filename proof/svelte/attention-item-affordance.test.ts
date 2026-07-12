@@ -26,9 +26,12 @@ test("ordinary informational pings stay quiet (no badge)", () => {
   assert.equal(a.badge, null);
 });
 
-test("rate-limit detection wins even for an actionable kind (still self-healing)", () => {
+test("an actionable kind wins over rate-limit body text (owner decision 2026-07-12)", () => {
+  // Aligned with notification-stream's typeForAttention: an actionable kind
+  // whose body merely mentions a rate limit still demands the owner act.
   const a = classifyAttentionItem({ kind: "job.needs_input", title: "x", body: "3021: rate limiting: inference request per min rate reached" });
-  assert.equal(a.tone, "retrying", "a transient rate limit is not a needs-you alarm");
+  assert.equal(a.tone, "attention", "actionable kind is a needs-you alarm, not benign retrying");
+  assert.equal(a.badge, "Needs you");
 });
 
 test("empty/unknown item is quiet info", () => {
