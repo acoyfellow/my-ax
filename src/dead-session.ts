@@ -15,7 +15,11 @@ export async function scanDeadSessions(env: Env, now = new Date()): Promise<void
   // would miss the exact dead-mid-turn case. Include 'running' past the stall
   // window; 'interrupted'/'error' are already terminalized and excluded.
   const sessions = await env.DB.prepare(
-    "SELECT id, owner_email, updated_at FROM sessions WHERE status IN ('active', 'running') AND updated_at < ? ORDER BY updated_at DESC LIMIT 50",
+    // Oldest-stalled first: when more than 50 sessions are eligible, the longest-
+    // dead ones are the actionable recovery candidates. DESC starved them behind
+    // a wall of newer (often no-op) sessions that never left the batch. id ASC is
+    // a deterministic tie-breaker for equal timestamps.
+    "SELECT id, owner_email, updated_at FROM sessions WHERE status IN ('active', 'running') AND updated_at < ? ORDER BY updated_at ASC, id ASC LIMIT 50",
   ).bind(cutoff).all<SessionRow>();
 
   for (const session of sessions.results ?? []) {

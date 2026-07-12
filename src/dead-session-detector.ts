@@ -34,7 +34,11 @@ export function detectDeadSession(
   if (latestUserIndex < 0) return null;
   if (entries.slice(latestUserIndex + 1).some((entry) => entry.role === "assistant")) return null;
   const latestUser = entries[latestUserIndex]!;
-  return { latestUserEntryId: latestUser.id, latestUserMessage: latestUser.content ?? "" };
+  // Refuse recovery when the latest user row has no usable content: silently
+  // re-injecting "" would replay an EMPTY message into a live conversation.
+  // Fail closed — no dead-session incident rather than an empty auto-revive.
+  if (typeof latestUser.content !== "string" || latestUser.content.length === 0) return null;
+  return { latestUserEntryId: latestUser.id, latestUserMessage: latestUser.content };
 }
 
 export function isDeadSessionAttentionForCurrentTurn(attentionCreatedAt: string | null | undefined, latestUserCreatedAt: string | null | undefined): boolean {
