@@ -29,6 +29,12 @@ test("machine shell parser handles CRLF and rejects a false (no-boundary) header
     exitCode: null,
     raw: "Exit code: 0oops",
   });
+  // Trailing horizontal whitespace before the newline is still a valid header.
+  assert.deepEqual(parseMachineShellContent("Exit code: 7 \t\r\nfailed"), {
+    stdout: "failed",
+    exitCode: 7,
+    raw: "Exit code: 7 \t\r\nfailed",
+  });
 });
 
 test("machine shell parser rejects an exit code outside the safe-integer range", () => {
