@@ -64,11 +64,32 @@ async function currentPinned(env: Env, email: string): Promise<PinnedRow[]> {
 
 export type PinResult = { id: string; pinned: boolean; pin_rank: string | null };
 
+/** Upper bound on how many conversations one owner may pin. Keeps the pinned
+ *  group scannable and bounds fractional-rank string growth. Re-pinning an
+ *  already-pinned conversation is idempotent and never counts against it. */
+export const MAX_PINNED = 20;
+
+/** Thrown when pinning a NEW conversation would exceed MAX_PINNED. The route
+ *  maps this to a 409 so the client can prompt the owner to unpin something. */
+export class PinLimitError extends Error {
+  readonly code = "PinLimit" as const;
+  readonly limit = MAX_PINNED;
+  constructor() {
+    super(`You can pin at most ${MAX_PINNED} conversations. Unpin one to pin another.`);
+    this.name = "PinLimitError";
+  }
+}
+
 export async function setSessionPinned(env: Env, email: string, id: string, pinned: boolean): Promise<PinResult | null> {
   const owned = await env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, email).first<{ id: string }>();
   if (!owned) return null;
   if (pinned) {
     const existing = await currentPinned(env, email);
+    // Fail closed at the cap — but re-pinning something already pinned is a
+    // no-op-shaped success, so only a genuinely new pin can trip the limit.
+    if (existing.length >= MAX_PINNED && !existing.some((r) => r.id === id)) {
+      throw new PinLimitError();
+    }
     const topRank = existing.length ? existing[0].pin_rank : null;
     const rank = rankForNewPin(topRank);
     await env.DB.prepare(
