@@ -17,7 +17,7 @@ test("completed delegation receipt sends owner back to the parent synthesis", ()
   assert.equal(notification.title, "Delegation complete");
   assert.match(notification.body, /1 delegated task completed/);
   assert.equal(notification.href, "/?session=session%201");
-  assert.equal(notification.dedupeKey, "delegate:session 1:run-1#completed#1");
+  assert.equal(notification.dedupeKey, `delegate:${JSON.stringify(["session 1", [["run-1", "completed", 1]]])}`);
 });
 
 test("failed delegation receipt is truthful and actionable", () => {
@@ -27,7 +27,8 @@ test("failed delegation receipt is truthful and actionable", () => {
   });
   assert.equal(notification.kind, "delegate.needs_input");
   assert.equal(notification.title, "Delegation needs review");
-  assert.match(notification.body, /1\/2 delegated tasks did not complete/);
+  assert.match(notification.body, /1\/2 delegated tasks need review/);
+  assert.doesNotMatch(notification.body, /did not complete/);
   assert.match(notification.body, /next action/);
 });
 
@@ -48,8 +49,14 @@ test("a real failure alongside a deferred task stays actionable and notes the de
     results: [{ ...completed, runId: "run-1", status: "error", error: "boom" }, { ...completed, runId: "run-2", status: "deferred" }],
   });
   assert.equal(notification.kind, "delegate.needs_input");
-  assert.match(notification.body, /1\/2 delegated tasks did not complete/);
+  assert.match(notification.body, /1\/2 delegated tasks need review/);
   assert.match(notification.body, /1 deferred on an inference rate limit; re-run when it clears/);
+});
+
+test("dedupe key is collision-free across ambiguous sessionId/runId splits", () => {
+  const a = delegateCompletionNotification({ sessionId: "a", results: [{ ...completed, runId: "b:c" }] });
+  const b = delegateCompletionNotification({ sessionId: "a:b", results: [{ ...completed, runId: "c" }] });
+  assert.notEqual(a.dedupeKey, b.dedupeKey);
 });
 
 test("dedupe key folds in the outcome so an error->success replay is not suppressed", () => {
