@@ -37,6 +37,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Fixed
 
+- Hardened conversation switching, transports, receipts, notifications, delegation backpressure (3021), push delivery, uploads, and error reporting across a sustained review pass: fail-closed guards, Unicode-safe truncation, tightened validation, and deterministic tests, with no change to documented behavior.
 - Protected every rendered Attention subroute with the Access identity middleware, restoring the owner-scoped “Mark this view seen” action without weakening its same-origin check.
 - Added a release and CI guard that fails if stale pre-Recipes API or agent-facing surfaces reappear in user/agent-facing source or generated assets, preventing another Recipes rename deploy regression.
 - Reopened a human decision and removed its provisional answer event when delivery to the canonical Think session fails, returning retryable `DECISION_RESUME_FAILED` instead of falsely reporting that the conversation resumed.

@@ -25,6 +25,8 @@ Status:
 | Durable conversations | ✅ | A `MyAgent` Think facet owns each conversation. User messages persist before model execution; provider/runtime failure can still end a turn. | `src/agent.ts`, `npm run prove:resume` |
 | Stream recovery | ✅ | Think recovery plus a parked-stream watchdog covers the observed stalled path. It is not a provider availability guarantee. | `src/agent.ts`, `npm run prove:resume` |
 | Conversation switching | ✅ | The Svelte client reconnects to the selected facet without document reload. | `proof/svelte/Chat.svelte` |
+| Pinned conversations | ✅ | Owner can pin, unpin, and drag-reorder conversations; server-authoritative fractional ranking, capped at 20 pins per owner (a new pin past the cap fails closed with a 409). | `src/session-pinning.ts`, `npm run test:session-pinning` |
+| Editable conversation starters | ✅ | The four new-conversation cards are owner-editable from Settings and via the agent through one shared per-owner store, seeded with defaults. | `src/conversation-starters.ts` |
 | Notification deep links | ✅ | Attention/PWA launches deliver same-origin targets; session targets switch the active facet. | `npm run test:deep-links` |
 | Transcript feed/export/search | ✅ | D1 projects conversation rows for feed, export, and FTS search. Live Think state remains authoritative. | `src/routes/sessions.ts`, `src/conversation-log.ts` |
 | Voice in active conversation | ✅ | Voice routes text turns into the canonical Think facet. Browser microphone activation remains explicit browser/user policy. | `src/voice-think-agent.ts`, `npm run prove:browser` |
