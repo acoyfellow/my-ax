@@ -569,7 +569,18 @@ app.get("/offline", (c) => c.html(
 // binding. /sw.js must live at root scope so it can control the installed PWA.
 app.get("/static/*", async (c) => c.env.ASSETS.fetch(c.req.raw));
 app.get("/favicon.ico", async (c) => c.env.ASSETS.fetch(c.req.raw));
-app.get("/sw.js", async (c) => c.env.ASSETS.fetch(c.req.raw));
+// The service worker script must NEVER be cached by the browser/PWA, or an
+// installed iOS PWA keeps running an old SW across app restarts and never picks
+// up a deploy (the classic "closed & reopened 10x, still stale" trap). Force
+// revalidation so every load re-fetches sw.js; the byte-diff on deploy then
+// triggers the update -> skipWaiting -> claim flow and purges the old cache.
+app.get("/sw.js", async (c) => {
+  const asset = await c.env.ASSETS.fetch(c.req.raw);
+  const headers = new Headers(asset.headers);
+  headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  headers.set("Service-Worker-Allowed", "/");
+  return new Response(asset.body, { status: asset.status, headers });
+});
 
 app.notFound((c) =>
   c.json<ApiResponse>(

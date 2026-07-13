@@ -4,7 +4,7 @@
 // pages/API/WS always stay on network. Successful same-origin static responses
 // may be cached at runtime; Access redirects and errors are never cached.
 
-const CACHE = "my-ax-static-v10";
+const CACHE = "my-ax-static-v11";
 const MANIFEST_PATH = "/static/brand/manifest.webmanifest";
 
 function offlineManifest() {
@@ -27,6 +27,14 @@ function offlineManifest() {
 // successful same-origin response.
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
+});
+
+// The page (pwaBootScript) posts this when it detects a freshly-installed
+// waiting SW, so a new deploy takes over an already-open PWA immediately
+// instead of waiting for every tab to close (iOS never closes them). Pairs
+// with the client's controllerchange -> reload.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "my-ax:skip-waiting") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -126,27 +134,32 @@ self.addEventListener("fetch", (event) => {
   // stale shell from the service worker.
   if (request.mode === "navigate") return;
 
-  // Cache-first anonymous deploy assets. Runtime-cached responses are only
-  // kept when they are successful, so Access/login/error responses do not
-  // become durable browser state.
+  // NETWORK-FIRST for anonymous deploy assets (was cache-first). A cache-first
+  // SW is the classic iOS-PWA staleness trap: once `/static/styles.css?v=<old>`
+  // is cached, an installed PWA that restores a frozen shell keeps requesting
+  // the SAME old `?v=` URL and the SW serves the stale file forever — closing
+  // and reopening the app does not help because iOS restores app state instead
+  // of doing a real navigation that would fetch the new build's HTML (and thus
+  // the new `?v=`). Network-first means every asset fetch tries the live
+  // deploy first and only falls back to cache when genuinely offline, so a
+  // deploy is picked up on the next load. Assets are already fingerprinted with
+  // `?v=<buildId>` and served with immutable caching upstream, so the extra
+  // conditional request is cheap (304) and never double-downloads.
   if (cacheableStatic(url)) {
     event.respondWith(
-      // Preserve deploy-version query strings (`/static/chat.js?v=<build>`)
-      // so a cached pre-deploy asset cannot shadow the newly-rendered shell.
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        }).catch(async () => {
-          // Access redirects are cross-origin and reject fetch under CORS.
-          // Serve a previously cached same-origin asset when available;
-          // otherwise fail quietly without an unhandled promise rejection.
-          return (await caches.match(request)) ?? (url.pathname === MANIFEST_PATH ? offlineManifest() : Response.error());
-        });
+      fetch(request).then((response) => {
+        // Only cache successful same-origin responses. Access/login redirects
+        // and errors must never become durable browser state.
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      }).catch(async () => {
+        // Offline (or an Access redirect that rejects under CORS): serve the
+        // last good cached copy, or a minimal offline manifest, without an
+        // unhandled rejection.
+        return (await caches.match(request)) ?? (url.pathname === MANIFEST_PATH ? offlineManifest() : Response.error());
       }),
     );
   }
