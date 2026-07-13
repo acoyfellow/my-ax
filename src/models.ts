@@ -91,7 +91,19 @@ export const MODELS: ModelEntry[] = [
   },
 ];
 
+// Gateway-less fallback default (public/OSS installs with no LLM gateway). The
+// only routes such a build can run are the Workers-AI rows, so the constant
+// default must stay a Workers-AI model or resolveAvailableModelId can never heal
+// a pinned/absent model to something runnable.
 export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
+
+// Preferred default when the deployment HAS the LLM gateway (the employee/prod
+// path). Routed through the AI gateway, so it inherits the transient 3021/429
+// retry-with-backoff wrapper (see llm.ts createRetryFetch) that the raw
+// Workers-AI binding path lacks — the Workers-AI default was failing ~half its
+// turns on gateway rate limits with no self-healing. gpt-5.6-terra is the
+// low-cost/fast gateway model.
+export const DEFAULT_GATEWAY_MODEL_ID = "gpt-5.6-terra";
 
 export function hasModelGateway(env: Env): boolean {
   return Boolean(env.LLM_GATEWAY_URL?.trim() && env.LLM_GATEWAY_TOKEN?.trim());
@@ -104,7 +116,15 @@ export function availableModels(env: Env): ModelEntry[] {
   return hasModelGateway(env) ? MODELS : MODELS.filter((model) => model.route === "workers-ai");
 }
 
-export function defaultModelId(_env: Env): string {
+// The effective default for THIS installation: the gateway model when the
+// gateway is configured (and the model is actually in the available catalog),
+// otherwise the Workers-AI fallback. Callers that mint the initial/healed model
+// id must use this, not the bare DEFAULT_MODEL_ID constant, so a gateway deploy
+// starts on the resilient gateway route instead of the brittle Workers-AI one.
+export function defaultModelId(env: Env): string {
+  if (hasModelGateway(env) && availableModels(env).some((model) => model.id === DEFAULT_GATEWAY_MODEL_ID)) {
+    return DEFAULT_GATEWAY_MODEL_ID;
+  }
   return DEFAULT_MODEL_ID;
 }
 
@@ -125,6 +145,6 @@ export function resolveModelId(id: string | undefined): string {
  * the visible catalog correctly hides that model. */
 export function resolveAvailableModelId(env: Env, id: string | undefined): string {
   const requested = id && findModel(id);
-  if (!requested) return DEFAULT_MODEL_ID;
-  return availableModels(env).some((model) => model.id === requested.id) ? requested.id : DEFAULT_MODEL_ID;
+  if (!requested) return defaultModelId(env);
+  return availableModels(env).some((model) => model.id === requested.id) ? requested.id : defaultModelId(env);
 }

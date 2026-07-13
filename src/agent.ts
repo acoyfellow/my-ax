@@ -5,7 +5,7 @@ import { createCompactFunction } from "agents/experimental/memory/utils";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
-import { DEFAULT_MODEL_ID, findModel } from "./models";
+import { defaultModelId, findModel } from "./models";
 import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
 import { createThinkTools } from "./tools";
@@ -193,7 +193,7 @@ export class MyAgent extends Think<Env> {
   /** Persist the model the UI currently has selected so non-composer turns
    *  (voice) use the same model as typed chat. Ignores unknown ids. */
   setSessionModel(model: string, reasoningEffort?: string) {
-    if (!findModel(model)) return { ok: false, model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID };
+    if (!findModel(model)) return { ok: false, model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env) };
     const current = this.getConfig<MyAgentConfig>() ?? {};
     const effort = reasoningEffort === "low" || reasoningEffort === "medium" || reasoningEffort === "high" ? reasoningEffort : undefined;
     this.configure<MyAgentConfig>({ ...current, model, ...(effort ? { reasoningEffort: effort } : {}) });
@@ -458,7 +458,7 @@ export class MyAgent extends Think<Env> {
   }
 
   getModel() {
-    return resolveMyAxModel(this.env, this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID).model;
+    return resolveMyAxModel(this.env, this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env)).model;
   }
 
   getTools() {
@@ -587,7 +587,7 @@ export class MyAgent extends Think<Env> {
       if (existing) continue;
       await logAssistantMessage(this.env, identity, this.name, message.text, {
         uiMessageId: message.id,
-        model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID,
+        model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env),
         ...(message.reasoning ? { reasoning: message.reasoning } : {}),
         backfilled: true,
       }).catch((error) => console.error("think_assistant_backfill_failed", { sessionId: this.name, err: String(error) }));
@@ -606,7 +606,7 @@ export class MyAgent extends Think<Env> {
     if (visibleContent || reasoning || result.status === "error") {
       await logAssistantMessage(this.env, identity, this.name, visibleContent, {
         uiMessageId: result.message.id,
-        model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID,
+        model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env),
         ...(reasoning ? { reasoning } : {}),
         status: result.status,
         ...(content.trim() ? {} : { emptyVisibleResponse: true }),
@@ -715,7 +715,7 @@ export class MyAgent extends Think<Env> {
   async runVoiceTurn(transcript: string): Promise<string> {
     const cfg = this.getConfig<MyAgentConfig>() ?? {};
     if (cfg.model && !findModel(cfg.model)) {
-      this.configure<MyAgentConfig>({ ...cfg, model: DEFAULT_MODEL_ID });
+      this.configure<MyAgentConfig>({ ...cfg, model: defaultModelId(this.env) });
     }
     let full = "";
     let failure: string | null = null;
@@ -973,7 +973,7 @@ export class MyAgent extends Think<Env> {
       this.configure<MyAgentConfig>({ ...current, ...(requestedModel ? { model: requestedModel } : {}), ...(effort ? { reasoningEffort: effort } : {}) });
     }
     const config = this.getConfig<MyAgentConfig>() ?? {};
-    const selected = requestedModel ?? config.model ?? DEFAULT_MODEL_ID;
+    const selected = requestedModel ?? config.model ?? defaultModelId(this.env);
     const resolved = resolveMyAxModel(this.env, selected);
     const attachmentByPath = new Map<string, Attachment>();
     for (const message of this.messages.filter((item) => item.role === "user")) {
@@ -1103,7 +1103,7 @@ export class MyAgent extends Think<Env> {
       ownerEmail: identity.email,
       sessionOrRunId: this.name,
       cycleIndex: await nextCycleIndex(this.env, identity.email, this.name),
-      model: this.getConfig<MyAgentConfig>()?.model ?? DEFAULT_MODEL_ID,
+      model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env),
       finishReason: steps.at(-1)?.finishReason ?? result.status,
       usage,
       recipesUsed,

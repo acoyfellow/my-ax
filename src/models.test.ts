@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { availableModels, DEFAULT_MODEL_ID, MODELS, findModel, resolveAvailableModelId, resolveModelId } from "./models";
+import { availableModels, DEFAULT_GATEWAY_MODEL_ID, DEFAULT_MODEL_ID, MODELS, defaultModelId, findModel, resolveAvailableModelId, resolveModelId } from "./models";
 import type { Env } from "./types";
 
 const minimalEnv = {} as Env;
@@ -40,11 +40,28 @@ describe("model catalog", () => {
   });
 
   it("heals stale gateway selections when this installation has no gateway", () => {
+    // Gateway-less: the only runnable rows are Workers-AI, so a stale gateway id
+    // heals to the Workers-AI fallback default.
     assert.equal(resolveAvailableModelId(minimalEnv, "gpt-5.5"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-4-8"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), "gpt-5.5");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-sol"), "gpt-5.6-sol");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-terra"), "gpt-5.6-terra");
+  });
+
+  it("prefers the resilient gateway model as the default on gateway installs", () => {
+    // The gateway default routes through the AI gateway (createRetryFetch 3021
+    // backoff); the Workers-AI binding default had no rate-limit self-healing.
+    assert.equal(DEFAULT_GATEWAY_MODEL_ID, "gpt-5.6-terra");
+    assert.equal(findModel(DEFAULT_GATEWAY_MODEL_ID)?.route, "gateway-openai");
+    // Gateway present -> default is the gateway model.
+    assert.equal(defaultModelId(gatewayEnv), "gpt-5.6-terra");
+    // Gateway absent -> default heals back to the Workers-AI fallback (the
+    // gateway model is not runnable / not in the available catalog).
+    assert.equal(defaultModelId(minimalEnv), DEFAULT_MODEL_ID);
+    // A fresh turn (no requested model) starts on the env-appropriate default.
+    assert.equal(resolveAvailableModelId(gatewayEnv, undefined), "gpt-5.6-terra");
+    assert.equal(resolveAvailableModelId(minimalEnv, undefined), DEFAULT_MODEL_ID);
   });
 });

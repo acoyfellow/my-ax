@@ -18,7 +18,7 @@
     applyTheme,
     SESSION_KEY,
   } from "@my-ax/store";
-  import { MODELS, DEFAULT_MODEL_ID } from "../../src/models";
+  import { MODELS } from "../../src/models";
   import { classifyJobHealth, jobResultAttr } from "./job-health";
 
   interface Props {
