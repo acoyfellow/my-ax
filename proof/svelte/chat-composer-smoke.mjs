@@ -60,12 +60,13 @@ assertIncludes(chatPage, '.connector-banner[data-state="upstream-auth"]', "conne
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");
 assertNotIncludes(appCss, '#theme-cycle', "global CSS must not define stale #theme-cycle selectors");
 // Robust app frame (device-agnostic; no per-device padding hacks).
-// 1) The shell is a fixed, full-viewport box that can't be scroll-offset AND
-//    must NOT carry an explicit height. A fixed box with inset:0 already sizes
-//    to the full cover viewport (incl. the iOS home-indicator region); adding
-//    height:100dvh over-constrains the block axis so `bottom` is ignored and
-//    the frame ends ~34px short on iOS, leaking the page background as a white
-//    bar below the composer. See proof/svelte/ios-safe-area-frame.test.mjs.
+// 1) The BASE shell is a fixed, full-viewport box that can't be scroll-offset
+//    and carries NO explicit height in the base rule: a fixed box with inset:0
+//    already sizes to the full cover viewport, and adding height:100dvh there
+//    over-constrains the block axis so `bottom` is ignored and the frame ends
+//    ~34px short on iOS Safari (the original white-bar bug). The ONLY height is
+//    the standalone-scoped 100lvh override (see assertion below). See
+//    proof/svelte/ios-safe-area-frame.test.mjs.
 assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:fixed so it cannot be scroll-offset");
 {
   const av = appCss.indexOf('.app-viewport {');
@@ -73,8 +74,21 @@ assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:
   if (!/position:\s*fixed/.test(block) || !/inset:\s*0/.test(block)) {
     throw new Error("the .app-viewport frame must be position:fixed; inset:0");
   }
-  if (/height:\s*100dvh/.test(block) || /height:\s*100svh/.test(block)) {
-    throw new Error("the .app-viewport frame must NOT set an explicit height (inset:0 already fills the cover viewport; an explicit height over-constrains the block axis and reopens the iOS bottom white bar)");
+  if (/height:/.test(block)) {
+    throw new Error("the BASE .app-viewport rule must NOT set an explicit height (inset:0 already fills the cover viewport in Safari; a base height reopens the iOS Safari white bar). Standalone height belongs in the display-mode:standalone override only.");
+  }
+}
+// 1b) INSTALLED-PWA fix: a home-screen PWA has no browser toolbar, but iOS
+//     still sizes the fixed frame to the small (toolbar-present) viewport, so
+//     inset:0 leaves a toolbar-height white bar below the composer. Standalone
+//     mode must pin the frame to the large viewport (100lvh = full chromeless
+//     screen). Scoped so Safari's already-correct layout is untouched.
+{
+  const media = appCss.indexOf('@media (display-mode: standalone) {');
+  if (media < 0) throw new Error("missing @media (display-mode: standalone) app-viewport height fix (reopens the installed-PWA bottom white bar)");
+  const block = appCss.slice(media, media + 200);
+  if (!/\.app-viewport\s*{/.test(block) || !/height:\s*100lvh/.test(block)) {
+    throw new Error("standalone .app-viewport must set height:100lvh so the chromeless installed PWA fills the full screen");
   }
 }
 // 2) The chat mount fills its slot so the composer footer sits at the bottom.
