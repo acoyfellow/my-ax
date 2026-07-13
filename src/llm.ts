@@ -7,7 +7,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createWorkersAI } from "workers-ai-provider";
 import { createRetryFetch } from "./gateway-retry-fetch";
 import type { Env } from "./types";
-import { DEFAULT_MODEL_ID, findModel, resolveAvailableModelId } from "./models";
+import { findModel, resolveAvailableModelId } from "./models";
 
 type GatewayEnv = {
   LLM_GATEWAY_URL?: string;
@@ -46,7 +46,12 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
   // Heal stale/removed model ids to the default rather than throwing every
   // turn. A session pinned to a churned model would otherwise look like a
   // permanent connection error to the user.
-  const modelId = resolveAvailableModelId(env, requestedModel || DEFAULT_MODEL_ID);
+  // No requestedModel -> resolveAvailableModelId heals to defaultModelId(env),
+  // which prefers the gateway model on gateway installs (resilient route) and
+  // the Workers-AI fallback otherwise. Do NOT hardcode DEFAULT_MODEL_ID here or
+  // a gateway deploy would start every fresh turn on the brittle Workers-AI
+  // route instead of the gateway.
+  const modelId = resolveAvailableModelId(env, requestedModel);
   const meta = findModel(modelId)!;
 
   let model;
