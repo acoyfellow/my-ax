@@ -71,15 +71,22 @@ function appViewportBlock() {
 }
 
 const SAB = 34; // iPhone home-indicator inset (CSS px), reported by iOS as env(safe-area-inset-bottom)
-const TOOLBAR = 88; // iOS Safari bottom toolbar height (CSS px). In an installed
-// (standalone) PWA there is NO toolbar, but iOS still sizes a fixed inset:0 box
-// to the small (toolbar-present) viewport, leaving a toolbar-height white bar.
+const TOP = 59; // iPhone status-bar / top safe-area inset (CSS px). The fixed
+// frame's top edge sits here under viewport-fit=cover.
 
-// Assert app.css ships the standalone override that fixes the installed-PWA
-// bar, and model it below with height = full device screen (what 100lvh /
-// -webkit-fill-available resolve to in a chromeless standalone PWA).
-if (!/@media \(display-mode: standalone\) \{[\s\S]*?\.app-viewport \{[\s\S]*?height:\s*100lvh/.test(appCss)) {
-  throw new Error("REGRESSION: app.css missing the standalone .app-viewport height:100lvh override (reopens the installed-PWA white bar)");
+// Extract the SHIPPED standalone (display-mode: standalone) .app-viewport
+// override so the test tracks the real stylesheet. The fix must release the
+// bottom anchor (bottom:auto) and size by height so exactly ONE of
+// {bottom, height} constrains the box (no over-constraint overshoot).
+function standaloneOverride() {
+  const m = appCss.match(/@media \(display-mode: standalone\) \{\s*\.app-viewport \{([\s\S]*?)\}/);
+  if (!m) throw new Error("REGRESSION: app.css missing the @media(display-mode:standalone) .app-viewport override (reopens the installed-PWA white bar)");
+  const decls = m[1].split(";").map((d) => d.trim()).filter(Boolean);
+  const hasBottomAuto = decls.some((d) => /^bottom\s*:\s*auto$/.test(d));
+  const hasHeight = decls.some((d) => /^height\s*:/.test(d));
+  if (!hasBottomAuto) throw new Error("standalone override must set bottom:auto so inset:0's bottom does not over-constrain the height (overshoot regression)");
+  if (!hasHeight) throw new Error("standalone override must set an explicit height to fill the chromeless PWA");
+  return decls.join("; ");
 }
 
 // Representative CSS viewports (portrait). The first is the owner's exact
@@ -137,6 +144,37 @@ async function rects(page, frameDecls, deviceH, keyboardOpen) {
   });
 }
 
+// Standalone model: a full-SCREEN device box (the chromeless PWA fills the
+// whole screen). The frame's top is pinned at `top` (the status-bar inset).
+// Measures how far the frame's bottom overshoots the screen bottom, and whether
+// the composer footer stays fully on-screen.
+async function pwaRects(page, frameDecls, screenH, top) {
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><style>
+    * { margin:0; box-sizing:border-box; }
+    html, body { height:100%; background:#000; }
+    .screen { position:relative; width:100%; height:${screenH}px; overflow:visible; }
+    .app-viewport { ${frameDecls}; background:#0a0a0a; overflow:hidden; display:flex; flex-direction:column; }
+    .hfull { height:100%; display:flex; flex-direction:column; }
+    .grow { flex:1 1 0%; min-height:0; }
+    .composer { flex:none; background:#e5e5e5; padding-bottom:max(10px, ${SAB}px); min-height:56px; }
+  </style></head><body>
+    <div class="screen" id="screen"><div class="app-viewport" id="frame"><div class="hfull">
+      <div class="grow"></div><div class="composer" id="composer"></div>
+    </div></div></div>
+  </body></html>`;
+  await page.setContent(doc);
+  return page.evaluate((screenH) => {
+    const g = (id) => document.getElementById(id).getBoundingClientRect();
+    const f = g("frame"), c = g("composer");
+    return {
+      overshoot: Math.max(0, Math.round(f.bottom - screenH)),
+      composerBottom: Math.round(c.bottom),
+      screenBottom: screenH,
+      footerVisible: Math.round(c.bottom) <= screenH,
+    };
+  }, screenH);
+}
+
 // Shipped decls (fixed→absolute remapped). Must carry NO explicit height.
 const shippedDecls = appViewportBlock();
 if (/height\s*:/.test(shippedDecls)) {
@@ -178,20 +216,32 @@ for (const engineName of ["chromium"]) {
     check(gap === SAB,
       `[${engineName} ${vp.name}] broken shape expected a ${SAB}px white gap but got ${gap}px (guard not catching the regression)`);
 
-    // 4) INSTALLED-PWA (standalone): the device screen is full height, but iOS
-    //    sizes the fixed frame to the small (toolbar-present) viewport. Model
-    //    the WITHOUT-fix case (inset:0 sized to screen-minus-toolbar) — it MUST
-    //    leak a toolbar-height bar, proving the bug and that the test catches
-    //    it. Then the WITH-fix case (standalone override height = full screen)
-    //    MUST reach the bottom.
-    const pwaBroken = await rects(page, brokenDeclsFor(vp.h - TOOLBAR), vp.h, false);
-    check(pwaBroken.deviceBottom - pwaBroken.frameBottom === TOOLBAR,
-      `[${engineName} ${vp.name}] standalone WITHOUT the fix should leak a ${TOOLBAR}px bar but leaked ${pwaBroken.deviceBottom - pwaBroken.frameBottom}px`);
-    const pwaFixed = await rects(page, `${shippedDecls}; height: ${vp.h}px`, vp.h, false);
-    check(pwaFixed.frameBottom === pwaFixed.deviceBottom,
-      `[${engineName} ${vp.name}] standalone WITH the 100lvh fix: frame bottom ${pwaFixed.frameBottom} != device bottom ${pwaFixed.deviceBottom} (installed-PWA bar not closed)`);
-    check(pwaFixed.composerBottom === pwaFixed.deviceBottom,
-      `[${engineName} ${vp.name}] standalone WITH the fix: composer bottom ${pwaFixed.composerBottom} != device bottom ${pwaFixed.deviceBottom}`);
+    // 4) INSTALLED-PWA (standalone) OVER-CONSTRAINT regression. The frame's top
+    //    sits at the top safe-area inset (TOP). The BROKEN shape I shipped and
+    //    then regressed with was `inset:0` (top:0 AND bottom:0) PLUS an explicit
+    //    height (100lvh). With top+bottom+height all set, CSS drops `bottom`
+    //    and lays the box out at its top extending `height` DOWNWARD; height =
+    //    full screen while top = TOP, so it overshoots the bottom by TOP and
+    //    the footer is pushed off-screen into the home-indicator zone (the
+    //    owner's "cut off + dark bar"). Model the containing block with a
+    //    top:TOP offset so the overshoot is measurable, then prove the SHIPPED
+    //    fix (bottom:auto releases the over-constraint) fills exactly.
+    // Model the fixed box as iOS lays it out under viewport-fit=cover: its top
+    // edge is at the status-bar inset (top:TOP), bottom:0, PLUS height:full.
+    // Over-constrained -> `bottom` dropped -> box runs `height` down from TOP,
+    // overshooting the screen bottom by TOP.
+    const overBroken = await pwaRects(page, `position:absolute; top:${TOP}px; left:0; right:0; bottom:0; height:${vp.h}px`, vp.h, TOP);
+    check(overBroken.overshoot === TOP,
+      `[${engineName} ${vp.name}] over-constrained top:inset + bottom:0 + height should overshoot by ${TOP}px (footer clipped) but overshot ${overBroken.overshoot}px — guard not catching the regression`);
+    // SHIPPED fix: standalone override (bottom:auto; height:<full screen>) with
+    // top pinned at TOP. Exactly one of {bottom,height} constrains it, so the
+    // frame fills top→bottom with NO overshoot and the footer is fully visible.
+    const fixedDecls = `position:absolute; top:${TOP}px; left:0; right:0; ${standaloneOverride().replace(/height:\s*100dvh/, `height:${vp.h - TOP}px`)}`;
+    const fixed = await pwaRects(page, fixedDecls, vp.h, TOP);
+    check(fixed.overshoot === 0,
+      `[${engineName} ${vp.name}] standalone fix should not overshoot but overshot ${fixed.overshoot}px`);
+    check(fixed.footerVisible,
+      `[${engineName} ${vp.name}] standalone fix: composer footer must be fully within the screen (bottom ${fixed.composerBottom} <= screen ${fixed.screenBottom})`);
 
     await ctx.close();
   }
