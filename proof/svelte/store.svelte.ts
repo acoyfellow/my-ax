@@ -56,9 +56,19 @@ interface ModelEntry {
 // Initial values come from localStorage (set by the user previously) or the
 // SSR-rendered initial select option. Each component's onMount syncs to
 // these as needed.
+//
+// Fresh-browser first-turn default = the AI-gateway model (gpt-5.6-terra). The
+// client always sends its current model in the request body, so this string is
+// what a brand-new browser actually runs on its first turn. It matches the
+// server's gateway default (models.ts DEFAULT_GATEWAY_MODEL_ID). On a
+// gateway-less install the server heals it to the Workers-AI fallback
+// (resolveAvailableModelId), so this stays functional there too. We moved off
+// the raw Workers-AI default because that binding path had no transient 3021
+// rate-limit retry and was failing ~half its turns.
+const DEFAULT_MODEL = "gpt-5.6-terra";
 function initialModel(): string {
-  if (typeof localStorage === "undefined") return "@cf/moonshotai/kimi-k2.7-code";
-  return localStorage.getItem("model") || "@cf/moonshotai/kimi-k2.7-code";
+  if (typeof localStorage === "undefined") return DEFAULT_MODEL;
+  return localStorage.getItem("model") || DEFAULT_MODEL;
 }
 function initialReasoning(): Reasoning {
   if (typeof localStorage === "undefined") return "medium";

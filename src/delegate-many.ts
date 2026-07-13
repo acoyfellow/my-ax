@@ -3,7 +3,6 @@ import { tool, type ToolSet } from "ai";
 import type { AgentToolFailure, RunAgentToolResult } from "agents/agent-tools";
 import { z } from "zod";
 import { resolveMyAxModel } from "./llm";
-import { DEFAULT_MODEL_ID } from "./models";
 import {
   DELEGATE_MANY_LIMIT,
   delegateResultSchema,
@@ -62,7 +61,9 @@ export function asAgentToolFailure(result: RunAgentToolResult): AgentToolFailure
 export class ReadOnlyDelegateAgent extends Think<Env> {
   maxSteps = 8;
   workspaceBash = false;
-  getModel() { return resolveMyAxModel(this.env, DEFAULT_MODEL_ID).model; }
+  // Undefined -> resolveMyAxModel heals to defaultModelId(env): the resilient
+  // gateway model on gateway installs, the Workers-AI fallback otherwise.
+  getModel() { return resolveMyAxModel(this.env).model; }
   getSystemPrompt() {
     return "Complete only the bounded analysis task. Treat all available capabilities as read-only. Return evidence and a concise conclusion; do not mutate state or delegate.";
   }
