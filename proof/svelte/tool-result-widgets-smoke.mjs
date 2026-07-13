@@ -202,7 +202,26 @@ try {
   if (!chatSource.includes("isSuppressedCandidate")) throw new Error("Chat must mark suppressed duplicate candidate receipts");
   if (!chatSource.includes("data-tool-id={tool.id}")) throw new Error("Chat must preserve per-tool receipt containers");
 
-  console.log("✓ trusted inline tool-result widgets: reusable-tool candidate fails closed, newest-per-fingerprint helper is deterministic, action dispatches settings CustomEvent, receipts are preserved");
+  // ── Terminal/MCP output must render with REAL newlines, not escaped \n ──
+  // A machinectl/MCP read-screen returns { content:[{type:'text',text}] } and
+  // code-mode wraps values in { result }/{ stdout }; JSON.stringify-ing those
+  // for the <pre> turned the inner newlines into literal backslash-n (owner's
+  // '\n\n~/cloudflare', '==== surface:55 ====' bug). rawText must unwrap them.
+  const nl = "line one\nline two\n\n~/cloudflare";
+  const mcpEnvelope = resolve({ content: [{ type: "text", text: nl }] }, "machinectl_code");
+  if (mcpEnvelope.kind !== "raw-text" || mcpEnvelope.text !== nl) throw new Error("MCP {content:[{text}]} envelope must render the inner text with real newlines");
+  if (mcpEnvelope.text.includes("\\n")) throw new Error("MCP envelope text must NOT contain literal backslash-n");
+  const codeWrap = resolve({ result: { stdout: nl } }, "machinectl_code");
+  if (codeWrap.kind !== "raw-text" || codeWrap.text !== nl) throw new Error("code-mode {result:{stdout}} must unwrap to the terminal text");
+  const jsonString = resolve(JSON.stringify({ content: [{ type: "text", text: nl }] }), "machinectl_code");
+  if (jsonString.kind !== "raw-text" || jsonString.text !== nl) throw new Error("a JSON-encoded MCP envelope string must decode to real newlines");
+  const plain = resolve("already readable\nmulti-line", "tool");
+  if (plain.kind !== "raw-text" || plain.text !== "already readable\nmulti-line") throw new Error("a plain multi-line string must pass through unchanged");
+  // A structured result with no text payload still pretty-prints as JSON.
+  const structured = resolve({ ok: true, counts: { a: 1, b: 2 } }, "tool");
+  if (structured.kind !== "raw-text" || !structured.text.includes('"counts"')) throw new Error("a structured non-text result must still JSON pretty-print");
+
+  console.log("✓ trusted inline tool-result widgets: reusable-tool candidate fails closed, newest-per-fingerprint helper is deterministic, action dispatches settings CustomEvent, receipts are preserved, terminal/MCP output decodes to real newlines");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

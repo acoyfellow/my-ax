@@ -295,8 +295,59 @@ function reusableToolCandidateWidget(value: unknown, toolName: string): ToolResu
   };
 }
 
+/** Pull human-readable text out of the common tool-result envelopes so a
+ *  <pre> shows real line breaks instead of a JSON blob with escaped \n. A
+ *  machinectl/MCP read-screen returns { content: [{ type: "text", text }] } and
+ *  code-mode wraps values in { result }/{ output }/{ stdout }; JSON.stringify-ing
+ *  those turns the inner newlines into literal backslash-n (the owner's bug).
+ *  Returns a string when a text payload is recognized, else null. Bounded
+ *  recursion; only unwraps string-bearing shapes, so structured results still
+ *  fall through to the JSON pretty-print. */
+function extractDisplayText(value: unknown, depth = 0): string | null {
+  if (depth > 4 || value == null) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    // A JSON-encoded string/object hiding real newlines: decode once and retry.
+    if ((trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith('"')) ) {
+      try {
+        const decoded = JSON.parse(trimmed);
+        if (decoded !== value) {
+          const inner = extractDisplayText(decoded, depth + 1);
+          if (inner !== null) return inner;
+          if (typeof decoded === "string") return decoded;
+        }
+      } catch { /* not JSON — fall through */ }
+    }
+    return value;
+  }
+  if (typeof value !== "object") return null;
+  const obj = value as Record<string, unknown>;
+  // MCP tool result: { content: [{ type: "text", text }] } (join text parts).
+  if (Array.isArray(obj.content)) {
+    const parts = obj.content
+      .filter((p): p is { type?: string; text?: unknown } => typeof p === "object" && p !== null)
+      .filter((p) => p.type === undefined || p.type === "text")
+      .map((p) => (typeof p.text === "string" ? p.text : null))
+      .filter((t): t is string => t !== null);
+    if (parts.length) return parts.join("");
+  }
+  // Code-mode / shell wrappers around a text payload.
+  for (const key of ["text", "stdout", "output", "result"] as const) {
+    if (key in obj) {
+      const inner = extractDisplayText(obj[key], depth + 1);
+      if (inner !== null) return inner;
+    }
+  }
+  return null;
+}
+
 function rawText(value: unknown): string {
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    const unwrapped = extractDisplayText(value);
+    return unwrapped ?? value;
+  }
+  const text = extractDisplayText(value);
+  if (text !== null) return text;
   try {
     return JSON.stringify(value ?? "", null, 2);
   } catch {

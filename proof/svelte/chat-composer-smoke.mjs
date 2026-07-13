@@ -62,11 +62,10 @@ assertNotIncludes(appCss, '#theme-cycle', "global CSS must not define stale #the
 // Robust app frame (device-agnostic; no per-device padding hacks).
 // 1) The BASE shell is a fixed, full-viewport box that can't be scroll-offset
 //    and carries NO explicit height in the base rule: a fixed box with inset:0
-//    already sizes to the full cover viewport, and adding height:100dvh there
+//    already sizes to the full cover viewport, and adding a height there
 //    over-constrains the block axis so `bottom` is ignored and the frame ends
-//    ~34px short on iOS Safari (the original white-bar bug). The ONLY height is
-//    the standalone-scoped 100lvh override (see assertion below). See
-//    proof/svelte/ios-safe-area-frame.test.mjs.
+//    ~34px short on iOS Safari (the original white-bar bug). Height lives ONLY
+//    in the standalone override (see 1b). See ios-safe-area-frame.test.mjs.
 assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:fixed so it cannot be scroll-offset");
 {
   const av = appCss.indexOf('.app-viewport {');
@@ -78,17 +77,25 @@ assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:
     throw new Error("the BASE .app-viewport rule must NOT set an explicit height (inset:0 already fills the cover viewport in Safari; a base height reopens the iOS Safari white bar). Standalone height belongs in the display-mode:standalone override only.");
   }
 }
-// 1b) INSTALLED-PWA fix: a home-screen PWA has no browser toolbar, but iOS
-//     still sizes the fixed frame to the small (toolbar-present) viewport, so
-//     inset:0 leaves a toolbar-height white bar below the composer. Standalone
-//     mode must pin the frame to the large viewport (100lvh = full chromeless
-//     screen). Scoped so Safari's already-correct layout is untouched.
+// 1b) INSTALLED-PWA fix: a home-screen PWA has no toolbar, but iOS still sizes
+//     a fixed inset:0 box to the small (toolbar-present) viewport, leaving a
+//     toolbar-height white bar. The fix must NOT just add a height to inset:0:
+//     inset:0 sets bottom:0 too, so top+bottom+height over-constrains the box
+//     and it overshoots DOWNWARD past the screen (footer clipped under the
+//     home-indicator — the regression). Standalone must RELEASE the bottom
+//     anchor (bottom:auto) and size by height (100dvh = full chromeless
+//     screen) so exactly one of {bottom,height} constrains it. Scoped so
+//     Safari's inset:0 layout is untouched.
 {
   const media = appCss.indexOf('@media (display-mode: standalone) {');
   if (media < 0) throw new Error("missing @media (display-mode: standalone) app-viewport height fix (reopens the installed-PWA bottom white bar)");
-  const block = appCss.slice(media, media + 200);
-  if (!/\.app-viewport\s*{/.test(block) || !/height:\s*100lvh/.test(block)) {
-    throw new Error("standalone .app-viewport must set height:100lvh so the chromeless installed PWA fills the full screen");
+  const block = appCss.slice(media, media + 220);
+  if (!/\.app-viewport\s*{/.test(block)) throw new Error("standalone override must target .app-viewport");
+  if (!/bottom:\s*auto/.test(block)) {
+    throw new Error("standalone .app-viewport must set bottom:auto so inset:0's bottom does not over-constrain the height (footer-overshoot regression)");
+  }
+  if (!/height:\s*100dvh/.test(block)) {
+    throw new Error("standalone .app-viewport must set height:100dvh so the chromeless installed PWA fills exactly the visible screen (no overshoot)");
   }
 }
 // 2) The chat mount fills its slot so the composer footer sits at the bottom.
