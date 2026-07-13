@@ -708,27 +708,32 @@
 
 
 /* Robust app frame — one model for every device (desktop, macOS/Windows PWA,
- * iOS/Android). The shell is pinned to the visual viewport with position:fixed
- * inset:0 so it can NEVER be scroll-offset: previously the body kept a stray
- * scrollTop (e.g. 57px from a skip-link/mount sibling or a restored scroll
- * position) which pushed the fixed-height footer/composer off-screen. Height is
- * 100dvh so it follows the mobile URL bar and, with
- * interactive-widget=resizes-content, the on-screen keyboard. No JS scroll
- * resets and no per-device padding hacks are needed. */
+ * iOS/Android). The shell is pinned with position:fixed; inset:0 so it can
+ * NEVER be scroll-offset: previously the body kept a stray scrollTop (e.g. 57px
+ * from a skip-link/mount sibling or a restored scroll position) which pushed the
+ * fixed-height footer/composer off-screen.
+ *
+ * IMPORTANT — do NOT also set an explicit height here. A fixed box with
+ * inset:0 is already sized to its containing block (the layout viewport, which
+ * under viewport-fit=cover is the FULL screen including the bottom home-
+ * indicator region). Adding height:100dvh over-constrains the block axis: per
+ * CSS 2.1 §10.6.4, when top, bottom, and height are all non-auto the engine
+ * ignores `bottom`, so the frame anchors at top:0 and ends 100dvh down. On iOS
+ * 100dvh excludes the home-indicator inset, so the frame stopped ~34px short of
+ * the physical bottom and the page background showed through as a white bar
+ * below the composer (that inset was effectively reserved twice: the frame gap
+ * PLUS the composer's own env(safe-area-inset-bottom) padding). Letting inset:0
+ * size the box fills the cover viewport exactly, and the composer's padding
+ * remains the single, correct home-indicator reservation. */
 html {
   height: 100%;
 }
 .app-viewport {
   position: fixed;
   inset: 0;
-  height: 100dvh;
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-}
-/* Fallback for engines without dvh: svh is the smallest stable viewport. */
-@supports not (height: 100dvh) {
-  .app-viewport { height: 100svh; }
 }
 
 /* The chat is hydrated into a generic svelte-hono mount div
