@@ -71,6 +71,16 @@ function appViewportBlock() {
 }
 
 const SAB = 34; // iPhone home-indicator inset (CSS px), reported by iOS as env(safe-area-inset-bottom)
+const TOOLBAR = 88; // iOS Safari bottom toolbar height (CSS px). In an installed
+// (standalone) PWA there is NO toolbar, but iOS still sizes a fixed inset:0 box
+// to the small (toolbar-present) viewport, leaving a toolbar-height white bar.
+
+// Assert app.css ships the standalone override that fixes the installed-PWA
+// bar, and model it below with height = full device screen (what 100lvh /
+// -webkit-fill-available resolve to in a chromeless standalone PWA).
+if (!/@media \(display-mode: standalone\) \{[\s\S]*?\.app-viewport \{[\s\S]*?height:\s*100lvh/.test(appCss)) {
+  throw new Error("REGRESSION: app.css missing the standalone .app-viewport height:100lvh override (reopens the installed-PWA white bar)");
+}
 
 // Representative CSS viewports (portrait). The first is the owner's exact
 // screenshot geometry (1320x2868 physical ÷ DPR 3).
@@ -167,6 +177,21 @@ for (const engineName of ["chromium"]) {
     const gap = broken.deviceBottom - broken.frameBottom;
     check(gap === SAB,
       `[${engineName} ${vp.name}] broken shape expected a ${SAB}px white gap but got ${gap}px (guard not catching the regression)`);
+
+    // 4) INSTALLED-PWA (standalone): the device screen is full height, but iOS
+    //    sizes the fixed frame to the small (toolbar-present) viewport. Model
+    //    the WITHOUT-fix case (inset:0 sized to screen-minus-toolbar) — it MUST
+    //    leak a toolbar-height bar, proving the bug and that the test catches
+    //    it. Then the WITH-fix case (standalone override height = full screen)
+    //    MUST reach the bottom.
+    const pwaBroken = await rects(page, brokenDeclsFor(vp.h - TOOLBAR), vp.h, false);
+    check(pwaBroken.deviceBottom - pwaBroken.frameBottom === TOOLBAR,
+      `[${engineName} ${vp.name}] standalone WITHOUT the fix should leak a ${TOOLBAR}px bar but leaked ${pwaBroken.deviceBottom - pwaBroken.frameBottom}px`);
+    const pwaFixed = await rects(page, `${shippedDecls}; height: ${vp.h}px`, vp.h, false);
+    check(pwaFixed.frameBottom === pwaFixed.deviceBottom,
+      `[${engineName} ${vp.name}] standalone WITH the 100lvh fix: frame bottom ${pwaFixed.frameBottom} != device bottom ${pwaFixed.deviceBottom} (installed-PWA bar not closed)`);
+    check(pwaFixed.composerBottom === pwaFixed.deviceBottom,
+      `[${engineName} ${vp.name}] standalone WITH the fix: composer bottom ${pwaFixed.composerBottom} != device bottom ${pwaFixed.deviceBottom}`);
 
     await ctx.close();
   }
