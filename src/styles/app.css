@@ -737,29 +737,34 @@ html {
 }
 
 /* iOS INSTALLED-PWA fix. In Safari, position:fixed; inset:0 fills the visible
- * area perfectly because the browser toolbar occupies the rest of the screen.
- * But in a home-screen (standalone) PWA there is NO toolbar, and iOS still
- * sizes the fixed containing block to the SMALL viewport (as if the toolbar
- * were present) — so the frame comes up short by exactly the toolbar's height
- * and the white html background shows through below the composer. Only in
- * standalone mode, pin the frame to the LARGE viewport (100lvh = the full
- * screen with browser UI retracted), which is exactly what a chromeless PWA
- * should fill. Scoped to standalone so Safari's already-correct layout is
- * untouched. min-height covers engines that honor lvh but not the fixed-box
- * sizing quirk. */
+ * area perfectly (the browser toolbar occupies the rest of the screen). In a
+ * home-screen (standalone) PWA there is NO toolbar, but iOS still sizes a fixed
+ * inset:0 box to the SMALL viewport, leaving a toolbar-height white bar below
+ * the composer.
+ *
+ * The fix must NOT add a conflicting height to inset:0. inset:0 already sets
+ * top:0 AND bottom:0; adding height too over-constrains the block axis (CSS
+ * 2.1 §10.6.4) so `bottom` is dropped and the box extends `height` DOWNWARD
+ * from top:0 — with 100lvh that overshoots past the bottom, pushing the footer
+ * into the home-indicator zone (the regression: footer cut off under a dark
+ * bar). Instead, in standalone only, release the bottom anchor (bottom:auto)
+ * and size by height:100dvh — the dynamic viewport, which in a chromeless
+ * standalone PWA IS the full screen (no toolbar to subtract). Now exactly one
+ * of {bottom, height} constrains the box, so it fills top→full-height with no
+ * overshoot. Safari keeps the untouched inset:0 path. */
 @media (display-mode: standalone) {
   .app-viewport {
-    height: 100lvh;
-    min-height: 100lvh;
+    bottom: auto;
+    height: 100dvh;
   }
 }
-@supports not (height: 100lvh) {
+@supports not (height: 100dvh) {
   @media (display-mode: standalone) {
-    /* Older iOS without lvh: -webkit-fill-available resolves to the full
+    /* Older iOS without dvh: -webkit-fill-available resolves to the full
      * standalone height (no toolbar to subtract). */
     .app-viewport {
+      bottom: auto;
       height: -webkit-fill-available;
-      min-height: -webkit-fill-available;
     }
   }
 }
