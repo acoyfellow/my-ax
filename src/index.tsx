@@ -41,9 +41,11 @@ import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerDecisionRoutes } from "./routes/decisions";
 import { registerCapabilityRoutes } from "./routes/capabilities";
+import { registerMeetingsRoutes } from "./routes/meetings";
 import { registerRecipeRoutes } from "./routes/recipes";
 import { registerCostSeriesRoutes } from "./routes/cost-series";
 import { CapabilitiesPage } from "./views/CapabilitiesPage";
+import { TeamMeetingsPage } from "./views/TeamMeetingsPage";
 import { getSessionAgent } from "./agent-stub";
 import { registerSvelteServe } from "../proof/svelte/serve";
 import { scanDeadSessions } from "./dead-session";
@@ -190,6 +192,9 @@ app.use("/runs/*", accessMiddleware());
 app.use("/runs", accessMiddleware());
 app.use("/jobs", accessMiddleware());
 app.use("/capabilities", accessMiddleware());
+// Gate both the base rendered path and its subroutes (see /attention note above).
+app.use("/team/meetings", accessMiddleware());
+app.use("/team/meetings/*", accessMiddleware());
 
 // ─── Health / discovery ────────────────────────────────────────────────────
 // Bodyless, storage-free probe for open clients. Version Metadata makes this
@@ -295,6 +300,7 @@ registerCostSeriesRoutes(app);
 registerArtifactRoutes(app);
 registerDecisionRoutes(app);
 registerCapabilityRoutes(app);
+registerMeetingsRoutes(app);
 registerSvelteServe(app);
 
 // ─── System / workspace container info ─────────────────────────────────────
@@ -529,6 +535,20 @@ app.get("/capabilities", (c) => {
   const theme = readThemeCookie(c);
   return c.html(
     <CapabilitiesPage
+      identityEmail={identity?.email ?? null}
+      buildId={buildId}
+      theme={theme}
+      appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+    />,
+  );
+});
+
+app.get("/team/meetings", (c) => {
+  const identity = c.get("identity");
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
+  const theme = readThemeCookie(c);
+  return c.html(
+    <TeamMeetingsPage
       identityEmail={identity?.email ?? null}
       buildId={buildId}
       theme={theme}

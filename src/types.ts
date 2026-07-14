@@ -72,6 +72,14 @@ declare global {
       // private deployments inject JSON without committing connector names.
       BUILTIN_CONNECTORS_JSON?: string;
 
+      // Optional, deploy-owned base URL of the shared team meeting-notes
+      // service (oatmeal-notes), e.g. https://oatmeal.ax.cloudflare.dev.
+      // Injected by the private deploy wrapper so the internal hostname is
+      // never committed to the public engine. When unset, /team/meetings
+      // renders a "not configured" state. my-ax and oatmeal share one Access
+      // application, so the caller's forwarded Access token validates upstream.
+      OATMEAL_NOTES_URL?: string;
+
       /**
        * Optional, deploy-owned exact allowlist for official MCP Code Mode.
        * Shape: {"version":1,"enabled":true,"connectors":{"id":{"expose":["tool"]}}}
