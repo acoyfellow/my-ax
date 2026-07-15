@@ -1,0 +1,23 @@
+proof/svelte/Chat.svelte
+  s_e050e2bde8a246::t_c2ac273a4d1554 1575-1581
+proof/svelte/transcript-merge.test.ts
+  s_e050e2bde8a246::t_742f7b7f144ac2 64-83
+proof/svelte/transcript-merge.ts
+  s_e050e2bde8a246::t_46001439b3c1d9 27-34,54-59,77-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4779ab39a5e78f5ccf2e96b4f6014995f353fb3b",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
