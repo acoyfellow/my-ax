@@ -13,6 +13,7 @@
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
+  import { mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
@@ -1483,7 +1484,15 @@
     const wasResuming = resumingExistingSession;
     thinkMessages = historyMessages || [];
     const existingTimestamps = new Map(messages.map((message) => [message.id, message.timestamp]));
-    messages = [];
+    // Do NOT clear the transcript here. The D1 eager restore already rendered the
+    // durable, complete history; Think's replay is authoritative for content but can
+    // be COMPACTED (fewer messages than the human wrote). Clearing then rebuilding
+    // from Think alone dropped any assistant reply Think omitted (the P1 "replies
+    // lost" race). Instead we build Think's views separately and MERGE: Think wins on
+    // id collision (authoritative content), but D1-only messages are kept. See
+    // transcript-merge.ts. Alignment is by id (D1 meta.uiMessageId === Think id).
+    const priorMessages = messages;
+    const thinkViews: MessageView[] = [];
     if (thinkMessages.length > 0) {
       onboardingHidden = true;
       if (wasResuming) {
@@ -1558,8 +1567,12 @@
         streaming: false,
         pending: false,
       };
-      messages = [...messages, m];
+      thinkViews.push(m);
     }
+    // Merge Think's replay into whatever the D1 eager restore already rendered.
+    // Think wins on id collision (authoritative), D1-only messages survive. When
+    // Think replayed nothing, this preserves the D1 transcript unchanged.
+    messages = thinkViews.length > 0 ? mergeTranscript(priorMessages, thinkViews) : priorMessages;
     void hydrateHistoryTimestamps();
     void revealResumedHistoryAtBottom();
   }
