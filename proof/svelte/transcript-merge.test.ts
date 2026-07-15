@@ -61,6 +61,26 @@ test("preferIncoming=false keeps existing on collision (defensive option)", () =
   assert.equal(merged[0].content, "keep me");
 });
 
+test("keepExistingOnlyIf drops D1-only synthetic tool rows but keeps real turns", () => {
+  // D1 restored: a real assistant turn (a1) + a synthetic tool row (d1-9).
+  // Think's replay omits both (compacted) but will re-render the tool inline.
+  const d1 = [msg("u1", "user", 1), msg("a1", "assistant", 2), msg("d1-9", "system", 3)];
+  const think = [msg("u1", "user", 1)];
+  const merged = mergeTranscript(d1, think, { keepExistingOnlyIf: (m) => !m.id.startsWith("d1-") });
+  assert.deepEqual(merged.map((m) => m.id), ["u1", "a1"]);
+  assert.ok(!merged.find((m) => m.id === "d1-9"), "synthetic tool row must be dropped");
+});
+
+test("keepExistingOnlyIf still keeps a d1- row if Think ALSO has that id (collision path)", () => {
+  // Defensive: if the same id appears on both sides, it's not existing-only, so the
+  // predicate does not apply and the incoming (Think) version is used.
+  const d1 = [msg("d1-9", "system", 3, { content: "d1" })];
+  const think = [msg("d1-9", "assistant", 3, { content: "think" })];
+  const merged = mergeTranscript(d1, think, { keepExistingOnlyIf: (m) => !m.id.startsWith("d1-") });
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].content, "think");
+});
+
 test("no duplicate ids in output when both sides share ids", () => {
   const d1 = [msg("u1", "user", 1), msg("a1", "assistant", 2)];
   const think = [msg("u1", "user", 1), msg("a1", "assistant", 2)];

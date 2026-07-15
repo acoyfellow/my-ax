@@ -24,6 +24,14 @@ export type MergeOptions = {
   // When true (Think replay), incoming entries override existing on id collision.
   // The default is what the resume path wants.
   preferIncoming?: boolean;
+  // Predicate deciding whether an EXISTING (D1) message that Think's replay OMITTED
+  // may be retained. Needed because D1 tool rows render as standalone `system`
+  // messages with synthetic `d1-<n>` ids, but Think represents those same tool
+  // calls as INLINE parts of assistant messages — so keeping the D1 tool rows on
+  // top of Think's replay would DUPLICATE them. Only genuine turns that carry a
+  // real ui id (a user/assistant message Think may have compacted away) should be
+  // retained. Defaults to keeping everything (pure-merge semantics for tests).
+  keepExistingOnlyIf?: (msg: MergeableMessage) => boolean;
 };
 
 /**
@@ -43,6 +51,12 @@ export function mergeTranscript<T extends MergeableMessage>(
   options: MergeOptions = {},
 ): T[] {
   const preferIncoming = options.preferIncoming ?? true;
+  const keepExistingOnlyIf = options.keepExistingOnlyIf;
+
+  // A message that exists ONLY in `incoming` is always kept. An existing-only
+  // message is kept unless the caller's predicate rejects it (used to drop D1
+  // tool/synthetic rows that Think re-materializes inline).
+  const incomingIds = new Set(incoming.map((m) => m.id));
 
   // First-seen order gives a stable tiebreaker for equal timestamps.
   const order = new Map<string, number>();
@@ -60,7 +74,10 @@ export function mergeTranscript<T extends MergeableMessage>(
     if (incomingSide === preferIncoming) chosen.set(msg.id, msg);
   };
 
-  for (const m of existing) consider(m, false);
+  for (const m of existing) {
+    if (keepExistingOnlyIf && !incomingIds.has(m.id) && !keepExistingOnlyIf(m)) continue;
+    consider(m, false);
+  }
   for (const m of incoming) consider(m, true);
 
   const merged = [...chosen.values()];
