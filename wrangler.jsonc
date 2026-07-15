@@ -15,7 +15,7 @@
 // Required at-deploy vars (override below or via `wrangler deploy --var`):
 //   - CLOUDFLARE_ACCOUNT_ID # your Cloudflare account id
 //   - CF_ACCESS_AUD         # Access app AUD if you front this with Access
-//   - CF_ACCESS_ISS         # Access team domain, e.g. https://<team>.example.com
+//   - CF_ACCESS_ISS         # Access issuer(s), comma-separated during a domain migration
 //   - BRIDGE_BASE_URL       # public origin of this deploy
 //
 // MODELS:
