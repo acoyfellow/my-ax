@@ -14,9 +14,9 @@ test("normalizes Cloudflare Access issuer URLs", () => {
   assert.equal(normalizeAccessIssuer(""), null);
 });
 
-test("falls back to JWT issuer when the configured issuer is malformed", () => {
+test("rejects the JWT issuer when the configured issuer is malformed", () => {
   const token = unsignedJwt({ iss: "https://support-chat.cloudflareaccess.com", aud: ["aud"] });
-  assert.equal(resolveAccessIssuerForTest(token, "not a url"), "https://support-chat.cloudflareaccess.com");
+  assert.equal(resolveAccessIssuerForTest(token, "not a url"), null);
 });
 
 test("configured issuer wins when valid", () => {
@@ -24,6 +24,18 @@ test("configured issuer wins when valid", () => {
   assert.equal(resolveAccessIssuerForTest(token, "https://support-chat.cloudflareaccess.com/"), "https://support-chat.cloudflareaccess.com");
 });
 
+test("selects a token issuer from the configured migration allowlist", () => {
+  const oldIssuer = "https://support-chat.cloudflareaccess.com";
+  const newIssuer = "https://ax.cloudflareaccess.com";
+  const configured = `${oldIssuer},${newIssuer}`;
+
+  assert.equal(resolveAccessIssuerForTest(unsignedJwt({ iss: oldIssuer }), configured), oldIssuer);
+  assert.equal(resolveAccessIssuerForTest(unsignedJwt({ iss: newIssuer }), configured), newIssuer);
+  assert.equal(
+    resolveAccessIssuerForTest(unsignedJwt({ iss: "https://evil.example.com" }), configured),
+    null,
+  );
+});
 
 test("dev bypass works for local loopback browser navigation", async () => {
   const identity = await verifyAccessRequest(new Request("http://localhost/api/health"), {

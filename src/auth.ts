@@ -20,7 +20,7 @@ export interface AccessIdentity {
 
 interface AuthEnv {
   CF_ACCESS_AUD: string;     // Application Audience tag from Zero Trust dashboard
-  CF_ACCESS_ISS: string;     // Team domain, e.g. https://<team>.example.com
+  CF_ACCESS_ISS: string;     // Allowed issuers, comma-separated during a domain migration
   ENVIRONMENT?: string;      // "dev" may bypass verification only for local runtimes
   DEV_USER_EMAIL?: string;
   DEV_USER_GROUPS?: string;  // comma-separated
@@ -56,12 +56,20 @@ function unsafeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 export function resolveAccessIssuerForTest(token: string, configuredIssuer: unknown) {
-  const configured = normalizeAccessIssuer(configuredIssuer);
-  if (configured) return configured;
-  // Fallback only chooses the JWKS origin. jwtVerify still validates the token
-  // signature and the configured audience below. Without this, a malformed
-  // deploy var breaks every protected route with jose's opaque "Invalid URL".
-  return normalizeAccessIssuer(unsafeJwtPayload(token)?.iss);
+  const configured =
+    typeof configuredIssuer === "string"
+      ? configuredIssuer
+          .split(",")
+          .map(normalizeAccessIssuer)
+          .filter((issuer): issuer is string => issuer !== null)
+      : [];
+  if (configured.length === 0) return null;
+  if (configured.length === 1) return configured[0];
+  if (configured.length > 1) {
+    const tokenIssuer = normalizeAccessIssuer(unsafeJwtPayload(token)?.iss);
+    return tokenIssuer && configured.includes(tokenIssuer) ? tokenIssuer : null;
+  }
+  return null;
 }
 
 function getJWKS(iss: string) {
