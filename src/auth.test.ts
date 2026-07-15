@@ -15,18 +15,18 @@ test("normalizes Cloudflare Access issuer URLs", () => {
 });
 
 test("rejects the JWT issuer when the configured issuer is malformed", () => {
-  const token = unsignedJwt({ iss: "https://support-chat.cloudflareaccess.com", aud: ["aud"] });
+  const token = unsignedJwt({ iss: "https://old-team.cloudflareaccess.com", aud: ["aud"] });
   assert.equal(resolveAccessIssuerForTest(token, "not a url"), null);
 });
 
 test("configured issuer wins when valid", () => {
   const token = unsignedJwt({ iss: "https://evil.example.com", aud: ["aud"] });
-  assert.equal(resolveAccessIssuerForTest(token, "https://support-chat.cloudflareaccess.com/"), "https://support-chat.cloudflareaccess.com");
+  assert.equal(resolveAccessIssuerForTest(token, "https://old-team.cloudflareaccess.com/"), "https://old-team.cloudflareaccess.com");
 });
 
 test("selects a token issuer from the configured migration allowlist", () => {
-  const oldIssuer = "https://support-chat.cloudflareaccess.com";
-  const newIssuer = "https://ax.cloudflareaccess.com";
+  const oldIssuer = "https://old-team.cloudflareaccess.com";
+  const newIssuer = "https://new-team.cloudflareaccess.com";
   const configured = `${oldIssuer},${newIssuer}`;
 
   assert.equal(resolveAccessIssuerForTest(unsignedJwt({ iss: oldIssuer }), configured), oldIssuer);
