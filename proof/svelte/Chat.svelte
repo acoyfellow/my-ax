@@ -1572,7 +1572,13 @@
     // Merge Think's replay into whatever the D1 eager restore already rendered.
     // Think wins on id collision (authoritative), D1-only messages survive. When
     // Think replayed nothing, this preserves the D1 transcript unchanged.
-    messages = thinkViews.length > 0 ? mergeTranscript(priorMessages, thinkViews) : priorMessages;
+    // keepExistingOnlyIf: retain a D1 message Think omitted ONLY if it is a genuine
+    // turn (real ui id). D1 tool rows are synthetic `d1-<n>` system messages that
+    // Think re-renders as inline assistant parts, so dropping them here avoids
+    // duplicated tool output.
+    messages = thinkViews.length > 0
+      ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: (m) => !m.id.startsWith("d1-") })
+      : priorMessages;
     void hydrateHistoryTimestamps();
     void revealResumedHistoryAtBottom();
   }
