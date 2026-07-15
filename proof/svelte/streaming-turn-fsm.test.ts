@@ -22,7 +22,7 @@ function activeState(requestId = "r1"): StreamingTurnState {
   return transition(idleStreamingTurnState, { type: "submit", requestId });
 }
 
-test("CFSA-651 keeps pre-text progress eligible through reasoning and step-only gaps until text", () => {
+test("keeps pre-text progress eligible through reasoning and step-only gaps until text", () => {
   let state = activeState("r1");
   for (const chunkType of ["start", "start-step", "reasoning-delta", "finish-step", "tool-input-available"]) {
     state = transition(state, frame("r1", chunkType));
