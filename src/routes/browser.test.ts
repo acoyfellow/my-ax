@@ -35,6 +35,16 @@ test("browser replay page serves the inline player + Loading placeholder", async
   assert.ok(html.includes("Loading replay"), "keeps the loading placeholder");
 });
 
+test("browser replay has a watchdog + raw-data fallback so it can't hang silently forever", async () => {
+  const html = await (await makeApp().request("/browser/replay/abc-123")).text();
+  // A timeout that flips to a visible failure instead of a permanent spinner.
+  assert.ok(/setTimeout\(/.test(html) && /watchdog/.test(html), "must arm a watchdog timeout");
+  // Every failure offers the raw recording endpoint so a user can self-diagnose.
+  assert.ok(html.includes("Open the raw recording data"), "must offer a raw-data escape hatch on failure");
+  // A no-JS fallback (in case the module is ever blocked again).
+  assert.ok(html.includes("<noscript>"), "must include a noscript fallback");
+});
+
 test("browser replay CSP lets the reconstructed DOM render its images (img/media data:+blob:)", async () => {
   const res = await makeApp().request("/browser/replay/abc-123");
   const csp = res.headers.get("Content-Security-Policy") ?? "";
