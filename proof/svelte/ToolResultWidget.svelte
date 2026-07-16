@@ -5,6 +5,10 @@
   let { result, toolName = "tool" }: { result: unknown; toolName?: string } = $props();
   let widget = $derived(resolveToolResultWidget(result, toolName));
   let fullscreen = $state(false);
+  // Media that fails to load/decode (404, dead artifact, unsupported codec like
+  // .mov in some browsers) flips to a direct-open link instead of a silent
+  // broken/blank player. Keyed by src so multiple widgets don't clobber.
+  let mediaError = $state<Record<string, boolean>>({});
   let reusableToolAction = $state<"idle" | "approving" | "enabled" | "error">("idle");
   let reusableToolMessage = $state("");
 
@@ -145,9 +149,17 @@
     ></iframe>
   {/if}
 {:else if widget.kind === "inline-raster-image"}
-  <img class="tool-call__inline-image" src={widget.src} alt={widget.alt} loading="lazy" data-tool-widget="inline-raster-image" />
+  {#if mediaError[widget.src]}
+    <a class="tool-call__media-fallback" href={widget.src} target="_blank" rel="noreferrer" data-tool-widget="inline-raster-image-fallback">Image unavailable — open it directly</a>
+  {:else}
+    <img class="tool-call__inline-image" src={widget.src} alt={widget.alt} loading="lazy" data-tool-widget="inline-raster-image" onerror={() => (mediaError[widget.src] = true)} />
+  {/if}
 {:else if widget.kind === "inline-video"}
-  <video class="tool-call__inline-video" src={widget.src} controls preload="metadata" playsinline aria-label={widget.label} data-tool-widget="inline-video"></video>
+  {#if mediaError[widget.src]}
+    <a class="tool-call__media-fallback" href={widget.src} target="_blank" rel="noreferrer" data-tool-widget="inline-video-fallback">Video couldn’t play here — download the recording</a>
+  {:else}
+    <video class="tool-call__inline-video" src={widget.src} controls preload="metadata" playsinline aria-label={widget.label} data-tool-widget="inline-video" onerror={() => (mediaError[widget.src] = true)}></video>
+  {/if}
 {:else if widget.kind === "reusable-tool-candidate"}
   <section
     class="tool-call__result reusable-tool-candidate"
