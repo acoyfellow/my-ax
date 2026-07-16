@@ -537,7 +537,7 @@ export class MyAgent extends Think<Env> {
     const users = this.messages.filter((message) => message.role === "user");
     let insertedLatest = false;
     for (const message of users) {
-      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'user' AND json_extract(meta_json, '$.uiMessageId') = ? LIMIT 1")
+      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'user' AND ui_message_id = ? LIMIT 1")
         .bind(this.name, identity.email, message.id).first<{ id: number }>().catch(() => null);
       if (existing) continue;
       const attachments = attachmentParts(message);
@@ -582,7 +582,7 @@ export class MyAgent extends Think<Env> {
       })),
     );
     for (const message of candidates) {
-      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'assistant' AND json_extract(meta_json, '$.uiMessageId') = ? LIMIT 1")
+      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'assistant' AND ui_message_id = ? LIMIT 1")
         .bind(this.name, identity.email, message.id).first<{ id: number }>().catch(() => null);
       if (existing) continue;
       await logAssistantMessage(this.env, identity, this.name, message.text, {

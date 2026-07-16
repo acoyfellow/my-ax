@@ -57,7 +57,7 @@ export async function appendConversationLog(
          WHERE NOT EXISTS (
            SELECT 1 FROM conversation_entries
            WHERE session_id = ? AND owner_email = ? AND role = ?
-             AND json_extract(meta_json, '$.uiMessageId') = ?
+             AND ui_message_id = ?
          )`,
       ).bind(
         sessionId, identity.email.toLowerCase(), entry.ts, entry.role, entry.tool ?? null, entry.isError ? 1 : 0, entry.content ?? null, metaJson,
@@ -71,7 +71,7 @@ export async function appendConversationLog(
          WHERE NOT EXISTS (
            SELECT 1 FROM conversation_entries
            WHERE session_id = ? AND owner_email = ? AND role = 'tool'
-             AND json_extract(meta_json, '$.toolCallId') = ?
+             AND tool_call_id = ?
          )`,
       ).bind(
         sessionId, identity.email.toLowerCase(), entry.ts, entry.role, entry.tool ?? null, entry.isError ? 1 : 0, entry.content ?? null, metaJson,
