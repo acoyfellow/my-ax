@@ -301,6 +301,18 @@ const chatPageStyles = `
     background: #0a0a0a;
     border-top: 1px solid var(--line);
   }
+  .tool-call__media-fallback {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: #0a0a0a;
+    border-top: 1px solid var(--line);
+    color: var(--brand, #8b93ff);
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+  .tool-call__media-fallback:hover { text-decoration: underline; }
 
   .msg-user[data-pending="1"] .msg-body { opacity: 0.75; }
   .msg-user[data-pending="0"] .msg-body { opacity: 1; transition: opacity 120ms; }
