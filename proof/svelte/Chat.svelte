@@ -13,6 +13,7 @@
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
+  import { mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
@@ -598,6 +599,16 @@
   }
   function syncScrollToBottom() {
     scrollToBottomVisible = !isLogPinned();
+    // P1 Stage 2: page older history when the user scrolls near the top. Preserve
+    // the visual position across the prepend so the viewport doesn't jump.
+    if (logEl && logEl.scrollTop < 200 && olderHistoryCursor !== null && olderHistoryCursor !== "" && !loadingOlderHistory) {
+      const prevHeight = logEl.scrollHeight;
+      const prevTop = logEl.scrollTop;
+      void loadOlderHistory().then(async () => {
+        await tick();
+        if (logEl) logEl.scrollTop = prevTop + (logEl.scrollHeight - prevHeight);
+      });
+    }
   }
   function queueScrollToBottom() {
     if (!logEl) return;
@@ -1424,6 +1435,25 @@
     fetchPage: (after) => fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?after=${encodeURIComponent(after)}&limit=200`, { credentials: "include" }),
   });
 
+  // P1 Stage 2: cursor for paging OLDER history on scroll-up after the newest
+  // page rendered. null = not yet loaded; "" = no older history remains.
+  let olderHistoryCursor: string | null = null;
+  let loadingOlderHistory = false;
+
+  // Fetch ONE newest-first bounded page (fast first paint). Returns entries in
+  // chronological order plus the cursor to page further back.
+  async function loadNewestEntries(expected: SessionGeneration, limit = 100): Promise<
+    { outcome: "stale" } | { outcome: "current"; entries: any[]; olderCursor: string | null; hasOlder: boolean }
+  > {
+    if (!sessionWorkIsCurrent(expected)) return { outcome: "stale" };
+    const res = await fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?order=desc&limit=${limit}`, { credentials: "include" });
+    if (!res.ok || !sessionWorkIsCurrent(expected)) return { outcome: "stale" };
+    const body = await res.json();
+    if (!sessionWorkIsCurrent(expected)) return { outcome: "stale" };
+    const r = body?.result ?? {};
+    return { outcome: "current", entries: r.entries ?? [], olderCursor: r.olderCursor ?? null, hasOlder: !!r.hasOlder };
+  }
+
   async function hydrateHistoryTimestamps() {
     const expected = sessionGeneration.capture();
     if (!expected) return;
@@ -1439,24 +1469,59 @@
     messages = messages.map((message) => ({ ...message, timestamp: timestamps.get(message.id) ?? message.timestamp }));
   }
 
+  function d1EntryToMessage(entry: any): Message {
+    const role = entry.role === "tool" ? "system" : entry.role;
+    const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
+    return { id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false };
+  }
+
   async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
     if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
-    const result = await loadSessionEntries(expected, 20);
+    // P1 Stage 2: render ONE newest-first bounded page immediately instead of
+    // draining up to 20 oldest-first 200-row pages before first paint. Older
+    // history pages in on scroll-up via loadOlderHistory.
+    const result = await loadNewestEntries(expected, 100);
     if (result.outcome === "stale") return "stale";
-    const restored: Message[] = [];
-    for (const entry of result.entries) {
-      const role = entry.role === "tool" ? "system" : entry.role;
-      const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
-      restored.push({ id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false });
-    }
+    const restored: Message[] = result.entries.map(d1EntryToMessage);
     if (!sessionWorkIsCurrent(expected)) return "stale";
     if (!restored.length) return "empty";
     messages = restored;
+    olderHistoryCursor = result.hasOlder ? (result.olderCursor ?? "") : "";
     onboardingHidden = true;
     // The eager fast-path load is a normal resume, not a recovery — stay quiet.
     // The explicit recovery paths (empty Think replay) still surface the notice.
     if (!quiet) pushSystem("Conversation restored from the durable transcript.");
     return "restored";
+  }
+
+  // P1 Stage 2: page older history on scroll-up. Prepends an older newest-first
+  // page (chronological) ahead of the current transcript, merged by id so a
+  // Think replay that already rendered some of these does not duplicate them.
+  async function loadOlderHistory(): Promise<void> {
+    if (loadingOlderHistory || olderHistoryCursor === null || olderHistoryCursor === "") return;
+    const expected = sessionGeneration.capture();
+    if (!expected) return;
+    loadingOlderHistory = true;
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?order=desc&before=${encodeURIComponent(olderHistoryCursor)}&limit=100`, { credentials: "include" });
+      if (!res.ok || !sessionWorkIsCurrent(expected)) return;
+      const body = await res.json();
+      if (!sessionWorkIsCurrent(expected)) return;
+      const r = body?.result ?? {};
+      // Drop synthetic d1- tool rows from paged-older history: Think renders tool
+      // calls as inline assistant parts, so a standalone d1- system row would
+      // duplicate an inline tool once the assistant turn is also shown. Keep only
+      // genuine turns (real ui id) that aren't already in the view.
+      const older: Message[] = (r.entries ?? [])
+        .map(d1EntryToMessage)
+        .filter((m: Message) => !m.id.startsWith("d1-"));
+      if (older.length) messages = mergeTranscript(older as any, messages as any) as typeof messages;
+      olderHistoryCursor = r.hasOlder ? (r.olderCursor ?? "") : "";
+    } catch {
+      // leave cursor intact so a later scroll retries
+    } finally {
+      loadingOlderHistory = false;
+    }
   }
 
   // When Think compacts a long session it replays fewer messages than the
@@ -1483,7 +1548,15 @@
     const wasResuming = resumingExistingSession;
     thinkMessages = historyMessages || [];
     const existingTimestamps = new Map(messages.map((message) => [message.id, message.timestamp]));
-    messages = [];
+    // Do NOT clear the transcript here. The D1 eager restore already rendered the
+    // durable, complete history; Think's replay is authoritative for content but can
+    // be COMPACTED (fewer messages than the human wrote). Clearing then rebuilding
+    // from Think alone dropped any assistant reply Think omitted (the P1 "replies
+    // lost" race). Instead we build Think's views separately and MERGE: Think wins on
+    // id collision (authoritative content), but D1-only messages are kept. See
+    // transcript-merge.ts. Alignment is by id (D1 meta.uiMessageId === Think id).
+    const priorMessages = messages;
+    const thinkViews: MessageView[] = [];
     if (thinkMessages.length > 0) {
       onboardingHidden = true;
       if (wasResuming) {
@@ -1558,8 +1631,18 @@
         streaming: false,
         pending: false,
       };
-      messages = [...messages, m];
+      thinkViews.push(m);
     }
+    // Merge Think's replay into whatever the D1 eager restore already rendered.
+    // Think wins on id collision (authoritative), D1-only messages survive. When
+    // Think replayed nothing, this preserves the D1 transcript unchanged.
+    // keepExistingOnlyIf: retain a D1 message Think omitted ONLY if it is a genuine
+    // turn (real ui id). D1 tool rows are synthetic `d1-<n>` system messages that
+    // Think re-renders as inline assistant parts, so dropping them here avoids
+    // duplicated tool output.
+    messages = thinkViews.length > 0
+      ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: (m) => !m.id.startsWith("d1-") })
+      : priorMessages;
     void hydrateHistoryTimestamps();
     void revealResumedHistoryAtBottom();
   }
