@@ -1508,7 +1508,13 @@
       const body = await res.json();
       if (!sessionWorkIsCurrent(expected)) return;
       const r = body?.result ?? {};
-      const older: Message[] = (r.entries ?? []).map(d1EntryToMessage);
+      // Drop synthetic d1- tool rows from paged-older history: Think renders tool
+      // calls as inline assistant parts, so a standalone d1- system row would
+      // duplicate an inline tool once the assistant turn is also shown. Keep only
+      // genuine turns (real ui id) that aren't already in the view.
+      const older: Message[] = (r.entries ?? [])
+        .map(d1EntryToMessage)
+        .filter((m: Message) => !m.id.startsWith("d1-"));
       if (older.length) messages = mergeTranscript(older as any, messages as any) as typeof messages;
       olderHistoryCursor = r.hasOlder ? (r.olderCursor ?? "") : "";
     } catch {
