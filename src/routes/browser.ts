@@ -43,7 +43,15 @@ export function registerBrowserRoutes(app: Hono<AppEnv>) {
       ? `width:Math.min(window.innerWidth,1200),height:Math.max(160,Math.min(window.innerHeight-96,1200))`
       : `width:Math.min(window.innerWidth-24,900),height:Math.min(window.innerHeight-80,700)`;
     return c.html(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Browser replay · my · ax</title><link rel="stylesheet" href="/static/vendor/rrweb-player.css"><style>${layout}</style>${header}<main id="shell"><div class="badge" id="badge">Loading playback…</div><div id="replay" class="loading">Loading replay…</div></main><script type="module">import rrwebPlayer from "/static/vendor/rrweb-player.mjs";const root=document.getElementById("replay");const badge=document.getElementById("badge");const id=${id};const clock=(ms)=>ms<1000?ms+" ms":(ms/1000).toFixed(ms<10000?1:0)+" s";try{const r=await fetch('/api/browser/recordings/'+encodeURIComponent(id));if(!r.ok)throw new Error((await r.json()).error?.message||'Replay unavailable');const body=await r.json();const events=Object.values((body.result||body).events||{})[0]||[];const times=events.map((event)=>event.timestamp).filter((value)=>Number.isFinite(value));const duration=times.length>1?Math.max(0,times[times.length-1]-times[0]):0;if(duration<1000){badge?.remove();root.className='still';root.innerHTML='<strong>Snapshot captured</strong><span>This browser run finished in '+clock(duration)+' — there is no meaningful playback to scrub.</span>'; }else{badge.textContent='Visual replay · '+clock(duration);root.className='';root.textContent='';new rrwebPlayer({target:root,props:{events,autoPlay:false,showController:true,skipInactive:false,${playerSize}}});}}catch(e){badge?.remove();root.className='error';root.textContent=e.message}</script>`, 200, {
-      "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src data:; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+      // The player is an inline <script type="module"> whose bytes vary per
+      // request (id + playerSize interpolation), so a static CSP hash can't
+      // cover it. script-src 'self' silently BLOCKED the inline module, leaving
+      // the page stuck on "Loading replay…" (no visible error). Allow inline
+      // script (matches artifacts.ts / decisions.ts, the other inline-script
+      // routes) plus 'self' for the imported rrweb-player.mjs. Widen img-src to
+      // blob:/data: so the rrweb-reconstructed DOM can render its captured
+      // images/screenshots; keep everything else locked to 'none'/'self'.
+      "Content-Security-Policy": "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });
