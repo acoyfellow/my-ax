@@ -1,0 +1,25 @@
+package.json
+  s_2a77a1542d3982::t_16d2d81687dcb8 39,69
+src/routes/browser.test.ts
+  s_2a77a1542d3982::t_a795b0269e51cf 38-47
+src/routes/browser.ts
+  s_2a77a1542d3982::t_9200deba1d7c70 45
+src/views/ChatPage.tsx
+  s_2a77a1542d3982::t_ee444f193fcbc5 304-315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d70d8fabbf17e1706b741154544f45b7681338c3",
+  "prompts": {},
+  "sessions": {
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
