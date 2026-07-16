@@ -1,25 +1,24 @@
--- P1 transcript-race Stage 4: index the uiMessageId dedup lookup.
+-- P1 transcript-race Stage 4: index the uiMessageId / toolCallId dedup lookups.
 --
 -- appendConversationLog and reconcileAssistantHistory dedup by
 --   WHERE session_id = ? AND owner_email = ? AND role = ? AND json_extract(meta_json,'$.uiMessageId') = ?
--- With no supporting index that is a scan per candidate message. On a long
--- thread reconcile (formerly on every onConnect) this multiplied into the
--- open-path stall. SQLite/D1 support expression indexes, so index the exact
--- json_extract expression alongside the equality-filtered columns.
+-- With no supporting index that is a scan per candidate row.
 --
--- Additive + idempotent. No data change.
-CREATE INDEX IF NOT EXISTS idx_conversation_entries_uimsgid
-    ON conversation_entries(
-        session_id,
-        owner_email,
-        role,
-        json_extract(meta_json, '$.uiMessageId')
-    );
+-- D1 rejects an expression index directly on json_extract() (SQLITE_ERROR 7500:
+-- json_extract is not index-safe there). Instead we add VIRTUAL generated
+-- columns that project the JSON fields, then index those. VIRTUAL (not STORED)
+-- means no table rewrite and no extra row storage — the value is computed on
+-- read, and the index materializes it. Additive + idempotent-friendly.
+ALTER TABLE conversation_entries
+    ADD COLUMN ui_message_id TEXT
+    GENERATED ALWAYS AS (json_extract(meta_json, '$.uiMessageId')) VIRTUAL;
 
--- The toolCallId dedup path (conversation-log.ts) uses the same shape for tools.
+ALTER TABLE conversation_entries
+    ADD COLUMN tool_call_id TEXT
+    GENERATED ALWAYS AS (json_extract(meta_json, '$.toolCallId')) VIRTUAL;
+
+CREATE INDEX IF NOT EXISTS idx_conversation_entries_uimsgid
+    ON conversation_entries(session_id, owner_email, role, ui_message_id);
+
 CREATE INDEX IF NOT EXISTS idx_conversation_entries_toolcallid
-    ON conversation_entries(
-        session_id,
-        owner_email,
-        json_extract(meta_json, '$.toolCallId')
-    );
+    ON conversation_entries(session_id, owner_email, tool_call_id);
