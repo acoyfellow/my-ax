@@ -537,7 +537,7 @@ export class MyAgent extends Think<Env> {
     const users = this.messages.filter((message) => message.role === "user");
     let insertedLatest = false;
     for (const message of users) {
-      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'user' AND json_extract(meta_json, '$.uiMessageId') = ? LIMIT 1")
+      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'user' AND ui_message_id = ? LIMIT 1")
         .bind(this.name, identity.email, message.id).first<{ id: number }>().catch(() => null);
       if (existing) continue;
       const attachments = attachmentParts(message);
@@ -582,7 +582,7 @@ export class MyAgent extends Think<Env> {
       })),
     );
     for (const message of candidates) {
-      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'assistant' AND json_extract(meta_json, '$.uiMessageId') = ? LIMIT 1")
+      const existing = await this.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = 'assistant' AND ui_message_id = ? LIMIT 1")
         .bind(this.name, identity.email, message.id).first<{ id: number }>().catch(() => null);
       if (existing) continue;
       await logAssistantMessage(this.env, identity, this.name, message.text, {
@@ -678,7 +678,15 @@ export class MyAgent extends Think<Env> {
     // the request's convenience email header as an authorization principal.
     super.onConnect(connection, ctx);
     this.logAcceptedUsers().catch((error) => console.error("think_user_log_sync_failed", { err: String(error) }));
-    this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_sync_failed", { err: String(error) }));
+    // P1 transcript-race Stage 3: keep assistant-history reconciliation OFF the
+    // open hot path. It backfills assistant rows Think has but D1 missed
+    // (interrupted turns); it is idempotent and needed neither before first paint
+    // nor before the cf_agent_chat_messages replay. Defer it past onConnect via a
+    // macrotask so a long-thread open is never blocked by a per-assistant D1
+    // dedup pass on connect. The DO stays alive while the connection is open.
+    setTimeout(() => {
+      this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_sync_failed", { err: String(error) }));
+    }, 0);
   }
 
   async onMessage(connection: Parameters<Think<Env>["onMessage"]>[0], message: unknown) {
