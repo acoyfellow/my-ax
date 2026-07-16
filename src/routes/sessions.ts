@@ -4,7 +4,7 @@ import type { AppEnv } from "../app-env";
 import { getConnector, type ConnectorId } from "../connectors";
 import { makeOAuthClientStore } from "../oauth-store";
 import { mintBridgeTicket } from "../bridge";
-import { clampEntriesLimit, pageConversationEntries, parseEntriesCursor, type ConversationEntryRow } from "../session-entries";
+import { clampEntriesLimit, pageConversationEntries, pageConversationEntriesDesc, parseEntriesCursor, parseEntriesBeforeCursor, type ConversationEntryRow } from "../session-entries";
 import { getSessionAgent } from "../agent-stub";
 import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
@@ -317,15 +317,34 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
   app.get("/api/sessions/:id/entries", async (c) => {
     const id = c.req.param("id");
     const email = c.get("identity").email;
-    const after = parseEntriesCursor(c.req.query("after"));
     const limit = clampEntriesLimit(c.req.query("limit"));
-    if (after === null) {
-      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CURSOR", message: "after must be a non-negative conversation entry id" }, next_actions: [] }, 400);
-    }
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?")
       .bind(id, email).first<{ id: string }>();
     if (!owned) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+
+    // P1 Stage 2: newest-first bounded page for fast first paint. `order=desc`
+    // reads `id < before ORDER BY id DESC LIMIT n+1` on the existing
+    // (session_id, id DESC) index, returns the page re-reversed to chronological
+    // with `olderCursor`/`hasOlder` to page further back on scroll-up. This is
+    // the resume hot path; the ASC `after` mode remains for idempotent forward
+    // polling / external readers.
+    if ((c.req.query("order") ?? "").toLowerCase() === "desc") {
+      const before = parseEntriesBeforeCursor(c.req.query("before"));
+      if (before === null) {
+        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CURSOR", message: "before must be a positive conversation entry id" }, next_actions: [] }, 400);
+      }
+      const descResult = await c.env.DB.prepare(
+        "SELECT id, ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id < ? ORDER BY id DESC LIMIT ?",
+      ).bind(id, email, before, limit + 1).all<ConversationEntryRow>();
+      const page = pageConversationEntriesDesc(descResult.results ?? [], limit);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { sessionId: id, ...page }, next_actions: [] });
+    }
+
+    const after = parseEntriesCursor(c.req.query("after"));
+    if (after === null) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CURSOR", message: "after must be a non-negative conversation entry id" }, next_actions: [] }, 400);
     }
     const result = await c.env.DB.prepare(
       "SELECT id, ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id > ? ORDER BY id ASC LIMIT ?",
