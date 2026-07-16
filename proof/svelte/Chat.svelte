@@ -599,6 +599,16 @@
   }
   function syncScrollToBottom() {
     scrollToBottomVisible = !isLogPinned();
+    // P1 Stage 2: page older history when the user scrolls near the top. Preserve
+    // the visual position across the prepend so the viewport doesn't jump.
+    if (logEl && logEl.scrollTop < 200 && olderHistoryCursor !== null && olderHistoryCursor !== "" && !loadingOlderHistory) {
+      const prevHeight = logEl.scrollHeight;
+      const prevTop = logEl.scrollTop;
+      void loadOlderHistory().then(async () => {
+        await tick();
+        if (logEl) logEl.scrollTop = prevTop + (logEl.scrollHeight - prevHeight);
+      });
+    }
   }
   function queueScrollToBottom() {
     if (!logEl) return;
@@ -1425,6 +1435,25 @@
     fetchPage: (after) => fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?after=${encodeURIComponent(after)}&limit=200`, { credentials: "include" }),
   });
 
+  // P1 Stage 2: cursor for paging OLDER history on scroll-up after the newest
+  // page rendered. null = not yet loaded; "" = no older history remains.
+  let olderHistoryCursor: string | null = null;
+  let loadingOlderHistory = false;
+
+  // Fetch ONE newest-first bounded page (fast first paint). Returns entries in
+  // chronological order plus the cursor to page further back.
+  async function loadNewestEntries(expected: SessionGeneration, limit = 100): Promise<
+    { outcome: "stale" } | { outcome: "current"; entries: any[]; olderCursor: string | null; hasOlder: boolean }
+  > {
+    if (!sessionWorkIsCurrent(expected)) return { outcome: "stale" };
+    const res = await fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?order=desc&limit=${limit}`, { credentials: "include" });
+    if (!res.ok || !sessionWorkIsCurrent(expected)) return { outcome: "stale" };
+    const body = await res.json();
+    if (!sessionWorkIsCurrent(expected)) return { outcome: "stale" };
+    const r = body?.result ?? {};
+    return { outcome: "current", entries: r.entries ?? [], olderCursor: r.olderCursor ?? null, hasOlder: !!r.hasOlder };
+  }
+
   async function hydrateHistoryTimestamps() {
     const expected = sessionGeneration.capture();
     if (!expected) return;
@@ -1440,24 +1469,53 @@
     messages = messages.map((message) => ({ ...message, timestamp: timestamps.get(message.id) ?? message.timestamp }));
   }
 
+  function d1EntryToMessage(entry: any): Message {
+    const role = entry.role === "tool" ? "system" : entry.role;
+    const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
+    return { id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false };
+  }
+
   async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
     if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
-    const result = await loadSessionEntries(expected, 20);
+    // P1 Stage 2: render ONE newest-first bounded page immediately instead of
+    // draining up to 20 oldest-first 200-row pages before first paint. Older
+    // history pages in on scroll-up via loadOlderHistory.
+    const result = await loadNewestEntries(expected, 100);
     if (result.outcome === "stale") return "stale";
-    const restored: Message[] = [];
-    for (const entry of result.entries) {
-      const role = entry.role === "tool" ? "system" : entry.role;
-      const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
-      restored.push({ id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false });
-    }
+    const restored: Message[] = result.entries.map(d1EntryToMessage);
     if (!sessionWorkIsCurrent(expected)) return "stale";
     if (!restored.length) return "empty";
     messages = restored;
+    olderHistoryCursor = result.hasOlder ? (result.olderCursor ?? "") : "";
     onboardingHidden = true;
     // The eager fast-path load is a normal resume, not a recovery — stay quiet.
     // The explicit recovery paths (empty Think replay) still surface the notice.
     if (!quiet) pushSystem("Conversation restored from the durable transcript.");
     return "restored";
+  }
+
+  // P1 Stage 2: page older history on scroll-up. Prepends an older newest-first
+  // page (chronological) ahead of the current transcript, merged by id so a
+  // Think replay that already rendered some of these does not duplicate them.
+  async function loadOlderHistory(): Promise<void> {
+    if (loadingOlderHistory || olderHistoryCursor === null || olderHistoryCursor === "") return;
+    const expected = sessionGeneration.capture();
+    if (!expected) return;
+    loadingOlderHistory = true;
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?order=desc&before=${encodeURIComponent(olderHistoryCursor)}&limit=100`, { credentials: "include" });
+      if (!res.ok || !sessionWorkIsCurrent(expected)) return;
+      const body = await res.json();
+      if (!sessionWorkIsCurrent(expected)) return;
+      const r = body?.result ?? {};
+      const older: Message[] = (r.entries ?? []).map(d1EntryToMessage);
+      if (older.length) messages = mergeTranscript(older as any, messages as any) as typeof messages;
+      olderHistoryCursor = r.hasOlder ? (r.olderCursor ?? "") : "";
+    } catch {
+      // leave cursor intact so a later scroll retries
+    } finally {
+      loadingOlderHistory = false;
+    }
   }
 
   // When Think compacts a long session it replays fewer messages than the
