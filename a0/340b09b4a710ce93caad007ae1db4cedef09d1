@@ -1,0 +1,21 @@
+proof/svelte/Chat.svelte
+  s_c8608720a9aca0::t_97df9bb638f49f 2172-2174,2176
+proof/svelte/chat-composer-smoke.mjs
+  s_c8608720a9aca0::t_962b87c583ba81 129-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a0340b09b4a710ce93caad007ae1db4cedef09d1",
+  "prompts": {},
+  "sessions": {
+    "s_c8608720a9aca0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f435b-44f1-750c-911d-62ea6492e54d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
