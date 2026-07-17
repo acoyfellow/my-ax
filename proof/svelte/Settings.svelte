@@ -1063,9 +1063,9 @@
           <h3 class="text-sm font-semibold text-fg">What the agent can use</h3>
           <p class="mt-1 text-xs leading-relaxed text-fg-mut">These are callable tools. They are not raw credentials.</p>
         </header>
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
           {#each capabilityGroups as group}
-            <section class="rounded-lg border border-line bg-bg p-3">
+            <section class="flex flex-col rounded-lg border border-line bg-bg p-3">
               <div>
                 <h4 class="text-xs font-semibold text-fg">{group.title}</h4>
                 <p class="mt-0.5 text-[11px] text-fg-mut">{group.summary}</p>
@@ -1073,10 +1073,8 @@
               <ul class="mt-3 grid gap-2">
                 {#each group.items as item}
                   <li class="rounded-md border border-line/60 bg-bg-alt/40 px-2.5 py-2">
-                    <div class="flex min-w-0 items-center justify-between gap-2">
-                      <strong class="truncate text-xs font-medium text-fg">{item.name}</strong>
-                      <code class="shrink-0 max-w-[48%] truncate text-[10px] text-brand" title={item.tools}>{item.tools}</code>
-                    </div>
+                    <strong class="block text-xs font-medium text-fg">{item.name}</strong>
+                    <code class="mt-0.5 block break-words font-mono text-[10px] leading-snug text-brand">{item.tools}</code>
                     <p class="mt-1 text-[11px] leading-snug text-fg-mut">{item.description}</p>
                   </li>
                 {/each}
@@ -1321,9 +1319,9 @@
                     <button type="button" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500" aria-label={`Remove starter ${i + 1}`} title="Remove" onclick={() => removeStarter(i)}>Remove</button>
                   </div>
                 </div>
-                <input class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg" placeholder="Title (shown on the card)" bind:value={starter.title} maxlength="60" aria-label={`Starter ${i + 1} title`} />
-                <input class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-xs text-fg-mut" placeholder="Hint (optional subtitle)" bind:value={starter.hint} maxlength="120" aria-label={`Starter ${i + 1} hint`} />
-                <textarea class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg min-h-[60px]" placeholder="Prompt inserted into the composer when tapped" bind:value={starter.prompt} maxlength="2000" aria-label={`Starter ${i + 1} prompt`}></textarea>
+                <input class="mt-2 block w-full min-w-0 box-border rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg" placeholder="Title (shown on the card)" bind:value={starter.title} maxlength="60" aria-label={`Starter ${i + 1} title`} />
+                <input class="mt-2 block w-full min-w-0 box-border rounded-md border border-line bg-bg px-3 py-2 text-xs text-fg-mut" placeholder="Hint (optional subtitle)" bind:value={starter.hint} maxlength="120" aria-label={`Starter ${i + 1} hint`} />
+                <textarea class="mt-2 block w-full min-w-0 box-border rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg min-h-[60px]" placeholder="Prompt inserted into the composer when tapped" bind:value={starter.prompt} maxlength="2000" aria-label={`Starter ${i + 1} prompt`}></textarea>
               </li>
             {/each}
           </ul>
