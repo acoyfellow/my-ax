@@ -1756,6 +1756,13 @@
     (document.getElementById("svelte-image-file") as HTMLInputElement)?.click();
   }
 
+  // Consolidated composer "+" menu: Add File / Camera (Watch stream lands here later).
+  let plusMenuOpen = $state(false);
+  function togglePlusMenu() { plusMenuOpen = !plusMenuOpen; }
+  function closePlusMenu() { plusMenuOpen = false; }
+  function plusAddFile() { closePlusMenu(); openImageFile(); }
+  function plusCamera() { closePlusMenu(); void toggleCamera(); }
+
   // ── Webcam vision (#10): capture a still and attach it so the agent can see ──
   let cameraOn = $state(false);
   let cameraEl = $state<HTMLVideoElement | undefined>(undefined);
@@ -2480,26 +2487,58 @@
             class="hidden"
             onchange={onImageInputChange}
           />
-          <button
-            type="button"
-            onclick={openImageFile}
-            class="flex-none flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg hover:border-brand/60"
-            aria-label="Attach image"
-            title="Attach image"
-          >＋</button>
-          <button
-            type="button"
-            onclick={cameraOn ? captureFrame : toggleCamera}
-            class="flex-none flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg-mut hover:text-fg hover:border-brand/60 data-[on='1']:border-brand/60 data-[on='1']:text-brand data-[on='1']:bg-brand/10"
-            data-on={cameraOn ? "1" : "0"}
-            data-camera-button="1"
-            aria-label={cameraOn ? "Capture a webcam frame for the agent" : "Turn on your webcam so the agent can see"}
-            title={cameraOn ? "Capture frame" : "Show webcam to agent"}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            </svg>
-          </button>
+          {#if cameraOn}
+            <!-- Camera active: the button becomes a direct "capture frame" action. -->
+            <button
+              type="button"
+              onclick={captureFrame}
+              class="flex-none flex items-center justify-center rounded-lg w-11 h-11 border border-brand/60 bg-brand/10 text-brand"
+              data-camera-button="1"
+              aria-label="Capture a webcam frame for the agent"
+              title="Capture frame"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+            </button>
+          {:else}
+            <!-- Consolidated "+" menu: Add File / Camera (one entry point for all media). -->
+            <div class="relative flex-none">
+              {#if plusMenuOpen}
+                <!-- click-away backdrop -->
+                <button type="button" class="fixed inset-0 z-10 cursor-default" aria-label="Close menu" onclick={closePlusMenu}></button>
+                <div
+                  class="absolute bottom-full left-0 z-20 mb-2 min-w-[10rem] overflow-hidden rounded-lg border border-line bg-bg shadow-lg"
+                  role="menu"
+                  aria-label="Add to message"
+                >
+                  <button type="button" role="menuitem" onclick={plusAddFile}
+                    class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-fg hover:bg-bg-alt">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Add file
+                  </button>
+                  <button type="button" role="menuitem" onclick={plusCamera}
+                    class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-fg hover:bg-bg-alt">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    Camera
+                  </button>
+                </div>
+              {/if}
+              <button
+                type="button"
+                onclick={togglePlusMenu}
+                class="flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg hover:border-brand/60 data-[open='1']:border-brand/60 data-[open='1']:text-brand"
+                data-open={plusMenuOpen ? "1" : "0"}
+                data-plus-button="1"
+                aria-haspopup="menu"
+                aria-expanded={plusMenuOpen}
+                aria-label="Add file or camera"
+                title="Add…"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+          {/if}
           <button
             type="submit"
             onclick={wsState.conn === "offline" ? retryConnection : onSendClick}
