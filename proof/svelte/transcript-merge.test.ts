@@ -10,6 +10,27 @@ const msg = (
 ): { id: string; role: string; timestamp?: number; content?: string; [k: string]: unknown } =>
   ({ id, role, timestamp, ...extra });
 
+// #1/#3 regression: the D1 REST read and the server Think replay now key the SAME
+// row identically (meta.uiMessageId || d1-<id>). Merging them must dedup, and
+// repeating the merge (every cf_agent_chat_messages replay) must be idempotent —
+// never growing the transcript or duplicating a message.
+test("merge of identically-keyed D1 + Think replay dedups (no duplication)", () => {
+  const d1 = [msg("ui-1", "user", 1), msg("ui-2", "assistant", 2), msg("ui-3", "user", 3)];
+  const think = [msg("ui-1", "user", 1), msg("ui-2", "assistant", 2), msg("ui-3", "user", 3)];
+  const merged = mergeTranscript(d1, think);
+  assert.equal(merged.length, 3);
+  assert.equal(new Set(merged.map((m) => m.id)).size, 3);
+});
+
+test("merge is idempotent under repeated Think replays", () => {
+  const d1 = [msg("ui-1", "user", 1), msg("ui-2", "assistant", 2)];
+  const think = [msg("ui-1", "user", 1), msg("ui-2", "assistant", 2)];
+  let m = mergeTranscript(d1, think);
+  for (let i = 0; i < 5; i++) m = mergeTranscript(m, think);
+  assert.equal(m.length, 2, "repeated replays must not grow the transcript");
+  assert.deepEqual(m.map((x) => x.id), ["ui-1", "ui-2"]);
+});
+
 // THE bug: D1 restored an assistant reply; Think's compacted replay omits it.
 test("keeps a D1-only assistant reply that Think's replay omitted", () => {
   const d1 = [msg("u1", "user", 1), msg("a1", "assistant", 2), msg("u2", "user", 3), msg("a2", "assistant", 4)];
