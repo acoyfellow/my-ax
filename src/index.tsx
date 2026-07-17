@@ -17,6 +17,7 @@ function isVoiceEnabled(env: Env): boolean {
 }
 import { getUserWorkspace } from "./workspace";
 import { ChatPage } from "./views/ChatPage";
+import { BetaPage } from "./views/BetaPage";
 import type { AppEnv } from "./app-env";
 import { deploymentVersionResponse } from "./deploy-version";
 import { oauthStoreFor } from "./oauth-store";
@@ -179,6 +180,7 @@ app.use("/machinectl/*", accessMiddleware());
 // non-personalized /offline fallback stay anonymous so install metadata,
 // browser JS, and offline recovery don't have to re-auth on every fetch.
 app.use("/", accessMiddleware());
+app.use("/beta", accessMiddleware());
 // Gate BOTH the base rendered path and every rendered subroute (e.g.
 // POST /attention/seen). In Hono, app.use("/attention", ...) alone only
 // matches the exact path, so mutating subroutes silently bypassed the
@@ -521,6 +523,23 @@ app.get("/", (c) => {
   const theme = readThemeCookie(c);
   return c.html(
     <ChatPage
+      identityEmail={identity?.email ?? null}
+      buildId={buildId}
+      buildTimestamp={c.env.CF_VERSION_METADATA?.timestamp ?? undefined}
+      theme={theme}
+      appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+    />,
+  );
+});
+
+// /beta — the proper single-root frontend (BetaApp). Additive + behind the same
+// Access; prod / is untouched. Cutover to / happens only when explicitly chosen.
+app.get("/beta", (c) => {
+  const identity = c.get("identity");
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
+  const theme = readThemeCookie(c);
+  return c.html(
+    <BetaPage
       identityEmail={identity?.email ?? null}
       buildId={buildId}
       buildTimestamp={c.env.CF_VERSION_METADATA?.timestamp ?? undefined}
