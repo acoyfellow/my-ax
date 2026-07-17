@@ -62,6 +62,11 @@ for (const marker of ['CONNECTOR_REAUTH_REQUIRED', 'my_ax_connector_reauth']) {
 assertIncludes(chat, 'class="connector-banner__cta"', "connector reauth banner keeps an explicit owner CTA");
 assertIncludes(chat, 'Authorization failed for ${connector}. Tap "Authorize" to try again.', "OAuth callback toast does not reflect raw provider reason text");
 assertNotIncludes(chat, 'Authorization failed for ${connector}${reason', "OAuth callback toast must not include raw reason query text");
+// FR-1: interactive artifacts can post an answer back to the chat composer.
+assertIncludes(chat, 'my-ax:artifact-submit', "chat listens for artifact form submissions");
+assertIncludes(chat, 'artifactWindows()', "artifact submits are accepted only from live artifact iframes (anti-spoof)");
+assertIncludes(chat, 'window.addEventListener("message", onArtifactMessage)', "the artifact message bridge is wired");
+
 assertIncludes(appCss, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled (in the compiled stylesheet)");
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");
 assertNotIncludes(appCss, '#theme-cycle', "global CSS must not define stale #theme-cycle selectors");

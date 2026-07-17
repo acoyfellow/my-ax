@@ -105,7 +105,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "create_svelte_artifact",
-    description: "Create one durable interactive Svelte 5 artifact attached to this conversation and rendered inline in chat. Use when the user asks for a widget, visualization, dashboard, interactive explainer, calculator, or other useful UI artifact. Each call creates a new one-off artifact: do not treat this as a revision workflow. Source must be a complete self-contained .svelte component using Svelte 5 runes and no external imports. The artifact runs in a sandboxed iframe with no owner credentials; only the Svelte runtime module CDN required to mount it is permitted.",
+    description: "Create one durable interactive Svelte 5 artifact attached to this conversation and rendered inline in chat. Use when the user asks for a widget, visualization, dashboard, interactive explainer, calculator, form, or other useful UI artifact. Each call creates a new one-off artifact: do not treat this as a revision workflow. Source must be a complete self-contained .svelte component using Svelte 5 runes and no external imports. The artifact runs in a sandboxed iframe with no owner credentials; only the Svelte runtime module CDN required to mount it is permitted. TO SEND A RESULT BACK TO THE CHAT (e.g. a submitted form answer), call `window.parent.postMessage({ type: 'my-ax:artifact-submit', value: '<text to place in the composer>', send: false }, '*')`. The value lands in the message composer for the user to review and send; pass `send: true` only to submit it immediately on the user's behalf. This is the only channel out of the sandbox.",
     parameters: {
       type: "object",
       properties: {
