@@ -67,6 +67,12 @@ assertIncludes(chat, 'my-ax:artifact-submit', "chat listens for artifact form su
 assertIncludes(chat, 'artifactWindows()', "artifact submits are accepted only from live artifact iframes (anti-spoof)");
 assertIncludes(chat, 'window.addEventListener("message", onArtifactMessage)', "the artifact message bridge is wired");
 
+// FR-2: a silently-stalled turn (socket healthy, no frames) must self-recover
+// into a truthful, non-destructive retry affordance instead of locking forever.
+assertIncludes(chat, "TURN_STALL_MS", "a turn-stall threshold exists");
+assertIncludes(chat, "gone quiet without finishing", "stalled turn surfaces a truthful notice");
+assertIncludes(chat, "lastTurnFrameAt", "the watchdog tracks the last turn frame time");
+
 assertIncludes(appCss, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled (in the compiled stylesheet)");
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");
 assertNotIncludes(appCss, '#theme-cycle', "global CSS must not define stale #theme-cycle selectors");
