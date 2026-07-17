@@ -863,17 +863,14 @@ html {
 
   .msg {
     width: 100%; max-width: 48rem; min-width: 0; margin: 0 auto 18px; overflow-x: hidden;
-    /* L4 perf: browser-native virtualization. The browser skips layout + paint
-     * for messages scrolled out of view, so a very long thread (the Master
-     * conversation) renders in O(viewport) instead of O(history) — no JS
-     * windowing, so L1's scroll-anchoring and the streaming path are untouched.
-     * contain-intrinsic-size gives an estimated height so the scrollbar and
-     * scroll offsets stay stable while off-screen messages are skipped. */
-    content-visibility: auto;
-    contain-intrinsic-size: auto 120px;
+    /* NOTE: content-visibility:auto was tried here (PR #20) as browser-native
+     * virtualization, but on real variable-height threads the fixed
+     * contain-intrinsic-size estimate was wildly wrong, so scrollHeight ballooned
+     * as off-screen messages got measured — stranding the viewport mid-scroll
+     * (the "jumps to the top / won't stay at bottom" bug). Removed: correctness
+     * beats the paint saving. A real perf win needs a JS virtual list that owns
+     * scroll anchoring, done as its own change. */
   }
-  /* The streaming (live) message must never be skipped mid-render. */
-  .msg[data-streaming="1"] { content-visibility: visible; }
   .msg-head {
     font-size: 11px; font-weight: 500; color: var(--fg-mut);
     margin-bottom: 6px; opacity: 0.85;
