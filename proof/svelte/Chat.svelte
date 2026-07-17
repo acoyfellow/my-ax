@@ -1455,18 +1455,15 @@
   }
 
   async function hydrateHistoryTimestamps() {
-    const expected = sessionGeneration.capture();
-    if (!expected) return;
-    const result = await loadSessionEntries(expected, 10);
-    if (result.outcome === "stale") return;
-    const timestamps = new Map<string, number>();
-    for (const entry of result.entries) {
-      const uiMessageId = entry?.meta?.uiMessageId;
-      const timestamp = Date.parse(entry?.createdAt ?? "");
-      if (typeof uiMessageId === "string" && Number.isFinite(timestamp)) timestamps.set(uiMessageId, timestamp);
-    }
-    if (!sessionWorkIsCurrent(expected)) return;
-    messages = messages.map((message) => ({ ...message, timestamp: timestamps.get(message.id) ?? message.timestamp }));
+    // NO-OP by design. This used to re-download up to 2000 oldest-first D1 rows
+    // (entries?after=0) on every resume AND every Think replay just to patch
+    // message timestamps. On a large thread (the Master conversation) that was
+    // ~0.6-2MB of duplicate transcript per call, and rebuilding `messages` from
+    // the top is what yanked the viewport to the beginning ~2s after load.
+    // The newest-first loader (d1EntryToMessage) and the Think replay already
+    // set timestamps from entry.createdAt, so this whole second fetch pass is
+    // redundant. Kept as a no-op so existing call sites don't need touching.
+    return;
   }
 
   function d1EntryToMessage(entry: any): Message {
@@ -1533,18 +1530,16 @@
   // so on resume, if D1 holds more user turns than Think replayed, show the
   // full transcript for display while Think keeps its compacted model context.
   async function reconcileCompactedHistory(thinkUserTurns: number) {
+    // The L1 merge (renderThinkHistory -> mergeTranscript) already keeps D1-only
+    // messages that a compacted Think replay omitted, so we no longer need to
+    // re-drain the whole transcript oldest-first (entries?after=0, up to 4000
+    // rows) just to detect compaction. If Think replayed nothing useful, the
+    // newest-first restoreD1History has already run. Only fall back to a single
+    // newest-first restore when Think replayed a near-empty history on resume.
+    if (thinkUserTurns > 0) return;
     const expected = sessionGeneration.capture();
-    if (!expected) return;
-    try {
-      const result = await loadSessionEntries(expected, 20);
-      if (result.outcome === "stale") return;
-      const d1UserTurns = result.entries.filter((entry: any) => entry.role === "user").length;
-      // Only override the view if D1 genuinely has more conversation than Think
-      // replayed, and we're still idle on this same session.
-      if (d1UserTurns > thinkUserTurns && !activeRequestId && sessionWorkIsCurrent(expected)) {
-        await restoreD1History(expected);
-      }
-    } catch {}
+    if (!expected || activeRequestId || !sessionWorkIsCurrent(expected)) return;
+    try { await restoreD1History(expected); } catch {}
   }
 
   function renderThinkHistory(historyMessages: any[]) {
