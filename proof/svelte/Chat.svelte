@@ -2113,9 +2113,42 @@
       }
     };
     const onStartersRefresh = () => { void loadStarters(); };
+    // Artifact -> chat bridge. An interactive Svelte artifact runs in a
+    // sandbox="allow-scripts" iframe (no same-origin), so its only channel back
+    // is window.parent.postMessage. It can send:
+    //   { type: "my-ax:artifact-submit", value: "<text>", send?: boolean }
+    // We accept it ONLY from a live artifact iframe on this page, validate the
+    // shape, bound the length, and drop it into the composer for the user to
+    // review. We do NOT auto-send unless the artifact explicitly asks AND the
+    // value is non-trivial — the human stays in the loop (no silent turns from
+    // sandboxed code). This is the previously-missing return path for
+    // create_svelte_artifact forms.
+    const artifactWindows = () => new Set(
+      [...document.querySelectorAll('iframe[data-tool-widget-frame="svelte-artifact"], iframe.svelte-artifact-frame')]
+        .map((f) => (f as HTMLIFrameElement).contentWindow)
+        .filter(Boolean),
+    );
+    const onArtifactMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.type !== "my-ax:artifact-submit") return;
+      // Source must be one of THIS page's artifact iframes (not an arbitrary window).
+      if (!artifactWindows().has(event.source as Window)) return;
+      const raw = typeof data.value === "string" ? data.value : "";
+      const value = raw.slice(0, 4000).trim();
+      if (!value) return;
+      if (composerLocked) return; // don't stomp an in-flight turn
+      composerText = value;
+      autoGrow();
+      inputEl?.focus();
+      // Auto-send only on an explicit, trusted request for a substantive value.
+      if (data.send === true && value.length >= 1 && !composerLocked) {
+        void onSendClick();
+      }
+    };
     window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
     window.addEventListener("my-ax:navigate", onNavigate as EventListener);
     window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
+    window.addEventListener("message", onArtifactMessage);
     navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
     return () => {
       window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
@@ -2124,6 +2157,7 @@
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("my-ax:switch-session", onSwitch as EventListener);
       window.removeEventListener("my-ax:navigate", onNavigate as EventListener);
+      window.removeEventListener("message", onArtifactMessage);
       navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
       window.removeEventListener("online", onVisibilityChange);
       if (connectionWatchdogId) clearInterval(connectionWatchdogId);
