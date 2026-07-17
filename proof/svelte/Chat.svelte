@@ -1480,7 +1480,7 @@
     // P1 Stage 2: render ONE newest-first bounded page immediately instead of
     // draining up to 20 oldest-first 200-row pages before first paint. Older
     // history pages in on scroll-up via loadOlderHistory.
-    const result = await loadNewestEntries(expected, 100);
+    const result = await loadNewestEntries(expected, 200);
     if (result.outcome === "stale") return "stale";
     const restored: Message[] = result.entries.map(d1EntryToMessage);
     if (!sessionWorkIsCurrent(expected)) return "stale";
@@ -1512,9 +1512,13 @@
       // calls as inline assistant parts, so a standalone d1- system row would
       // duplicate an inline tool once the assistant turn is also shown. Keep only
       // genuine turns (real ui id) that aren't already in the view.
+      // #3 idempotent: never re-add an id already rendered. Drop synthetic d1- tool
+      // rows (Think renders those inline) AND anything already present, so repeated
+      // scroll-up paging can't duplicate the boundary rows.
+      const present = new Set(messages.map((m) => m.id));
       const older: Message[] = (r.entries ?? [])
         .map(d1EntryToMessage)
-        .filter((m: Message) => !m.id.startsWith("d1-"));
+        .filter((m: Message) => !m.id.startsWith("d1-") && !present.has(m.id));
       if (older.length) messages = mergeTranscript(older as any, messages as any) as typeof messages;
       olderHistoryCursor = r.hasOlder ? (r.olderCursor ?? "") : "";
     } catch {
@@ -1640,11 +1644,30 @@
     // turn (real ui id). D1 tool rows are synthetic `d1-<n>` system messages that
     // Think re-renders as inline assistant parts, so dropping them here avoids
     // duplicated tool output.
+    // #4 preserve scroll: capture whether the user was pinned at the bottom AND the
+    // pre-merge geometry BEFORE mutating `messages`, so the Think replay reconcile
+    // never yanks the viewport. If they were at the bottom we settle at the bottom;
+    // if they had scrolled up, we hold their position across any height change.
+    const wasPinned = logEl ? (logEl.scrollHeight - logEl.clientHeight - logEl.scrollTop < 80) : true;
+    const prevTop = logEl?.scrollTop ?? 0;
+    const prevHeight = logEl?.scrollHeight ?? 0;
     messages = thinkViews.length > 0
       ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: (m) => !m.id.startsWith("d1-") })
       : priorMessages;
     void hydrateHistoryTimestamps();
-    void revealResumedHistoryAtBottom();
+    if (wasPinned) {
+      void revealResumedHistoryAtBottom();
+    } else {
+      // #5 hold position without a smooth animation: restore scrollTop adjusted for
+      // the height delta the merge introduced, so nothing visibly jumps.
+      void tick().then(() => {
+        if (!logEl) return;
+        const prevBehavior = logEl.style.scrollBehavior;
+        logEl.style.scrollBehavior = "auto";
+        logEl.scrollTop = prevTop + (logEl.scrollHeight - prevHeight);
+        requestAnimationFrame(() => { if (logEl) logEl.style.scrollBehavior = prevBehavior; });
+      });
+    }
   }
 
   function handleThinkChunk(chunk: any) {
