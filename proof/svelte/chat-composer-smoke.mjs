@@ -126,6 +126,18 @@ assertIncludes(appCss, '#svelte-hono-chat-root {', "chat mount must be made a fi
     if (!block.includes(decl)) throw new Error(`chat mount fill rule must include ${JSON.stringify(decl)}`);
   }
 }
+// /beta single-root mount: sits directly under body.app-viewport (fixed, NOT a
+// flex container), so it needs an explicit height:100% — flex:1 can't fill a
+// non-flex parent. Without this the composer floats mid-screen on an empty
+// thread and <body> (not <main>) owns scroll on a long one.
+assertIncludes(appCss, '#svelte-hono-beta-root {', "beta mount must have a definite-height rule (unbroken h-full chain)");
+{
+  const i = appCss.indexOf('#svelte-hono-beta-root {');
+  const block = appCss.slice(i, i + 160);
+  for (const decl of ['height: 100%;', 'min-height: 0;', 'display: flex;', 'flex-direction: column;']) {
+    if (!block.includes(decl)) throw new Error(`beta mount fill rule must include ${JSON.stringify(decl)}`);
+  }
+}
 // The chat embed must forward wrapperClass="contents" so the generic mount
 // wrapper does not re-break the height chain the CSS rule depends on.
 assertIncludes(chatPage, 'hydrateAs="chat"', "ChatPage mounts the chat embed");
