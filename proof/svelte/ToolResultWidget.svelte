@@ -99,6 +99,7 @@
       {/if}
       <iframe
         class="svelte-artifact-frame"
+        data-tool-widget-frame="svelte-artifact"
         src={widget.src}
         title={widget.title}
         loading="lazy"
