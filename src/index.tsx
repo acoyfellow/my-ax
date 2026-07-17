@@ -431,14 +431,21 @@ app.all("/agents/*", async (c) => {
         // unavailable, preserving readable history during migration.
         if (!messages.length) {
           const rows = await c.env.DB.prepare(
-            "SELECT id, ts, role, content FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id ASC",
-          ).bind(sessionId, identity.email.toLowerCase()).all<{ id: number; ts: string; role: string; content: string }>();
-          messages = (rows.results ?? []).map((row) => ({
-            id: `legacy-d1:${row.id}`,
-            role: ["user", "assistant", "system"].includes(row.role) ? row.role as "user" | "assistant" | "system" : "system",
-            parts: [{ type: "text", text: row.role === "tool" ? `[tool result]\n${row.content}` : row.content }],
-            createdAt: new Date(row.ts),
-          }));
+            "SELECT id, ts, role, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id ASC",
+          ).bind(sessionId, identity.email.toLowerCase()).all<{ id: number; ts: string; role: string; content: string; meta_json: string | null }>();
+          messages = (rows.results ?? []).map((row) => {
+            // Canonical id: MUST match the client's d1EntryToMessage keying
+            // (meta.uiMessageId || `d1-<id>`), so the D1 REST read and this Think
+            // replay dedup to the same message instead of double-rendering.
+            let uiMessageId: string | undefined;
+            try { uiMessageId = row.meta_json ? (JSON.parse(row.meta_json)?.uiMessageId as string | undefined) : undefined; } catch {}
+            return {
+              id: uiMessageId || `d1-${row.id}`,
+              role: ["user", "assistant", "system"].includes(row.role) ? row.role as "user" | "assistant" | "system" : "system",
+              parts: [{ type: "text", text: row.role === "tool" ? `[tool result]\n${row.content}` : row.content }],
+              createdAt: new Date(row.ts),
+            };
+          });
         }
         if (messages.length) await facet.importLegacyMessages(messages);
       }
