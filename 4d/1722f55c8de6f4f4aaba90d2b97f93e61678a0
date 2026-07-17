@@ -1,0 +1,19 @@
+proof/svelte/Settings.svelte
+  s_58fd295f2ea96b::t_b4c7200c44cab8 1066,1068,1076-1077,1322-1324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4d1722f55c8de6f4f4aaba90d2b97f93e61678a0",
+  "prompts": {},
+  "sessions": {
+    "s_58fd295f2ea96b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e8e0e-e5c2-78a0-81ed-9f91469bc981",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
