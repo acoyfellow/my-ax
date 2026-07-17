@@ -2169,8 +2169,11 @@
       autoGrow();
       inputEl?.focus();
       // Auto-send only on an explicit, trusted request for a substantive value.
+      // Use the real form submit path (requestSubmit) — onSendClick is the
+      // cancel-active-turn CLICK handler and early-returns while idle, so it
+      // never actually sent the message (FR-1/L2 R3 defect).
       if (data.send === true && value.length >= 1 && !composerLocked) {
-        void onSendClick();
+        queueMicrotask(() => formEl?.requestSubmit());
       }
     };
     window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
