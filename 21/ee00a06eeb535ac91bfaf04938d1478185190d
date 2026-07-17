@@ -1,0 +1,21 @@
+src/styles/app.css
+  s_e050e2bde8a246::t_e3c3f35b055afb 838-1078
+src/views/CapabilitiesPage.tsx
+  s_e050e2bde8a246::t_3f44723b6fe3e5 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "21ee00a06eeb535ac91bfaf04938d1478185190d",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
