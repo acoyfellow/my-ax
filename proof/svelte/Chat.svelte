@@ -471,6 +471,11 @@
   let turnState = $state<StreamingTurnState>(idleStreamingTurnState);
 
   function dispatchTurn(event: StreamingTurnEvent) {
+    // FR-2: stamp every turn transition so the watchdog can tell a genuinely
+    // active turn (frames arriving) from a silently-stalled one (locked but no
+    // frames for a long time, even though the socket is healthy).
+    lastTurnFrameAt = Date.now();
+    turnStallSurfaced = false;
     const next = transitionStreamingTurn(turnState, event);
     turnState = next;
     if (next.tag !== "active") {
@@ -976,6 +981,10 @@
   // stream chunks after a reconnect or a foreground resume probe.
   let responseRecoveryPending = false;
   let lastSocketActivityAt = Date.now();
+  // FR-2: last time ANY turn frame moved the FSM; the stall watchdog uses this.
+  let lastTurnFrameAt = Date.now();
+  let turnStallSurfaced = false;
+  const TURN_STALL_MS = 45_000;
   let connectionWatchdogId: ReturnType<typeof setInterval> | null = null;
   const ACTIVE_TURN_KEY_PREFIX = "my-ax-active-turn:";
 
@@ -2064,6 +2073,25 @@
         (ws as any).send(JSON.stringify({ type: "my_ax_ping", at: Date.now() }));
       }
       if (responseRecoveryPending && age > 15_000) responseRecoveryPending = false;
+      // FR-2: silently-stalled turn. The socket is OPEN and recently active (so
+      // it's not a disconnect), the composer is locked on an active turn, but no
+      // turn frame has moved the FSM for TURN_STALL_MS. Surface a truthful,
+      // NON-destructive affordance: tell the owner the agent went quiet and
+      // unlock the composer so they can retry/steer. We do NOT cancel the turn —
+      // a genuinely-slow server turn can still land and reconcile via the normal
+      // frame/adopt path. Fire once per stall (turnStallSurfaced resets on the
+      // next real frame in dispatchTurn).
+      if (
+        !turnStallSurfaced &&
+        composerLocked &&
+        (ws as any).readyState === WebSocket.OPEN &&
+        Date.now() - lastTurnFrameAt > TURN_STALL_MS
+      ) {
+        turnStallSurfaced = true;
+        pushSystem("The agent has gone quiet without finishing this turn. It may still be working — you can wait, or send another message to retry or steer.");
+        dispatchTurn({ type: "frame", frame: { requestId: activeRequestId, done: true } });
+        applyStatus("idle");
+      }
     }, 5_000);
 
     const onDeployUpdate = (event: Event) => {
