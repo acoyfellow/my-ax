@@ -35,8 +35,14 @@ assertIncludes(chat, 'if (resumingExistingSession) eagerRestoreFromD1(sessionGen
 assertIncludes(chat, 'restoreD1History(expected, true)', "the eager fast-path load is quiet (no recovery toast on a normal resume)");
 // #10 webcam vision: camera capture routes through the shared upload path so a
 // frame becomes a normal (removable) attachment the agent can see.
-assertIncludes(chat, 'data-camera-button="1"', "composer exposes a webcam capture control");
-assertIncludes(chat, 'onclick={cameraOn ? captureFrame : toggleCamera}', "camera button toggles on, then captures a frame");
+// Consolidated composer input: a single "+" menu (Add file / Camera) replaces the
+// separate attach + camera buttons. When the camera is on, the button becomes a
+// direct capture-frame control.
+assertIncludes(chat, 'data-plus-button="1"', "composer exposes a single + menu button");
+assertIncludes(chat, 'onclick={plusAddFile}', "the + menu has an Add file item");
+assertIncludes(chat, 'onclick={plusCamera}', "the + menu has a Camera item");
+assertIncludes(chat, 'data-camera-button="1"', "an active camera exposes a capture-frame control");
+assertIncludes(chat, 'onclick={captureFrame}', "the active-camera button captures a frame");
 assertIncludes(chat, 'await addImageFile(new File([blob], frameFilename()', "a captured frame is attached via the shared upload path");
 assertIncludes(chat, 'getUserMedia({ video: { facingMode: "user" }, audio: false })', "camera opens video-only in an explicit gesture (privacy)");
 assertIncludes(chat, 'data-camera-preview="1"', "a live preview shows what will be captured before sending");
