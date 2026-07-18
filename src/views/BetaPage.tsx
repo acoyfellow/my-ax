@@ -18,7 +18,7 @@ interface BetaPageProps {
 export const BetaPage: FC<BetaPageProps> = (props) => {
   return (
     <Layout
-      title="My Agent Experience (beta)"
+      title="My Agent Experience"
       identityEmail={props.identityEmail}
       bodyClass="overflow-hidden"
       buildId={props.buildId}
