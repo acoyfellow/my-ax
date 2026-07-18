@@ -975,31 +975,6 @@ export class MyAgent extends Think<Env> {
    * chat-visible connection; falls back to any live connection. Rejects with a
    * typed error if no client is connected or the client does not reply in time.
    */
-  /**
-   * Dev-only page.* bridge probe (RPC). Exercises the full DO->client->DO
-   * round-trip (callPage -> page_call -> client registry -> page_result)
-   * WITHOUT an LLM inference. Guarded by DEV_USER_EMAIL (unset in prod).
-   */
-  async devPageCall(verb: string, args?: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string }> {
-    if (!this.env.DEV_USER_EMAIL) return { ok: false, error: "dev only" };
-    try {
-      const result = await this.callPage(verb, args ?? {});
-      return { ok: true, result };
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  }
-
-  /**
-   * Dev-only: run real work_code THROUGH the sandbox executor (not the raw
-   * callPage bridge), so we can prove the bare `page.*` global is wired into the
-   * work_code scope without an LLM. Guarded by DEV_USER_EMAIL (unset in prod).
-   */
-  async devWorkCode(code: string): Promise<unknown> {
-    if (!this.env.DEV_USER_EMAIL) return { ok: false, error: "dev only" };
-    return executeWorkCode(code, this.buildToolContext());
-  }
-
   private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
     const connections = [...this.getConnections<{ chatVisible?: boolean }>()];
     if (connections.length === 0) return Promise.reject(new Error("page_unavailable: no live browser client connected to this session"));

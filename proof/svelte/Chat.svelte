@@ -2190,8 +2190,15 @@
         queueMicrotask(() => formEl?.requestSubmit());
       }
     };
+    const onPageToast = (e: Event) => {
+      const d = (e as CustomEvent<{ text?: string; kind?: string }>).detail;
+      const text = String(d?.text ?? "").slice(0, 500);
+      if (!text) return;
+      if (d?.kind === "error") pushError(text); else pushSystem(text);
+    };
     window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
     window.addEventListener("my-ax:navigate", onNavigate as EventListener);
+    window.addEventListener("my-ax:toast", onPageToast as EventListener);
     window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
     window.addEventListener("message", onArtifactMessage);
     navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
@@ -2202,6 +2209,7 @@
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("my-ax:switch-session", onSwitch as EventListener);
       window.removeEventListener("my-ax:navigate", onNavigate as EventListener);
+      window.removeEventListener("my-ax:toast", onPageToast as EventListener);
       window.removeEventListener("message", onArtifactMessage);
       navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
       window.removeEventListener("online", onVisibilityChange);
