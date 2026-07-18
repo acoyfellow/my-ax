@@ -38,7 +38,7 @@ test("work_code sandbox prelude no longer exposes a top-level recipe namespace",
 });
 
 test("work_code invokes submitted async arrow with ctx while preserving globals", () => {
-  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,cloudbox:globalThis\.cloudbox,page:globalThis\.page,codemode:globalThis\.codemode\}/);
+  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,terrarium:globalThis\.terrarium,page:globalThis\.page,codemode:globalThis\.codemode\}/);
   assert.match(source, /const executableCode = `async \(\) => await \(\$\{submittedCode\}\)\(globalThis\.ctx\)`/);
   assert.match(source, /executor\.execute\(executableCode,/);
 });

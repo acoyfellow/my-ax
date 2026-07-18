@@ -49,7 +49,7 @@ export function savedRecipeExecutionCode(recipeCode: string, input: Record<strin
   return `async () => { const input = ${inputJson};\n${recipeCode}\n}`;
 }
 
-const CAPABILITY_PATTERN = /^(workspace|machine|cloudbox)\.[a-zA-Z0-9_.-]+$/;
+const CAPABILITY_PATTERN = /^(workspace|machine|terrarium)\.[a-zA-Z0-9_.-]+$/;
 
 function assertObject(value: unknown, field: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new SavedRecipeError("InvalidInput", `${field} must be an object`);

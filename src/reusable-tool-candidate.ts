@@ -177,7 +177,7 @@ export function isValidSuggestedShape(shape: SuggestedRecipeShape | undefined): 
 
 /** High-authority host namespaces that can never be persisted as a portable,
  *  replayable reusable tool. Must match recipe-approval-policy.ts. */
-const HIGH_AUTHORITY_PREFIXES = ["machine.", "cloudbox."] as const;
+const HIGH_AUTHORITY_PREFIXES = ["machine.", "terrarium."] as const;
 
 /** True when a capability set is high-authority AND host-bound (non-portable).
  *  Such code is inline-only: the promotion policy refuses to persist it, so it
@@ -188,7 +188,7 @@ export function isHighAuthorityInlineOnly(capabilities: string[]): boolean {
   if (!highAuthority) return false;
   const hostBound = capabilities.some((cap) => {
     const [ns, method] = cap.split(".");
-    return (ns === "machine" || ns === "cloudbox" || ns === "workspace") && method !== "none";
+    return (ns === "machine" || ns === "terrarium" || ns === "workspace") && method !== "none";
   });
   return hostBound;
 }
@@ -201,7 +201,7 @@ export function isHighAuthorityInlineOnly(capabilities: string[]): boolean {
  *   - source is non-empty and normalizes to >= REUSABLE_TOOL_MIN_SOURCE_LENGTH
  *   - marker present with a meaningful cleaned name
  *   - suggested-recipe shape is structurally valid
- *   - the capabilities are NOT high-authority-inline-only (machine/cloudbox
+ *   - the capabilities are NOT high-authority-inline-only (machine/terrarium
  *     host-bound code that the promotion policy will refuse to persist)
  *
  * Any other outcome sets eligible=false with a specific reason so the
@@ -232,7 +232,7 @@ export function evaluateReusableToolCandidate(input: ReusableToolCandidateInput)
   if (!isValidSuggestedShape(input.suggestedRecipe)) {
     return { eligible: false, fingerprint, reason: "invalid_shape" };
   }
-  // Fail closed: host-bound machine/cloudbox code is inline-only and cannot be
+  // Fail closed: host-bound machine/terrarium code is inline-only and cannot be
   // persisted, so it must not surface an approvable candidate card.
   if (isHighAuthorityInlineOnly(caps)) {
     return { eligible: false, fingerprint, reason: "high_authority_inline_only" };
