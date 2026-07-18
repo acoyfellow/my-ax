@@ -23,7 +23,8 @@ function assertNotIncludes(haystack, needle, label) {
 }
 
 const buildConfig = read("proof/svelte/build.mjs");
-const chatPage = read("src/views/ChatPage.tsx");
+const betaPage = read("src/views/BetaPage.tsx");
+const betaApp = read("proof/svelte/BetaApp.svelte");
 const attention = read("proof/svelte/Attention.svelte");
 const checkIn = read("proof/svelte/CheckIn.svelte");
 const displayHrefHelper = read("proof/svelte/check-in-display-href.ts");
@@ -34,7 +35,8 @@ const ssr = read("proof/svelte/CheckIn.ssr.mjs");
 assertIncludes(buildConfig, "checkin: here(\"CheckIn.svelte\")", "Svelte build config");
 assertIncludes(generatedBundles, "checkin", "generated Svelte bundles");
 assertIncludes(generatedBundles, "data-check-in-raw-href", "generated Check-in raw API href marker");
-assertNotIncludes(chatPage, "hydrateAs=\"checkin\"", "Chat shell Check-in mount that steals composer space");
+assertNotIncludes(betaPage, "hydrateAs=\"checkin\"", "App shell Check-in mount that steals composer space");
+assertNotIncludes(betaApp, "import CheckIn", "BetaApp does not embed CheckIn in the chat shell");
 // B redesign: CheckIn is DECOUPLED from the notifications panel (the panel is
 // now a pure notification stream). The CheckIn component + bundle are preserved
 // for its own surface; it must no longer be embedded in Attention.

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { getAgentByName, routeAgentRequest, routeSubAgentRequest } from "agents";
 import type { Env, ApiResponse } from "./types";
@@ -16,7 +16,6 @@ function isVoiceEnabled(env: Env): boolean {
   return String((env as unknown as Record<string, unknown>).VOICE_ENABLED ?? "") === "1";
 }
 import { getUserWorkspace } from "./workspace";
-import { ChatPage } from "./views/ChatPage";
 import { BetaPage } from "./views/BetaPage";
 import type { AppEnv } from "./app-env";
 import { deploymentVersionResponse } from "./deploy-version";
@@ -535,24 +534,10 @@ app.all("/agents/*", async (c) => {
 // Identity is baked into the header pill from the verified Access JWT so
 // the user sees their email immediately on first paint. Browser-side JS
 // modules live under /static/*.
-app.get("/", (c) => {
-  const identity = c.get("identity");
-  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
-  const theme = readThemeCookie(c);
-  return c.html(
-    <ChatPage
-      identityEmail={identity?.email ?? null}
-      buildId={buildId}
-      buildTimestamp={c.env.CF_VERSION_METADATA?.timestamp ?? undefined}
-      theme={theme}
-      appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
-    />,
-  );
-});
-
-// /beta — the proper single-root frontend (BetaApp). Additive + behind the same
-// Access; prod / is untouched. Cutover to / happens only when explicitly chosen.
-app.get("/beta", (c) => {
+// Root now serves the single-root BetaApp frontend (promoted from /beta after
+// proven 1:1 parity). The legacy 6-mount ChatPage is retired. /beta stays as a
+// one-release alias so stale bookmarks / PWA caches still resolve.
+const renderApp = (c: Context<AppEnv>) => {
   const identity = c.get("identity");
   const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
   const theme = readThemeCookie(c);
@@ -565,7 +550,12 @@ app.get("/beta", (c) => {
       appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
     />,
   );
-});
+};
+
+app.get("/", (c) => renderApp(c));
+
+// /beta — one-release alias of / during cutover. Remove in a later release.
+app.get("/beta", (c) => renderApp(c));
 
 app.get("/capabilities", (c) => {
   const identity = c.get("identity");
