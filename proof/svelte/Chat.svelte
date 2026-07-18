@@ -15,6 +15,7 @@
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
+  import { handlePageCall, type PageCallFrame } from "./page-registry";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import {
@@ -1302,6 +1303,19 @@
       return;
     }
     if (m.type === "my_ax_pong") {
+      return;
+    } else if (m.type === "page_call") {
+      // The page.* codemode connector: the server-side agent drives the live UI
+      // over this same socket. Execute the curated verb and reply with a
+      // page_result frame keyed by requestId. Never throws (handlePageCall
+      // returns a typed error frame).
+      void handlePageCall(m as PageCallFrame).then(({ frame, after }) => {
+        try { (ws as any)?.send(JSON.stringify(frame)); } catch {}
+        // Run any disruptive side-effect (e.g. session switch that tears down
+        // this socket) only AFTER the result frame has been handed to the
+        // socket, so the awaiting server DO always receives its reply first.
+        if (after) { try { queueMicrotask(after); } catch { after(); } }
+      });
       return;
     } else if (m.type === "cf_agent_stream_resuming") {
       // Server advertised a resumable in-flight stream on connection. An
