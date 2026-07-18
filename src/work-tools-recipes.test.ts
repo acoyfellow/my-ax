@@ -38,9 +38,18 @@ test("work_code sandbox prelude no longer exposes a top-level recipe namespace",
 });
 
 test("work_code invokes submitted async arrow with ctx while preserving globals", () => {
-  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,cloudbox:globalThis\.cloudbox,codemode:globalThis\.codemode\}/);
+  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,cloudbox:globalThis\.cloudbox,page:globalThis\.page,codemode:globalThis\.codemode\}/);
   assert.match(source, /const executableCode = `async \(\) => await \(\$\{submittedCode\}\)\(globalThis\.ctx\)`/);
   assert.match(source, /executor\.execute\(executableCode,/);
+});
+
+test("work_code wires the page.* namespace into bridgeFns and the sandbox prelude", () => {
+  // Regression guard: the page connector was registered as a codemode source
+  // but the bare `page.*` global was never spliced into the work_code scope,
+  // so `page.listSessions()` threw 'page is not defined' in prod.
+  assert.match(source, /page_\$\{name\}/, "page_* dispatchers must be added to bridgeFns");
+  assert.match(source, /pagePrelude = ctx\.callPage \? namespace\("page"/, "page namespace must be conditionally spliced into the prelude");
+  assert.match(source, /page:globalThis\.page/, "page must be present on globalThis.ctx");
 });
 
 test("agent system prompt no longer references recipe.list / recipe.run", () => {

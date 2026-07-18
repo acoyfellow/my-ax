@@ -990,6 +990,16 @@ export class MyAgent extends Think<Env> {
     }
   }
 
+  /**
+   * Dev-only: run real work_code THROUGH the sandbox executor (not the raw
+   * callPage bridge), so we can prove the bare `page.*` global is wired into the
+   * work_code scope without an LLM. Guarded by DEV_USER_EMAIL (unset in prod).
+   */
+  async devWorkCode(code: string): Promise<unknown> {
+    if (!this.env.DEV_USER_EMAIL) return { ok: false, error: "dev only" };
+    return executeWorkCode(code, this.buildToolContext());
+  }
+
   private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
     const connections = [...this.getConnections<{ chatVisible?: boolean }>()];
     if (connections.length === 0) return Promise.reject(new Error("page_unavailable: no live browser client connected to this session"));
