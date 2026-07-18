@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 
 const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
-const chatPage = readFileSync(new URL("../../src/views/ChatPage.tsx", import.meta.url), "utf8");
+const betaPage = readFileSync(new URL("../../src/views/BetaPage.tsx", import.meta.url), "utf8");
 const appCss = readFileSync(new URL("../../src/styles/app.css", import.meta.url), "utf8");
 
 function assertIncludes(haystack, needle, label) {
@@ -138,13 +138,13 @@ assertIncludes(appCss, '#svelte-hono-beta-root {', "beta mount must have a defin
     if (!block.includes(decl)) throw new Error(`beta mount fill rule must include ${JSON.stringify(decl)}`);
   }
 }
-// The chat embed must forward wrapperClass="contents" so the generic mount
-// wrapper does not re-break the height chain the CSS rule depends on.
-assertIncludes(chatPage, 'hydrateAs="chat"', "ChatPage mounts the chat embed");
+// The single-root app embed must forward wrapperClass="contents" so the generic
+// mount wrapper does not re-break the height chain the CSS rule depends on.
+assertIncludes(betaPage, 'hydrateAs="beta"', "BetaPage mounts the single-root app embed");
 {
-  const i = chatPage.indexOf('hydrateAs="chat"');
-  const around = chatPage.slice(Math.max(0, i - 120), i + 160);
-  if (!around.includes('wrapperClass="contents"')) throw new Error("chat embed must forward wrapperClass=\"contents\"");
+  const i = betaPage.indexOf('hydrateAs="beta"');
+  const around = betaPage.slice(Math.max(0, i - 160), i + 200);
+  if (!around.includes('wrapperClass="contents"')) throw new Error("app embed must forward wrapperClass=\"contents\"");
 }
 // ...and SvelteEmbed must actually apply that class to the mount wrapper.
 // Forwarding the prop is useless if the wrapper hardcodes/drops the class,
