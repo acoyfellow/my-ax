@@ -1,6 +1,6 @@
 // Codemode runtime adapter for My AX.
 //
-// This module wires the workspace / machine / cloudbox / saved-snippet
+// This module wires the workspace / machine / terrarium / saved-snippet
 // surfaces behind the @cloudflare/codemode runtime contract. There are
 // three layers, kept deliberately separate:
 //
@@ -60,7 +60,7 @@ export type {
 // Lightweight in-process descriptor of a codemode connector. The @cloudflare
 // /codemode `CodemodeConnector` base class is a `WorkerEntrypoint` — useful
 // when each connector is its own Worker, but heavy for the in-process
-// workspace/machine/cloudbox trio. We mirror only the public connector shape
+// workspace/machine/terrarium trio. We mirror only the public connector shape
 // (describe + tools) so model code calling `codemode.search/describe/run`
 // has the same surface, and so an eventual swap to the real connector base
 // class is a structural refactor, not an API change.
@@ -145,7 +145,7 @@ function parseQualified(name: string): { connector: string; tool: string } | nul
 /**
  * Build the in-process codemode-shaped runtime exposed to work_code.
  *
- * Accepts the three native namespaces (workspace/machine/cloudbox) plus an
+ * Accepts the three native namespaces (workspace/machine/terrarium) plus an
  * optional snippet hook backed by saved_recipes. Returns the `codemode`
  * namespace (search/describe/run), the per-tool bridge functions, and the
  * sandbox prelude that wires `globalThis.codemode` to those bridge calls.
@@ -262,7 +262,7 @@ export function createCodemodeWorkRuntime(
 /**
  * Options for `runNativeCodemode` (defined in
  * `code-mode-runtime.worker.ts`). The native execution path wires the
- * workspace/machine/cloudbox connectors as `CodemodeConnector` workers
+ * workspace/machine/terrarium connectors as `CodemodeConnector` workers
  * and uses `createCodemodeRuntime` to give callers the canonical
  * tool/approve/reject/rollback/snippet API. Used only from worker-
  * runtime entry points that have a DurableObjectState handle; unit

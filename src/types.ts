@@ -79,9 +79,9 @@ declare global {
        */
       MCP_CODE_MODE_POLICY_JSON?: string;
 
-      /** Optional Cloudbox durable-computer delegation. Both must be set. */
-      CLOUDBOX_URL?: string;
-      CLOUDBOX_INTERNAL_TOKEN?: string;
+      /** Optional Terrarium cloud-run delegation (terrarium.* connector). Both must be set. */
+      TERRARIUM_URL?: string;
+      TERRARIUM_CONTROL_TOKEN?: string;
 
       /** Optional model gateway for non-Workers-AI catalog rows. */
       LLM_GATEWAY_URL?: string;

@@ -2,7 +2,7 @@
 // testable without the Worker-only work-tools imports. Fixes the recipe-audit
 // gaps: no more `WorkCodeRecipe_<epoch>` names; a portability signal.
 
-const HOST_NAMESPACES = new Set(["machine", "workspace", "cloudbox"]);
+const HOST_NAMESPACES = new Set(["machine", "workspace", "terrarium"]);
 
 export function isPortable(capabilities: string[]): boolean {
   // A `<ns>.none` sentinel explicitly means "needs no host binding" and is
@@ -27,7 +27,7 @@ function fallbackName(code: string): string {
 export function suggestRecipeName(code: string): string {
   const comment = code.match(/^\s*\/\/\s*(?:name:\s*)?([a-zA-Z][ \t\w-]{2,40})/);
   if (comment) return clean(comment[1]) || fallbackName(code);
-  const call = code.match(/\b(?:machine|workspace|cloudbox)\.(\w+)/);
+  const call = code.match(/\b(?:machine|workspace|terrarium)\.(\w+)/);
   const returned = code.match(/return\s+(?:JSON\.stringify\()?\{\s*(\w+)/);
   if (call && returned) return clean(`${call[1]}_${returned[1]}`);
   if (returned) return clean(`compute_${returned[1]}`);
@@ -36,7 +36,7 @@ export function suggestRecipeName(code: string): string {
 }
 
 export function suggestRecipeDescription(code: string, caps: string[]): string {
-  const hostCap = caps.find((c) => /^(machine|workspace|cloudbox)\./.test(c));
+  const hostCap = caps.find((c) => /^(machine|workspace|terrarium)\./.test(c));
   const verb = code.match(/return\s+(?:JSON\.stringify\()?\{\s*(\w+)/)?.[1];
   if (verb && hostCap) return `Computes { ${verb}, ... } via ${hostCap}. Review before enabling.`;
   if (verb) return `Computes { ${verb}, ... } from its input. Portable. Review before enabling.`;
