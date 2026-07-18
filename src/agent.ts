@@ -175,6 +175,9 @@ export class MyAgent extends Think<Env> {
    *  race between turns. */
   private dirtyFsThisTurn = false;
   private notifiedOwnerThisTurn = false;
+  // page.* codemode connector: in-flight page_call requests keyed by requestId,
+  // resolved when the live client replies with a page_result frame (onMessage).
+  private pendingPageCalls = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private cycleStepUsage: Array<{ usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null }; finishReason?: string }> = [];
   private recipesUsedThisTurn: unknown[] = [];
   private recipesSavedThisTurn: unknown[] = [];
@@ -370,6 +373,7 @@ export class MyAgent extends Think<Env> {
       this.seedIdentity(body.identity);
       return Response.json({ ok: true });
     }
+
     if (url.pathname === "/inject-user-message") {
       try {
         const result = await this.injectUserMessage(await request.json());
@@ -702,6 +706,18 @@ export class MyAgent extends Think<Env> {
         connection.setState({ ...((connection.state ?? {}) as Record<string, unknown>), chatVisible: parsed.visible === true });
         return;
       }
+      // page.* codemode connector: the live client's reply to a page_call.
+      if (parsed?.type === "page_result") {
+        const p = parsed as { requestId?: string; ok?: boolean; result?: unknown; error?: string };
+        const pending = p.requestId ? this.pendingPageCalls.get(p.requestId) : undefined;
+        if (pending && p.requestId) {
+          this.pendingPageCalls.delete(p.requestId);
+          clearTimeout(pending.timer);
+          if (p.ok) pending.resolve(p.result ?? null);
+          else pending.reject(new Error(p.error || "page verb failed"));
+        }
+        return;
+      }
     } catch {}
     return super.onMessage(connection, message as Parameters<Think<Env>["onMessage"]>[1]);
   }
@@ -941,6 +957,7 @@ export class MyAgent extends Think<Env> {
         return result;
       },
       broadcast: (message) => this.broadcast(message),
+      callPage: (verb, args, opts) => this.callPage(verb, args, opts),
       identity,
       sessionId,
       bridgeBaseUrl: env.BRIDGE_BASE_URL,
@@ -950,6 +967,51 @@ export class MyAgent extends Think<Env> {
       // validate the origin at their point of use.
       workerOrigin: resolveWorkerOrigin(env),
     };
+  }
+
+  /**
+   * page.* codemode connector bridge. Marshal one curated verb to the live chat
+   * client over the existing WebSocket and await its page_result. Prefers a
+   * chat-visible connection; falls back to any live connection. Rejects with a
+   * typed error if no client is connected or the client does not reply in time.
+   */
+  /**
+   * Dev-only page.* bridge probe (RPC). Exercises the full DO->client->DO
+   * round-trip (callPage -> page_call -> client registry -> page_result)
+   * WITHOUT an LLM inference. Guarded by DEV_USER_EMAIL (unset in prod).
+   */
+  async devPageCall(verb: string, args?: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: string }> {
+    if (!this.env.DEV_USER_EMAIL) return { ok: false, error: "dev only" };
+    try {
+      const result = await this.callPage(verb, args ?? {});
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
+    const connections = [...this.getConnections<{ chatVisible?: boolean }>()];
+    if (connections.length === 0) return Promise.reject(new Error("page_unavailable: no live browser client connected to this session"));
+    const requestId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const timeoutMs = Math.min(Math.max(opts?.timeoutMs ?? 10_000, 1000), 30_000);
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingPageCalls.delete(requestId);
+        reject(new Error(`page_timeout: verb ${verb} did not reply within ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.pendingPageCalls.set(requestId, { resolve, reject, timer });
+      try {
+        // broadcast (not connection.send): the socket-owning isolate delivers
+        // reliably under hibernation; the client filters by requestId and only
+        // the tab holding this conversation replies with page_result.
+        this.broadcast(JSON.stringify({ type: "page_call", requestId, verb, args: args ?? {} }));
+      } catch (e) {
+        this.pendingPageCalls.delete(requestId);
+        clearTimeout(timer);
+        reject(new Error(`page_send_failed: ${String(e)}`));
+      }
+    });
   }
 
   async beforeTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
