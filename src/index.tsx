@@ -421,6 +421,13 @@ app.all("/agents/*", async (c) => {
     const result = await facet.devPageCall(verb, args);
     return c.json(result as Record<string, unknown>);
   }
+  if (c.env.DEV_USER_EMAIL && c.req.path === "/agents/my-agent-dev-work-code") {
+    const identity = c.get("identity");
+    const { sessionId, code } = await c.req.json<{ sessionId: string; code: string }>();
+    const facet = await getSessionAgent(c.env, identity.email, sessionId);
+    const result = await facet.devWorkCode(code);
+    return c.json({ result });
+  }
 
   const match = /^\/agents\/my-agent\/([^/]+)$/.exec(c.req.path);
   if (match) {
