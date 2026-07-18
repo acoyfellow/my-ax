@@ -1,0 +1,25 @@
+src/agent.ts
+  s_58fd295f2ea96b::t_9aea2d2d5390b1 993-1002
+src/index.tsx
+  s_58fd295f2ea96b::t_6ceeb685a3ef99 424-430
+src/work-tools-recipes.test.ts
+  s_58fd295f2ea96b::t_1ed1fc28e5ff14 41,46-54
+src/work-tools.ts
+  s_58fd295f2ea96b::t_d3efc8df6f1727 222,229,234,236,287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b5d09127c3cc129c71357f76bdf7cf6c556b25ab",
+  "prompts": {},
+  "sessions": {
+    "s_58fd295f2ea96b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e8e0e-e5c2-78a0-81ed-9f91469bc981",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
