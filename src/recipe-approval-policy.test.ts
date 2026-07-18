@@ -32,8 +32,8 @@ test("non-portable machine recipes stay inline instead of creating attention noi
   assert.equal(shouldPersistSuggestedRecipe(decision), false);
 });
 
-test("cloudbox recipes are also treated as high-authority inline-only prompts", () => {
-  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["cloudbox.run_exec"], portable: false }), {
+test("terrarium recipes are also treated as high-authority inline-only prompts", () => {
+  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["terrarium.spawn"], portable: false }), {
     notify: false,
     reason: "high_authority_inline_only",
   });

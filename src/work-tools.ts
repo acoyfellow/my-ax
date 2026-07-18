@@ -1,5 +1,5 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
-import { createCloudboxWorkProvider, CLOUDBOX_WORK_METHODS } from "./cloudbox-tools";
+import { createTerrariumWorkProvider, TERRARIUM_WORK_METHODS } from "./terrarium-tools";
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import type { ToolContext, ToolDef } from "./types";
@@ -37,7 +37,7 @@ const PAGE_WORK_METHODS = [
 
 type WorkCall = {
   index: number;
-  where: "workspace" | "machine" | "cloudbox" | "codemode" | "page";
+  where: "workspace" | "machine" | "terrarium" | "codemode" | "page";
   method: string;
   status: "ok" | "error";
   durationMs: number;
@@ -111,16 +111,16 @@ function catalogEntry(where: WorkCall["where"] | "codemode" | "snippet", name: s
 // Static codemode connector advertisement. The runtime itself is reachable
 // inside work_code as `codemode.search()` / `codemode.describe(name)` /
 // `codemode.run(name, input)` and dispatches to whichever underlying
-// connector (workspace / machine / cloudbox) or snippet owns the tool.
+// connector (workspace / machine / terrarium) or snippet owns the tool.
 const CODEMODE_METHODS = [
-  { name: "search", description: "List or filter codemode tools across workspace, machine, cloudbox, and reusable tools." },
+  { name: "search", description: "List or filter codemode tools across workspace, machine, terrarium, and reusable tools." },
   { name: "describe", description: "Return the description and input schema for one codemode tool by qualified name." },
   { name: "run", description: "Invoke one codemode tool or owner-approved reusable tool by name with a structured input." },
 ] as const;
 
 export const WORK_SEARCH_TOOL: ToolDef = {
   name: "work_search",
-  description: "Discover where My AX can do work. My AX Workspace is persistent conversation-adjacent storage and processes; My Machine is the connected physical computer with local/authenticated state; Cloudbox is a clean bounded repo run with receipts. Search before choosing when the destination is not obvious.",
+  description: "Discover where My AX can do work. My AX Workspace is persistent conversation-adjacent storage and processes; My Machine is the connected physical computer with local/authenticated state; Terrarium spawns bounded cloud agent runs with verified receipts. Search before choosing when the destination is not obvious.",
   parameters: { type: "object", properties: { query: { type: "string", description: "What capability or kind of work is needed." } } },
   execute: async (args, ctx) => {
     checkedWorkspaceProvider(ctx);
@@ -129,14 +129,14 @@ export const WORK_SEARCH_TOOL: ToolDef = {
     const catalog = [
       ...WORKSPACE_METHODS.map((method) => catalogEntry("workspace", method.name, method.description)),
       ...machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema)),
-      ...CLOUDBOX_WORK_METHODS.map((method) => catalogEntry("cloudbox", method.name, method.description, Boolean(ctx.env.CLOUDBOX_URL && ctx.env.CLOUDBOX_INTERNAL_TOKEN))),
+      ...TERRARIUM_WORK_METHODS.map((method) => catalogEntry("terrarium", method.name, method.description, Boolean(ctx.env.TERRARIUM_URL && ctx.env.TERRARIUM_CONTROL_TOKEN))),
       ...PAGE_WORK_METHODS.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage))),
       ...CODEMODE_METHODS.map((method) => catalogEntry("codemode", method.name, method.description, true)),
       ...snippets.map((snippet) => ({ method: `codemode:${snippet.name}`, where: "codemode" as const, description: snippet.description, available: true, inputSchema: snippet.inputSchema, capabilities: snippet.capabilities })),
     ];
     const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
     const filtered = query ? catalog.filter((entry) => `${entry.method} ${entry.description} ${entry.where}`.toLowerCase().includes(query)) : catalog;
-    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace", machine: "My Machine", cloudbox: "Cloudbox", page: "My AX Page (live browser UI)" }, matches: filtered.length ? filtered : catalog });
+    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace", machine: "My Machine", terrarium: "Terrarium (bounded cloud agent runs)", page: "My AX Page (live browser UI)" }, matches: filtered.length ? filtered : catalog });
   },
 };
 
@@ -162,15 +162,15 @@ function buildSnippetHook(ctx: ToolContext): CodemodeSnippetHook | undefined {
 export async function executeWorkCode(code: string, ctx: ToolContext) {
   if (!code || new TextEncoder().encode(code).byteLength > 32_000) return { ok: false, error: "code is required and must be <= 32000 bytes" };
   const machine = await createMachineWorkProvider(ctx);
-  const cloudbox = createCloudboxWorkProvider(ctx);
+  const terrariumProvider = createTerrariumWorkProvider(ctx);
   const calls: WorkCall[] = [];
-  // Build the workspace/machine/cloudbox dispatchers up-front, then route them
+  // Build the workspace/machine/terrarium dispatchers up-front, then route them
   // through both the legacy raw bridge namespaces AND the new codemode runtime
   // so model code can call `workspace.read({...})` directly or hop through
   // `codemode.run("workspace.read", {...})` / `codemode.search()`.
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
-  const cloudboxFns = instrument("cloudbox", restrictByCapabilities("cloudbox", cloudbox.fns, ctx.allowedWorkCapabilities), calls);
+  const terrariumFns = instrument("terrarium", restrictByCapabilities("terrarium", terrariumProvider.fns, ctx.allowedWorkCapabilities), calls);
   // page.* connector: each verb marshals to the live browser client via
   // ctx.callPage (over the chat WS). Only present when a live chat connection
   // exists. The server-side catalog mirrors proof/svelte/page-registry.ts.
@@ -193,8 +193,8 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
       fns: machineFns,
     },
     {
-      connector: { name: "cloudbox", description: "Cloudbox — a clean bounded repository run with receipts.", tools: CLOUDBOX_WORK_METHODS.map((method) => ({ name: method.name, description: method.description, execute: cloudboxFns[method.name] })) },
-      fns: cloudboxFns,
+      connector: { name: "terrarium", description: "Terrarium — spawn bounded cloud agent runs with verified receipts.", tools: TERRARIUM_WORK_METHODS.map((method) => ({ name: method.name, description: method.description, execute: terrariumFns[method.name] })) },
+      fns: terrariumFns,
     },
     ...(ctx.callPage ? [{
       connector: {
@@ -218,7 +218,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const bridgeFns = {
     ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
     ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
-    ...Object.fromEntries(Object.entries(cloudboxFns).map(([name, fn]) => [`cloudbox_${name}`, fn])),
+    ...Object.fromEntries(Object.entries(terrariumFns).map(([name, fn]) => [`terrarium_${name}`, fn])),
     ...Object.fromEntries(Object.entries(pageFns).map(([name, fn]) => [`page_${name}`, fn])),
     codemode__search: instrumentedCodemodeBridge.search,
     codemode__describe: instrumentedCodemodeBridge.describe,
@@ -230,10 +230,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const prelude = [
     namespace("workspace", Object.keys(workspaceFns)),
     namespace("machine", Object.keys(machineFns)),
-    namespace("cloudbox", Object.keys(cloudboxFns)),
+    namespace("terrarium", Object.keys(terrariumFns)),
     pagePrelude,
     codemodeRuntime.prelude,
-    "globalThis.ctx={workspace:globalThis.workspace,machine:globalThis.machine,cloudbox:globalThis.cloudbox,page:globalThis.page,codemode:globalThis.codemode};",
+    "globalThis.ctx={workspace:globalThis.workspace,machine:globalThis.machine,terrarium:globalThis.terrarium,page:globalThis.page,codemode:globalThis.codemode};",
   ].join("\n");
   const submittedCode = code.trim().replace(/;+$/, "");
   const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
@@ -284,7 +284,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
-  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,cloudbox,page,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). My AX Page methods drive the owner's LIVE browser UI for this conversation (only while a tab is open): page.listSessions(), page.readHealth(), page.readTranscriptTail({n}), page.switchSession({id}), page.openSettings({section}), page.openAttention(), page.openSessions(); each errors page_unavailable when no live tab is connected. A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and reusable tools, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved reusable tool by name; reusable-tool runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
-  parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, cloudbox, and/or codemode namespaces." } }, required: ["code"] },
+  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,terrarium,page,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Terrarium methods spawn bounded cloud agent runs with verified receipts: terrarium.spawn({task,timeoutMs?,model?}) waits for the receipt, terrarium.spawn_background({task}) returns a runId immediately, and terrarium.status({runId}) checks a run. My AX Page methods drive the owner's LIVE browser UI for this conversation (only while a tab is open): page.listSessions(), page.readHealth(), page.readTranscriptTail({n}), page.switchSession({id}), page.openSettings({section}), page.openAttention(), page.openSessions(); each errors page_unavailable when no live tab is connected. A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and reusable tools, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved reusable tool by name; reusable-tool runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
+  parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, terrarium, page, and/or codemode namespaces." } }, required: ["code"] },
   execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };
