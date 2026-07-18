@@ -23,9 +23,21 @@ const WORKSPACE_METHODS = [
   { name: "preview_close", description: "Close a workspace preview." },
 ] as const;
 
+// page.* connector catalog (server side). Mirrors proof/svelte/page-registry.ts
+// PAGE_VERBS. Each verb marshals over the chat WS to the live browser client.
+const PAGE_WORK_METHODS = [
+  { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
+  { name: "readHealth", description: "Read workspace container health for the live session: {diskPct,files,version,region,...}." },
+  { name: "readTranscriptTail", description: "Read the last N entries of the active conversation as rendered: [{role,text,ts}]. Optional {n}." },
+  { name: "switchSession", description: "Switch the active conversation in the owner's UI to {id}. Resolves on the client switch ack." },
+  { name: "openSettings", description: "Open the settings dialog in the owner's UI, optionally to {section}." },
+  { name: "openAttention", description: "Open the notifications/attention panel in the owner's UI." },
+  { name: "openSessions", description: "Open the conversations sidebar in the owner's UI." },
+] as const;
+
 type WorkCall = {
   index: number;
-  where: "workspace" | "machine" | "cloudbox" | "codemode";
+  where: "workspace" | "machine" | "cloudbox" | "codemode" | "page";
   method: string;
   status: "ok" | "error";
   durationMs: number;
@@ -118,12 +130,13 @@ export const WORK_SEARCH_TOOL: ToolDef = {
       ...WORKSPACE_METHODS.map((method) => catalogEntry("workspace", method.name, method.description)),
       ...machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema)),
       ...CLOUDBOX_WORK_METHODS.map((method) => catalogEntry("cloudbox", method.name, method.description, Boolean(ctx.env.CLOUDBOX_URL && ctx.env.CLOUDBOX_INTERNAL_TOKEN))),
+      ...PAGE_WORK_METHODS.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage))),
       ...CODEMODE_METHODS.map((method) => catalogEntry("codemode", method.name, method.description, true)),
       ...snippets.map((snippet) => ({ method: `codemode:${snippet.name}`, where: "codemode" as const, description: snippet.description, available: true, inputSchema: snippet.inputSchema, capabilities: snippet.capabilities })),
     ];
     const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
     const filtered = query ? catalog.filter((entry) => `${entry.method} ${entry.description} ${entry.where}`.toLowerCase().includes(query)) : catalog;
-    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace", machine: "My Machine", cloudbox: "Cloudbox" }, matches: filtered.length ? filtered : catalog });
+    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace", machine: "My Machine", cloudbox: "Cloudbox", page: "My AX Page (live browser UI)" }, matches: filtered.length ? filtered : catalog });
   },
 };
 
@@ -158,6 +171,15 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
   const cloudboxFns = instrument("cloudbox", restrictByCapabilities("cloudbox", cloudbox.fns, ctx.allowedWorkCapabilities), calls);
+  // page.* connector: each verb marshals to the live browser client via
+  // ctx.callPage (over the chat WS). Only present when a live chat connection
+  // exists. The server-side catalog mirrors proof/svelte/page-registry.ts.
+  const pageFns = ctx.callPage
+    ? instrument("page", restrictByCapabilities("page", Object.fromEntries(PAGE_WORK_METHODS.map((m) => [
+        m.name,
+        async (input: unknown) => ctx.callPage!(m.name, (input ?? {}) as Record<string, unknown>),
+      ])), ctx.allowedWorkCapabilities), calls)
+    : {};
 
   // Native codemode connector trio. Wrapping the same instrumented dispatchers
   // keeps a single receipt/cost path for both call styles.
@@ -174,6 +196,14 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
       connector: { name: "cloudbox", description: "Cloudbox — a clean bounded repository run with receipts.", tools: CLOUDBOX_WORK_METHODS.map((method) => ({ name: method.name, description: method.description, execute: cloudboxFns[method.name] })) },
       fns: cloudboxFns,
     },
+    ...(ctx.callPage ? [{
+      connector: {
+        name: "page",
+        description: "My AX Page — the owner's LIVE browser UI for this conversation. Curated, capability-scoped verbs that drive the running app (read sessions/health/transcript, switch conversation, open panels). Only works while the owner has this conversation open in a browser; otherwise each verb errors page_unavailable.",
+        tools: PAGE_WORK_METHODS.map((method) => ({ name: method.name, description: method.description, execute: pageFns[method.name] })),
+      },
+      fns: pageFns,
+    }] : []),
   ];
   const snippetHook = buildSnippetHook(ctx);
   const codemodeRuntime = createCodemodeWorkRuntime(codemodeSources, snippetHook);
@@ -251,7 +281,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
-  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,cloudbox,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and reusable tools, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved reusable tool by name; reusable-tool runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
+  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,cloudbox,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Cloudbox methods: cloudbox.run_create({repo}), cloudbox.run_read({runId,path}), cloudbox.run_write({runId,path,content}), and cloudbox.run_exec({runId,command}). My AX Page methods drive the owner's LIVE browser UI for this conversation (only while a tab is open): page.listSessions(), page.readHealth(), page.readTranscriptTail({n}), page.switchSession({id}), page.openSettings({section}), page.openAttention(), page.openSessions(); each errors page_unavailable when no live tab is connected. A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and reusable tools, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved reusable tool by name; reusable-tool runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
   parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, cloudbox, and/or codemode namespaces." } }, required: ["code"] },
   execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };

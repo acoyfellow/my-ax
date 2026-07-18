@@ -411,6 +411,17 @@ app.all("/agents/*", async (c) => {
   // conversation into a MyAgent facet inside one per-user UserAgent root.
   // This makes user-scoped state physically co-located without changing the
   // browser protocol.
+  // Dev-only page.* bridge probe. Exercises the full DO->client->DO round-trip
+  // (callPage -> page_call frame -> client registry -> page_result -> resolve)
+  // against the live browser socket, no LLM inference. Unset in prod.
+  if (c.env.DEV_USER_EMAIL && c.req.path === "/agents/my-agent-dev-page-call") {
+    const identity = c.get("identity");
+    const { sessionId, verb, args } = await c.req.json<{ sessionId: string; verb: string; args?: Record<string, unknown> }>();
+    const facet = await getSessionAgent(c.env, identity.email, sessionId);
+    const result = await facet.devPageCall(verb, args);
+    return c.json(result as Record<string, unknown>);
+  }
+
   const match = /^\/agents\/my-agent\/([^/]+)$/.exec(c.req.path);
   if (match) {
     const identity = c.get("identity");
