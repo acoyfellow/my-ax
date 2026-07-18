@@ -144,12 +144,22 @@ export class OAuthClientDO extends DurableObject<Env> {
     };
   }
 
-  private async decryptStoredSet(stored: StoredTokenSet): Promise<DecryptedTokenSet> {
-    return {
-      ...stored,
-      access_token: await this.decryptOrPassthrough(stored.access_token),
-      refresh_token: stored.refresh_token ? await this.decryptOrPassthrough(stored.refresh_token) : undefined,
-    };
+  private async decryptStoredSet(stored: StoredTokenSet): Promise<DecryptedTokenSet | null> {
+    // Fail SOFT on an undecryptable token. A single corrupt/legacy blob (e.g. a
+    // value that matches looksEncrypted() but is not valid base64, which makes
+    // atob() throw) must NOT propagate out of the DO and 503 the entire
+    // connector-status endpoint. Treat it as "not authorized" so the connector
+    // simply shows an authorize link, and the user can re-auth to overwrite it.
+    try {
+      return {
+        ...stored,
+        access_token: await this.decryptOrPassthrough(stored.access_token),
+        refresh_token: stored.refresh_token ? await this.decryptOrPassthrough(stored.refresh_token) : undefined,
+      };
+    } catch (error) {
+      console.error("oauth_token_decrypt_failed", { userScope: this.userScope, err: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
   }
 
   /** Resolve a connector id to its Connector record. Checks the env-gated
@@ -453,6 +463,8 @@ export class OAuthClientDO extends DurableObject<Env> {
     if (!stored) return null;
 
     const decrypted = await this.decryptStoredSet(stored);
+    // Undecryptable token -> treat as unauthorized (fail soft, see decryptStoredSet).
+    if (!decrypted) return null;
 
     const now = Math.floor(Date.now() / 1000);
     const expiringSoon = decrypted.expires_at - now < REFRESH_LEEWAY_SECONDS;

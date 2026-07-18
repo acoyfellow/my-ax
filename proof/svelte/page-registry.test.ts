@@ -42,7 +42,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["listSessions", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "switchSession"]);
+  assert.deepEqual(names, ["listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -99,6 +99,30 @@ test("openSettings / openAttention / openSessions dispatch their window events s
   await handlePageCall({ type: "page_call", requestId: "r7", verb: "openAttention" });
   await handlePageCall({ type: "page_call", requestId: "r8", verb: "openSessions" });
   assert.deepEqual(events, ["my-ax:settings-open", "my-ax:attention-open", "my-ax:sessions-open"]);
+});
+
+test("notify dispatches my-ax:toast with text+kind and requires text", async () => {
+  const events = installGlobals({});
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "rn1", verb: "notify", args: { text: "hello owner", kind: "system" } });
+  assert.equal(frame.ok, true);
+  assert.deepEqual(events, ["my-ax:toast"]);
+  const err = await handlePageCall({ type: "page_call", requestId: "rn2", verb: "notify", args: {} });
+  assert.equal(err.frame.ok, false);
+  assert.match(String(err.frame.error), /requires \{text\}/);
+});
+
+test("navigate replies first then dispatches my-ax:navigate in after() (disruptive)", async () => {
+  const events = installGlobals({});
+  const { frame, after } = await handlePageCall({ type: "page_call", requestId: "rv1", verb: "navigate", args: { target: "/?action=attention" } });
+  assert.equal(frame.ok, true);
+  assert.deepEqual((frame.result as any), { ok: true, target: "/?action=attention" });
+  assert.deepEqual(events, [], "no navigate event before the result is flushed");
+  assert.equal(typeof after, "function");
+  after!();
+  assert.deepEqual(events, ["my-ax:navigate"]);
+  const err = await handlePageCall({ type: "page_call", requestId: "rv2", verb: "navigate", args: {} });
+  assert.equal(err.frame.ok, false);
+  assert.match(String(err.frame.error), /requires \{target\}/);
 });
 
 test("unknown verb resolves to a typed error frame keyed by requestId", async () => {

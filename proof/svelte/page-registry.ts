@@ -140,6 +140,33 @@ export const PAGE_VERBS: PageVerb[] = [
       return { result: { ok: true } };
     },
   },
+  {
+    name: "notify",
+    description: "Show a transient in-app notice (toast) to the owner in the live UI. Input: {text, kind?: 'system'|'error'}.",
+    resolution: "receipt",
+    run: async (args) => {
+      const text = String(args.text ?? "").slice(0, 500);
+      if (!text) throw new Error("notify requires {text}");
+      const kind = args.kind === "error" ? "error" : "system";
+      window.dispatchEvent(new CustomEvent("my-ax:toast", { detail: { text, kind } }));
+      return { result: { ok: true } };
+    },
+  },
+  {
+    name: "navigate",
+    description: "Navigate the owner's UI to an in-app deep link (e.g. /?session=<id>, /?action=attention, /?action=settings, /runs/<id>). Input: {target}. Resolves on the client's navigate ack.",
+    resolution: "ack",
+    run: async (args) => {
+      const target = String(args.target ?? "").trim();
+      if (!target) throw new Error("navigate requires {target}");
+      // Disruptive: a session/full navigation can tear down this socket. Reply
+      // FIRST, then dispatch the deep-link in `after` (same pattern as switchSession).
+      return {
+        result: { ok: true, target },
+        after: () => { window.dispatchEvent(new CustomEvent("my-ax:navigate", { detail: { href: target } })); },
+      };
+    },
+  },
 ];
 
 export function pageVerbCatalog() {
