@@ -152,6 +152,14 @@ export interface ToolContext {
   runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown>; callerCapabilities?: string[] }) => Promise<unknown>;
   broadcast: (msg: string) => void;
 
+  /**
+   * page.* codemode connector: marshal one curated page verb to the LIVE browser
+   * client over the existing chat WebSocket and await the typed result.
+   * Resolves with the verb result or rejects on a hard timeout / no client.
+   * Undefined when no live chat connection is available (e.g. a background job).
+   */
+  callPage?: (verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }) => Promise<unknown>;
+
   // Legacy in-process connector bridge surfaces retained for Settings
   // catalog/reauth helper calls. Populated by agent.ts buildToolContext().
   identity: AccessIdentity;
