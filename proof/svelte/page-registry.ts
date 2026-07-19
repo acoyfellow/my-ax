@@ -52,6 +52,17 @@ export interface PageVerb {
   run: (args: Record<string, unknown>) => Promise<PageVerbOutcome>;
 }
 
+// Artifact-tool bridge (page connector v2). Chat.svelte owns the real
+// ArtifactToolRegistry (it lives where the iframes are); it injects these two
+// hooks so the curated page verbs can discover + invoke artifact-proposed tools
+// WITHOUT those tools polluting the base allowlist or work_search (G4).
+export interface ArtifactBridge {
+  listTools: () => Array<{ artifactId: string; name: string; description: string }>;
+  invokeTool: (artifactId: string, name: string, args: Record<string, unknown>) => Promise<unknown>;
+}
+let artifactBridge: ArtifactBridge | null = null;
+export function setArtifactBridge(bridge: ArtifactBridge | null): void { artifactBridge = bridge; }
+
 async function getJSON(url: string): Promise<unknown> {
   const r = await fetch(url, { credentials: "include", headers: { accept: "application/json" } });
   if (!r.ok) throw new Error(`${url} -> ${r.status}`);
@@ -165,6 +176,28 @@ export const PAGE_VERBS: PageVerb[] = [
         result: { ok: true, target },
         after: () => { window.dispatchEvent(new CustomEvent("my-ax:navigate", { detail: { href: target } })); },
       };
+    },
+  },
+  {
+    name: "listArtifactTools",
+    description: "List tools that live artifact widgets have self-registered: [{artifactId,name,description}]. These are NOT in work_search; discover them here, then call invokeArtifactTool.",
+    resolution: "receipt",
+    run: async () => {
+      return { result: artifactBridge ? artifactBridge.listTools() : [] };
+    },
+  },
+  {
+    name: "invokeArtifactTool",
+    description: "Invoke a tool a live artifact widget self-registered. Input: {artifactId, name, args?}. Parent-mediated + arg-validated; errors artifact_gone/artifact_unknown_tool/artifact_bad_args/artifact_invoke_timeout.",
+    resolution: "receipt",
+    run: async (args) => {
+      if (!artifactBridge) throw new Error("artifact_bridge_unavailable");
+      const artifactId = String(args.artifactId ?? "");
+      const name = String(args.name ?? "");
+      if (!artifactId || !name) throw new Error("invokeArtifactTool requires {artifactId, name}");
+      const toolArgs = (args.args && typeof args.args === "object") ? args.args as Record<string, unknown> : {};
+      const result = await artifactBridge.invokeTool(artifactId, name, toolArgs);
+      return { result };
     },
   },
 ];
