@@ -667,11 +667,23 @@
   }
   :global(.session-row__signal[data-signal="running"]) {
     color: var(--brand);
-    background: conic-gradient(from 0deg, currentColor 0 25%, transparent 25% 55%, currentColor 55% 100%);
-    animation: session-signal-spin 900ms linear infinite;
+    /* Conventional circular ring spinner: a full ring with one bright arc
+       that rotates, instead of the previous conic-gradient wedge that read
+       as a "Pac-Man" mouth. */
+    background: transparent;
+    box-shadow: none;
+    box-sizing: border-box;
+    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    animation: session-signal-spin 700ms linear infinite;
   }
   @keyframes session-signal-spin {
     to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.session-row__signal[data-signal="running"]) {
+      animation-duration: 1.8s;
+    }
   }
   :global(.session-row__main) {
     flex: 1;
