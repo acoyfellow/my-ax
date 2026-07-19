@@ -103,23 +103,27 @@ The exact gateway contract is deployment-specific and should be injected outside
 
 It connects outbound to My AX and publishes a live capability catalog. Configure and run it only on a computer whose local authority you intend to expose. My Machine is terminal-equivalent authority, not a sandbox.
 
-### Cloudbox
+### Terrarium
 
-A compatible Cloudbox deployment adds bounded repository runs to Work Code Mode. Configure:
+A compatible Terrarium deployment adds bounded cloud agent runs (with verified receipts) to Work Code Mode. Configure the URL as a var:
 
 ```jsonc
 "vars": {
-  "CLOUDBOX_URL": "https://your-cloudbox.example.com"
+  "TERRARIUM_URL": "https://your-terrarium.example.com"
 }
 ```
 
-Then set the shared deployment secret:
+Then set the shared deployment control token secret:
 
 ```bash
-npx wrangler secret put CLOUDBOX_INTERNAL_TOKEN
+npx wrangler secret put TERRARIUM_CONTROL_TOKEN
 ```
 
-The same value must be configured on Cloudbox. Current integration methods create a live run, read and write relative files, and execute bounded commands. Cloudbox is optional; My AX Workspace and connected MCPs work without it.
+The same token must be accepted by Terrarium (`Authorization: Bearer <TERRARIUM_CONTROL_TOKEN>`; the server binds the principal). Integration methods are `terrarium.spawn` (waits for the receipt), `terrarium.spawn_background` (returns a run id), and `terrarium.status` (checks a run). Terrarium is optional; My AX Workspace and connected MCPs work without it. It replaces the retired `cloudbox` connector.
+
+### Page connector (live UI)
+
+The `page.*` connector needs no configuration or secret. It resolves over the owner chat WebSocket, so it is available automatically whenever an owner chat tab is connected, and every verb errors `page_unavailable` otherwise. It lets the agent drive the owner's own browser session and invoke tools that artifacts self-register. There is nothing to deploy or provision for it.
 
 ### Pantry Bridge
 
