@@ -1030,6 +1030,22 @@ html {
   }
   .tool-call__summary::-webkit-details-marker { display: none; }
   .tool-call__pip { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
+  /* While a tool call is open/in-flight (yellow, pending) show a clear
+     active/loading pulse so the step reads as "working", not stalled. The
+     animation only runs for the pending state; done/error are terminal and
+     static. */
+  .tool-call[data-state="pending"] .tool-call__pip {
+    animation: tool-call-pip-pulse 1s ease-in-out infinite;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 60%, transparent);
+  }
+  @keyframes tool-call-pip-pulse {
+    0%   { opacity: 1;    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent); }
+    70%  { opacity: 0.55; box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 0%, transparent); }
+    100% { opacity: 1;    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 0%, transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tool-call[data-state="pending"] .tool-call__pip { animation: none; opacity: 1; box-shadow: none; }
+  }
   .tool-call[data-state="done"] .tool-call__pip { background: var(--good); }
   .tool-call[data-state="error"] .tool-call__pip { background: var(--bad); }
   .tool-call__name { color: var(--fg); }
