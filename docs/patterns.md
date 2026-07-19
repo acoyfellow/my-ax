@@ -41,15 +41,17 @@ connected MCP tools
 
 ## 3. Route Computer Work by State
 
-`work_search` and `work_code` present three locations without publishing every underlying operation as an eager model tool.
+`work_search` and `work_code` present several locations without publishing every underlying operation as an eager model tool.
 
 ```text
 workspace.*  snapshot-backed /home/user
 machine.*    outbound-connected physical machine
-cloudbox.*   bounded public-repository run
+terrarium.*  bounded cloud agent run (verified receipts)
+page.*       live browser UI (only while a chat tab is connected)
+codemode.*   discover/describe/run tools + owner-approved reusable tools
 ```
 
-The distinction follows state, not geography. My AX Workspace and Cloudbox both run on Cloudflare. My Machine matters because it contains current local checkouts, desktop state, and authentication that do not exist in either remote environment.
+The distinction follows state, not geography. My AX Workspace and Terrarium both run on Cloudflare. My Machine matters because it contains current local checkouts, desktop state, and authentication that do not exist in either remote environment. The Page connector is different again: it resolves over the owner chat WebSocket to steer the owner's own browser session, so it works only while a chat tab is open.
 
 The Dynamic Worker receives a generated bridge containing only the methods selected by the host. It has no ambient network access. That isolation does not reduce the authority of a method such as `machine.shell`; the host callback still runs with the connected user's terminal permissions.
 
@@ -58,7 +60,9 @@ Relevant code:
 ```text
 src/work-tools.ts
 src/routes/machinectl.ts
-src/cloudbox-tools.ts
+src/terrarium-tools.ts
+proof/svelte/page-registry.ts
+proof/svelte/artifact-tools.ts
 ```
 
 ## 4. Keep the Workspace Local, Snapshot the Boundary

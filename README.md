@@ -2,11 +2,11 @@
 
 A personal agent you deploy into your own Cloudflare account. It holds durable conversations, runs code across your workspace and connected machine, schedules recurring work, delegates bounded analysis, and surfaces what needs you — all behind your Access login, on infrastructure you own.
 
-[![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a Cloudbox run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
+[![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a remote run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
-In this 3.4s clip the agent writes a workspace file, runs a command on a connected machine, and reads a Cloudbox run — one configured path, not a validation of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
+In this 3.4s clip the agent writes a workspace file, runs a command on a connected machine, and reads a remote agent run — one configured path, not a validation of every boundary. (The clip was recorded when the third connector slot was Cloudbox; that slot is now Terrarium — same shape, bounded cloud runs with verified receipts.) [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
 
-My AX is experimental and single-operator: you control the deployment and its Cloudflare resources. Calls to model providers, MCP servers, Cloudbox, and a connected machine run outside My AX's storage boundary — each receives only what you send it and retains data under its own policy.
+My AX is experimental and single-operator: you control the deployment and its Cloudflare resources. Calls to model providers, MCP servers, Terrarium, and a connected machine run outside My AX's storage boundary — each receives only what you send it and retains data under its own policy.
 
 **Read this in seven minutes:** [What It Does](#what-it-does) (capabilities) · [Important Limits](#important-limits) (the hard bounds) · [Deploy](#deploy) (get it running) · [Repository Map](#repository-map) (where the code lives).
 
@@ -17,7 +17,8 @@ My AX is experimental and single-operator: you control the deployment and its Cl
 - **Check-in** — authenticated HTTP and MCP surfaces summarize what needs the owner, what is running, what recently completed, and the next steer from existing Attention, jobs, and run receipts. The shell maps raw API steers to rendered owner destinations for `/attention`, `/runs`, and `/jobs`.
 - **Durable conversations** — Think is authoritative for conversation execution and retained message state. D1 contains a derived transcript index for UI, search, and export. In-flight work may still be interrupted by provider or runtime failure.
 - **Connected capabilities** — the model and generated programs receive callable tools instead of OAuth tokens or deployment secrets. Trusted server-side adapters hold credentials and retain their configured authority.
-- **Execution environments** — use the container-backed owner workspace plus optional Machine, Cloudbox, and public-page Browser capabilities.
+- **Execution environments** — use the container-backed owner workspace plus optional Machine, Terrarium (bounded cloud agent runs with verified receipts), and public-page Browser capabilities.
+- **Live UI control (page connector)** — while a chat tab is open, the agent can drive the owner's own browser session: list/switch conversations, read health and the transcript tail, open Settings/Attention/Sessions, notify, and navigate. Interactive artifacts it creates with `create_svelte_artifact` can self-register scoped tools the agent then invokes (`page.listArtifactTools` / `page.invokeArtifactTool`), parent-mediated and arg-validated — a live instrument built once and steered later.
 - **Recurring jobs** — authenticated UI routes and agent tools share one owner-scoped service to create, update, pause, resume, run, inspect, and delete scheduled prompts.
 - **Bounded delegation** — a parent can invoke up to two concurrent child agents for model-only analysis, then synthesize their retained results.
 - **Attention and outputs** — decisions and supported output records remain associated with their owner and source conversation; object bytes live in R2 where applicable.
@@ -38,7 +39,8 @@ Owner through Cloudflare Access
     │
     ├─ workspace.*  My AX Workspace
     ├─ machine.*    My Machine
-    ├─ cloudbox.*   Cloudbox
+    ├─ terrarium.*  Terrarium (bounded cloud agent runs)
+    ├─ page.*       live browser UI + self-registering artifacts
     └─ browser      public-page Browser Run
 ```
 
@@ -75,7 +77,8 @@ Those rendered pages are Access-protected, preserve the raw API receipts, and sh
 | Work Code Mode | Generated source is limited to 32 KiB and each Code Mode execution has a 60s wall-clock limit. Saved recipes are owner-approved persisted `work_code` recipes with explicit capabilities and run receipts; they are not a generic extension marketplace. Confinement does not reduce the authority of an allowlisted callback. |
 | Workspace | All conversations for one owner share `/home/user`. After a workspace mutation capability runs, My AX attempts an R2 snapshot. Recent writes can be lost, and concurrent conversations can edit the same files without a merge coordinator. |
 | Machine | Commands run as the OS account hosting the outbound companion, with that account's filesystem, process, and network permissions. My AX adds no privilege separation. |
-| Cloudbox | The adapter can create a run for a public repository, modify its checkout, and execute commands. My AX provides no repository publishing credential; commands retain whatever network authority Cloudbox permits. |
+| Terrarium | The adapter spawns bounded cloud agent runs and returns verified receipts (`terrarium.spawn` waits, `terrarium.spawn_background` returns a run id, `terrarium.status` checks one). Runs execute in Terrarium's own containers under its authority; My AX holds only a bearer control token and adds no privilege separation. |
+| Page (live UI) | Works only while an owner chat tab is connected; each verb errors `page_unavailable` otherwise. Disruptive verbs (switch/navigate) tear down and reconnect the socket. Artifact-registered tools are per-artifact, capped (8 per artifact, 32 total), bound to the source window, arg-validated against the registered schema, and are NOT injected into the default tool catalog — discoverable only via `page.listArtifactTools`. Self-registered tools become discoverable on the turn AFTER the artifact is created. |
 | Browser | Browser Run accepts HTTP(S) URLs that pass public-address checks and does not receive local browser cookies. DNS rebinding remains an infrastructure boundary. Authenticated local browsing works only when a connected Machine explicitly exposes it. |
 | Voice and push | Depend on explicit browser permission and provider availability. A failed push does not remove its D1 Attention record. Microphone access begins only from a user action. |
 
@@ -127,7 +130,7 @@ Connector URLs are screened for embedded credentials and disallowed literal dest
 Optional providers:
 
 - **My Machine** — run [`machinectl`](https://github.com/acoyfellow/machinectl). This grants terminal-equivalent access as the companion's OS user; use a dedicated least-privilege account.
-- **Cloudbox** — configure a dedicated `CLOUDBOX_INTERNAL_TOKEN` shared only by this My AX deployment and its Cloudbox service.
+- **Terrarium** — configure `TERRARIUM_URL` and a dedicated `TERRARIUM_CONTROL_TOKEN` shared only by this My AX deployment and its Terrarium service. The agent spawns bounded cloud runs and reads back verified receipts.
 - **Web Push** — configure VAPID and grant browser notification permission.
 - **Pantry bridge** — set `PANTRY_TOKEN` (and optionally `PANTRY_URL`, default `https://pantry.coey.dev`) to push enabled saved recipes to a pantry for reuse by other agents. Additive, enabled-only, fail-soft, and a no-op without the token. See [Deploying My AX](./docs/deploy.md#pantry-bridge).
 
@@ -144,7 +147,10 @@ src/job-service.ts    owner-scoped job CRUD and evidence
 src/recurring-job-run.ts shared job terminal state and owner receipts
 src/saved-recipes.ts  owner-approved reusable work_code recipes
 src/delegate-many.ts  bounded Agents-as-tools delegation
-src/work-tools.ts     Workspace, Machine, and Cloudbox catalog
+src/work-tools.ts     Workspace, Machine, Terrarium, Page, and codemode catalog
+src/terrarium-tools.ts bounded cloud agent runs with verified receipts
+proof/svelte/page-registry.ts  live-UI page connector verbs
+proof/svelte/artifact-tools.ts artifact self-registration registry
 src/mcp-code-mode.ts  allowlisted MCP composition
 src/routes/           authenticated HTTP adapters
 proof/svelte/         product UI and allowlisted result widgets
