@@ -19,15 +19,16 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/saved-recipes.ts` + `src/routes/recipes.ts` | Owner-approved saved `work_code` recipes. They run only against an owned session, reuse the normal Work Code Mode bridge, and append start/terminal Run Receipt events. |
 | `src/llm.ts` + `src/models.ts` | Model/provider routing helpers and the operator-controlled catalog used by Think agents. |
 | `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
-| `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, and Cloudbox with location-tagged call receipts. |
-| `src/cloudbox-tools.ts` | Optional bounded Cloudbox live-run adapter used behind `cloudbox.*`. |
+| `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, Terrarium, the live-UI Page connector, and a codemode namespace, with location-tagged call receipts. |
+| `src/terrarium-tools.ts` | Bounded Terrarium cloud-agent-run adapter used behind `terrarium.*` (`spawn`/`spawn_background`/`status`), returning verified receipts. |
+| `proof/svelte/page-registry.ts` + `proof/svelte/artifact-tools.ts` | Live-UI Page connector verbs (`page.*`, resolved over the chat WebSocket) plus the artifact self-registration registry that lets a created artifact propose scoped tools the agent then invokes. |
 | `src/jobs.ts` + `src/job-service.ts` + `src/recurring-job-run.ts` + `src/routes/jobs.ts` | Native recurring-prompt scheduling, shared owner-scoped CRUD/evidence service, and one terminalization path for scheduled/manual runs and owner-visible receipts. |
 | `src/run-receipts.ts` + `src/routes/runs.tsx` | Shared owner-scoped Run Receipt event append primitive, v0 CRUD/events, and read-only board; events are explicitly appended, not automatically captured. |
 | `src/connectors.ts` | Connector registry. Public engine ships empty; users add their own MCPs via Settings → Connectors. |
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
 | `src/bridge.ts` | Mints scoped per-call tickets, attaches upstream auth, writes audit receipts. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
-| `src/views/` | Server-rendered JSX shells: `Layout`, `ChatPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. |
+| `src/views/` | Server-rendered JSX shells: `Layout`, `BetaPage` (the single-root app served at `/` and `/beta`), `CapabilitiesPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. The legacy multi-mount `ChatPage` is retired. |
 | `proof/svelte/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results are grouped into at most two compact child snapshots (status, summary, attempts, bounded details). Agents 0.17.0 supports detached/background child runs and official progress frames, but this custom Svelte socket does not yet expose the EventTarget required by `useAgentToolEvents`; the UI therefore labels and renders retained raw tool output rather than claiming live progress. Reconnect/transcript replay reuses that output. Cancellation and child drill-in are omitted because the current parent route exposes no safe official action/navigation surface. |
 | `migrations/` | D1 schema migrations. |
 
@@ -50,7 +51,8 @@ Browser
   │            ├─→ Worker Loader  ── bounded Work Code Mode dispatcher
   │            │      ├─ workspace.* → My AX Workspace
   │            │      ├─ machine.*   → outbound Machinectl relay
-  │            │      └─ cloudbox.*  → bounded Cloudbox live runs
+  │            │      ├─ terrarium.* → bounded Terrarium cloud agent runs
+  │            │      └─ page.*      → live browser UI (over the chat WS)
   │            ├─→ D1 `my-ax-db` ── session registry, Think-turn mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
   │            ├─→ R2 uploads     ── owner-scoped image attachments + screenshot/Svelte artifact objects
   │            ├─→ Browser Run    ── public-page browser sessions + native rrweb recording receipts
@@ -80,9 +82,11 @@ Wrangler bindings (see `wrangler.jsonc`):
 | `CF_VERSION_METADATA` | Version metadata | Worker version id surfaced in the Settings drawer |
 
 `work_code` accepts at most `32 KiB` of generated source and gives the Dynamic
-Worker a `30s` timeout with global outbound networking disabled. Host methods
+Worker a `60s` timeout with global outbound networking disabled. Host methods
 can reach their configured providers; for example, `machine.shell` reaches the
-connected laptop and `cloudbox.run_create` reaches Cloudbox.
+connected laptop and `terrarium.spawn` reaches the Terrarium service. The
+`page.*` verbs are not Worker Loader outbound calls: they resolve over the owner
+chat WebSocket and only work while a chat tab is connected.
 
 ## Storage Layout
 
@@ -134,7 +138,7 @@ my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configure
 - **Trusted inline widget registry** — `proof/svelte/tool-result-widgets.ts` classifies tool output into an explicit allowlisted Svelte renderer. It never accepts arbitrary component names, HTML, or iframe URLs from model-adjacent output. Unknown payloads fall back to inert raw text. For Svelte artifacts it accepts only same-origin `/api/artifacts/:uuid/preview` URLs and mounts them in an `allow-scripts` sandboxed iframe.
 - **`create_svelte_artifact`** — a native Think tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
 - **`browser_open`** — a native Think tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
-- **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the persistent My AX Workspace, the connected physical machine, and optional Cloudbox runs. Child calls carry location, method, status, and duration metadata.
+- **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the persistent My AX Workspace, the connected physical machine, bounded Terrarium cloud agent runs, the live-UI Page connector, and a codemode namespace. Child calls carry location, method, status, and duration metadata.
 - **Recurring jobs** — `JobService` is the sole business boundary for list/create/update/pause/resume/run/delete/history. Every adapter supplies the verified owner; all reads and mutations scope SQL by that owner. Active updates create the replacement native schedule before persistence, cancel it if persistence fails, and retire the old schedule only after the new row is durable. `job_events` retains mutation/run evidence and idempotency keys bound repeated create/run requests.
 - **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration plus explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 

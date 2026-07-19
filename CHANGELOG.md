@@ -8,6 +8,9 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 ### Added
 
+- Added the **Page connector** (`page.*`): while an owner chat tab is connected, the agent can drive the owner's own browser session over the chat WebSocket — list/switch conversations, read health and the transcript tail, open Settings/Attention/Sessions, notify, and navigate. Each verb errors `page_unavailable` when no live tab is connected.
+- Added **artifact self-registration** (page connector v2): an artifact created with `create_svelte_artifact` can self-register scoped tools on mount; the agent discovers them with `page.listArtifactTools()` and invokes them with `page.invokeArtifactTool({artifactId,name,args})`, parent-mediated and arg-validated. Tools are bound to the source window, capped (8 per artifact, 32 total), kept out of the default catalog, and become discoverable on the turn after the artifact is created — a live instrument built once and steered later (e.g. a Job Health Cockpit).
+- Added the **Terrarium connector** (`terrarium.*`), replacing the retired `cloudbox` connector: `terrarium.spawn` waits for a verified receipt, `terrarium.spawn_background` returns a run id, `terrarium.status` checks a run. Runs execute in Terrarium's own containers under a bearer control token.
 - Added an owner-scoped Check-in primitive: authenticated `GET /api/check-in` and MCP `my_ax_check_in` compose unread Attention, active recurring jobs, and recent run receipts into one compact “what needs me / what is running / what completed” response without adding storage.
 - Added owner-visible, actionable Attention receipts for terminal recurring-job runs. Successful scheduled work now tells the operator to review the conversation, and failed scheduled work reports the failure and next action instead of requiring transcript inspection.
 - Added owner-visible Attention receipts for terminal delegated child batches, so delegated work now returns through the same Check-in/Attention loop as recurring jobs instead of existing only as retained tool output inside the transcript.
@@ -34,9 +37,12 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Split Check-in unread receipts into actionable owner requests and informational updates while preserving the total unread count, capped samples, and failed-run visibility.
 - Absorbed the Agents SDK v0.17.0 cohort by exact-pinning `agents@0.17.0`, `@cloudflare/think@0.11.0`, `@cloudflare/voice@0.3.3`, and `@cloudflare/codemode@0.4.2`; My AX keeps using Think's unified `runTurn({ mode: "submit" })` path for owner/API injection and native recurring alarms, and leaves detached/background sub-agent progress as a deliberate future UI/receipt adoption rather than a hidden behavior change.
 - Raised explicit Work Code Mode and MCP Code Mode execution caps from 30s to 60s to match the current Code Mode runtime cohort.
+- Promoted the single-root Svelte app to `/` (previously `/beta`), retiring the legacy multi-mount `ChatPage`; `/beta` remains a one-release alias.
 
 ### Fixed
 
+- Fixed `/api` connector-status 503 caused by an undecryptable stored OAuth token throwing in `atob()`: `decryptStoredSet` now fails soft (returns null, logs `oauth_token_decrypt_failed`) and is treated as unauthorized.
+- Stripped inert dev-only probe routes (`dev-page-call`, `dev-work-code`) that were terraloop scaffolding.
 - Hardened conversation switching, transports, receipts, notifications, delegation backpressure (3021), push delivery, uploads, and error reporting across a sustained review pass: fail-closed guards, Unicode-safe truncation, tightened validation, and deterministic tests, with no change to documented behavior.
 - Protected every rendered Attention subroute with the Access identity middleware, restoring the owner-scoped “Mark this view seen” action without weakening its same-origin check.
 - Added a release and CI guard that fails if stale pre-Recipes API or agent-facing surfaces reappear in user/agent-facing source or generated assets, preventing another Recipes rename deploy regression.
