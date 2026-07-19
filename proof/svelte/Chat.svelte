@@ -15,7 +15,8 @@
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
-  import { handlePageCall, type PageCallFrame } from "./page-registry";
+  import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
+  import { ArtifactToolRegistry } from "./artifact-tools";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import {
@@ -2165,13 +2166,40 @@
     // value is non-trivial — the human stays in the loop (no silent turns from
     // sandboxed code). This is the previously-missing return path for
     // create_svelte_artifact forms.
-    const artifactWindows = () => new Set(
-      [...document.querySelectorAll('iframe[data-tool-widget-frame="svelte-artifact"], iframe.svelte-artifact-frame')]
-        .map((f) => (f as HTMLIFrameElement).contentWindow)
-        .filter(Boolean),
-    );
+    const artifactFrames = () => [...document.querySelectorAll('iframe[data-tool-widget-frame="svelte-artifact"], iframe.svelte-artifact-frame')] as HTMLIFrameElement[];
+    const artifactWindows = () => new Set(artifactFrames().map((f) => f.contentWindow).filter(Boolean));
+    // page connector v2: artifact-proposed tool registry. G1 trust anchor —
+    // resolve the artifactId FROM the source window (data-artifact-id, server-minted),
+    // never from the message. postToArtifact routes ONLY to that bound window.
+    const artifactRegistry = new ArtifactToolRegistry({
+      artifactIdForWindow: (source) => {
+        const frame = artifactFrames().find((f) => f.contentWindow === source);
+        return frame?.getAttribute("data-artifact-id") || null;
+      },
+      postToArtifact: (artifactId, frame) => {
+        const el = artifactFrames().find((f) => f.getAttribute("data-artifact-id") === artifactId);
+        const win = el?.contentWindow;
+        if (!win) return false;
+        try { win.postMessage(frame, "*"); return true; } catch { return false; }
+      },
+    });
+    setArtifactBridge({
+      listTools: () => artifactRegistry.listTools(),
+      invokeTool: (artifactId, name, args) => artifactRegistry.invoke(artifactId, name, args),
+    });
     const onArtifactMessage = (event: MessageEvent) => {
       const data = event.data;
+      // page connector v2 handshake frames (register / invoke-result).
+      if (data && data.type === "my-ax:artifact-register") {
+        if (!artifactWindows().has(event.source as Window)) return;
+        artifactRegistry.register(event.source, data.tools);
+        return;
+      }
+      if (data && data.type === "my-ax:artifact-invoke-result") {
+        if (!artifactWindows().has(event.source as Window)) return;
+        artifactRegistry.resolveResult(String(data.callId ?? ""), data.ok === true, data.result, typeof data.error === "string" ? data.error : undefined);
+        return;
+      }
       if (!data || data.type !== "my-ax:artifact-submit") return;
       // Source must be one of THIS page's artifact iframes (not an arbitrary window).
       if (!artifactWindows().has(event.source as Window)) return;
@@ -2211,6 +2239,7 @@
       window.removeEventListener("my-ax:navigate", onNavigate as EventListener);
       window.removeEventListener("my-ax:toast", onPageToast as EventListener);
       window.removeEventListener("message", onArtifactMessage);
+      setArtifactBridge(null);
       navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
       window.removeEventListener("online", onVisibilityChange);
       if (connectionWatchdogId) clearInterval(connectionWatchdogId);

@@ -42,7 +42,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "switchSession"]);
+  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
