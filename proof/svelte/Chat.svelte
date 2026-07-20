@@ -20,15 +20,6 @@
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import {
-    initialWatchState,
-    startWatch,
-    stopWatch,
-    onTick as watchOnTick,
-    watchLabel,
-    WATCH_PROMPT,
-    type WatchState,
-  } from "./watch-stream";
-  import {
     agentStatusFor,
     idleStreamingTurnState,
     isComposerLocked,
@@ -1784,47 +1775,12 @@
     (document.getElementById("svelte-image-file") as HTMLInputElement)?.click();
   }
 
-  // Consolidated composer "+" menu: Add File / Camera (Watch stream lands here later).
+  // Consolidated composer "+" menu: Add File / Camera.
   let plusMenuOpen = $state(false);
   function togglePlusMenu() { plusMenuOpen = !plusMenuOpen; }
   function closePlusMenu() { plusMenuOpen = false; }
   function plusAddFile() { closePlusMenu(); openImageFile(); }
   function plusCamera() { closePlusMenu(); void toggleCamera(); }
-  async function plusWatchStream() {
-    closePlusMenu();
-    // Open the camera first (explicit user gesture) if it is not already on,
-    // then arm the hands-off watch loop.
-    if (!cameraOn) { await toggleCamera(); if (!cameraOn) return; }
-    startWatchLoop();
-  }
-
-  // ── #1 Tier-0 "watch my camera": hands-off frame -> vision turn loop ──
-  // The pure state machine (watch-stream.ts) owns the bounding/timing; this
-  // Svelte glue owns the timer, the capture, and the submit. Bounded by
-  // MAX_CAPTURES and it never stacks turns (skips a tick while one is live).
-  let watchState = $state<WatchState>(initialWatchState());
-  let watchTimer: ReturnType<typeof setInterval> | null = null;
-  function startWatchLoop() {
-    watchState = startWatch(watchState);
-    if (watchTimer) clearInterval(watchTimer);
-    watchTimer = setInterval(() => { void watchTick(); }, watchState.intervalMs);
-  }
-  function stopWatchLoop(reason: WatchState["stoppedReason"] = "owner") {
-    watchState = stopWatch(watchState, reason);
-    if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
-  }
-  async function watchTick() {
-    const decision = watchOnTick(watchState, { turnInFlight: composerLocked, cameraOn });
-    watchState = decision.state;
-    if (!watchState.active && watchTimer) { clearInterval(watchTimer); watchTimer = null; }
-    if (!decision.capture) return;
-    await captureFrame();
-    // Send the watch prompt if a frame actually attached this tick.
-    if (pendingAttachments.length > 0 && !composerLocked) {
-      composerText = WATCH_PROMPT;
-      queueMicrotask(() => formEl?.requestSubmit());
-    }
-  }
 
   // ── Webcam vision (#10): capture a still and attach it so the agent can see ──
   let cameraOn = $state(false);
@@ -1848,8 +1804,6 @@
     cameraStream = null;
     if (cameraEl) cameraEl.srcObject = null;
     cameraOn = false;
-    // Turning the camera off also stops any active watch loop.
-    if (watchState.active || watchTimer) stopWatchLoop("camera-off");
   }
   // Draw the current frame to an offscreen canvas and attach it as a JPEG via
   // the same owner-scoped upload path as any image, so it becomes a removable
@@ -2593,20 +2547,7 @@
               <div class="webcam-preview" data-camera-preview="1">
                 <!-- svelte-ignore a11y_media_has_caption -->
                 <video bind:this={cameraEl} class="webcam-preview__video" muted playsinline autoplay aria-label="Your webcam preview"></video>
-                <div class="webcam-preview__hint">
-                  {#if watchState.active}
-                    Watching — sending a frame to the agent every {Math.round(watchState.intervalMs / 1000)}s ({watchState.captures} sent). It stops automatically; tap Stop to end early.
-                  {:else}
-                    Camera on — tap the camera button to capture a frame, or Watch to send frames automatically.
-                  {/if}
-                </div>
-                {#if watchState.active}
-                  <div class="webcam-preview__watching" aria-live="polite" role="status">
-                    <span class="webcam-preview__watching-dot" aria-hidden="true"></span>
-                    <span>{watchLabel(watchState)}</span>
-                    <button type="button" class="webcam-preview__watch-stop" onclick={() => stopWatchLoop("owner")}>Stop</button>
-                  </div>
-                {/if}
+                <div class="webcam-preview__hint">Camera on — tap the camera button to capture a frame for the agent.</div>
                 <button type="button" class="webcam-preview__stop" onclick={stopCamera} aria-label="Turn off webcam" title="Turn off camera">×</button>
               </div>
             {/if}
@@ -2691,11 +2632,6 @@
                     class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-fg hover:bg-bg-alt">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                     Camera
-                  </button>
-                  <button type="button" role="menuitem" onclick={plusWatchStream}
-                    class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-fg hover:bg-bg-alt">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7z"/></svg>
-                    Watch stream
                   </button>
                 </div>
               {/if}
