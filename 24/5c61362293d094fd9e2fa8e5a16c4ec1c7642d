@@ -1,0 +1,21 @@
+proof/svelte/watch-stream.test.ts
+  s_2a77a1542d3982::t_5ba77a64bfc112 1-125
+src/styles/app.css
+  s_2a77a1542d3982::t_18253e1c1d4bbb 647-684
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "245c61362293d094fd9e2fa8e5a16c4ec1c7642d",
+  "prompts": {},
+  "sessions": {
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
