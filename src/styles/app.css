@@ -644,44 +644,7 @@
   line-height: 1;
   cursor: pointer;
 }
-/* Active "watching" indicator for the hands-off watch-my-camera loop (#1). */
-.webcam-preview__watching {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: var(--color-fg);
-  background: color-mix(in srgb, var(--color-brand) 10%, var(--color-bg-alt));
-  border-top: 1px solid var(--line);
-}
-.webcam-preview__watching-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-brand);
-  flex: none;
-  animation: webcam-watching-pulse 1.4s ease-in-out infinite;
-}
-@keyframes webcam-watching-pulse {
-  0%, 100% { opacity: 0.35; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .webcam-preview__watching-dot { animation: none; opacity: 1; }
-}
-.webcam-preview__watch-stop {
-  margin-left: auto;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--color-surface-2);
-  color: var(--color-fg);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.webcam-preview__watch-stop:hover { background: var(--color-surface-3); }
+
 
 /* iOS Safari auto-zooms when a focused text control's font-size is < 16px.
  * Enforce a 16px floor for every text-entry control on phone-width screens.
