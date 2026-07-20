@@ -2678,7 +2678,7 @@
                 <!-- click-away backdrop -->
                 <button type="button" class="fixed inset-0 z-10 cursor-default" aria-label="Close menu" onclick={closePlusMenu}></button>
                 <div
-                  class="absolute bottom-full left-0 z-20 mb-2 min-w-[10rem] overflow-hidden rounded-lg border border-line bg-bg shadow-lg"
+                  class="absolute bottom-full right-0 z-20 mb-2 min-w-[10rem] overflow-hidden rounded-lg border border-line bg-bg shadow-lg"
                   role="menu"
                   aria-label="Add to message"
                 >
