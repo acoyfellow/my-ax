@@ -89,11 +89,12 @@ tools are bound to the source window, capped per artifact, and validated against
 the schema the artifact registered. A freshly created artifact's tools become
 discoverable on the next turn, after the iframe has mounted and registered.
 
-## Run Your Laptop
+## Run A Command On A Machine You Connect
 
-A connected [machinectl](https://github.com/acoyfellow/machinectl) companion adds
-`machine.*` methods that run as the companion's OS user. The agent gets the
-command output; you can read the exact command it ran.
+A [machinectl](https://github.com/acoyfellow/machinectl) companion you install
+adds `machine.*` methods that run as the companion's OS account. The companion
+connects outbound only and opens no inbound port. The agent gets the command
+output. You can read the exact command it ran.
 
 The live connector status for a connected machine:
 
@@ -101,8 +102,9 @@ The live connector status for a connected machine:
 { "connected": true, "machineName": "jcoeyman-macbook", "tools": [{ "name": "shell", ... }] }
 ```
 
-This is terminal-equivalent access. Run the companion under a dedicated
-least-privilege account.
+The companion is the highest-authority path and has the same power as a terminal.
+Run it under a dedicated least-privilege OS account. See the security posture in
+SECURITY.md before you connect a machine.
 
 ## Steer A Long-Lived Terminal
 
