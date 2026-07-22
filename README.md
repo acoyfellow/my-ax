@@ -1,10 +1,12 @@
 # My AX
 
-**My AX is an agent that runs your laptop and spawns its own cloud machines, so you can hand off work and leave.**
+**My AX is a single-operator agent that acts with your authority across a container, a machine you connect, and bounded cloud runs. You deploy it into your own Cloudflare account, behind your own Access login.**
 
-You deploy it into your own Cloudflare account, behind your Access login. You give it a task and close the tab. It writes files in a container workspace, runs commands on your connected laptop, spawns bounded agent runs in the cloud, and drives its own browser session. When work finishes or needs a decision, it tells you. You return to a check-in page that reports what needs you, what is running, and what finished.
+You authorize the agent. It is not a remote-access tool and takes no inbound connection. Every path it uses is one you configure, gate with Cloudflare Access, and can stop. It writes files in a container workspace, runs commands through a companion you install on a machine you choose, starts bounded agent runs in the cloud, and opens public web pages in a headless browser. When work finishes or needs a decision, it records the result. You return to a check-in page that reports what needs you, what is running, and what finished.
 
-The agent operates the computer. You approve, steer, and take over when you want. Every action it takes leaves a receipt you can read.
+The agent acts with the authority you already hold, made explicit. You approve the work, steer it, and stop it. Every action writes a receipt you can read.
+
+> **Security posture.** My AX is single-operator. One verified Access identity owns every conversation, record, and tool call. The machine companion connects outbound only, authenticates every caller at the Worker boundary, and runs as an OS account you choose. See the [security posture](./SECURITY.md) for the trust model, the identity and network boundaries, and what My AX does not do.
 
 [![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a remote run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
@@ -12,20 +14,20 @@ In this 3.4s clip the agent writes a workspace file, runs a command on a connect
 
 > **Verify before trusting.** `npm run check` covers local build, types, and unit tests only. Access, containers, models, voice, push, and workspace restoration are proven by the [deployment proof](./proof/README.md), not by a green local run.
 
-## What It Runs On
+## Where The Agent Acts
 
-The agent does not have one computer. It picks the right place for each task, and each place returns output you can inspect.
+The agent uses more than one place. It picks the place for each task. Each place returns output you can inspect.
 
-| The agent can | Mechanism | What you can read back |
-|---|---|---|
-| Work in a persistent workspace | container-backed `/home/user`, snapshotted to R2 | files, command output |
-| Run your laptop | `machine.*` over an outbound companion ([machinectl](https://github.com/acoyfellow/machinectl)) | the exact command, its output |
-| Spawn a bounded cloud run | `terrarium.spawn` returns a verified receipt | `runId`, contract status, exit code |
-| Drive a public web page | `browser_open` in a real headless browser | rendered title, text, an rrweb replay |
-| Drive your own live UI | `page.*` over the chat WebSocket | session list, health, transcript tail |
-| Build a live instrument | `create_svelte_artifact` + tools the artifact self-registers | the artifact, steered in place |
+| Place | Mechanism | Authority | What you can read back |
+|---|---|---|---|
+| Container workspace | container-backed `/home/user`, snapshotted to R2 | isolated per owner | files, command output |
+| A machine you connect | `machine.*` over an outbound companion ([machinectl](https://github.com/acoyfellow/machinectl)) | the companion's OS account, which you choose | the exact command, its output |
+| A bounded cloud run | `terrarium.spawn` returns a verified receipt | Terrarium's own container | `runId`, contract status, exit code |
+| A public web page | `browser_open` in a headless browser | no local cookies; public URLs only | rendered title, text, an rrweb replay |
+| Your own live UI | `page.*` over the chat WebSocket | only while your chat tab is open | session list, health, transcript tail |
+| An artifact it builds | `create_svelte_artifact` + tools the artifact registers | sandboxed iframe, no same-origin access | the artifact, driven in place |
 
-Terrarium is the piece that makes "leave" true. A cloud run does not need you or your laptop present. The agent starts it, and the run returns a receipt with a `runId` and a contract status when it finishes.
+A cloud run does not need you or your machine present. The agent starts it. The run returns a receipt with a `runId` and a contract status when it finishes. The machine companion is the highest-authority path: it runs as a real OS account, so give it a dedicated least-privilege account. See the [security posture](./SECURITY.md) for the boundary on each place.
 
 A [feature tour](./docs/feature-tour.md) walks each capability with a real transcript or receipt.
 
