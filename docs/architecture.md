@@ -10,7 +10,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/artifacts.ts` + `src/routes/artifacts.ts` | One-off Svelte artifact compile/storage path plus owner-scoped preview/index routes. |
 | `src/auth.ts` | Verifies the Cloudflare Access JWT (when configured); attaches `identity` to the request context. |
 | `src/agent.ts` | Active `MyAgent extends Think` Durable Object — native chat, tools, unified durable submissions via `runTurn`, D1 mirror hooks, invisible Session-backed memory. |
-| `src/delegate-many.ts` | Static `delegate_many`: the canonical parent runs at most two concurrent, run-scoped read-only `ReadOnlyDelegateAgent` Think facets via official `runAgentTool`; children cannot delegate, retained agent-tool events/runs are evidence, and the parent owns synthesis. Later delegations opportunistically clear older terminal child runs. |
+| `src/delegate-many.ts` | Static `delegate_many`. The canonical parent runs at most two concurrent, run-scoped, read-only `ReadOnlyDelegateAgent` Think facets through the official `runAgentTool`. Children cannot delegate. Retained agent-tool events and runs are the evidence. The parent owns the synthesis. Later delegations opportunistically clear older terminal child runs. |
 | `src/think-workspace.ts` | Adapts Think workspace tools to the real Sandbox `/home/user` workspace. |
 | `src/notify.ts` + `src/push.ts` | Owner-scoped Web Push transport and agent-notification delivery. |
 | `src/browser-tools.ts` | Cloudflare Browser Run `browser_open` tool and inline replay-receipt payload. |
@@ -24,12 +24,12 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `proof/svelte/page-registry.ts` + `proof/svelte/artifact-tools.ts` | Live-UI Page connector verbs (`page.*`, resolved over the chat WebSocket) plus the artifact self-registration registry that lets a created artifact propose scoped tools the agent then invokes. |
 | `src/jobs.ts` + `src/job-service.ts` + `src/recurring-job-run.ts` + `src/routes/jobs.ts` | Native recurring-prompt scheduling, shared owner-scoped CRUD/evidence service, and one terminalization path for scheduled/manual runs and owner-visible receipts. |
 | `src/run-receipts.ts` + `src/routes/runs.tsx` | Shared owner-scoped Run Receipt event append primitive, v0 CRUD/events, and read-only board; events are explicitly appended, not automatically captured. |
-| `src/connectors.ts` | Connector registry. Public engine ships empty; users add their own MCPs via Settings → Connectors. |
+| `src/connectors.ts` | Connector registry. Public engine ships empty; users add their own MCPs in Settings, then Connectors. |
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
 | `src/bridge.ts` | Mints scoped per-call tickets, attaches upstream auth, writes audit receipts. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `BetaPage` (the single-root app served at `/` and `/beta`), `CapabilitiesPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. The legacy multi-mount `ChatPage` is retired. |
-| `proof/svelte/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results are grouped into at most two compact child snapshots (status, summary, attempts, bounded details). Agents 0.17.0 supports detached/background child runs and official progress frames, but this custom Svelte socket does not yet expose the EventTarget required by `useAgentToolEvents`; the UI therefore labels and renders retained raw tool output rather than claiming live progress. Reconnect/transcript replay reuses that output. Cancellation and child drill-in are omitted because the current parent route exposes no safe official action/navigation surface. |
+| `proof/svelte/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results group into at most two compact child snapshots, each with status, summary, attempts, and bounded details. Agents 0.17.0 supports detached child runs and official progress frames. This custom Svelte socket does not yet expose the EventTarget that `useAgentToolEvents` needs. The UI therefore labels and renders retained raw tool output instead of claiming live progress. Reconnect and transcript replay reuse that output. Cancellation and child drill-in are absent because the current parent route exposes no safe official action surface. |
 | `migrations/` | D1 schema migrations. |
 
 The chat surface has no hand-written `.js` files. Everything in `public/static/` is fonts, generated CSS, and brand assets.
@@ -42,24 +42,24 @@ Browser
   │  HTTPS (Cloudflare Access JWT enforced at the edge, when configured)
   ▼
 <your-host> (Worker `my-ax`)
-  ├─→ USER_AGENT / UserAgent DO  ── one durable root per user
-  │     └─→ MyAgent facets       ── per-session Think chat, recovery, submissions, memory
-  │            │
-  │            ├─→ OAuthClientDO  ── per-user encrypted OAuth bearers used to register native Agent.mcp tools
-  │            ├─→ Sandbox DO     ── per-user My AX Workspace
-  │            │      └─ /home/user → container-local workspace restored from R2 snapshots
-  │            ├─→ Worker Loader  ── bounded Work Code Mode dispatcher
-  │            │      ├─ workspace.* → My AX Workspace
-  │            │      ├─ machine.*   → outbound Machinectl relay
-  │            │      ├─ terrarium.* → bounded Terrarium cloud agent runs
-  │            │      └─ page.*      → live browser UI (over the chat WS)
-  │            ├─→ D1 `my-ax-db` ── session registry, Think-turn mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
-  │            ├─→ R2 uploads     ── owner-scoped image attachments + screenshot/Svelte artifact objects
-  │            ├─→ Browser Run    ── public-page browser sessions + native rrweb recording receipts
-  │            └─→ Models         ── curated operator-controlled models
-  │
-  ├─→ MachineHost DO            ── per-user outbound-connected physical laptop relay
-  └─→ User-added MCP servers    ── native MCP tools forwarded per-user (Settings → Connectors)
+  |-> USER_AGENT / UserAgent DO  -- one durable root per user
+  |     `-> MyAgent facets       -- per-session Think chat, recovery, submissions, memory
+  |            |
+  |            |-> OAuthClientDO  -- per-user encrypted OAuth bearers used to register native Agent.mcp tools
+  |            |-> Sandbox DO     -- per-user My AX Workspace
+  |            |      `- /home/user -> container-local workspace restored from R2 snapshots
+  |            |-> Worker Loader  -- bounded Work Code Mode dispatcher
+  |            |      |- workspace.* -> My AX Workspace
+  |            |      |- machine.*   -> outbound Machinectl relay
+  |            |      |- terrarium.* -> bounded Terrarium cloud agent runs
+  |            |      `- page.*      -> live browser UI (over the chat WS)
+  |            |-> D1 `my-ax-db` -- session registry, Think-turn mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
+  |            |-> R2 uploads     -- owner-scoped image attachments + screenshot/Svelte artifact objects
+  |            |-> Browser Run    -- public-page browser sessions + native rrweb recording receipts
+  |            `-> Models         -- curated operator-controlled models
+  |
+  |-> MachineHost DO            -- per-user outbound-connected physical laptop relay
+  `-> User-added MCP servers    -- native MCP tools forwarded per-user (Settings, then Connectors)
 ```
 
 ## Bindings Reference
@@ -108,13 +108,13 @@ Production uses the verified Access JWT email as the owner key. Local developmen
 
 ## OAuth Flow for a User-Added MCP Server
 
-1. User visits Settings → Connectors → Add MCP server, pastes the upstream URL, Test, Save.
+1. User opens Settings, then Connectors, then Add MCP server, pastes the upstream URL, Tests, and Saves.
 2. The Worker probes `/.well-known/oauth-authorization-server` to discover endpoints.
 3. If the server advertises a `registration_endpoint`, the Worker mints a fresh client id via Dynamic Client Registration (RFC 7591).
 4. `/api/connectors/<id>/authorize` redirects to the discovered authorization endpoint with PKCE + state.
 5. User consents at the upstream provider.
 6. Callback at `/api/connectors/<id>/callback` receives the auth code.
-7. Worker exchanges code → access_token + refresh_token, stored encrypted in `OAuthClientDO`.
+7. Worker exchanges the code for an access_token and a refresh_token, stored encrypted in `OAuthClientDO`.
 8. Every subsequent tool call mints a fresh `bridge.ts` ticket, attaches the bearer, and forwards.
 9. Refresh happens server-side ~5 minutes before expiry; user never re-consents unless they explicitly disconnect.
 

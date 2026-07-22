@@ -53,6 +53,10 @@ interface LayoutProps {
   theme?: ThemePref;
   /** Public origin of this deployment (for manifest + social metadata). */
   appOrigin?: string;
+  /** The chat app owns the viewport: position:fixed, inset:0, no document
+   *  scroll (the message pane scrolls itself). Default true. A normal
+   *  scrolling document page (docs, capabilities) passes false. */
+  ownViewport?: boolean;
 }
 
 /** Constant copy used in both <title> defaults and OG meta. Kept in one
@@ -255,7 +259,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => {
             string when no Svelte components are mounted on the worker. */}
         <SvelteHonoHead buildId={v} />
       </head>
-      <body class={`app-viewport bg-bg text-fg antialiased ${props.bodyClass ?? ""}`}>
+      <body class={`${props.ownViewport === false ? "" : "app-viewport"} bg-bg text-fg antialiased ${props.bodyClass ?? ""}`}>
         {/* Skip link — first focusable element. Visible only when focused.
             href= is a no-op; the inline onclick locates whichever <main>
             this page rendered and focuses it. Works for chat (#log) and
