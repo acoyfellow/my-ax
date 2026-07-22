@@ -32,6 +32,7 @@ public/static/brand/og.png
 public/favicon.ico
 public/.DS_Store
 proof/svelte/bundles.generated.ts
+src/docs-content.generated.ts
 proof/svelte/build/
 proof/svelte/*.ssr.mjs
 *.ssr.css
