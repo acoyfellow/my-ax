@@ -44,6 +44,9 @@ import { registerCapabilityRoutes } from "./routes/capabilities";
 import { registerRecipeRoutes } from "./routes/recipes";
 import { registerCostSeriesRoutes } from "./routes/cost-series";
 import { CapabilitiesPage } from "./views/CapabilitiesPage";
+import { DocsPage } from "./views/DocsPage";
+import { DocsArticlePage } from "./views/DocsArticlePage";
+import { DOC_PAGE_BY_SLUG } from "./docs-content.generated";
 import { getSessionAgent } from "./agent-stub";
 import { registerSvelteServe } from "../proof/svelte/serve";
 import { scanDeadSessions } from "./dead-session";
@@ -545,6 +548,35 @@ app.get("/capabilities", (c) => {
   const theme = readThemeCookie(c);
   return c.html(
     <CapabilitiesPage
+      identityEmail={identity?.email ?? null}
+      buildId={buildId}
+      theme={theme}
+      appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+    />,
+  );
+});
+app.get("/docs", (c) => {
+  const identity = c.get("identity");
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
+  const theme = readThemeCookie(c);
+  return c.html(
+    <DocsPage
+      identityEmail={identity?.email ?? null}
+      buildId={buildId}
+      theme={theme}
+      appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+    />,
+  );
+});
+app.get("/docs/:slug", (c) => {
+  const page = DOC_PAGE_BY_SLUG[c.req.param("slug")];
+  if (!page) return c.notFound();
+  const identity = c.get("identity");
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
+  const theme = readThemeCookie(c);
+  return c.html(
+    <DocsArticlePage
+      page={page}
       identityEmail={identity?.email ?? null}
       buildId={buildId}
       theme={theme}

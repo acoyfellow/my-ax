@@ -51,7 +51,7 @@ const SCRIPT = String.raw`
 export const CapabilitiesPage: FC<Props> = (props) => {
   const bundle = createCapabilityBundle({ principal: props.identityEmail || "unknown", urls: defaultUrls, task: "Review these resources without broad internal search" });
   const proof = runCapabilityReviewDemo(bundle);
-  return <Layout title="Scoped capabilities · my · ax" identityEmail={props.identityEmail} buildId={props.buildId} theme={props.theme} appOrigin={props.appOrigin} bodyClass="min-h-dvh bg-bg text-fg">
+  return <Layout title="Scoped capabilities · my · ax" identityEmail={props.identityEmail} buildId={props.buildId} theme={props.theme} appOrigin={props.appOrigin} ownViewport={false} bodyClass="min-h-dvh bg-bg text-fg">
     <main class="cap-page mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <section class="cap-hero">
         <div class="cap-hero-copy">
