@@ -19,6 +19,7 @@
   import { ArtifactToolRegistry } from "./artifact-tools";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
+  import { decideComposerKey, isMobileComposer } from "./composer-keys";
   import {
     agentStatusFor,
     idleStreamingTurnState,
@@ -1736,9 +1737,16 @@
     autoGrow();
   }
   function onInputKeydown(e: KeyboardEvent) {
-    if (e.key !== "Enter") return;
-    if (e.shiftKey) return;
-    if (e.isComposing || (e as any).keyCode === 229) return;
+    const decision = decideComposerKey({
+      key: e.key,
+      shiftKey: e.shiftKey,
+      isComposing: e.isComposing || (e as any).keyCode === 229,
+      isMobile: isMobileComposer(),
+    });
+    // "newline" / "ignore": let the textarea insert the newline or handle the
+    // key normally. On mobile, plain Enter is "newline" — it must NOT send;
+    // sending is the explicit Send button only.
+    if (decision !== "send") return;
     e.preventDefault();
     if (wsState.status !== "idle" && wsState.status !== "done") return;
     if (wsState.conn !== "live") return;
