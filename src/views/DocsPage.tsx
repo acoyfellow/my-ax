@@ -33,13 +33,13 @@ const GUIDES: Array<{ anchor: string; goal: string; steps: string[]; result: str
   },
   {
     anchor: "guide-machine",
-    goal: "Connect your laptop",
+    goal: "Connect a machine you choose",
     steps: [
-      "Install and run machinectl on the computer you want the agent to use.",
-      "Sign in so the companion connects outbound to your deployment.",
+      "Install and run machinectl on a machine you choose, under a dedicated least-privilege OS account.",
+      "Sign in so the companion connects outbound to your deployment. It opens no inbound port.",
       "Ask the agent to run a command; it uses machine.shell.",
     ],
-    result: "The command output and the exact command the agent ran. The companion has the same power as a terminal. Use a least-privilege account.",
+    result: "The command output and the exact command the agent ran. The companion has the same power as a terminal and runs as the OS account you chose. Read the security posture before you connect a machine.",
   },
   {
     anchor: "guide-jobs",
@@ -118,6 +118,7 @@ const CONCEPTS: Array<{ title: string; body: string }> = [
   { title: "You leave; the agent keeps working", body: "You give the agent a task and close the tab. It works while you are away. Check-in reports what needs you, what is running, and what finished. You read the receipt and decide the next step. The product is built so you can leave." },
   { title: "The agent has more than one computer", body: "The agent picks the place for each task. It uses the workspace for files tied to the conversation. It uses your laptop for local and authenticated state. It uses Terrarium for cloud runs that do not need you present. It uses its own browser for public pages. One tool surface covers all four." },
   { title: "Every action leaves a receipt", body: "A cloud run returns a runId and a verified contract status. A recurring run writes start and terminal events. A reusable-tool run records an execution id. The receipt is the proof. Do not trust a claim; read the receipt." },
+  { title: "The owner authorizes the agent", body: "My AX is single-operator. One verified Cloudflare Access identity owns every conversation, record, and tool call. The agent acts with the authority the owner already holds. It is not a remote-access tool and takes no inbound connection to a machine the owner connects. The owner configures each path, gates it with Access, and can stop it." },
   { title: "Confinement does not grant authority", body: "Generated code runs in a bounded sandbox with no direct database, secret, or network access. It calls allowlisted server-side handlers. A handler keeps its normal authority; the sandbox does not add or remove it." },
   { title: "Who owns what", body: "The Agents SDK owns durable identity, sockets, schedules, and child runs. Think owns model turns, history, and recovery. My AX owns authorization, the UI, jobs, Attention, receipts, and the work providers. Think is authoritative for a conversation; D1 is a derived index." },
 ];
@@ -147,8 +148,8 @@ export const DocsPage: FC<Props> = (props) => {
       <main class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <header>
           <p class="text-xs font-semibold uppercase tracking-widest text-brand">My AX documentation</p>
-          <h1 class="mt-3 text-3xl font-semibold leading-tight text-balance text-fg sm:text-4xl">An agent that runs your laptop and spawns its own cloud machines.</h1>
-          <p class="mt-4 max-w-2xl text-base leading-relaxed text-fg-mut text-pretty">You give it a task and close the tab. It works in a container, on your connected laptop, in bounded cloud runs, and in its own browser. When work finishes or needs a decision, it tells you. Every action leaves a receipt you can read.</p>
+          <h1 class="mt-3 text-3xl font-semibold leading-tight text-balance text-fg sm:text-4xl">A single-operator agent that acts with your authority.</h1>
+          <p class="mt-4 max-w-2xl text-base leading-relaxed text-fg-mut text-pretty">You deploy My AX into your own Cloudflare account, behind your own Access login. You authorize the agent. It works in a container, on a machine you connect, in bounded cloud runs, and in a headless browser. It is not a remote-access tool and takes no inbound connection. Every action writes a receipt you can read. See the <a class="text-brand hover:underline" href="/docs/security">security posture</a>.</p>
         </header>
 
         <nav class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -229,6 +230,7 @@ export const DocsPage: FC<Props> = (props) => {
 
         <Section id="deeper" title="Go deeper" lede="Longer references, the source, and the live proof.">
           <div class="flex flex-wrap gap-2">
+            <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/security">Security posture</a>
             <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/feature-tour">Feature tour, with receipts</a>
             <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/architecture">Architecture</a>
             <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/feature-matrix">Feature status and limits</a>
