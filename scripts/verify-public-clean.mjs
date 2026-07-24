@@ -33,6 +33,23 @@ const credentialPatterns = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
   /\bAKIA[0-9A-Z]{16}\b/,
 ];
+// Owner/personal identity that must never ship in the public engine. Real
+// receipts pasted into docs are the usual source: redact them to placeholders
+// (owner@example.com, <your-machine>, <session-id>) before committing.
+//
+// Needles are assembled from parts so this guard file never contains the
+// literal it forbids (the same idiom as exactFragments above); otherwise the
+// scan would flag itself or, worse, pass only by accident of regex escaping.
+const ownerUser = ["j", "coeyman"].join("");
+const ownerEmailDomain = "@" + ["cloudflare", "com"].join(".");
+const ownerMachine = ownerUser + "-macbook";
+const privateCodename = ["LEE", "terminal"].join(" ");
+const piiFragments = [
+  [ownerUser, "owner username"],
+  [ownerEmailDomain, "cloudflare.com email address"],
+  [ownerMachine, "owner machine name"],
+  [privateCodename, "private project codename"],
+].map(([value, label]) => [value.toLowerCase(), label]);
 const allowedExamples = new Set([".dev.vars.example", ".env.example"]);
 const findings = [];
 
@@ -44,6 +61,7 @@ for (const file of tracked) {
   for (const fragment of exactFragments) if (lower.includes(fragment)) findings.push(`${file}: private deployment marker (${fragment})`);
   for (const phrase of forbiddenProse) if (lower.includes(phrase)) findings.push(`${file}: deployment-specific prose (${phrase})`);
   for (const pattern of credentialPatterns) if (pattern.test(text)) findings.push(`${file}: credential-like material (${pattern.source})`);
+  for (const [fragment, label] of piiFragments) if (lower.includes(fragment)) findings.push(`${file}: owner PII (${label})`);
 }
 
 // Public Wrangler config must never carry account-scoped resource ids.
