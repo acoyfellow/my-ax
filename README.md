@@ -1,22 +1,31 @@
 # My AX
 
-**My AX is a single-operator agent that acts with your authority across a container, a machine you connect, and bounded cloud runs. You deploy it into your own Cloudflare account, behind your own Access login.**
+**My AX is a single-operator agent. It acts with your authority. It works in a container, on a machine you connect, and in bounded cloud runs. You deploy it into your own Cloudflare account. You put it behind your own Access login.**
 
-You authorize the agent. It is not a remote-access tool and takes no inbound connection. Every path it uses is one you configure, gate with Cloudflare Access, and can stop. It writes files in a container workspace, runs commands through a companion you install on a machine you choose, starts bounded agent runs in the cloud, and opens public web pages in a headless browser. When work finishes or needs a decision, it records the result. You return to a check-in page that reports what needs you, what is running, and what finished.
+You approve the agent. It is not a remote-access tool. It takes no inbound connection. You configure each path it uses. You gate each path with Cloudflare Access. You can stop each path.
 
-The agent acts with the authority you already hold, made explicit. You approve the work, steer it, and stop it. Every action writes a receipt you can read.
+The agent does these tasks:
 
-> **Security posture.** My AX is single-operator. One verified Access identity owns every conversation, record, and tool call. The machine companion connects outbound only, authenticates every caller at the Worker boundary, and runs as an OS account you choose. See the [security posture](./SECURITY.md) for the trust model, the identity and network boundaries, and what My AX does not do.
+- It writes files in a container workspace.
+- It runs commands through a companion. You install the companion on a machine you choose.
+- It starts bounded agent runs in the cloud.
+- It opens public web pages in a headless browser.
+
+The agent records the result when work finishes or needs a decision. You return to a check-in page. The page shows what needs you, what runs now, and what finished.
+
+The agent acts with the authority you already hold. You approve the work. You direct the work. You stop the work. Each action writes a receipt you can read.
+
+> **Security posture.** My AX is single-operator. One verified Access identity owns every conversation, record, and tool call. The machine companion connects outbound only. It checks every caller at the Worker boundary. It runs as an OS account you choose. See the [security posture](./SECURITY.md) for the trust model, the identity and network boundaries, and what My AX does not do.
 
 [![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a remote run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
-In this 3.4s clip the agent writes a workspace file, runs a command on a connected machine, and reads a remote agent run. That is one configured path, not proof of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
+In this 3.4s clip the agent writes a workspace file. It runs a command on a connected machine. It reads a remote agent run. This is one configured path. It is not proof of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
 
-> **Verify before trusting.** `npm run check` covers local build, types, and unit tests only. Access, containers, models, voice, push, and workspace restoration are proven by the [deployment proof](./proof/README.md), not by a green local run.
+> **Verify before you trust.** `npm run check` covers the local build, the types, and the unit tests only. The [deployment proof](./proof/README.md) proves Access, containers, models, voice, push, and workspace restoration. A green local run does not prove them.
 
 ## Where The Agent Acts
 
-The agent uses more than one place. It picks the place for each task. Each place returns output you can inspect.
+The agent uses more than one place. It picks the place for each task. Each place returns output you can read.
 
 | Place | Mechanism | Authority | What you can read back |
 |---|---|---|---|
@@ -27,25 +36,25 @@ The agent uses more than one place. It picks the place for each task. Each place
 | Your own live UI | `page.*` over the chat WebSocket | only while your chat tab is open | session list, health, transcript tail |
 | An artifact it builds | `create_svelte_artifact` + tools the artifact registers | sandboxed iframe, no same-origin access | the artifact, driven in place |
 
-A cloud run does not need you or your machine present. The agent starts it. The run returns a receipt with a `runId` and a contract status when it finishes. The machine companion is the highest-authority path: it runs as a real OS account, so give it a dedicated least-privilege account. See the [security posture](./SECURITY.md) for the boundary on each place.
+A cloud run does not need you or your machine present. The agent starts it. The run returns a receipt when it finishes. The receipt holds a `runId` and a contract status. The machine companion is the highest-authority path. It runs as a real OS account. Give it a dedicated account with least privilege. See the [security posture](./SECURITY.md) for the boundary on each place.
 
-A [feature tour](./docs/feature-tour.md) walks each capability with a real transcript or receipt.
+The [feature tour](./docs/feature-tour.md) shows each capability with a real transcript or receipt.
 
 ## The Owner Loop
 
 You do not watch the agent work. You return to it.
 
-- **Check-in** is the front door. `GET /api/check-in` and MCP `my_ax_check_in` compose one response from Attention, jobs, and run receipts: what needs you, what is running, what finished or failed, and a suggested next step. The authenticated shell renders those as owner pages at `/attention`, `/runs`, and `/jobs`, and keeps the raw API receipt href on each link for proof.
-- **Attention** holds owner-scoped items with unread state. A finished job, an exhausted recovery attempt, or a question from the agent lands here. Web Push delivers it when you are away; the item stays if push fails.
-- **Run receipts** record explicitly appended events. A recurring job run, a saved-recipe run, and a delegated batch each write start and terminal events you can open.
+- **Check-in** is the front door. `GET /api/check-in` and MCP `my_ax_check_in` build one response from Attention, jobs, and run receipts. The response shows what needs you, what runs now, what finished or failed, and a next step. The authenticated shell shows these as owner pages at `/attention`, `/runs`, and `/jobs`. Each link keeps the raw API receipt href for proof.
+- **Attention** holds owner-scoped items with unread state. A finished job, an ended recovery attempt, or a question from the agent lands here. Web Push sends it when you are away. The item stays if push fails.
+- **Run receipts** record events the agent adds. A recurring job run, a saved-recipe run, and a delegated batch each write a start event and a terminal event you can open.
 
-## What The Agent Can Decide To Do
+## What The Agent Can Do
 
-- **Schedule recurring work.** Native per-session alarms run saved prompts. HTTP routes, agent tools, Code Mode, and MCP share one owner-scoped job service. D1 holds job state and durable history.
-- **Delegate bounded analysis.** A parent runs at most 2 concurrent read-only child agents, depth 1, 120s each. Children get no application, MCP, browser, machine, or delegation tools. The parent keeps their retained results and writes the synthesis.
-- **Reuse a proven procedure.** You approve a successful `work_code` run as a named reusable tool. Reuse runs the exact saved code, so there is no regeneration drift. Each run records a receipt and appears in Check-in.
-- **Ask you a question.** `ask_user` writes an owner-scoped decision and an Attention item, waits, then injects your validated answer back into the source conversation.
-- **Build a UI.** `create_svelte_artifact` compiles a self-contained Svelte 5 component, stores it, and renders it in a sandboxed iframe. The artifact can register its own tools, which the agent then calls to steer it on a later turn.
+- **Schedule recurring work.** Native per-session alarms run saved prompts. HTTP routes, agent tools, Code Mode, and MCP share one owner-scoped job service. D1 holds the job state and the durable history.
+- **Delegate bounded analysis.** A parent runs at most 2 read-only child agents at the same time. Each child runs at depth 1 for 120 seconds. Children get no application, MCP, browser, machine, or delegation tools. The parent keeps their results and writes the summary.
+- **Reuse a proven procedure.** You approve a successful `work_code` run as a named reusable tool. Reuse runs the exact saved code. The code does not change between runs. Each run records a receipt and shows in Check-in.
+- **Ask you a question.** `ask_user` writes an owner-scoped decision and an Attention item. It waits. It then puts your approved answer back into the source conversation.
+- **Build a UI.** `create_svelte_artifact` compiles a self-contained Svelte 5 component. It stores the component. It shows the component in a sandboxed iframe. The artifact can register its own tools. The agent calls those tools to direct the artifact on a later turn.
 
 ## Important Limits
 
@@ -53,15 +62,15 @@ The hard bounds, so you know what the agent cannot do.
 
 | Surface | Boundary |
 |---|---|
-| Delegation | At most 2 concurrent children, depth 1, 8 model/tool steps each, 120s timeout. Children incur model-provider calls and create retained records. The UI shows a terminal snapshot, not live progress or cancel. |
-| Recurring jobs | At most 10 active jobs per owner. Cadence 60 seconds to 30 days. Names 200 characters, prompts 4,000. D1 drives the UI while the native scheduler drives execution, and they can disagree. There is no automatic repair; if state drifts, pause, delete, and recreate. |
-| Work Code Mode | Generated source is limited to 32,000 bytes. Each execution has a 60-second wall-clock limit and no ambient network. Confinement does not reduce the authority of an allowlisted callback. |
-| Workspace | All conversations for one owner share `/home/user`. After a mutation, My AX attempts an R2 snapshot. Recent writes can be lost with the container, and concurrent conversations can edit the same files without a merge. |
-| Machine | Commands run as the OS account hosting the companion, with that account's permissions. My AX adds no privilege separation. |
-| Terrarium | The agent spawns bounded cloud runs and reads verified receipts. Runs execute in Terrarium's own containers under its authority. My AX holds a bearer control token and adds no privilege separation. |
-| Page (live UI) | Works only while an owner chat tab is connected. Each verb errors `page_unavailable` otherwise. Artifact-registered tools are per-artifact, capped, bound to the source window, and validated against their schema. |
-| Browser | `browser_open` accepts HTTP(S) URLs that pass public-address checks and receives no local browser cookies. Authenticated local browsing works only when a connected machine exposes it. |
-| Voice and push | Depend on explicit browser permission and provider availability. A failed push does not remove its Attention record. |
+| Delegation | At most 2 children at the same time, depth 1, 8 model or tool steps each, 120s timeout. Children make model-provider calls and create records that stay. The UI shows a final snapshot. It does not show live progress and has no cancel. |
+| Recurring jobs | At most 10 active jobs per owner. Cadence 60 seconds to 30 days. Names 200 characters, prompts 4,000. D1 drives the UI. The native scheduler drives execution. The two can disagree. There is no automatic repair. If the state drifts, pause, delete, and create the job again. |
+| Work Code Mode | The generated source has a limit of 32,000 bytes. Each run has a 60-second wall-clock limit and no ambient network. The limit does not reduce the authority of an allowlisted callback. |
+| Workspace | All conversations for one owner share `/home/user`. My AX tries an R2 snapshot after a change. Recent writes can be lost with the container. Two conversations can edit the same files with no merge. |
+| Machine | Commands run as the OS account that hosts the companion, with that account's permissions. My AX adds no privilege separation. |
+| Terrarium | The agent starts bounded cloud runs and reads verified receipts. Runs execute in Terrarium's own containers under its authority. My AX holds a bearer control token and adds no privilege separation. |
+| Page (live UI) | Works only while an owner chat tab is connected. Each verb returns `page_unavailable` at other times. Artifact-registered tools are per-artifact and capped. They are bound to the source window. They are checked against their schema. |
+| Browser | `browser_open` accepts HTTP(S) URLs that pass public-address checks. It receives no local browser cookies. Authenticated local browsing works only when a connected machine gives access to it. |
+| Voice and push | Need explicit browser permission and provider availability. A failed push does not remove its Attention record. |
 
 [Feature Status and Limits](./docs/feature-matrix.md) is the current-state inventory: what is real, where it lives, and the known limits.
 
@@ -74,7 +83,7 @@ Requirements:
 - Python 3, Bash, and OpenSSL
 - A Cloudflare account authorized to create Workers, Containers, D1, KV, R2, Workers AI, Browser Rendering, and Dynamic Worker Loader resources; paid usage or product enablement may apply
 
-`setup.sh` creates infrastructure. It does not produce a verified service. Read [Deploying My AX](./docs/deploy.md) before you run it against an existing account or expose the hostname.
+`setup.sh` creates infrastructure. It does not make a verified service. Read [Deploying My AX](./docs/deploy.md) before you run it against an existing account or make the hostname public.
 
 ```bash
 git clone https://github.com/acoyfellow/my-ax
@@ -87,7 +96,15 @@ export MY_AX_ACCOUNT_ID=your_target_account_id
 bash scripts/setup.sh
 ```
 
-The script creates missing named resources, binds configured existing ones, generates absent bridge and encryption secrets, applies pending remote D1 migrations, and deploys. On a fresh Worker it replaces the historical Durable Object migration chain with one baseline; existing deployments keep their append-only history. When the secret source is still available, rerunning setup reuses keys rather than rotating them; it cannot recover deleted keys.
+The script does these steps:
+
+- It creates missing named resources.
+- It binds existing resources you configured.
+- It creates bridge and encryption secrets that are absent.
+- It applies pending remote D1 migrations.
+- It deploys.
+
+On a fresh Worker the script replaces the historical Durable Object migration chain with one baseline. Existing deployments keep their append-only history. The script reuses keys when the secret source is still available. It does not rotate them. It cannot recover deleted keys.
 
 Before you send a real turn:
 
@@ -98,20 +115,20 @@ Before you send a real turn:
 5. Redeploy, verify anonymous access is rejected, and verify authenticated `GET /api/health` returns `ok: true`.
 6. Open the hostname through Access and complete one model turn. Health proves routing and bindings only; run the documented snapshot and restore proof when workspace persistence matters.
 
-Push needs VAPID secrets. Managed OAuth callbacks need an Access-gated HTTPS hostname; loopback cannot complete that flow. [Deploying My AX](./docs/deploy.md) has copy-paste configuration, verification, and troubleshooting. Each installation must own separate Worker, D1, KV, R2, Durable Object, Access, and secret state. Installations may share a source revision but must never share runtime resources.
+Push needs VAPID secrets. Managed OAuth callbacks need an Access-gated HTTPS hostname. Loopback cannot complete that flow. [Deploying My AX](./docs/deploy.md) has copy-paste configuration, verification, and troubleshooting. Each installation must own separate Worker, D1, KV, R2, Durable Object, Access, and secret state. Installations can share a source revision. They must never share runtime resources.
 
 ## Connect Tools
 
-Open **Settings, then Connectors, then Add**, and enter an HTTPS MCP endpoint the Worker can reach. For OAuth-enabled servers, My AX attempts metadata discovery and stores grants encrypted with owner-bound context under the deployment-wide `MASTER_KEY`. Incompatible metadata or callback configuration will not connect. Replacing the key without keeping the old value permanently prevents decryption of existing grants.
+Open **Settings, then Connectors, then Add**. Enter an HTTPS MCP endpoint the Worker can reach. For OAuth-enabled servers, My AX tries metadata discovery. It stores grants encrypted with owner-bound context under the deployment-wide `MASTER_KEY`. A server with incompatible metadata or callback configuration will not connect. If you replace the key and do not keep the old value, you can never decrypt existing grants.
 
-Connector URLs are screened for embedded credentials and disallowed destinations. The operator allowlists exact MCP method identifiers for Code Mode; My AX does not prove that an allowlisted method is side-effect-free.
+My AX checks connector URLs for embedded credentials and disallowed destinations. The operator allowlists exact MCP method identifiers for Code Mode. My AX does not prove that an allowlisted method has no side effect.
 
 Optional providers:
 
-- **My Machine** runs [`machinectl`](https://github.com/acoyfellow/machinectl). This grants terminal-equivalent access as the companion's OS user. Use a dedicated least-privilege account.
-- **Terrarium** needs `TERRARIUM_URL` and a dedicated `TERRARIUM_CONTROL_TOKEN` shared only by this deployment and its Terrarium service. The agent spawns bounded cloud runs and reads back verified receipts.
+- **My Machine** runs [`machinectl`](https://github.com/acoyfellow/machinectl). This gives terminal-equivalent access as the companion's OS user. Use a dedicated account with least privilege.
+- **Terrarium** needs `TERRARIUM_URL` and a dedicated `TERRARIUM_CONTROL_TOKEN`. Share the token only between this deployment and its Terrarium service. The agent starts bounded cloud runs and reads back verified receipts.
 - **Web Push** needs VAPID keys and browser notification permission.
-- **Pantry bridge** needs `PANTRY_TOKEN` (and optionally `PANTRY_URL`, default `https://pantry.coey.dev`) to push enabled reusable tools to a pantry for reuse by other agents. It is additive, enabled-only, fail-soft, and a no-op without the token.
+- **Pantry bridge** needs `PANTRY_TOKEN` to push enabled reusable tools to a pantry. Other agents can then reuse them. You can also set `PANTRY_URL`; the default is `https://pantry.coey.dev`. The bridge is additive and enabled-only. It fails soft. It does nothing without the token.
 
 ## Who Owns What
 
@@ -121,7 +138,7 @@ Optional providers:
 | Think | Model and tool turns, message history, recovery, conversation memory, and compaction. |
 | My AX | Single-operator authorization, UI, product policy, jobs, Attention, receipts, and work providers. |
 
-Think is authoritative for conversation execution and history. D1 stores application records and derived indexes; R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups. Code Mode has no direct database, secret, or network bindings; its allowlisted server-side callbacks keep their normal authority.
+Think is authoritative for conversation execution and history. D1 stores application records and derived indexes. R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups. Code Mode has no direct database, secret, or network bindings. Its allowlisted server-side callbacks keep their normal authority.
 
 ## Repository Map
 
