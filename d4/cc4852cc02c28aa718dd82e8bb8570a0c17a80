@@ -1,0 +1,41 @@
+public/static/brand/cf-icons/access.svg
+  s_e050e2bde8a246::t_393333c16742c3 1
+public/static/brand/cf-icons/ai-gateway.svg
+  s_e050e2bde8a246::t_13e2ffbaabdd05 1
+public/static/brand/cf-icons/browser-run.svg
+  s_e050e2bde8a246::t_ed7022a085ad46 1
+public/static/brand/cf-icons/containers.svg
+  s_e050e2bde8a246::t_f31a08cbb112f2 1
+public/static/brand/cf-icons/d1.svg
+  s_e050e2bde8a246::t_111893b991dcb6 1
+public/static/brand/cf-icons/durable-objects.svg
+  s_e050e2bde8a246::t_5a001b95c463f3 1
+public/static/brand/cf-icons/dynamic-workers.svg
+  s_e050e2bde8a246::t_4e60b9f712f18b 1-11
+public/static/brand/cf-icons/kv.svg
+  s_e050e2bde8a246::t_aa007c40bacfb4 1
+public/static/brand/cf-icons/r2.svg
+  s_e050e2bde8a246::t_f1922d6d5af09a 1
+public/static/brand/cf-icons/sandbox.svg
+  s_e050e2bde8a246::t_31727ff5a456a7 1
+public/static/brand/cf-icons/workers-ai.svg
+  s_e050e2bde8a246::t_a1cf885a72e20a 1
+public/static/brand/cloudflare-ax.svg
+  s_e050e2bde8a246::t_6dfec677b3ce15 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d4cc4852cc02c28aa718dd82e8bb8570a0c17a80",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
