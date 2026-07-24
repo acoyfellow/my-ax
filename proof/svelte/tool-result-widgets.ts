@@ -214,7 +214,7 @@ function browserRunWidget(value: unknown): ToolResultWidget | null {
 
 /** Recognized capability namespace prefixes, gate-kept so we never surface arbitrary
  *  producer-supplied strings on the owner-visible card. */
-const CAPABILITY_ALLOWED_PREFIXES = ["workspace.", "machine.", "cloudbox.", "codemode."];
+const CAPABILITY_ALLOWED_PREFIXES = ["workspace.", "machine.", "terrarium.", "page.", "codemode."];
 const CAPABILITY_MAX = 24;
 const PROPOSED_NAME_MAX = 80;
 const PROPOSED_DESCRIPTION_MAX = 240;

@@ -86,7 +86,7 @@
       items: [
         { name: "MCP servers", tools: "server tools · mcp_code_mode", description: "Use tools from servers you add. Credentials stay server-side." },
         { name: "Workspace container", tools: "machine.* through work_code", description: "Use methods from the connected runtime with that runtime’s account." },
-        { name: "Cloudbox", tools: "cloudbox.* through work_code", description: "Run bounded repo work in a clean Cloudflare computer." },
+        { name: "Terrarium", tools: "terrarium.* through work_code", description: "Spawn bounded cloud agent runs and read back verified receipts." },
         { name: "Push notifications", tools: "browser subscription", description: "Send Attention updates to subscribed browsers." },
       ],
     },
@@ -1108,7 +1108,7 @@
             </label>
             <label class="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-surface-2/60">
               <input type="radio" name="reusable-tool-approval-mode" value="auto" checked={recipeApprovalMode === "auto"} onchange={() => setRecipeApprovalMode("auto")} class="mt-1" />
-              <span><strong class="block text-xs text-fg">Enable new tools automatically</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">Qualifying tools can be reused immediately. Come back here anytime to review, disable, or delete them. Host-bound machine and Cloudbox code is never auto-saved.</span></span>
+              <span><strong class="block text-xs text-fg">Enable new tools automatically</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">Qualifying tools can be reused immediately. Come back here anytime to review, disable, or delete them. Host-bound machine and Terrarium code is never auto-saved.</span></span>
             </label>
           </fieldset>
           <div class="grid gap-2">
