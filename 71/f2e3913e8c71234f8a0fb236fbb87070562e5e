@@ -1,0 +1,29 @@
+proof/svelte/Settings.svelte
+  s_9995a31335769c::t_8c549313656fe6 89,1111
+proof/svelte/tool-result-widgets.ts
+  s_f10e36fcc51c4f::t_ba593846e81a56 217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "71f2e3913e8c71234f8a0fb236fbb87070562e5e",
+  "prompts": {},
+  "sessions": {
+    "s_9995a31335769c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f808e-b553-703e-979d-90ff115871cd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_f10e36fcc51c4f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f6f75-18e2-7e65-ab8b-4f58f529661f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
