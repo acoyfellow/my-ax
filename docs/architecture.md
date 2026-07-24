@@ -10,7 +10,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/artifacts.ts` + `src/routes/artifacts.ts` | One-off Svelte artifact compile/storage path plus owner-scoped preview/index routes. |
 | `src/auth.ts` | Verifies the Cloudflare Access JWT (when configured); attaches `identity` to the request context. |
 | `src/agent.ts` | Active `MyAgent extends Think` Durable Object — native chat, tools, unified durable submissions via `runTurn`, D1 mirror hooks, invisible Session-backed memory. |
-| `src/delegate-many.ts` | Static `delegate_many`. The canonical parent runs at most two concurrent, run-scoped, read-only `ReadOnlyDelegateAgent` Think facets through the official `runAgentTool`. Children cannot delegate. Retained agent-tool events and runs are the evidence. The parent owns the synthesis. Later delegations opportunistically clear older terminal child runs. |
+| `src/delegate-many.ts` | Static `delegate_many`. The canonical parent runs at most two run-scoped, read-only `ReadOnlyDelegateAgent` Think facets through the official `runAgentTool`, one after the other (serially, not concurrently) because they share one Workers AI per-minute inference cap. Children cannot delegate. Retained agent-tool events and runs are the evidence. The parent owns the synthesis. Later delegations opportunistically clear older terminal child runs. |
 | `src/think-workspace.ts` | Adapts Think workspace tools to the real Sandbox `/home/user` workspace. |
 | `src/notify.ts` + `src/push.ts` | Owner-scoped Web Push transport and agent-notification delivery. |
 | `src/browser-tools.ts` | Cloudflare Browser Run `browser_open` tool and inline replay-receipt payload. |
