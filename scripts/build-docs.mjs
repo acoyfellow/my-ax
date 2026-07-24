@@ -5,7 +5,7 @@
 // Output: src/docs-content.generated.ts, a map of slug -> { title, markdown }.
 // The /docs/:slug route renders that markdown with `marked` inside the docs shell.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,12 +26,48 @@ const PAGES = [
   { slug: "patterns", file: "patterns.md", title: "Implementation patterns", from: "docs" },
 ];
 
+// Verify-don't-trust: turn every inline-code span that names a real repo file
+// into a link to that exact file on GitHub. A path is linked ONLY when it
+// exists on disk at build time, so a doc can never point at a file that is not
+// in the tree. Links target /blob/main so they track the branch and never go
+// stale on redeploy. Fenced code blocks are left untouched.
+const REPO_BLOB_BASE = "https://github.com/acoyfellow/my-ax/blob/main";
+const REPO_PATH_RE = /^[a-z][a-z0-9_.-]*(?:\/[a-z0-9_.-]+)*\.(?:ts|tsx|mjs|cjs|js|sql|svelte|json|jsonc|css|md|sh|yaml|yml)$/i;
+
+function isRealRepoFile(candidate) {
+  if (!REPO_PATH_RE.test(candidate)) return false;
+  if (candidate.includes("..")) return false;
+  const abs = join(root, candidate);
+  if (!abs.startsWith(root)) return false;
+  try { return statSync(abs).isFile(); } catch { return false; }
+}
+
+// Link real-file inline-code spans, but never inside a fenced code block and
+// never a span that is already the text of a markdown link.
+function linkCodePaths(markdown) {
+  const parts = markdown.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g);
+  let linked = 0;
+  const out = parts.map((chunk, i) => {
+    if (i % 2 === 1) return chunk; // odd chunks are fenced blocks
+    return chunk.replace(/(\]\()?`([^`\n]+)`/g, (whole, alreadyLink, inner) => {
+      if (alreadyLink) return whole; // span sits right after ](  -> part of a link
+      if (!isRealRepoFile(inner)) return whole;
+      linked += 1;
+      return `[\`${inner}\`](${REPO_BLOB_BASE}/${inner})`;
+    });
+  });
+  return { markdown: out.join(""), linked };
+}
+
 const entries = [];
+let totalLinked = 0;
 for (const p of PAGES) {
   const base = p.from === "root" ? root : docsDir;
   const path = join(base, p.file);
   try {
-    const markdown = readFileSync(path, "utf8");
+    const raw = readFileSync(path, "utf8");
+    const { markdown, linked } = linkCodePaths(raw);
+    totalLinked += linked;
     entries.push({ slug: p.slug, title: p.title, markdown });
   } catch {
     console.warn(`build-docs: skip ${p.file} (missing)`);
@@ -44,4 +80,4 @@ const body = `export const DOC_PAGES: DocPage[] = ${JSON.stringify(entries, null
 const helper = "export const DOC_PAGE_BY_SLUG: Record<string, DocPage> = Object.fromEntries(DOC_PAGES.map((p) => [p.slug, p]));\n";
 
 writeFileSync(out, banner + type + body + helper);
-console.log(`build-docs: wrote ${entries.length} doc pages to ${out}`);
+console.log(`build-docs: wrote ${entries.length} doc pages to ${out} (${totalLinked} source links verified)`);
