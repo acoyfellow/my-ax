@@ -31,7 +31,7 @@ const userAsk = "List my recent conversations, switch to the Beta thread, then r
 const stepResults = [
   '[{"id":"86f61450","title":"Alpha thread"},{"id":"30d895f4","title":"Beta thread"}]',
   '{"ok":true,"id":"30d895f4"}',
-  '{"region":"AUS-DOG","home":{"diskUsedBytes":16384,"fileCount":0}}',
+  '{"region":"TEST-COLO","home":{"diskUsedBytes":16384,"fileCount":0}}',
 ];
 
 // BEFORE: 3 sequential turns. Each turn re-bills system+tools + the whole

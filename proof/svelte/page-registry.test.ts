@@ -61,10 +61,10 @@ test("listSessions unwraps the REST { result: { sessions } } envelope", async ()
 });
 
 test("readHealth unwraps the REST { result } envelope", async () => {
-  installGlobals({ fetchJson: () => ({ ok: true, result: { region: "AUS-DOG", container: { vcpus: 4 } } }) });
+  installGlobals({ fetchJson: () => ({ ok: true, result: { region: "TEST-COLO", container: { vcpus: 4 } } }) });
   const { frame } = await handlePageCall({ type: "page_call", requestId: "r2", verb: "readHealth" });
   assert.equal(frame.ok, true);
-  assert.deepEqual(frame.result, { region: "AUS-DOG", container: { vcpus: 4 } });
+  assert.deepEqual(frame.result, { region: "TEST-COLO", container: { vcpus: 4 } });
 });
 
 test("readTranscriptTail reads rendered rows and clamps n", async () => {
