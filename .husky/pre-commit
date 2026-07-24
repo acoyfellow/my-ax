@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -e
+
+# Husky owns this repository's hook path. Preserve a user's global hook (such
+# as guardrail) before checking the staged snapshot for public-tree leaks.
+global_hooks_path="$(git config --global --get core.hooksPath || true)"
+if [ -n "$global_hooks_path" ] && [ -x "$global_hooks_path/pre-commit" ]; then
+  "$global_hooks_path/pre-commit"
+fi
+
+npm run verify:public:staged

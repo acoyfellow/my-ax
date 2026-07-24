@@ -75,6 +75,7 @@
     "test:unit": "npm run test:models && npm run test:auth && npm run test:check-in && npm run test:cycle-costs && npm run test:runs && npm run test:jobs-route && npm run test:attention-route && npm run test:browser-route && npm run test:recovery-exhaustion && npm run test:assistant-backfill && npm run test:recurring-job-receipt && npm run test:recurring-job-run && npm run test:upstream-rate-limit && npm run test:gateway-retry-fetch && npm run test:voice-narration && npm run test:voice-turn-narration && npm run test:session-pinning && npm run test:pinned-reorder && npm run test:pinned-ui && npm run test:job-health && npm run test:attention-affordance && npm run test:notification-stream && npm run test:conversation-starters && npm run test:starters-ui && npm run test:tool-output-limit && npm run test:machinectl-output && npm run test:terrarium-connector && npm run test:grant-crypto && npm run test:tool-id-sanitize && npm run test:dead-session && npm run test:notify && npm run test:tool-widgets && npm run test:chat-composer && npm run test:page-registry && npm run test:artifact-tools && npm run test:composer-keys && npm run test:ios-safe-area-frame && npm run test:settings-snippets && npm run test:appbar-controls && npm run test:attention-modal && npm run test:run-receipt-modal && npm run test:semantic-guards && npm run test:conversation-context && npm run test:run-receipts && npm run test:session-entries && npm run test:public-url && npm run test:uploads && npm run test:audio-messages && npm run test:mcp-code-mode && npm run test:bridge-replay && npm run test:bridge-origin && npm run test:workspace-snapshot-ordering && npm run test:deep-links && npm run test:attention-state && npm run test:session-generation && npm run test:reconnecting-socket && npm run test:session-latch && npm run test:voice-half-duplex && npm run test:voice-chime && npm run test:voice-transcript-guard && npm run test:webcam-frame && npm run test:sw-navigation-ack && npm run test:sw-cache-strategy && npm run test:deploy-refresh && npm run test:streaming-turn-fsm && npm run test:delegation && npm run test:recipes && npm run test:pantry-sync && tsx --test src/saved-recipes-gating.test.ts && npm run test:decision-response && npm run test:capability-review && npm run test:voice-session-ownership && npm run test:voice-think-agent && npm run test:session-ownership && npm run test:job-state",
     "prove:resume": "node scripts/prove-resume.mjs",
     "verify:public": "node scripts/verify-public-clean.mjs",
+    "verify:public:staged": "node scripts/verify-public-clean.mjs --staged",
     "verify:legacy-surface": "node scripts/verify-legacy-surface.mjs",
     "build:vendor": "node scripts/build-vendor.mjs",
     "test:job-state": "tsx --test src/job-state-transition.test.ts src/job-service.test.ts",
@@ -110,7 +111,8 @@
     "test:streaming-turn-fsm": "tsx --test proof/svelte/streaming-turn-fsm.test.ts",
     "test:bridge-origin": "tsx --test src/bridge-origin.test.ts",
     "test": "npm run test:unit",
-    "test:deploy-refresh": "tsx --test src/deploy-version.test.ts && node proof/svelte/deploy-refresh-smoke.mjs"
+    "test:deploy-refresh": "tsx --test src/deploy-version.test.ts && node proof/svelte/deploy-refresh-smoke.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.84",
@@ -140,6 +142,7 @@
     "@types/node": "25.9.3",
     "esbuild": "0.28.1",
     "esbuild-svelte": "^0.9.5",
+    "husky": "^9.1.7",
     "sharp": "0.35.1",
     "tailwindcss": "4.3.1",
     "tsx": "^4.21.0",

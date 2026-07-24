@@ -6,9 +6,17 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const root = process.argv[2] || process.cwd();
+const args = process.argv.slice(2);
+const staged = args.includes("--staged");
+const root = args.find((arg) => arg !== "--staged") || process.cwd();
 const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: root })
   .toString("utf8").split("\0").filter(Boolean);
+const stagedFiles = staged
+  ? new Set(execFileSync("git", ["diff", "--cached", "--name-only", "-z"], { cwd: root }).toString("utf8").split("\0").filter(Boolean))
+  : new Set();
+const readTrackedFile = (file) => staged && stagedFiles.has(file)
+  ? execFileSync("git", ["show", `:${file}`], { cwd: root, encoding: "utf8" })
+  : readFileSync(`${root}/${file}`, "utf8");
 
 const exactFragments = [
   ["my", "ax", "cloudflare", "dev"].join("."),
@@ -60,7 +68,7 @@ const findings = [];
 for (const file of tracked) {
   if (forbiddenNames.test(file) && !allowedExamples.has(file)) findings.push(`${file}: forbidden private environment filename`);
   let text;
-  try { text = readFileSync(`${root}/${file}`, "utf8"); } catch { continue; }
+  try { text = readTrackedFile(file); } catch { continue; }
   const lower = text.toLowerCase();
   for (const fragment of exactFragments) if (lower.includes(fragment)) findings.push(`${file}: private deployment marker (${fragment})`);
   for (const phrase of forbiddenProse) if (lower.includes(phrase)) findings.push(`${file}: deployment-specific prose (${phrase})`);
@@ -69,7 +77,7 @@ for (const file of tracked) {
 }
 
 // Public Wrangler config must never carry account-scoped resource ids.
-const wrangler = readFileSync(`${root}/wrangler.jsonc`, "utf8");
+const wrangler = readTrackedFile("wrangler.jsonc");
 if (!wrangler.includes('"database_id": "REPLACE_WITH_D1_DATABASE_ID"')) findings.push("wrangler.jsonc: D1 database id must remain a placeholder");
 if (!wrangler.includes('"id": "REPLACE_WITH_KV_NAMESPACE_ID"')) findings.push("wrangler.jsonc: KV namespace id must remain a placeholder");
 
