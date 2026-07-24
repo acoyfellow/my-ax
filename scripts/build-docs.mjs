@@ -17,6 +17,7 @@ const out = join(root, "src", "docs-content.generated.ts");
 // `from` is "docs" (docs/*.md) or "root" (repo-root *.md, e.g. SECURITY.md).
 const PAGES = [
   { slug: "security", file: "SECURITY.md", title: "Security posture", from: "root" },
+  { slug: "principles", file: "principles.md", title: "Principles", from: "docs" },
   { slug: "feature-tour", file: "feature-tour.md", title: "Feature tour", from: "docs" },
   { slug: "architecture", file: "architecture.md", title: "Architecture", from: "docs" },
   { slug: "feature-matrix", file: "feature-matrix.md", title: "Feature status and limits", from: "docs" },
