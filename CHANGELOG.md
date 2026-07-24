@@ -1,13 +1,17 @@
 # Changelog
 
-Notable changes to My Agent Experience are recorded chronologically here.
+Progress on My Agent Experience is recorded here in date order, newest first. Each dated entry lists the features and changes that shipped that day.
 
-My AX remains version `0.0.1` while it is being built. These dated sections are development history, not versioned releases.
+The version stays `0.0.1`. It does not increment. The number is a deliberate stance, not a status. The real identity of each change is its commit hash. Each dated entry names the deployed revision.
 
-## [Unreleased]
+## 2026-07-23
+
+Deployed to both supported targets at revision `6c8f7f0`: my-ax.coey.dev (personal, `deploy-personal.sh`) and my.ax.cloudflare.dev (employee, `deploy-employee.sh`).
 
 ### Added
 
+- Added a self-hosted documentation surface at `/docs`, served by the app. The surface has four intent paths: Start, Guides, Reference, and Concepts. It uses the app design tokens. Each `/docs/<slug>` subpage renders a repository `.md` file. In-repository `.md` links change to on-site `/docs/<slug>` links. The build step inlines the Markdown, because the worker has no file system.
+- Added a "What makes it different" section to `/docs`. The section states six verified capabilities. Each capability was checked against the code. A red-team review through three lenses (capability security, operational truth, precise claims) removed every must-fix objection. The text uses Simplified Technical English. The text does not use the word "novel", banned phrases, or arrow glyphs.
 - Added the **Page connector** (`page.*`): while an owner chat tab is connected, the agent can drive the owner's own browser session over the chat WebSocket — list/switch conversations, read health and the transcript tail, open Settings/Attention/Sessions, notify, and navigate. Each verb errors `page_unavailable` when no live tab is connected.
 - Added **artifact self-registration** (page connector v2): an artifact created with `create_svelte_artifact` can self-register scoped tools on mount; the agent discovers them with `page.listArtifactTools()` and invokes them with `page.invokeArtifactTool({artifactId,name,args})`, parent-mediated and arg-validated. Tools are bound to the source window, capped (8 per artifact, 32 total), kept out of the default catalog, and become discoverable on the turn after the artifact is created — a live instrument built once and steered later (e.g. a Job Health Cockpit).
 - Added the **Terrarium connector** (`terrarium.*`), replacing the retired `cloudbox` connector: `terrarium.spawn` waits for a verified receipt, `terrarium.spawn_background` returns a run id, `terrarium.status` checks a run. Runs execute in Terrarium's own containers under a bearer control token.
@@ -38,6 +42,12 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Absorbed the Agents SDK v0.17.0 cohort by exact-pinning `agents@0.17.0`, `@cloudflare/think@0.11.0`, `@cloudflare/voice@0.3.3`, and `@cloudflare/codemode@0.4.2`; My AX keeps using Think's unified `runTurn({ mode: "submit" })` path for owner/API injection and native recurring alarms, and leaves detached/background sub-agent progress as a deliberate future UI/receipt adoption rather than a hidden behavior change.
 - Raised explicit Work Code Mode and MCP Code Mode execution caps from 30s to 60s to match the current Code Mode runtime cohort.
 - Promoted the single-root Svelte app to `/` (previously `/beta`), retiring the legacy multi-mount `ChatPage`; `/beta` remains a one-release alias.
+
+### Documentation
+
+- Rewrote `SECURITY.md` from a report stub into a posture document. The document states the trust model, the identity and authentication path, the outbound-only network posture, the capability boundaries, and an honest statement of the machine companion. The document adds a "what it does not do" section and an empty compliance-mapping table for the deploying team. The document makes no invented compliance claim. The posture is shown at `/docs/security`.
+- Reframed the README and documentation copy away from remote-access-tool language. The new frame everywhere: a single-operator agent that acts with the owner's own authority. It is not a remote-access tool. It takes no inbound connection. The owner authorizes each action.
+- Rewrote the documentation content in ASD-STE100 Simplified Technical English: short sentences, one idea in each sentence, no banned phrases, and no arrow glyphs.
 
 ### Fixed
 
@@ -88,7 +98,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 - Bound direct Voice actors to the authenticated owner and rejected missing or foreign session IDs before seeding or routing Voice state.
 - Rejected carrier-grade NAT destinations in `100.64.0.0/10` from public URL validation.
 
-## [2026-06-19]
+## 2026-06-19
 
 ### Security
 
@@ -100,7 +110,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 - Added regression coverage for adversarial upload session IDs and included it in the unit suite.
 
-## [2026-06-18]
+## 2026-06-18
 
 ### Added
 
@@ -123,7 +133,7 @@ My AX remains version `0.0.1` while it is being built. These dated sections are 
 
 - Added focused regression suites for bridge-ticket replay, recurring-job transitions, session-generation races, workspace snapshot ordering, and audit-storage failure.
 
-## [2026-06-17]
+## 2026-06-17
 
 ### Added
 
