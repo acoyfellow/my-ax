@@ -9,6 +9,18 @@ interface Props {
   appOrigin?: string;
 }
 
+// What sets My AX apart. Each point is a verified capability, stated positively,
+// and bounded. Red-teamed against capability-security, operational-truth, and
+// no-overclaim lenses.
+const DIFFERENTIATORS: Array<{ title: string; body: string }> = [
+  { title: "It runs in your own account", body: "My AX is single-tenant and single-operator. You deploy it into your own Cloudflare account, behind your own Access login. One verified identity owns every conversation, record, and tool call. No shared service holds your data." },
+  { title: "One agent, five places, one tool surface", body: "work_search and work_code give the agent one way to act across a container workspace, a machine you connect, bounded cloud runs, its own live browser UI, and a codemode namespace. The agent picks the place for each task. It does not need a separate integration per surface." },
+  { title: "Inner runs cannot widen their authority", body: "When the agent runs a saved tool inside a turn, its capabilities are the intersection of the tool's declared needs and the caller's current grants. The set can only narrow, never widen. This is capability-based security, the same model as Sandstorm." },
+  { title: "It builds instruments and then drives them", body: "The agent can build a UI with create_svelte_artifact, and that artifact can register its own tools. The agent then calls those tools to steer the artifact on a later turn. It builds an instrument once and operates it, instead of rebuilding it each time." },
+  { title: "Bounded actions return a verified receipt", body: "A cloud run returns a runId, a verified contract status, and an exit code. A recurring run and a reusable-tool run write start and terminal events. A bridged tool call writes an audit receipt. You read the receipt instead of trusting a claim." },
+  { title: "You leave; it reports back", body: "You give the agent a task and close the tab. It works while you are away. Check-in composes one view from Attention, jobs, and run receipts: what needs you, what is running, what finished or failed. You return to that view." },
+];
+
 // Four reading paths. Each answers a different question, so the reader picks by
 // intent, not by scrolling. Learn, do, look up, understand.
 const PATHS: Array<{ anchor: string; label: string; question: string }> = [
@@ -123,6 +135,22 @@ const CONCEPTS: Array<{ title: string; body: string }> = [
   { title: "Who owns what", body: "The Agents SDK owns durable identity, sockets, schedules, and child runs. Think owns model turns, history, and recovery. My AX owns authorization, the UI, jobs, Attention, receipts, and the work providers. Think is authoritative for a conversation; D1 is a derived index." },
 ];
 
+// Cloudflare primitives My AX binds. Icons are the official product icons from
+// developers.cloudflare.com (cloudflare-docs/src/icons), saved under brand/cf-icons.
+const PRIMITIVES: Array<{ icon: string; name: string }> = [
+  { icon: "workers-ai", name: "Workers AI" },
+  { icon: "durable-objects", name: "Durable Objects" },
+  { icon: "d1", name: "D1" },
+  { icon: "r2", name: "R2" },
+  { icon: "kv", name: "KV" },
+  { icon: "containers", name: "Containers" },
+  { icon: "sandbox", name: "Sandbox" },
+  { icon: "dynamic-workers", name: "Worker Loader" },
+  { icon: "browser-run", name: "Browser Rendering" },
+  { icon: "ai-gateway", name: "AI Gateway" },
+  { icon: "access", name: "Access" },
+];
+
 const Section: FC<{ id: string; title: string; lede: string; children?: unknown }> = (p) => (
   <section id={p.id} class="scroll-mt-6 border-t border-line pt-10 mt-10">
     <h2 class="text-xl font-semibold text-fg">{p.title}</h2>
@@ -147,12 +175,43 @@ export const DocsPage: FC<Props> = (props) => {
     <Layout title="Docs · my · ax" identityEmail={props.identityEmail} buildId={props.buildId} theme={props.theme} appOrigin={props.appOrigin} ownViewport={false} bodyClass="min-h-dvh bg-bg text-fg">
       <main class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <header>
-          <p class="text-xs font-semibold uppercase tracking-widest text-brand">My AX documentation</p>
-          <h1 class="mt-3 text-3xl font-semibold leading-tight text-balance text-fg sm:text-4xl">A single-operator agent that acts with your authority.</h1>
-          <p class="mt-4 max-w-2xl text-base leading-relaxed text-fg-mut text-pretty">You deploy My AX into your own Cloudflare account, behind your own Access login. You authorize the agent. It works in a container, on a machine you connect, in bounded cloud runs, and in a headless browser. It is not a remote-access tool and takes no inbound connection. Every action writes a receipt you can read. See the <a class="text-brand hover:underline" href="/docs/security">security posture</a>.</p>
+          <div class="flex items-center gap-3 text-brand">
+            <img src="/static/brand/cloudflare-ax.svg" alt="Cloudflare Agent Experience" class="h-5 w-auto" />
+            <span class="text-xs font-semibold uppercase tracking-widest text-fg-mut">Documentation</span>
+          </div>
+
+          <h1 class="mt-6 text-3xl font-semibold leading-tight text-balance text-fg sm:text-4xl">What is My AX?</h1>
+          <p class="mt-4 max-w-2xl text-lg leading-relaxed text-fg text-pretty">My AX is a personal AI agent you run in your own Cloudflare account. You give it a task and leave. It works in a container, on a machine you connect, in bounded cloud runs, and in a headless browser, then reports back what needs you.</p>
+          <p class="mt-4 max-w-2xl text-base leading-relaxed text-fg-mut text-pretty">One verified Access identity owns it. You authorize every action. It is not a remote-access tool and takes no inbound connection. Every action writes a receipt you can read. See the <a class="text-brand hover:underline" href="/docs/security">security posture</a>.</p>
+
+          <div class="mt-8 rounded-xl border border-line bg-bg-alt p-5">
+            <p class="text-sm font-medium text-fg">Built on Cloudflare, dogfooding the platform end to end.</p>
+            <p class="mt-1 text-sm text-fg-mut">My AX binds these primitives directly.</p>
+            <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {PRIMITIVES.map((p) => (
+                <li class="flex items-center gap-2.5 rounded-lg border border-line bg-bg px-3 py-2.5">
+                  <img src={`/static/brand/cf-icons/${p.icon}.svg`} alt="" aria-hidden="true" class="h-5 w-5 flex-none" />
+                  <span class="truncate text-sm text-fg">{p.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </header>
 
-        <nav class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <section class="mt-12">
+          <h2 class="text-xl font-semibold text-fg">What makes it different</h2>
+          <p class="mt-1 mb-6 max-w-2xl text-sm leading-relaxed text-fg-mut">Six things My AX does, each grounded in the code.</p>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {DIFFERENTIATORS.map((d) => (
+              <div class="rounded-xl border border-line bg-bg-alt p-5">
+                <h3 class="text-base font-semibold text-fg">{d.title}</h3>
+                <p class="mt-2 text-sm leading-relaxed text-fg-mut">{d.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <nav class="mt-12 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PATHS.map((p) => (
             <a href={`#${p.anchor}`} class="rounded-lg border border-line bg-bg-alt px-4 py-3 transition-colors hover:border-brand/60">
               <span class="block text-sm font-semibold text-fg">{p.label}</span>
@@ -230,6 +289,7 @@ export const DocsPage: FC<Props> = (props) => {
 
         <Section id="deeper" title="Go deeper" lede="Longer references, the source, and the live proof.">
           <div class="flex flex-wrap gap-2">
+            <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/principles">Principles</a>
             <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/security">Security posture</a>
             <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/feature-tour">Feature tour, with receipts</a>
             <a class="rounded-lg border border-line px-4 py-2 text-sm text-fg transition-colors hover:border-brand/60" href="/docs/architecture">Architecture</a>
