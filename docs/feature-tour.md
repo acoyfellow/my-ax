@@ -4,9 +4,10 @@ Each section shows one capability, the tool that runs it, and a real result from
 production run or a passing test. The receipt is the point: the agent produces an
 artifact you can read, not a claim you have to trust.
 
-Run IDs, version IDs, and file paths below are from real runs against
-`my.ax.cloudflare.dev`. Model output varies between runs; the mechanism and the
-receipt shape do not.
+The receipts below are real run output with the shape preserved. Identifying
+fields (owner email, machine name, region, session and surface ids, project
+names) are redacted or replaced with placeholders. Model output varies between
+runs; the mechanism and the receipt shape do not.
 
 ## Spawn A Bounded Cloud Run
 
@@ -54,10 +55,10 @@ worker version:
 
 ```json
 {
-  "identity": "jcoeyman@cloudflare.com",
-  "region": "AUS-DOG",
+  "identity": "owner@example.com",
+  "region": "<redacted>",
   "container": { "instanceType": "standard-4", "vcpus": 4, "memoryGiB": 12 },
-  "worker": { "versionId": "26769a80-e9e4-46fb-9cda-e52c3cddde1e" }
+  "worker": { "versionId": "<version-id>" }
 }
 ```
 
@@ -99,7 +100,7 @@ output. You can read the exact command it ran.
 The live connector status for a connected machine:
 
 ```json
-{ "connected": true, "machineName": "jcoeyman-macbook", "tools": [{ "name": "shell", ... }] }
+{ "connected": true, "machineName": "<your-machine>", "tools": [{ "name": "shell", ... }] }
 ```
 
 The companion is the highest-authority path and has the same power as a terminal.
@@ -117,9 +118,9 @@ the live one:
 
 ```json
 {
-  "surfaceId": "F4758FDE-5C9D-4656-B631-0880D2CC23F5",
-  "sessionId": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
-  "content": "LEE terminal tail — live session output"
+  "surfaceId": "<surface-id>",
+  "sessionId": "<session-id>",
+  "content": "agent terminal tail — live session output"
 }
 ```
 

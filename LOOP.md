@@ -1,9 +1,10 @@
 # My AX speed-first Terraloop
 
-This is a mandatory Terraloop contract. It follows both:
+This is a mandatory Terraloop contract. It follows the operator's private
+Terraloop protocol notes, which live outside this public repository:
 
-- `/Users/jcoeyman/cloudflare/.context/TERRALOOP.md`
-- `/Users/jcoeyman/cloudflare/terrarium/.context/SELF_HEALING_TERRALOOP.md` for question-first experiments, per-round reconciliation, parent verification, self-editing, and independent stop-gate review. The Terrarium drift campaign's specific deliverables and drift score do not apply unless the current My AX finding is about Terrarium drift.
+- a base Terraloop contract; and
+- a self-healing Terraloop protocol for question-first experiments, per-round reconciliation, parent verification, self-editing, and independent stop-gate review. A drift campaign's specific deliverables and drift score do not apply unless the current My AX finding is about that drift.
 
 Start this contract with **both** concrete control planes:
 

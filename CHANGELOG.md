@@ -6,7 +6,7 @@ The version stays `0.0.1`. It does not increment. The number is a deliberate sta
 
 ## 2026-07-23
 
-Deployed to both supported targets at revision `6c8f7f0`: my-ax.coey.dev (personal, `deploy-personal.sh`) and my.ax.cloudflare.dev (employee, `deploy-employee.sh`).
+Deployed to both supported targets at revision `6c8f7f0` through the private deployment wrappers (`deploy-personal.sh` and `deploy-employee.sh`). Hostnames are deployment-specific and live in the private wrappers, not here.
 
 ### Added
 
