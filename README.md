@@ -51,7 +51,7 @@ You do not watch the agent work. You return to it.
 ## What The Agent Can Do
 
 - **Schedule recurring work.** Native per-session alarms run saved prompts. HTTP routes, agent tools, Code Mode, and MCP share one owner-scoped job service. D1 holds the job state and the durable history.
-- **Delegate bounded analysis.** A parent runs at most 2 read-only child agents at the same time. Each child runs at depth 1 for 120 seconds. Children get no application, MCP, browser, machine, or delegation tools. The parent keeps their results and writes the summary.
+- **Delegate bounded analysis.** A parent runs at most 2 read-only child agents. It runs them one after the other, not at the same time, because they share one inference rate limit. Each child runs at depth 1 for 120 seconds. Children get no application, MCP, browser, machine, or delegation tools. The parent keeps their results and writes the summary.
 - **Reuse a proven procedure.** You approve a successful `work_code` run as a named reusable tool. Reuse runs the exact saved code. The code does not change between runs. Each run records a receipt and shows in Check-in.
 - **Ask you a question.** `ask_user` writes an owner-scoped decision and an Attention item. It waits. It then puts your approved answer back into the source conversation.
 - **Build a UI.** `create_svelte_artifact` compiles a self-contained Svelte 5 component. It stores the component. It shows the component in a sandboxed iframe. The artifact can register its own tools. The agent calls those tools to direct the artifact on a later turn.
@@ -62,7 +62,7 @@ The hard bounds, so you know what the agent cannot do.
 
 | Surface | Boundary |
 |---|---|
-| Delegation | At most 2 children at the same time, depth 1, 8 model or tool steps each, 120s timeout. Children make model-provider calls and create records that stay. The UI shows a final snapshot. It does not show live progress and has no cancel. |
+| Delegation | At most 2 children, run one after the other (not at the same time), depth 1, 8 model or tool steps each, 120s timeout. Children make model-provider calls and create records that stay. The UI shows a final snapshot. It does not show live progress and has no cancel. |
 | Recurring jobs | At most 10 active jobs per owner. Cadence 60 seconds to 30 days. Names 200 characters, prompts 4,000. D1 drives the UI. The native scheduler drives execution. The two can disagree. There is no automatic repair. If the state drifts, pause, delete, and create the job again. |
 | Work Code Mode | The generated source has a limit of 32,000 bytes. Each run has a 60-second wall-clock limit and no ambient network. The limit does not reduce the authority of an allowlisted callback. |
 | Workspace | All conversations for one owner share `/home/user`. My AX tries an R2 snapshot after a change. Recent writes can be lost with the container. Two conversations can edit the same files with no merge. |
