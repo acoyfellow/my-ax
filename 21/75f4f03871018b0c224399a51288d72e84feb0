@@ -1,0 +1,29 @@
+.husky/pre-commit
+  s_e050e2bde8a246::t_e2a05151942758 1-11
+package-lock.json
+  s_9995a31335769c::t_f9f72b075f14c7 39,5430-5445
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2175f4f03871018b0c224399a51288d72e84feb0",
+  "prompts": {},
+  "sessions": {
+    "s_9995a31335769c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f808e-b553-703e-979d-90ff115871cd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
