@@ -44,11 +44,15 @@ const ownerUser = ["j", "coeyman"].join("");
 const ownerEmailDomain = "@" + ["cloudflare", "com"].join(".");
 const ownerMachine = ownerUser + "-macbook";
 const privateCodename = ["LEE", "terminal"].join(" ");
+// A real Cloudflare colo code in a receipt leaks the owner's physical region.
+// Use a synthetic value such as TEST-COLO or <redacted> in fixtures and docs.
+const ownerColo = ["AUS", "DOG"].join("-");
 const piiFragments = [
   [ownerUser, "owner username"],
   [ownerEmailDomain, "cloudflare.com email address"],
   [ownerMachine, "owner machine name"],
   [privateCodename, "private project codename"],
+  [ownerColo, "owner colo/region code"],
 ].map(([value, label]) => [value.toLowerCase(), label]);
 const allowedExamples = new Set([".dev.vars.example", ".env.example"]);
 const findings = [];
