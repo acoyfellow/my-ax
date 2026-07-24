@@ -6,15 +6,9 @@ My AX stores each connector's OAuth token in a Durable Object keyed by the verif
 
 ```text
 Access identity
-      │
-      ▼
-OAuthClientDO ── encrypted token
-      │
-      ▼
-Agent.mcp ── bearer attached by the Worker
-      │
-      ▼
-upstream MCP
+  -> OAuthClientDO (encrypted token)
+  -> Agent.mcp (bearer attached by the Worker)
+  -> upstream MCP
 ```
 
 This preserves user attribution only when the MCP server and its upstream OAuth flow preserve it. My AX cannot add per-user attribution to a server that uses a shared credential.
@@ -35,8 +29,8 @@ An operator can expose an exact read/query subset to `mcp_code_mode`. New or unl
 
 ```text
 connected MCP tools
-       ├─ native tool          one call or explicit side effect
-       └─ mcp_code_mode        reviewed multi-call read/query program
+  -> native tool       one call or explicit side effect
+  -> mcp_code_mode     reviewed multi-call read/query program
 ```
 
 ## 3. Route Computer Work by State
@@ -71,16 +65,10 @@ Each user gets a Cloudflare Sandbox container. Ordinary file operations use cont
 
 ```text
 turn starts
-   │
-   ├─ restore latest successful backup when needed
-   ▼
-/home/user
-   │
-   ├─ file and process work
-   ▼
-turn ends after a mutating tool
-   │
-   └─ snapshot to R2; update D1 pointer on success
+  -> restore latest successful backup when needed
+  -> /home/user (file and process work)
+  -> turn ends after a mutating tool
+  -> snapshot to R2; update D1 pointer on success
 ```
 
 A container failure can lose writes made after the last successful snapshot. Root filesystem changes are not part of the durable contract; user files and user-local tools belong under `/home/user`.

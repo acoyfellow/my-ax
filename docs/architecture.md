@@ -39,8 +39,8 @@ The chat surface has no hand-written `.js` files. Everything in `public/static/`
 
 ```
 Browser
-  │  HTTPS (Cloudflare Access JWT enforced at the edge, when configured)
-  ▼
+  |  HTTPS (Cloudflare Access JWT enforced at the edge, when configured)
+  v
 <your-host> (Worker `my-ax`)
   |-> USER_AGENT / UserAgent DO  -- one durable root per user
   |     `-> MyAgent facets       -- per-session Think chat, recovery, submissions, memory
