@@ -108,6 +108,42 @@ export const PAGE_VERBS: PageVerb[] = [
     },
   },
   {
+    name: "readViewport",
+    description: "Read the live top-document viewport and the .app-viewport frame gap (read-only): {innerWidth,innerHeight,visualWidth,visualHeight,visualOffsetTop,visualScale,dvh,safeAreaTop,safeAreaBottom,appViewportRect,gapBelow,devicePixelRatio}.",
+    resolution: "receipt",
+    run: async () => {
+      const vv = window.visualViewport;
+      const innerWidth = window.innerWidth;
+      const innerHeight = window.innerHeight;
+      const dvh = document.documentElement.clientHeight;
+      const readInset = (name: string) => {
+        const probe = document.createElement("div");
+        probe.style.cssText = `position:fixed;height:env(${name});width:0;visibility:hidden;pointer-events:none`;
+        document.body.appendChild(probe);
+        const px = Number.parseFloat(getComputedStyle(probe).height) || 0;
+        probe.remove();
+        return px;
+      };
+      const el = document.querySelector(".app-viewport");
+      const r = el ? el.getBoundingClientRect() : null;
+      const appViewportRect = r ? { top: r.top, left: r.left, width: r.width, height: r.height, bottom: r.bottom } : null;
+      return { result: {
+        innerWidth,
+        innerHeight,
+        visualWidth: vv?.width ?? innerWidth,
+        visualHeight: vv?.height ?? innerHeight,
+        visualOffsetTop: vv?.offsetTop ?? 0,
+        visualScale: vv?.scale ?? 1,
+        dvh,
+        safeAreaTop: readInset("safe-area-inset-top"),
+        safeAreaBottom: readInset("safe-area-inset-bottom"),
+        appViewportRect,
+        gapBelow: appViewportRect ? Math.max(0, innerHeight - appViewportRect.bottom) : null,
+        devicePixelRatio: window.devicePixelRatio,
+      } };
+    },
+  },
+  {
     name: "switchSession",
     description: "Switch the active conversation to {id}. Resolves on the client's switch ack.",
     resolution: "ack",
