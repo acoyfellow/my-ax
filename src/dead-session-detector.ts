@@ -93,3 +93,70 @@ export function deadSessionRecoveryPlan(entry: RecentConversationEntry): DeadSes
 export function isAutoRevive(entry: RecentConversationEntry | undefined): boolean {
   return entry ? deadSessionIncident(entry).alreadyRevived : false;
 }
+
+export const DEAD_SESSION_ATTENTION_KIND = "session.dead";
+
+export interface DeadSessionDb {
+  prepare(sql: string): {
+    bind(...binds: unknown[]): {
+      all<T = unknown>(): Promise<{ results?: T[] }>;
+      first<T = unknown>(): Promise<T | null>;
+      run(): Promise<unknown>;
+    };
+  };
+}
+
+export interface DeadSessionDeps {
+  reviveTurn: (ownerEmail: string, sessionId: string, message: string, clientMsgId: string) => Promise<void>;
+  alertOwner: (ownerEmail: string, sessionId: string, dedupeSuffix: number) => Promise<void>;
+}
+
+type DeadSessionRow = { id: string; owner_email: string; updated_at: string };
+
+export async function runDeadSessionScan(db: DeadSessionDb, deps: DeadSessionDeps, now: Date, stallMs = DEAD_SESSION_STALL_MS): Promise<void> {
+  const cutoff = new Date(now.getTime() - stallMs).toISOString();
+  const sessions = await db.prepare(
+    "SELECT id, owner_email, updated_at FROM sessions WHERE status IN ('active', 'running') AND updated_at < ? ORDER BY updated_at ASC, id ASC LIMIT 50",
+  ).bind(cutoff).all<DeadSessionRow>();
+
+  for (const session of sessions.results ?? []) {
+    try {
+      const ownerEmail = session.owner_email?.trim().toLowerCase();
+      if (!ownerEmail) throw new Error("session owner is missing");
+      const recent = await db.prepare(
+        `SELECT id, ts, role, content, meta_json FROM (
+          SELECT id, ts, role, content, meta_json FROM conversation_entries
+          WHERE session_id = ? AND owner_email = ? ORDER BY id DESC LIMIT 12
+        ) ORDER BY id ASC`,
+      ).bind(session.id, ownerEmail).all<RecentConversationEntry>();
+      const dead = detectDeadSession(recent.results ?? [], session.updated_at, now, stallMs);
+      if (!dead) continue;
+
+      const latestUserEntry = (recent.results ?? []).find((entry) => entry.id === dead.latestUserEntryId);
+      if (!latestUserEntry) continue;
+      const incident = deadSessionRecoveryPlan(latestUserEntry);
+      if (incident.action === "retry_silently") {
+        await deps.reviveTurn(ownerEmail, session.id, dead.latestUserMessage, `${AUTO_REVIVE_PREFIX}${incident.originalUserEntryId}`);
+        continue;
+      }
+
+      const latestUserCreatedAt = latestUserEntry.ts ?? session.updated_at;
+      const priorAttention = await db.prepare(
+        "SELECT id, created_at FROM attention_items WHERE owner_email = ? AND session_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1",
+      ).bind(ownerEmail, session.id, DEAD_SESSION_ATTENTION_KIND).first<{ id: string; created_at: string }>();
+      const attention = priorAttention && isDeadSessionAttentionForCurrentTurn(priorAttention.created_at, latestUserCreatedAt) ? priorAttention : null;
+      if (!attention) {
+        await deps.alertOwner(ownerEmail, session.id, incident.originalUserEntryId);
+      }
+      await db.prepare(
+        "UPDATE sessions SET status = 'interrupted', updated_at = updated_at WHERE id = ? AND owner_email = ? AND status IN ('active', 'running')",
+      ).bind(session.id, ownerEmail).run();
+    } catch (error) {
+      console.error("dead_session_scan_failed", {
+        sessionId: session.id,
+        ownerEmail: session.owner_email,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}

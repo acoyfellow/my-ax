@@ -1,5 +1,6 @@
 import { Think } from "@cloudflare/think";
 import { Session } from "agents/experimental/memory/session";
+import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { createCompactFunction } from "agents/experimental/memory/utils";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
@@ -614,7 +615,17 @@ export class MyAgent extends Think<Env> {
     await this.completeInjectedRecurringJobRun(result).catch((error) => console.error("recurring_job_terminal_receipt_failed", { sessionId: this.name, err: String(error) }));
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
-    const visibleContent = visibleAssistantContent({ status: result.status, content, error: result.error, ownerNotified: this.notifiedOwnerThisTurn });
+    let visibleSource = content;
+    try {
+      const memoryBlock = this.session.getContextBlock("memory")?.content ?? null;
+      if (isMemoryBlockLeak(content, memoryBlock)) {
+        console.warn("memory_block_leak_suppressed", { sessionId: this.name, replyLen: content.length });
+        visibleSource = "";
+      }
+    } catch (error) {
+      console.error("memory_block_leak_check_failed", { sessionId: this.name, err: String(error) });
+    }
+    const visibleContent = visibleAssistantContent({ status: result.status, content: visibleSource, error: result.error, ownerNotified: this.notifiedOwnerThisTurn });
     if (visibleContent || reasoning || result.status === "error") {
       await logAssistantMessage(this.env, identity, this.name, visibleContent, {
         uiMessageId: result.message.id,
@@ -1305,8 +1316,8 @@ export class MyAgent extends Think<Env> {
     return session
       .withContext("memory", {
         description:
-          "Long-lived facts, decisions, and preferences for this conversation. Persist what later turns in this session should know. Do not store secrets, credentials, or sensitive data.",
-        maxTokens: 2000,
+          "Long-lived facts, decisions, and preferences for this conversation. Persist what later turns in this session should know. Keep it concise: when the block is near full, REPLACE stale lines instead of appending — do not paste large context dumps here, and never emit this block as a chat reply. Do not store secrets, credentials, or sensitive data.",
+        maxTokens: MEMORY_BLOCK_MAX_TOKENS,
       })
       .withCachedPrompt()
       // Hermes-style compaction: preserve head + recent tail, summarize the
