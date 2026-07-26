@@ -737,39 +737,6 @@ html {
   overscroll-behavior: none;
 }
 
-/* iOS INSTALLED-PWA fix. In Safari, position:fixed; inset:0 fills the visible
- * area perfectly (the browser toolbar occupies the rest of the screen). In a
- * home-screen (standalone) PWA there is NO toolbar, but iOS still sizes a fixed
- * inset:0 box to the SMALL viewport, leaving a toolbar-height white bar below
- * the composer.
- *
- * The fix must NOT add a conflicting height to inset:0. inset:0 already sets
- * top:0 AND bottom:0; adding height too over-constrains the block axis (CSS
- * 2.1 §10.6.4) so `bottom` is dropped and the box extends `height` DOWNWARD
- * from top:0 — with 100lvh that overshoots past the bottom, pushing the footer
- * into the home-indicator zone (the regression: footer cut off under a dark
- * bar). Instead, in standalone only, release the bottom anchor (bottom:auto)
- * and size by height:100dvh — the dynamic viewport, which in a chromeless
- * standalone PWA IS the full screen (no toolbar to subtract). Now exactly one
- * of {bottom, height} constrains the box, so it fills top→full-height with no
- * overshoot. Safari keeps the untouched inset:0 path. */
-@media (display-mode: standalone) {
-  .app-viewport {
-    bottom: auto;
-    height: var(--app-h, 100dvh);
-  }
-}
-@supports not (height: 100dvh) {
-  @media (display-mode: standalone) {
-    /* Older iOS without dvh: -webkit-fill-available resolves to the full
-     * standalone height (no toolbar to subtract). */
-    .app-viewport {
-      bottom: auto;
-      height: -webkit-fill-available;
-    }
-  }
-}
-
 /* The chat is hydrated into a generic svelte-hono mount div
  * (#svelte-hono-chat-root). That wrapper would otherwise be a block box that
  * breaks the height:100% (h-full) chain between the fixed frame column and the
