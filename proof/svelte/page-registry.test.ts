@@ -8,17 +8,32 @@ function installGlobals(opts: {
   fetchJson?: (url: string) => unknown;
   events?: string[];
   msgNodes?: Array<{ user: boolean; text: string; ts?: string }>;
+  viewport?: { innerWidth: number; innerHeight: number; visualHeight: number; dvh: number; appViewportBottom: number | null; safeAreaBottom?: number };
 }) {
   const events = opts.events ?? [];
+  const vp = opts.viewport;
   (globalThis as any).window = {
     dispatchEvent: (e: any) => { events.push(e.type); return true; },
     addEventListener: () => {},
     removeEventListener: () => {},
+    ...(vp ? {
+      innerWidth: vp.innerWidth,
+      innerHeight: vp.innerHeight,
+      devicePixelRatio: 3,
+      visualViewport: { width: vp.innerWidth, height: vp.visualHeight, offsetTop: 0, scale: 1 },
+    } : {}),
   };
+  if (vp) (globalThis as any).getComputedStyle = () => ({ height: `${vp.safeAreaBottom ?? 0}px` });
   (globalThis as any).CustomEvent = class { type: string; detail: unknown; constructor(t: string, i?: any) { this.type = t; this.detail = i?.detail; } };
   (globalThis as any).Event = class { type: string; constructor(t: string) { this.type = t; } };
   (globalThis as any).queueMicrotask = (fn: () => void) => fn();
   (globalThis as any).document = {
+    documentElement: { clientHeight: vp?.dvh ?? 0 },
+    body: { appendChild: () => {} },
+    createElement: () => ({ style: {}, remove: () => {} }),
+    querySelector: (sel: string) => (sel === ".app-viewport" && vp && vp.appViewportBottom !== null)
+      ? { getBoundingClientRect: () => ({ top: 0, left: 0, width: vp.innerWidth, height: vp.appViewportBottom!, bottom: vp.appViewportBottom! }) }
+      : null,
     querySelectorAll: () => (opts.msgNodes ?? []).map((n) => ({
       classList: { contains: (c: string) => (c === "msg-user" ? n.user : false) },
       querySelector: () => ({ textContent: n.text }),
@@ -38,11 +53,12 @@ beforeEach(() => {
   delete (globalThis as any).window;
   delete (globalThis as any).document;
   delete (globalThis as any).fetch;
+  delete (globalThis as any).getComputedStyle;
 });
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "switchSession"]);
+  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readViewport", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -72,6 +88,36 @@ test("readTranscriptTail reads rendered rows and clamps n", async () => {
   const { frame } = await handlePageCall({ type: "page_call", requestId: "r3", verb: "readTranscriptTail", args: { n: 999 } });
   assert.equal(frame.ok, true);
   assert.deepEqual(frame.result, [ { role: "user", text: "hi", ts: null }, { role: "assistant", text: "hello there", ts: "2026" } ]);
+});
+
+test("readViewport returns live top-document metrics including a numeric gapBelow", async () => {
+  installGlobals({ viewport: { innerWidth: 390, innerHeight: 844, visualHeight: 844, dvh: 810, appViewportBottom: 844, safeAreaBottom: 34 } });
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "rvp1", verb: "readViewport" });
+  assert.equal(frame.ok, true);
+  const r = frame.result as Record<string, unknown>;
+  assert.equal(r.innerWidth, 390);
+  assert.equal(r.innerHeight, 844);
+  assert.equal(r.visualHeight, 844);
+  assert.equal(r.dvh, 810);
+  assert.equal(r.safeAreaBottom, 34);
+  assert.equal(r.devicePixelRatio, 3);
+  assert.deepEqual(r.appViewportRect, { top: 0, left: 0, width: 390, height: 844, bottom: 844 });
+  assert.equal(r.gapBelow, 0);
+});
+
+test("readViewport reports a positive gapBelow when the frame stops short (the bug it diagnoses)", async () => {
+  installGlobals({ viewport: { innerWidth: 390, innerHeight: 844, visualHeight: 844, dvh: 810, appViewportBottom: 810 } });
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "rvp2", verb: "readViewport" });
+  assert.equal(frame.ok, true);
+  assert.equal((frame.result as Record<string, unknown>).gapBelow, 34);
+});
+
+test("readViewport returns null appViewportRect/gapBelow when the frame is absent", async () => {
+  installGlobals({ viewport: { innerWidth: 390, innerHeight: 844, visualHeight: 844, dvh: 810, appViewportBottom: null } });
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "rvp3", verb: "readViewport" });
+  assert.equal(frame.ok, true);
+  assert.equal((frame.result as Record<string, unknown>).appViewportRect, null);
+  assert.equal((frame.result as Record<string, unknown>).gapBelow, null);
 });
 
 test("switchSession returns result immediately and defers the disruptive switch to after()", async () => {

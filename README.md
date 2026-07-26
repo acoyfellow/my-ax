@@ -44,7 +44,7 @@ The [feature tour](./docs/feature-tour.md) shows each capability with a real tra
 
 You do not watch the agent work. You return to it.
 
-- **Check-in** is the front door. `GET /api/check-in` and MCP `my_ax_check_in` build one response from Attention, jobs, and run receipts. The response shows what needs you, what runs now, what finished or failed, and a next step. The authenticated shell shows these as owner pages at `/attention`, `/runs`, and `/jobs`. Each link keeps the raw API receipt href for proof.
+- **Check-in** is the front door. `GET /api/check-in` and MCP `my_ax_check_in` build one response from Attention, jobs, and run receipts. The response shows what needs you, what runs now, what finished or failed, and a next step. The authenticated shell shows these as owner pages at `/attention`, `/runs`, and `/jobs`. Each rendered page keeps the raw API receipt href for proof: `/attention` exposes `data-attention-api-receipt-href`, `/runs` exposes `data-runs-api-receipt-href`, and `/jobs` exposes `data-jobs-api-receipt-href`. The `/attention` page also has a same-origin `data-attention-seen-form` you use to mark the current filtered view seen.
 - **Attention** holds owner-scoped items with unread state. A finished job, an ended recovery attempt, or a question from the agent lands here. Web Push sends it when you are away. The item stays if push fails.
 - **Run receipts** record events the agent adds. A recurring job run, a saved-recipe run, and a delegated batch each write a start event and a terminal event you can open.
 

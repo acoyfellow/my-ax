@@ -756,7 +756,7 @@ html {
 @media (display-mode: standalone) {
   .app-viewport {
     bottom: auto;
-    height: 100dvh;
+    height: var(--app-h, 100dvh);
   }
 }
 @supports not (height: 100dvh) {

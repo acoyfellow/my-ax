@@ -46,3 +46,6 @@ src/*.bak-*
 
 # guardrail deploy artifacts (local only)
 .guardrail/
+
+# Internal terraloop / campaign state (never ship in the public engine)
+.context/
