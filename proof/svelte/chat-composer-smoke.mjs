@@ -111,8 +111,8 @@ assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:
   if (!/bottom:\s*auto/.test(block)) {
     throw new Error("standalone .app-viewport must set bottom:auto so inset:0's bottom does not over-constrain the height (footer-overshoot regression)");
   }
-  if (!/height:\s*100dvh/.test(block)) {
-    throw new Error("standalone .app-viewport must set height:100dvh so the chromeless installed PWA fills exactly the visible screen (no overshoot)");
+  if (!/height:\s*(?:100dvh|var\(\s*[-]{2}app-h\s*,\s*100dvh\s*\))/.test(block)) {
+    throw new Error("standalone .app-viewport must set height:100dvh or height:var(--app-h, 100dvh) so the chromeless installed PWA fills exactly the visible screen (no overshoot)");
   }
 }
 // 2) The chat mount fills its slot so the composer footer sits at the bottom.
