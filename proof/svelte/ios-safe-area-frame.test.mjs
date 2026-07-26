@@ -45,6 +45,11 @@ if (!chromium) {
 }
 
 const appCss = readFileSync(new URL("../../src/styles/app.css", import.meta.url), "utf8");
+const layoutSource = readFileSync(new URL("../../src/views/Layout.tsx", import.meta.url), "utf8");
+
+if (!/(?:document\.documentElement|root)\.style\.setProperty\(\s*["'`]--app-h["'`]\s*,\s*window\.innerHeight\s*\+\s*["'`]px["'`]\s*\)/.test(layoutSource)) {
+  throw new Error("REGRESSION: Layout viewport sync must drive --app-h from window.innerHeight (installed-PWA wasted-height fix)");
+}
 
 // Pull the SHIPPED .app-viewport declarations straight from app.css so this
 // test tracks the real stylesheet, not a hand-copied snippet.
@@ -236,7 +241,7 @@ for (const engineName of ["chromium"]) {
     // SHIPPED fix: standalone override (bottom:auto; height:<full screen>) with
     // top pinned at TOP. Exactly one of {bottom,height} constrains it, so the
     // frame fills top→bottom with NO overshoot and the footer is fully visible.
-    const fixedDecls = `position:absolute; top:${TOP}px; left:0; right:0; ${standaloneOverride().replace(/height:\s*100dvh/, `height:${vp.h - TOP}px`)}`;
+    const fixedDecls = `position:absolute; top:${TOP}px; left:0; right:0; ${standaloneOverride().replace(/height:\s*(?:100dvh|var\(\s*--app-h\s*,\s*100dvh\s*\))/, `height:${vp.h - TOP}px`)}`;
     const fixed = await pwaRects(page, fixedDecls, vp.h, TOP);
     check(fixed.overshoot === 0,
       `[${engineName} ${vp.name}] standalone fix should not overshoot but overshot ${fixed.overshoot}px`);
