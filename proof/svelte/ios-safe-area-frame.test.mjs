@@ -45,11 +45,6 @@ if (!chromium) {
 }
 
 const appCss = readFileSync(new URL("../../src/styles/app.css", import.meta.url), "utf8");
-const layoutSource = readFileSync(new URL("../../src/views/Layout.tsx", import.meta.url), "utf8");
-
-if (!/(?:document\.documentElement|root)\.style\.setProperty\(\s*["'`]--app-h["'`]\s*,\s*window\.innerHeight\s*\+\s*["'`]px["'`]\s*\)/.test(layoutSource)) {
-  throw new Error("REGRESSION: Layout viewport sync must drive --app-h from window.innerHeight (installed-PWA wasted-height fix)");
-}
 
 // Pull the SHIPPED .app-viewport declarations straight from app.css so this
 // test tracks the real stylesheet, not a hand-copied snippet.
@@ -83,15 +78,13 @@ const TOP = 59; // iPhone status-bar / top safe-area inset (CSS px). The fixed
 // override so the test tracks the real stylesheet. The fix must release the
 // bottom anchor (bottom:auto) and size by height so exactly ONE of
 // {bottom, height} constrains the box (no over-constraint overshoot).
-function standaloneOverride() {
+function assertNoStandaloneHeightOverride() {
   const m = appCss.match(/@media \(display-mode: standalone\) \{\s*\.app-viewport \{([\s\S]*?)\}/);
-  if (!m) throw new Error("REGRESSION: app.css missing the @media(display-mode:standalone) .app-viewport override (reopens the installed-PWA white bar)");
+  if (!m) return;
   const decls = m[1].split(";").map((d) => d.trim()).filter(Boolean);
-  const hasBottomAuto = decls.some((d) => /^bottom\s*:\s*auto$/.test(d));
-  const hasHeight = decls.some((d) => /^height\s*:/.test(d));
-  if (!hasBottomAuto) throw new Error("standalone override must set bottom:auto so inset:0's bottom does not over-constrain the height (overshoot regression)");
-  if (!hasHeight) throw new Error("standalone override must set an explicit height to fill the chromeless PWA");
-  return decls.join("; ");
+  if (decls.some((d) => /^height\s*:/.test(d))) {
+    throw new Error("REGRESSION: standalone .app-viewport must NOT set an explicit height; position:fixed inset:0 already fills the cover viewport, and re-adding height (100dvh/lvh/var(--app-h)) over-constrains the block axis and reopens the iOS home-indicator white bar (CSS 2.1 10.6.4). Let inset:0 size the frame and the composer's env(safe-area-inset-bottom) be the single home-indicator reservation.");
+  }
 }
 
 // Representative CSS viewports (portrait). The first is the owner's exact
@@ -238,15 +231,13 @@ for (const engineName of ["chromium"]) {
     const overBroken = await pwaRects(page, `position:absolute; top:${TOP}px; left:0; right:0; bottom:0; height:${vp.h}px`, vp.h, TOP);
     check(overBroken.overshoot === TOP,
       `[${engineName} ${vp.name}] over-constrained top:inset + bottom:0 + height should overshoot by ${TOP}px (footer clipped) but overshot ${overBroken.overshoot}px — guard not catching the regression`);
-    // SHIPPED fix: standalone override (bottom:auto; height:<full screen>) with
-    // top pinned at TOP. Exactly one of {bottom,height} constrains it, so the
-    // frame fills top→bottom with NO overshoot and the footer is fully visible.
-    const fixedDecls = `position:absolute; top:${TOP}px; left:0; right:0; ${standaloneOverride().replace(/height:\s*(?:100dvh|var\(\s*--app-h\s*,\s*100dvh\s*\))/, `height:${vp.h - TOP}px`)}`;
+    assertNoStandaloneHeightOverride();
+    const fixedDecls = `position:absolute; top:${TOP}px; left:0; right:0; bottom:0`;
     const fixed = await pwaRects(page, fixedDecls, vp.h, TOP);
     check(fixed.overshoot === 0,
-      `[${engineName} ${vp.name}] standalone fix should not overshoot but overshot ${fixed.overshoot}px`);
+      `[${engineName} ${vp.name}] inset:0 frame (top:inset + bottom:0, no height) should not overshoot but overshot ${fixed.overshoot}px`);
     check(fixed.footerVisible,
-      `[${engineName} ${vp.name}] standalone fix: composer footer must be fully within the screen (bottom ${fixed.composerBottom} <= screen ${fixed.screenBottom})`);
+      `[${engineName} ${vp.name}] inset:0 frame: composer footer must be fully within the screen (bottom ${fixed.composerBottom} <= screen ${fixed.screenBottom})`);
 
     await ctx.close();
   }
