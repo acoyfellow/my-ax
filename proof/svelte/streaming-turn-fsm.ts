@@ -207,3 +207,13 @@ export function hasProducedOutput(state: StreamingTurnState): boolean {
   if (state.tag === "active" || state.tag === "terminal") return state.producedVisibleText || state.producedToolOutput;
   return false;
 }
+
+export function shouldRenderChunk(frame: StreamingTurnFrame): boolean {
+  if (isTerminalFrame(frame)) return false;
+  if (frame.replayComplete) return false;
+  return typeof frame.chunkType === "string" && frame.chunkType.length > 0;
+}
+
+export function chunkMessageId(chunk: { messageId?: unknown } | null | undefined): string | null {
+  return chunk && typeof chunk.messageId === "string" && chunk.messageId.length > 0 ? chunk.messageId : null;
+}
