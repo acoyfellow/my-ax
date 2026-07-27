@@ -22,6 +22,7 @@
   import { decideComposerKey, isMobileComposer } from "./composer-keys";
   import {
     agentStatusFor,
+    chunkMessageId,
     idleStreamingTurnState,
     isComposerLocked,
     transition as transitionStreamingTurn,
@@ -1390,9 +1391,6 @@
         applyStatus("running");
       }
     } else if (m.type === "cf_agent_use_chat_response" && m.id !== activeRequestId) {
-      // A reconnect can leave the browser holding a stale request id. Never
-      // discard a terminal error merely because its id differs: that was the
-      // primary "agent died with no error" failure mode.
       if (m.error) {
         dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Agent request failed" } });
         finalizeStreaming();
@@ -1403,10 +1401,14 @@
         restoredActiveTurn = false;
         forgetActiveTurn();
         applyStatus("idle");
-      } else if (!m.done) applyStatus("running");
-      else {
-        applyStatus("idle");
+      } else if (m.done) {
+        finalizeStreaming();
+        if (!activeRequestId) streamingMsgId = null;
+        applyStatus(activeRequestId ? "running" : "idle");
         (window as any).__refreshConnectors?.();
+      } else {
+        applyStatus("running");
+        if (m.body) { try { handleThinkChunk(JSON.parse(m.body)); } catch {} }
       }
     } else if (m.type === "cf_agent_use_chat_response" && m.id === activeRequestId) {
       if (m.error) {
@@ -1694,7 +1696,10 @@
     if (typeof chunk?.type === "string") {
       dispatchTurn({ type: "frame", frame: { requestId: activeRequestId, chunkType: chunk.type } });
     }
-    if (
+    const serverMessageId = chunkMessageId(chunk);
+    if (serverMessageId) {
+      streamingMsgId = serverMessageId;
+    } else if (
       !streamingMsgId &&
       ["text-start", "text-delta", "reasoning-start", "reasoning-delta", "tool-input-start", "tool-input-available"].includes(chunk.type)
     ) {

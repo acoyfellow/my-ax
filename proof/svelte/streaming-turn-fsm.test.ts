@@ -3,11 +3,13 @@ import test from "node:test";
 import {
   activeRequestIdOf,
   agentStatusFor,
+  chunkMessageId,
   classifyFrame,
   hasProducedOutput,
   idleStreamingTurnState,
   isComposerLocked,
   progressEligible,
+  shouldRenderChunk,
   transition,
   type StreamingTurnEvent,
   type StreamingTurnFrame,
@@ -15,6 +17,28 @@ import {
 } from "./streaming-turn-fsm";
 
 const frame = (requestId: string | null, chunkType?: string): StreamingTurnEvent => ({ type: "frame", frame: { requestId, chunkType } });
+
+test("multi-client: a foreign turn's deltas are still rendered (not gated on activeRequestId)", () => {
+  assert.equal(shouldRenderChunk({ requestId: "someone-elses-turn", chunkType: "text-delta" }), true);
+  assert.equal(shouldRenderChunk({ requestId: null, chunkType: "text-delta" }), true);
+  assert.equal(shouldRenderChunk({ requestId: "mine", chunkType: "reasoning-delta" }), true);
+  assert.equal(shouldRenderChunk({ requestId: "x", chunkType: "tool-output-available" }), true);
+});
+
+test("terminal / replay-complete frames are not rendered as content deltas", () => {
+  assert.equal(shouldRenderChunk({ requestId: "x", done: true }), false);
+  assert.equal(shouldRenderChunk({ requestId: "x", error: "boom" }), false);
+  assert.equal(shouldRenderChunk({ requestId: "x", replayComplete: true }), false);
+  assert.equal(shouldRenderChunk({ requestId: "x" }), false);
+});
+
+test("chunkMessageId keys rendering to the server messageId, never a synthesized local id", () => {
+  assert.equal(chunkMessageId({ messageId: "srv-msg-123", type: "text-delta" } as any), "srv-msg-123");
+  assert.equal(chunkMessageId({ type: "text-delta" } as any), null);
+  assert.equal(chunkMessageId({ messageId: "" } as any), null);
+  assert.equal(chunkMessageId(null), null);
+  assert.equal(chunkMessageId(undefined), null);
+});
 const done = (requestId: string | null): StreamingTurnEvent => ({ type: "frame", frame: { requestId, done: true } });
 const error = (requestId: string | null, message = "boom"): StreamingTurnEvent => ({ type: "frame", frame: { requestId, error: message } });
 
