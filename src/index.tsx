@@ -629,10 +629,15 @@ app.get("/favicon.ico", async (c) => c.env.ASSETS.fetch(c.req.raw));
 // triggers the update -> skipWaiting -> claim flow and purges the old cache.
 app.get("/sw.js", async (c) => {
   const asset = await c.env.ASSETS.fetch(c.req.raw);
+  const buildId = c.env.CF_VERSION_METADATA?.id ?? "dev";
+  const source = await asset.text();
+  const body = source.replace(/const CACHE = "[^"]*"/, `const CACHE = "my-ax-static-${buildId}"`);
   const headers = new Headers(asset.headers);
   headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
   headers.set("Service-Worker-Allowed", "/");
-  return new Response(asset.body, { status: asset.status, headers });
+  headers.delete("ETag");
+  headers.delete("Content-Length");
+  return new Response(body, { status: asset.status, headers });
 });
 
 app.notFound((c) =>
