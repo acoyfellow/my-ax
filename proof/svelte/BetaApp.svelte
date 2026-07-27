@@ -24,7 +24,48 @@
     initialTheme?: "system" | "light" | "dark";
   }
   const { identityEmail = null, initialTheme = "system" }: Props = $props();
+
+  let vpDebug = $state<string>("");
+  let vpDebugOn = $state(false);
+  $effect(() => {
+    if (typeof window === "undefined") return;
+    if (!/[?&]vpdebug=1/.test(location.search)) return;
+    vpDebugOn = true;
+    const measure = () => {
+      const b = document.body.getBoundingClientRect();
+      const composer = document.querySelector(".safe-area-composer");
+      const wrap = composer?.closest(".flex-none") as HTMLElement | null;
+      const w = wrap?.getBoundingClientRect();
+      const cs = composer ? getComputedStyle(composer) : null;
+      const bs = getComputedStyle(document.body);
+      vpDebug = [
+        `innerH ${window.innerHeight}`,
+        `visualH ${Math.round(window.visualViewport?.height ?? 0)}`,
+        `dvh ${document.documentElement.clientHeight}`,
+        `bodyBottom ${Math.round(b.bottom)}`,
+        `gapUnderBody ${Math.round(window.innerHeight - b.bottom)}`,
+        `composerBottom ${w ? Math.round(w.bottom) : "n/a"}`,
+        `gapUnderComposer ${w ? Math.round(window.innerHeight - w.bottom) : "n/a"}`,
+        `bodyPos ${bs.position}`,
+        `bodyH ${bs.height}`,
+        `composerPadB ${cs?.paddingBottom ?? "n/a"}`,
+      ].join("  ");
+    };
+    measure();
+    const id = setInterval(measure, 500);
+    window.addEventListener("resize", measure, { passive: true });
+    return () => { clearInterval(id); window.removeEventListener("resize", measure); };
+  });
 </script>
+
+{#if vpDebugOn}
+  <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:2147483647">
+    <div style="position:absolute;inset:0;border:3px solid magenta"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:env(safe-area-inset-bottom);background:rgba(255,0,0,.45)"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:lime"></div>
+    <div style="position:absolute;left:6px;right:6px;top:calc(env(safe-area-inset-top) + 60px);font:600 12px/1.35 ui-monospace,monospace;color:#0f0;background:rgba(0,0,0,.82);padding:8px;border-radius:8px;word-break:break-word">{vpDebug}</div>
+  </div>
+{/if}
 
 <div class="h-full flex flex-col">
   <AppShell {identityEmail} />
