@@ -94,25 +94,19 @@ assertIncludes(appCss, 'position: fixed;', "app-viewport frame must be position:
     throw new Error("the BASE .app-viewport rule must NOT set an explicit height (inset:0 already fills the cover viewport in Safari; a base height reopens the iOS Safari white bar). Standalone height belongs in the display-mode:standalone override only.");
   }
 }
-// 1b) INSTALLED-PWA fix: a home-screen PWA has no toolbar, but iOS still sizes
-//     a fixed inset:0 box to the small (toolbar-present) viewport, leaving a
-//     toolbar-height white bar. The fix must NOT just add a height to inset:0:
-//     inset:0 sets bottom:0 too, so top+bottom+height over-constrains the box
-//     and it overshoots DOWNWARD past the screen (footer clipped under the
-//     home-indicator — the regression). Standalone must RELEASE the bottom
-//     anchor (bottom:auto) and size by height (100dvh = full chromeless
-//     screen) so exactly one of {bottom,height} constrains it. Scoped so
-//     Safari's inset:0 layout is untouched.
+// 1b) INSTALLED-PWA fix: position:fixed inset:0 already fills the cover viewport
+//     (full screen incl. the home-indicator region) in a chromeless standalone
+//     PWA. Adding an explicit height to inset:0 over-constrains the block axis
+//     and reopens the home-indicator white bar. So standalone must NOT set a
+//     height override; the composer's env(safe-area-inset-bottom) padding is
+//     the single home-indicator reservation.
 {
   const media = appCss.indexOf('@media (display-mode: standalone) {');
-  if (media < 0) throw new Error("missing @media (display-mode: standalone) app-viewport height fix (reopens the installed-PWA bottom white bar)");
-  const block = appCss.slice(media, media + 220);
-  if (!/\.app-viewport\s*{/.test(block)) throw new Error("standalone override must target .app-viewport");
-  if (!/bottom:\s*auto/.test(block)) {
-    throw new Error("standalone .app-viewport must set bottom:auto so inset:0's bottom does not over-constrain the height (footer-overshoot regression)");
-  }
-  if (!/height:\s*(?:100dvh|var\(\s*[-]{2}app-h\s*,\s*100dvh\s*\))/.test(block)) {
-    throw new Error("standalone .app-viewport must set height:100dvh or height:var(--app-h, 100dvh) so the chromeless installed PWA fills exactly the visible screen (no overshoot)");
+  if (media >= 0) {
+    const block = appCss.slice(media, media + 220);
+    if (/\.app-viewport\s*{[^}]*height\s*:/.test(block)) {
+      throw new Error("REGRESSION: standalone .app-viewport must NOT set an explicit height; inset:0 already fills the cover viewport and a height override reopens the installed-PWA home-indicator white bar");
+    }
   }
 }
 // 2) The chat mount fills its slot so the composer footer sits at the bottom.
