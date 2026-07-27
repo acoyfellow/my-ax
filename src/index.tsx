@@ -170,6 +170,19 @@ app.get("/api/health", async (c) => {
   }, ok ? 200 : 500);
 });
 
+// GET /api/version — identity-free deploy-version probe for open clients (the
+// PWA update poll). Mounted BEFORE accessMiddleware, like /api/health: a PWA
+// whose Access session has expired must still get the version header so the
+// boot script can detect a new deploy and hard-reload. When this was gated the
+// poll 302'd to the Access login and update detection silently never fired, so
+// installed PWAs stayed frozen on an old build across close/reopen. It is
+// bodyless and storage-free and leaks only the build id (already public in the
+// served HTML). Access still gates reachability at the edge.
+app.get("/api/version", (c) => deploymentVersionResponse(
+  c.env.CF_VERSION_METADATA,
+  c.req.header("If-None-Match"),
+));
+
 // Cloudflare Access in front of EVERYTHING that matters.
 app.use("/api/*", accessMiddleware());
 app.use("/agents/*", accessMiddleware());
@@ -194,14 +207,6 @@ app.use("/runs/*", accessMiddleware());
 app.use("/runs", accessMiddleware());
 app.use("/jobs", accessMiddleware());
 app.use("/capabilities", accessMiddleware());
-
-// ─── Health / discovery ────────────────────────────────────────────────────
-// Bodyless, storage-free probe for open clients. Version Metadata makes this
-// cheaper than /api/health, which intentionally performs schema checks.
-app.get("/api/version", (c) => deploymentVersionResponse(
-  c.env.CF_VERSION_METADATA,
-  c.req.header("If-None-Match"),
-));
 
 app.get("/api", async (c) => {
   try {
