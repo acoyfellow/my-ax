@@ -109,7 +109,7 @@ export const PAGE_VERBS: PageVerb[] = [
   },
   {
     name: "readViewport",
-    description: "Read the live top-document viewport and the .app-viewport frame gap (read-only): {innerWidth,innerHeight,visualWidth,visualHeight,visualOffsetTop,visualScale,dvh,safeAreaTop,safeAreaBottom,appViewportRect,gapBelow,devicePixelRatio}.",
+    description: "Read the live top-document viewport and the .app-viewport frame gap (read-only): {innerWidth,innerHeight,visualWidth,visualHeight,visualOffsetTop,visualScale,dvh,safeAreaTop,safeAreaBottom,appViewportRect,gapBelow,devicePixelRatio,userAgent,platform,uaMobile,maxTouchPoints,standalone}.",
     resolution: "receipt",
     run: async () => {
       const vv = window.visualViewport;
@@ -140,6 +140,11 @@ export const PAGE_VERBS: PageVerb[] = [
         appViewportRect,
         gapBelow: appViewportRect ? Math.max(0, innerHeight - appViewportRect.bottom) : null,
         devicePixelRatio: window.devicePixelRatio,
+        userAgent: navigator.userAgent,
+        platform: (navigator as any).userAgentData?.platform ?? navigator.platform ?? "",
+        uaMobile: (navigator as any).userAgentData?.mobile ?? null,
+        maxTouchPoints: navigator.maxTouchPoints ?? 0,
+        standalone: (window.matchMedia?.("(display-mode: standalone)")?.matches ?? false) || Boolean((navigator as any).standalone),
       } };
     },
   },

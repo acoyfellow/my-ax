@@ -29,7 +29,7 @@ const PAGE_WORK_METHODS = [
   { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
   { name: "readHealth", description: "Read workspace container health for the live session: {diskPct,files,version,region,...}." },
   { name: "readTranscriptTail", description: "Read the last N entries of the active conversation as rendered: [{role,text,ts}]. Optional {n}." },
-  { name: "readViewport", description: "Read the live top-document viewport + .app-viewport frame gap: {innerWidth,innerHeight,visualHeight,visualScale,dvh,safeAreaTop,safeAreaBottom,appViewportRect,gapBelow,devicePixelRatio}. Read-only." },
+  { name: "readViewport", description: "Read the live top-document viewport + .app-viewport frame gap: {innerWidth,innerHeight,visualHeight,visualScale,dvh,safeAreaTop,safeAreaBottom,appViewportRect,gapBelow,devicePixelRatio,userAgent,platform,uaMobile,maxTouchPoints,standalone}. Read-only." },
   { name: "switchSession", description: "Switch the active conversation in the owner's UI to {id}. Resolves on the client switch ack." },
   { name: "openSettings", description: "Open the settings dialog in the owner's UI, optionally to {section}." },
   { name: "openAttention", description: "Open the notifications/attention panel in the owner's UI." },
