@@ -31,8 +31,13 @@
     if (typeof window === "undefined") return;
     if (/[?&]vpdebug=1/.test(location.search)) localStorage.setItem("my-ax-vpdebug", "1");
     if (/[?&]vpdebug=0/.test(location.search)) localStorage.removeItem("my-ax-vpdebug");
-    if (localStorage.getItem("my-ax-vpdebug") !== "1") return;
-    vpDebugOn = true;
+    vpDebugOn = localStorage.getItem("my-ax-vpdebug") === "1";
+    const onToggle = (e: Event) => {
+      const on = (e as CustomEvent<{ on?: boolean }>).detail?.on !== false;
+      vpDebugOn = on;
+    };
+    window.addEventListener("my-ax:vpdebug", onToggle);
+    let id: ReturnType<typeof setInterval> | null = null;
     const measure = () => {
       const b = document.body.getBoundingClientRect();
       const composer = document.querySelector(".safe-area-composer");
@@ -63,9 +68,9 @@
       ].join("  ");
     };
     measure();
-    const id = setInterval(measure, 500);
+    id = setInterval(measure, 500);
     window.addEventListener("resize", measure, { passive: true });
-    return () => { clearInterval(id); window.removeEventListener("resize", measure); };
+    return () => { if (id) clearInterval(id); window.removeEventListener("resize", measure); window.removeEventListener("my-ax:vpdebug", onToggle); };
   });
 </script>
 

@@ -24,6 +24,13 @@ function installGlobals(opts: {
     } : {}),
   };
   if (vp) (globalThis as any).getComputedStyle = () => ({ height: `${vp.safeAreaBottom ?? 0}px` });
+  (globalThis as any).window.matchMedia = () => ({ matches: false });
+  const store = new Map<string, string>();
+  (globalThis as any).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+  };
   (globalThis as any).CustomEvent = class { type: string; detail: unknown; constructor(t: string, i?: any) { this.type = t; this.detail = i?.detail; } };
   (globalThis as any).Event = class { type: string; constructor(t: string) { this.type = t; } };
   (globalThis as any).queueMicrotask = (fn: () => void) => fn();
@@ -54,11 +61,12 @@ beforeEach(() => {
   delete (globalThis as any).document;
   delete (globalThis as any).fetch;
   delete (globalThis as any).getComputedStyle;
+  delete (globalThis as any).localStorage;
 });
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readViewport", "switchSession"]);
+  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readViewport", "setViewportDebug", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -118,6 +126,19 @@ test("readViewport returns null appViewportRect/gapBelow when the frame is absen
   assert.equal(frame.ok, true);
   assert.equal((frame.result as Record<string, unknown>).appViewportRect, null);
   assert.equal((frame.result as Record<string, unknown>).gapBelow, null);
+});
+
+test("setViewportDebug toggles the overlay, persists the flag, and returns live metrics", async () => {
+  const events = installGlobals({ viewport: { innerWidth: 390, innerHeight: 844, visualHeight: 844, dvh: 810, appViewportBottom: 810, safeAreaBottom: 34 } });
+  const on = await handlePageCall({ type: "page_call", requestId: "vd1", verb: "setViewportDebug", args: { on: true } });
+  assert.equal(on.frame.ok, true);
+  assert.equal((on.frame.result as Record<string, unknown>).on, true);
+  assert.equal((on.frame.result as Record<string, unknown>).gapBelow, 34);
+  assert.equal((globalThis as any).localStorage.getItem("my-ax-vpdebug"), "1");
+  assert.ok(events.includes("my-ax:vpdebug"));
+  const off = await handlePageCall({ type: "page_call", requestId: "vd2", verb: "setViewportDebug", args: { on: false } });
+  assert.equal((off.frame.result as Record<string, unknown>).on, false);
+  assert.equal((globalThis as any).localStorage.getItem("my-ax-vpdebug"), null);
 });
 
 test("switchSession returns result immediately and defers the disruptive switch to after()", async () => {

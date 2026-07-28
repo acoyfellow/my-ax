@@ -149,6 +149,41 @@ export const PAGE_VERBS: PageVerb[] = [
     },
   },
   {
+    name: "setViewportDebug",
+    description: "Toggle the on-screen viewport debug overlay in the owner's live UI (works in the installed PWA where a URL query cannot). Input: {on: boolean}. Draws the app-frame edges, the safe-area-inset-bottom band, the screen-bottom line, and live viewport numbers, then returns the current readViewport metrics so the overlay and the numbers agree.",
+    resolution: "receipt",
+    run: async (args) => {
+      const on = args?.on === undefined ? true : Boolean(args.on);
+      try {
+        if (on) localStorage.setItem("my-ax-vpdebug", "1");
+        else localStorage.removeItem("my-ax-vpdebug");
+      } catch {}
+      window.dispatchEvent(new CustomEvent("my-ax:vpdebug", { detail: { on } }));
+      const vv = window.visualViewport;
+      const innerHeight = window.innerHeight;
+      const readInset = (name: string) => {
+        const probe = document.createElement("div");
+        probe.style.cssText = `position:fixed;height:env(${name});width:0;visibility:hidden;pointer-events:none`;
+        document.body.appendChild(probe);
+        const px = Number.parseFloat(getComputedStyle(probe).height) || 0;
+        probe.remove();
+        return px;
+      };
+      const el = document.querySelector(".app-viewport");
+      const r = el ? el.getBoundingClientRect() : null;
+      return { result: {
+        on,
+        innerHeight,
+        visualHeight: vv?.height ?? innerHeight,
+        dvh: document.documentElement.clientHeight,
+        safeAreaBottom: readInset("safe-area-inset-bottom"),
+        appViewportBottom: r ? r.bottom : null,
+        gapBelow: r ? Math.max(0, innerHeight - r.bottom) : null,
+        standalone: (window.matchMedia?.("(display-mode: standalone)")?.matches ?? false) || Boolean((navigator as any).standalone),
+      } };
+    },
+  },
+  {
     name: "switchSession",
     description: "Switch the active conversation to {id}. Resolves on the client's switch ack.",
     resolution: "ack",
