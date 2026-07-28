@@ -177,7 +177,7 @@ export const DocsPage: FC<Props> = (props) => {
         <header>
           <div class="flex items-center gap-3 text-brand">
             <img src="/static/brand/cloudflare-ax.svg" alt="Cloudflare Agent Experience" class="h-5 w-auto" />
-            <span class="text-xs font-semibold uppercase tracking-widest text-fg-mut">Documentation</span>
+            <span class="text-xs font-semibold text-fg-mut">Documentation</span>
           </div>
 
           <h1 class="mt-6 text-3xl font-semibold leading-tight text-balance text-fg sm:text-4xl">What is My AX?</h1>

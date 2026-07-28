@@ -97,7 +97,7 @@ interface EmbedResult {
  * inside an existing Hono JSX page.
  *
  * `hydrateAs` must match the bundles.generated.ts entry for this component
- * (set in proof/svelte/build.mjs `components: { health: "..." }`).
+ * (set in src/ui/build.mjs `components: { health: "..." }`).
  *
  * Each embed gets its own mount target id (`svelte-hono-{hydrateAs}-root`)
  * so multiple components can coexist on the same page without colliding.
@@ -110,7 +110,7 @@ export function embedSvelte<Props extends Record<string, unknown> = Record<strin
 ): EmbedResult {
   if (!bundles[hydrateAs]) {
     throw new Error(`embedSvelte: no bundle registered for "${hydrateAs}". ` +
-      `Add it to proof/svelte/build.mjs components map.`);
+      `Add it to src/ui/build.mjs components map.`);
   }
 
   const out = svelteRender(component as never, { props: props as never });

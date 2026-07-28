@@ -197,7 +197,7 @@
   aria-label="Connectors"
 >
   <header class="flex items-baseline justify-between mb-2">
-    <h3 class="text-[11px] font-semibold text-fg uppercase tracking-wider">
+    <h3 class="text-xs font-semibold text-fg">
       Connectors
     </h3>
     <span class="text-[10px] text-fg-mut">{summary}</span>
@@ -205,7 +205,7 @@
 
   <!-- Physical laptop: same Access identity, no second OAuth consent. -->
   <div class="mb-3 pb-3 border-b border-line/60">
-    <h4 class="text-[10px] font-semibold text-fg-mut uppercase tracking-wider mb-1.5">
+    <h4 class="text-xs font-medium text-fg-mut mb-1.5">
       Physical laptop
     </h4>
     <div class="laptop-row" data-mcp-id="machinectl" title={laptopConnected ? "Laptop connected" : "Laptop offline"}>
@@ -219,7 +219,7 @@
        deployment status API; the public client contains no private catalog. -->
   {#if Object.entries(authStatus).filter(([id, status]: [string, any]) => id !== "machinectl" && !userMcps.some((m) => m.id === id) && status?.kind === "oauth-bearer").length > 0}
     <div class="mb-3 pb-3 border-b border-line/60">
-      <h4 class="text-[10px] font-semibold text-fg-mut uppercase tracking-wider mb-1.5">Included MCP servers</h4>
+      <h4 class="text-xs font-medium text-fg-mut mb-1.5">Included MCP servers</h4>
       <table class="w-full text-[12px] border-collapse"><tbody>
         {#each Object.entries(authStatus).filter(([id, status]: [string, any]) => id !== "machinectl" && !userMcps.some((m) => m.id === id) && status?.kind === "oauth-bearer") as [id, status]: [string, any]}
           <tr class="conn-row" data-mcp-id={id}>
@@ -241,13 +241,13 @@
   <!-- User-added MCPs -->
   <div>
     <div class="flex items-center justify-between mb-1.5">
-      <h4 class="text-[10px] font-semibold text-fg-mut uppercase tracking-wider">
+      <h4 class="text-xs font-medium text-fg-mut">
         MCP servers
       </h4>
       <button
         type="button"
         onclick={openModal}
-        class="inline-flex items-center gap-1 text-[11px] text-fg-mut hover:text-fg hover:bg-surface-2 rounded px-1.5 py-0.5 transition-colors"
+        class="inline-flex items-center gap-1 text-xs text-fg-mut hover:text-fg hover:bg-surface-2 rounded px-1.5 py-0.5 transition-colors"
         title="Add an MCP server you can authorize"
         aria-label="Add MCP server"
       >
@@ -318,7 +318,7 @@
       aria-labelledby="add-mcp-title"
       onclick={handleBackdropClick}
     >
-      <div class="w-full max-w-md mx-3 rounded-xl bg-bg-alt border border-line shadow-2xl p-4">
+      <div class="w-full max-w-md mx-3 rounded-xl bg-bg-alt ring ring-line shadow-2xl p-4">
         <div class="flex items-center justify-between mb-3">
           <h3 id="add-mcp-title" class="text-sm font-semibold text-fg">Add MCP server</h3>
           <button
@@ -336,7 +336,7 @@
 
         <label
           for="svelte-connectors-add-url"
-          class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider"
+          class="block text-xs font-medium text-fg-mut mb-1.5"
         >
           MCP URL
         </label>
@@ -350,7 +350,7 @@
           bind:value={mcpUrl}
           class="w-full rounded-md bg-bg border border-line text-fg placeholder:text-fg-mut/60 px-3 py-2 text-sm font-mono focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40"
         />
-        <p class="text-[11px] text-fg-mut mt-1.5 leading-snug">
+        <p class="text-xs text-fg-mut mt-1.5 leading-snug">
           Paste the MCP server's HTTPS URL. We'll discover its OAuth
           metadata and confirm it speaks MCP before saving.
         </p>
@@ -358,7 +358,7 @@
         {#if probe}
           <div class="mt-3 rounded-md border border-line bg-bg p-3 text-[12px] text-fg">
             <div class="flex items-baseline justify-between mb-1">
-              <span class="text-[11px] text-fg-mut uppercase tracking-wider">Discovered</span>
+              <span class="text-xs text-fg-mut">Discovered</span>
               <span class="text-fg font-medium">{probe.serverName}</span>
             </div>
             <dl class="space-y-1 text-[11px] font-mono">
@@ -506,10 +506,8 @@
     gap: 3px;
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     color: var(--brand);
     background: rgba(246, 130, 31, 0.10);
     text-decoration: none;

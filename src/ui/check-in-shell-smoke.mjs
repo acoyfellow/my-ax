@@ -22,15 +22,15 @@ function assertNotIncludes(haystack, needle, label) {
   }
 }
 
-const buildConfig = read("proof/svelte/build.mjs");
+const buildConfig = read("src/ui/build.mjs");
 const betaPage = read("src/views/BetaPage.tsx");
-const betaApp = read("proof/svelte/BetaApp.svelte");
-const attention = read("proof/svelte/Attention.svelte");
-const checkIn = read("proof/svelte/CheckIn.svelte");
-const displayHrefHelper = read("proof/svelte/check-in-display-href.ts");
-const displayHrefTest = read("proof/svelte/check-in-display-href.test.ts");
-const generatedBundles = read("proof/svelte/bundles.generated.ts");
-const ssr = read("proof/svelte/CheckIn.ssr.mjs");
+const betaApp = read("src/ui/BetaApp.svelte");
+const attention = read("src/ui/Attention.svelte");
+const checkIn = read("src/ui/CheckIn.svelte");
+const displayHrefHelper = read("src/ui/check-in-display-href.ts");
+const displayHrefTest = read("src/ui/check-in-display-href.test.ts");
+const generatedBundles = read("src/ui/bundles.generated.ts");
+const ssr = read("src/ui/CheckIn.ssr.mjs");
 
 assertIncludes(buildConfig, "checkin: here(\"CheckIn.svelte\")", "Svelte build config");
 assertIncludes(generatedBundles, "checkin", "generated Svelte bundles");

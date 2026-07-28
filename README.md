@@ -153,7 +153,7 @@ src/delegate-many.ts     bounded agents-as-tools delegation
 src/work-tools.ts        workspace, machine, terrarium, page, and codemode catalog
 src/terrarium-tools.ts   bounded cloud agent runs with verified receipts
 src/routes/              authenticated HTTP adapters
-proof/svelte/            product UI and allowlisted result widgets
+src/ui/            product UI and allowlisted result widgets
 migrations/              D1 application and projection schemas
 ```
 

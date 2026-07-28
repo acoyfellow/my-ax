@@ -14,7 +14,7 @@ const out = join(dir, "registry.mjs");
 
 try {
   execFileSync("./node_modules/.bin/esbuild", [
-    "proof/svelte/tool-result-widgets.ts",
+    "src/ui/tool-result-widgets.ts",
     "--bundle",
     "--platform=node",
     "--format=esm",
@@ -177,7 +177,7 @@ try {
   if (delegation.runs[0].taskFingerprint !== "a1b2c3d4" || delegation.runs[0].label !== "Research evidence" || delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation metadata/status/attempts missing");
 
   // ── Widget copy + action + receipt preservation contract ────────────────
-  const widgetSource = readFileSync("proof/svelte/ToolResultWidget.svelte", "utf8");
+  const widgetSource = readFileSync("src/ui/ToolResultWidget.svelte", "utf8");
   if (!widgetSource.includes("Reusable tool")) throw new Error("reusable-tool card must use the 'Reusable tool' label");
   if (!widgetSource.includes('data-tool-widget="audio-message"')) throw new Error("audio message card must render its widget container");
   if (!/<audio[^>]*\bcontrols\b/.test(widgetSource)) throw new Error("audio message card must render a native <audio controls> player");
@@ -195,7 +195,7 @@ try {
   if (!widgetSource.includes("my-ax:settings-open")) throw new Error("Settings action must dispatch my-ax:settings-open");
   if (!/section:\s*"recipes"/.test(widgetSource) || !/recipeName\s*}/.test(widgetSource)) throw new Error("Settings action must carry {section:'recipes', recipeName} detail");
 
-  const chatSource = readFileSync("proof/svelte/Chat.svelte", "utf8");
+  const chatSource = readFileSync("src/ui/Chat.svelte", "utf8");
   // Every underlying tool-call receipt container must remain — the collapse
   // logic downgrades the widget kind but never removes the <details> row.
   if (!chatSource.includes("selectVisibleReusableToolCandidates")) throw new Error("Chat must consume the duplicate-collapse helper");
