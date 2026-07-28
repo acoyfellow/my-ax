@@ -19,7 +19,7 @@
 // renders correctly in both themes without per-utility `dark:` prefixes.
 
 import type { FC, PropsWithChildren } from "hono/jsx";
-import { svelteHeadTags } from "../../proof/svelte/embed";
+import { svelteHeadTags } from "../ui/embed";
 
 const SvelteHonoHead: FC<{ buildId?: string }> = ({ buildId }) => {
   const tags = svelteHeadTags(buildId);

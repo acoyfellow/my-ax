@@ -397,10 +397,8 @@
     align-items: center;
     padding: 1px 7px;
     border-radius: 999px;
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 11px;
+    font-weight: 500;
     border: 1px solid var(--line);
     color: var(--fg-mut);
   }

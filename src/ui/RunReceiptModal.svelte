@@ -156,16 +156,16 @@
       {:else if run}
         <header class="flex flex-col gap-3 border-b border-line pb-4">
           <div class="flex items-start justify-between gap-3">
-            <h3 class="text-xl font-semibold tracking-tight">{run.task_summary}</h3>
-            <span class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-fg-mut">{run.status}</span>
+            <h3 class="text-xl font-semibold">{run.task_summary}</h3>
+            <span class="shrink-0 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-fg-mut">{run.status}</span>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div class="rounded-xl border border-line bg-bg p-3">
-              <div class="text-[11px] uppercase tracking-[0.18em] text-fg-mut">Run id</div>
+              <div class="text-xs text-fg-mut">Run id</div>
               <code class="mt-1 block break-all text-xs text-brand">{run.id}</code>
             </div>
             <div class="rounded-xl border border-line bg-bg p-3">
-              <div class="text-[11px] uppercase tracking-[0.18em] text-fg-mut">Created</div>
+              <div class="text-xs text-fg-mut">Created</div>
               <div class="mt-1 font-mono text-xs">{run.created_at}</div>
             </div>
           </div>

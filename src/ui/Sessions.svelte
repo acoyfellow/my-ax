@@ -771,10 +771,8 @@
   :global(.session-row[data-pinned="1"] .session-row__reorder) { cursor: grab; }
   .session-group-header {
     padding: 8px 10px 3px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 500;
     color: var(--fg-mut);
   }
   .sr-only {
