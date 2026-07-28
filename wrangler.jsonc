@@ -115,7 +115,7 @@
   ],
 
   // Static assets. The Worker no longer ships hand-written JS — the chat
-  // surface is Svelte 5 (proof/svelte/, hydrated from /__svelte/<id>.<hash>.js
+  // surface is Svelte 5 (src/ui/, hydrated from /__svelte/<id>.<hash>.js
   // routes served by the Worker itself). `public/` holds fonts, brand
   // assets, the generated tailwind output (`styles.css`), the service
   // worker, manifest.webmanifest, and a few favicons.

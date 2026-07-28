@@ -55,8 +55,8 @@ Relevant code:
 src/work-tools.ts
 src/routes/machinectl.ts
 src/terrarium-tools.ts
-proof/svelte/page-registry.ts
-proof/svelte/artifact-tools.ts
+src/ui/page-registry.ts
+src/ui/artifact-tools.ts
 ```
 
 ## 4. Keep the Workspace Local, Snapshot the Boundary
@@ -108,8 +108,8 @@ Unknown results render as inert text. Svelte artifacts run in an `allow-scripts`
 Relevant code:
 
 ```text
-proof/svelte/tool-result-widgets.ts
-proof/svelte/ToolResultWidget.svelte
+src/ui/tool-result-widgets.ts
+src/ui/ToolResultWidget.svelte
 src/artifacts.ts
 src/routes/browser.ts
 ```

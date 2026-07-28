@@ -2518,7 +2518,7 @@
             if (logEl) logEl.scrollTo({ top: logEl.scrollHeight, behavior: "smooth" });
             syncScrollToBottom();
           }}
-          class="fixed z-20 right-5 bottom-28 sm:bottom-24 rounded-full border border-line bg-bg/95 shadow-raise w-11 h-11 text-fg text-xl hover:border-brand/60"
+          class="fixed z-20 right-5 bottom-28 sm:bottom-24 rounded-full ring ring-line bg-bg/95 shadow-raise w-11 h-11 text-fg text-xl hover:ring-brand/60"
           aria-label="Scroll to latest message"
           title="Scroll to bottom"
         >
@@ -2547,11 +2547,11 @@
             {#if voiceEnabled}
               <span class="voice-mode-button__live" aria-hidden="true"></span>
             {:else}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Z" />
-                <path d="M6 11a6 6 0 0 0 12 0" />
-                <path d="M12 17v4" />
-                <path d="M9 21h6" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="11" rx="3" />
+                <path d="M5 10v1a7 7 0 0 0 14 0v-1" />
+                <path d="M12 18v3" />
+                <path d="M8 21h8" />
               </svg>
             {/if}
           </button>
@@ -2632,7 +2632,7 @@
                 <!-- click-away backdrop -->
                 <button type="button" class="fixed inset-0 z-10 cursor-default" aria-label="Close menu" onclick={closePlusMenu}></button>
                 <div
-                  class="absolute bottom-full right-0 z-20 mb-2 min-w-[10rem] overflow-hidden rounded-lg border border-line bg-bg shadow-lg"
+                  class="absolute bottom-full right-0 z-20 mb-2 min-w-[10rem] overflow-hidden rounded-lg ring ring-line bg-bg shadow-lg"
                   role="menu"
                   aria-label="Add to message"
                 >

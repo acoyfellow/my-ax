@@ -48,7 +48,7 @@ import { DocsPage } from "./views/DocsPage";
 import { DocsArticlePage } from "./views/DocsArticlePage";
 import { DOC_PAGE_BY_SLUG } from "./docs-content.generated";
 import { getSessionAgent } from "./agent-stub";
-import { registerSvelteServe } from "../proof/svelte/serve";
+import { registerSvelteServe } from "./ui/serve";
 import { scanDeadSessions } from "./dead-session";
 
 // Re-export Durable Object classes (required by wrangler).

@@ -78,7 +78,7 @@
 <section class="check-in-card @container/checkin bg-bg px-4 py-4 text-fg" aria-label="Owner Check-in" data-check-in-root>
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
-      <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-fg-mut">Owner status</p>
+      <p class="text-xs font-medium text-fg-mut">Owner status</p>
       {#if loading}
         <p class="mt-2 text-sm text-fg-mut">Loading latest state…</p>
       {:else if error}
