@@ -1,0 +1,41 @@
+src/ui/BetaApp.svelte
+  s_fc73a7c9587683::t_199d4f55bbd9b0 34-40,71,73
+src/ui/page-registry.test.ts
+  s_fc73a7c9587683::t_dc4999f91180cb 27-33,64,69,131-143
+src/ui/page-registry.ts
+  s_176a17cdcf2e2f::t_ef16ac7d24f0df 151-185
+src/work-tools.ts
+  s_085e890f02f378::t_6bc7bc97ba2e17 32,291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8e00200015494e89b38d419468701b8ec972f2ab",
+  "prompts": {},
+  "sessions": {
+    "s_085e890f02f378": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fa933-befa-7ea6-bf59-fa48b7100a50",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_176a17cdcf2e2f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e98e3-d6f8-7f8d-a326-86340280df3a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_fc73a7c9587683": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f959f-ed3f-78c4-b8f7-55e513d85ddb",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
