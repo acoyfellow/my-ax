@@ -23,7 +23,6 @@ const WORKSPACE_METHODS = [
   { name: "preview_close", description: "Close a workspace preview." },
 ] as const;
 
-// page.* connector catalog (server side). Mirrors proof/svelte/page-registry.ts
 // PAGE_VERBS. Each verb marshals over the chat WS to the live browser client.
 const PAGE_WORK_METHODS = [
   { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
@@ -178,7 +177,6 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const terrariumFns = instrument("terrarium", restrictByCapabilities("terrarium", terrariumProvider.fns, ctx.allowedWorkCapabilities), calls);
   // page.* connector: each verb marshals to the live browser client via
   // ctx.callPage (over the chat WS). Only present when a live chat connection
-  // exists. The server-side catalog mirrors proof/svelte/page-registry.ts.
   const pageFns = ctx.callPage
     ? instrument("page", restrictByCapabilities("page", Object.fromEntries(PAGE_WORK_METHODS.map((m) => [
         m.name,
