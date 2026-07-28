@@ -29,7 +29,9 @@
   let vpDebugOn = $state(false);
   $effect(() => {
     if (typeof window === "undefined") return;
-    if (!/[?&]vpdebug=1/.test(location.search)) return;
+    if (/[?&]vpdebug=1/.test(location.search)) localStorage.setItem("my-ax-vpdebug", "1");
+    if (/[?&]vpdebug=0/.test(location.search)) localStorage.removeItem("my-ax-vpdebug");
+    if (localStorage.getItem("my-ax-vpdebug") !== "1") return;
     vpDebugOn = true;
     const measure = () => {
       const b = document.body.getBoundingClientRect();
@@ -38,10 +40,19 @@
       const w = wrap?.getBoundingClientRect();
       const cs = composer ? getComputedStyle(composer) : null;
       const bs = getComputedStyle(document.body);
+      const standalone = window.matchMedia("(display-mode: standalone)").matches;
+      const probe = document.createElement("div");
+      probe.style.cssText = "position:fixed;height:env(safe-area-inset-bottom);width:0;visibility:hidden";
+      document.body.appendChild(probe);
+      const sab = Math.round(parseFloat(getComputedStyle(probe).height) || 0);
+      probe.remove();
       vpDebug = [
+        `standalone ${standalone}`,
         `innerH ${window.innerHeight}`,
         `visualH ${Math.round(window.visualViewport?.height ?? 0)}`,
+        `screenH ${window.screen?.height ?? "?"}`,
         `dvh ${document.documentElement.clientHeight}`,
+        `safeAreaBottom ${sab}`,
         `bodyBottom ${Math.round(b.bottom)}`,
         `gapUnderBody ${Math.round(window.innerHeight - b.bottom)}`,
         `composerBottom ${w ? Math.round(w.bottom) : "n/a"}`,
