@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const layout = fs.readFileSync("src/views/Layout.tsx", "utf8");
-const chat = fs.readFileSync("proof/svelte/Chat.svelte", "utf8");
+const chat = fs.readFileSync("src/ui/Chat.svelte", "utf8");
 const index = fs.readFileSync("src/index.tsx", "utf8");
 
 assert.match(index, /app\.get\("\/api\/version"/);

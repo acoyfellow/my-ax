@@ -96,11 +96,11 @@ mustContain("src/routes/jobs.ts", "data-job-history-receipt-href", "jobs item ra
 mustContain("docs/feature-matrix.md", "data-jobs-api-receipt-href", "feature matrix Jobs API receipt marker contract");
 mustContain("docs/feature-matrix.md", "per-job history receipt links", "feature matrix Jobs history receipt contract");
 
-mustContain("proof/svelte/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
+mustContain("src/ui/CheckIn.svelte", "displayCheckInHref", "Check-in rendered destination helper usage");
 // The helper maps /api/{attention,runs,jobs} to owner routes on a complete
 // path-segment boundary, preserving the query/fragment suffix.
-mustContain("proof/svelte/check-in-display-href.ts", '["attention", "runs", "jobs"]', "Check-in API display mapping covers all three destinations");
-mustContain("proof/svelte/check-in-display-href.ts", '`/${seg}${href.slice(prefix.length)}`', "Check-in rendered display mapping preserves suffix");
+mustContain("src/ui/check-in-display-href.ts", '["attention", "runs", "jobs"]', "Check-in API display mapping covers all three destinations");
+mustContain("src/ui/check-in-display-href.ts", '`/${seg}${href.slice(prefix.length)}`', "Check-in rendered display mapping preserves suffix");
 
 if (failures.length) {
   console.error("owner-route smoke failed:");

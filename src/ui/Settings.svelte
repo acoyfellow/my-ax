@@ -923,7 +923,7 @@
           class:is-active={activeSection === section.id}
         >
           <span class="block text-sm font-medium">{section.label}</span>
-          <span class="hidden text-[11px] text-fg-mut sm:block">{section.hint}</span>
+          <span class="hidden text-xs text-fg-mut sm:block">{section.hint}</span>
         </button>
       {/each}
       {#if visibleSections.length === 0}<p class="px-2 py-3 text-xs text-fg-mut">No settings match.</p>{/if}
@@ -933,7 +933,7 @@
       <div class="space-y-4" hidden={activeSection !== "general"}>
     {#if identityEmail}
       <div>
-        <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Signed in</span>
+        <span class="block text-xs font-medium text-fg-mut mb-1.5">Signed in</span>
         <div class="w-full rounded-md bg-bg border border-line text-fg text-sm font-mono px-3 py-2.5 min-h-[44px] flex items-center truncate" title={identityEmail}>
           {identityEmail}
         </div>
@@ -941,7 +941,7 @@
     {/if}
 
     <div>
-      <label for="drawer-model" class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Model</label>
+      <label for="drawer-model" class="block text-xs font-medium text-fg-mut mb-1.5">Model</label>
       <select
         id="drawer-model"
         bind:value={modelState.current}
@@ -983,7 +983,7 @@
 
     {#if selectedSupportsReasoning}
       <div>
-        <label class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">
+        <label class="block text-xs font-medium text-fg-mut mb-1.5">
           Reasoning effort
         </label>
         <div class="grid grid-cols-3 gap-1 rounded-md bg-bg border border-line p-1">
@@ -1003,7 +1003,7 @@
 
     {#if showInstall}
       <section class="rounded-md border border-line bg-bg px-3 py-3">
-        <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">App</span>
+        <span class="block text-xs font-medium text-fg-mut mb-1.5">App</span>
         {#if installPromptEvent}
           <button
             type="button"
@@ -1020,7 +1020,7 @@
     {/if}
 
     <section class="rounded-md border border-line bg-bg px-3 py-3">
-      <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Notifications</span>
+      <span class="block text-xs font-medium text-fg-mut mb-1.5">Notifications</span>
       <div class="grid gap-2 sm:grid-cols-2">
         <button
           type="button"
@@ -1068,7 +1068,7 @@
             <section class="flex flex-col rounded-lg border border-line bg-bg p-3">
               <div>
                 <h4 class="text-xs font-semibold text-fg">{group.title}</h4>
-                <p class="mt-0.5 text-[11px] text-fg-mut">{group.summary}</p>
+                <p class="mt-0.5 text-xs text-fg-mut">{group.summary}</p>
               </div>
               <ul class="mt-3 grid gap-2">
                 {#each group.items as item}
@@ -1096,7 +1096,7 @@
 
       <div hidden={activeSection !== "recipes"} class="space-y-4">
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Reusable tools</span>
+          <span class="block text-xs font-medium text-fg-mut mb-1.5">Reusable tools</span>
           <p class="mb-3 text-xs text-fg-mut">
             Reusable tools are saved pieces of successful <code>work_code</code> that My AX can use again. Enabled tools can run in future tasks; every run creates a receipt.
           </p>
@@ -1122,7 +1122,7 @@
                       <strong class="break-words text-sm text-fg">{recipe.name}</strong>
                       <p class="mt-1 text-fg-mut line-clamp-2">{recipe.description}</p>
                     </div>
-                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] font-semibold text-fg-mut">{recipe.status === "pending" ? "Pending" : recipe.status === "enabled" ? "Enabled" : "Disabled"}</span>
+                    <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-xs font-medium text-fg-mut">{recipe.status === "pending" ? "Pending" : recipe.status === "enabled" ? "Enabled" : "Disabled"}</span>
                   </div>
                   <div class="mt-2 flex flex-wrap gap-1" aria-label={`Capabilities for ${recipe.name}`}>
                     {#each recipe.capabilities as capability}
@@ -1150,7 +1150,7 @@
         </section>
 
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-          <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Starter reusable tools</span>
+          <span class="block text-xs font-medium text-fg-mut mb-1.5">Starter reusable tools</span>
           <p class="mb-3 text-xs text-fg-mut">Pick a generic tool, review its code and capabilities, then save your own pending copy. Templates are never enabled automatically.</p>
           <div class="grid gap-2 sm:grid-cols-2">
             {#each recipeTemplates as template}
@@ -1167,7 +1167,7 @@
 
         <form onsubmit={submitRecipe} class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4 grid gap-2">
           <div class="flex items-center justify-between gap-3">
-            <span class="block text-[11px] font-medium text-fg-mut uppercase tracking-wider">{editingRecipeId ? "Review reusable tool" : "Create reusable tool manually"}</span>
+            <span class="block text-xs font-medium text-fg-mut">{editingRecipeId ? "Review reusable tool" : "Create reusable tool manually"}</span>
             {#if editingRecipeId}<button type="button" onclick={resetRecipeForm} class="text-xs text-fg-mut hover:text-fg">Cancel edit</button>{/if}
           </div>
           <input type="text" maxlength={64} placeholder="name_like_this" bind:value={recipeName} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
@@ -1181,7 +1181,7 @@
 
       <div hidden={activeSection !== "jobs"}>
     <section id="jobs" class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
-      <span class="block text-[11px] font-medium text-fg-mut mb-1.5 uppercase tracking-wider">Recurring jobs</span>
+      <span class="block text-xs font-medium text-fg-mut mb-1.5">Recurring jobs</span>
       <p class="mb-3 text-xs text-fg-mut">
         Pick where each run lands: a new thread, this thread, or a specific thread you name. Push notifications explain which destination they open.
       </p>
@@ -1203,7 +1203,7 @@
                 <span class="shrink-0 rounded-full bg-surface-2 px-2 py-1 text-[10px] text-fg-mut">{cadenceLabel(job.cadence_secs)}</span>
               </div>
               <div class="mt-1 text-fg-mut line-clamp-2">{job.prompt}</div>
-              <div class="mt-2 grid gap-0.5 font-mono text-[11px] text-fg-mut">
+              <div class="mt-2 grid gap-0.5 font-mono text-xs text-fg-mut">
                 <div>{state} · next {nextRun}</div>
                 <div data-job-destination={threadMode}>{THREAD_MODE_LABELS[threadMode]}</div>
                 <div data-job-result={jobResultAttr(health)} data-job-health={health.state} data-job-tone={health.tone}>last {lastRun} · {result}</div>
@@ -1218,15 +1218,15 @@
               {:else}
                 <div class="mt-3 grid gap-2 border-t border-line pt-3" data-job-edit={job.id}>
                   <label class="grid gap-1">
-                    <span class="text-[11px] font-medium text-fg-mut">Name</span>
+                    <span class="text-xs font-medium text-fg-mut">Name</span>
                     <input type="text" maxlength={200} bind:value={editName} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60" />
                   </label>
                   <label class="grid gap-1">
-                    <span class="text-[11px] font-medium text-fg-mut">Prompt</span>
+                    <span class="text-xs font-medium text-fg-mut">Prompt</span>
                     <textarea rows={2} maxlength={4000} bind:value={editPrompt} class="w-full min-h-[64px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 focus:outline-none focus:border-brand/60"></textarea>
                   </label>
                   <label class="grid gap-1">
-                    <span class="text-[11px] font-medium text-fg-mut">Cadence</span>
+                    <span class="text-xs font-medium text-fg-mut">Cadence</span>
                     <select bind:value={editCadence} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2">
                       <option value="60">Every minute</option>
                       <option value="300">Every 5 minutes</option>
@@ -1236,7 +1236,7 @@
                     </select>
                   </label>
                   <label class="grid gap-1">
-                    <span class="text-[11px] font-medium text-fg-mut">Destination</span>
+                    <span class="text-xs font-medium text-fg-mut">Destination</span>
                     <select bind:value={editThreadMode} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2" aria-label="Run destination">
                       <option value="new_session_per_run">New thread</option>
                       <option value="same_session">This thread</option>
@@ -1245,9 +1245,9 @@
                   </label>
                   {#if editThreadMode === "specific_session"}
                     <label class="grid gap-1">
-                      <span class="text-[11px] font-medium text-fg-mut">Thread id</span>
+                      <span class="text-xs font-medium text-fg-mut">Thread id</span>
                       <input type="text" bind:value={editSpecificId} placeholder="Paste a thread id" aria-describedby={`edit-thread-help-${job.id}`} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 font-mono focus:outline-none focus:border-brand/60" />
-                      <span id={`edit-thread-help-${job.id}`} class="text-[11px] text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
+                      <span id={`edit-thread-help-${job.id}`} class="text-xs text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
                     </label>
                   {/if}
                   <div class="flex flex-wrap justify-end gap-1.5">
@@ -1284,16 +1284,16 @@
           <option value="86400">Every day</option>
         </select>
         <div class="grid gap-1">
-          <label for="job-destination" class="text-[11px] font-medium uppercase tracking-wider text-fg-mut">Destination</label>
+          <label for="job-destination" class="text-xs font-medium text-fg-mut">Destination</label>
           <select id="job-destination" bind:value={jobThreadMode} class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2">
             <option value="new_session_per_run">New thread each run</option>
             <option value="same_session">This thread</option>
             <option value="specific_session">Specific thread…</option>
           </select>
           {#if jobThreadMode === "specific_session"}
-            <label for="job-specific-id" class="mt-1 text-[11px] font-medium text-fg-mut">Thread id</label>
+            <label for="job-specific-id" class="mt-1 text-xs font-medium text-fg-mut">Thread id</label>
             <input id="job-specific-id" type="text" bind:value={jobSpecificId} placeholder="Paste a thread id" aria-describedby="job-specific-help" class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 font-mono focus:outline-none focus:border-brand/60" />
-            <span id="job-specific-help" class="text-[11px] text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
+            <span id="job-specific-help" class="text-xs text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
           {/if}
         </div>
         <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">Add recurring job</button>
@@ -1312,7 +1312,7 @@
             {#each starters as starter, i (i)}
               <li class="rounded-lg border border-line bg-bg-alt/40 p-3">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="text-[11px] font-medium text-fg-mut">Starter {i + 1}</span>
+                  <span class="text-xs font-medium text-fg-mut">Starter {i + 1}</span>
                   <div class="flex gap-1">
                     <button type="button" class="job-action-button" aria-label={`Move starter ${i + 1} up`} title="Move up" disabled={i === 0} onclick={() => moveStarter(i, -1)}>↑</button>
                     <button type="button" class="job-action-button" aria-label={`Move starter ${i + 1} down`} title="Move down" disabled={i === starters.length - 1} onclick={() => moveStarter(i, 1)}>↓</button>
@@ -1384,7 +1384,7 @@
         href="https://github.com/acoyfellow/my-ax"
         target="_blank"
         rel="noopener"
-        class="inline-flex items-center gap-1.5 text-[11px] text-fg-mut/70 hover:text-fg-mut transition-colors"
+        class="inline-flex items-center gap-1.5 text-xs text-fg-mut/70 hover:text-fg-mut transition-colors"
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.3 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.3 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.9 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/>

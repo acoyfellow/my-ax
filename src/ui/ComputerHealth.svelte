@@ -88,7 +88,7 @@
 >
   <header class="flex items-start justify-between gap-3 mb-2">
     <div>
-      <h3 class="text-[11px] font-semibold text-fg uppercase tracking-wider">
+      <h3 class="text-xs font-semibold text-fg">
         Workspace container
       </h3>
       <p class="mt-0.5 text-[10px] leading-snug text-fg-mut">Remote runtime for commands, files, and receipts.</p>
@@ -137,7 +137,7 @@
       { label: "Deployed",  value: deployed,     mono: false },
     ] as row}
       <div class="flex items-baseline justify-between gap-3 py-1.5 border-b border-line/20 last:border-0">
-        <span class="text-[11px] text-fg-mut uppercase tracking-wider flex-shrink-0">{row.label}</span>
+        <span class="text-xs text-fg-mut flex-shrink-0">{row.label}</span>
         <span
           class={"text-[12px] text-fg text-right truncate min-w-0 " + (row.mono ? "font-mono" : "")}
           title={row.title ?? ""}

@@ -3,9 +3,9 @@
 // Access. Additive: prod / (ChatPage) is untouched.
 import type { FC } from "hono/jsx";
 import { Layout, type ThemePref } from "./Layout";
-import { SvelteEmbed } from "../../proof/svelte/SvelteEmbed";
+import { SvelteEmbed } from "../ui/SvelteEmbed";
 // @ts-expect-error -- pre-compiled Svelte SSR module, no .d.ts.
-import BetaAppComponent from "../../proof/svelte/BetaApp.ssr.mjs";
+import BetaAppComponent from "../ui/BetaApp.ssr.mjs";
 
 interface BetaPageProps {
   identityEmail?: string | null;
