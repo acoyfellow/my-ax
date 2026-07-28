@@ -1,9 +1,3 @@
-// JSX wrapper around proof/svelte/embed.ts so panel sites can write
-//
-//   <SvelteEmbed component={ComputerHealthComponent} hydrateAs="health" />
-//
-// instead of the verbose IIFE+dangerouslySetInnerHTML dance.
-
 import type { FC } from "hono/jsx";
 import { embedSvelte } from "./embed";
 
@@ -13,7 +7,6 @@ interface Props {
   // .d.ts; we don't want to fake one.
   // deno-lint-ignore no-explicit-any
   component: any;
-  /** Must match the id in proof/svelte/build.mjs components map. */
   hydrateAs: string;
   /** Props handed to the component for both SSR and hydration. */
   props?: Record<string, unknown>;
