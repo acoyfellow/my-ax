@@ -531,6 +531,7 @@ const renderApp = (c: Context<AppEnv>) => {
   const identity = c.get("identity");
   const buildId = c.env.CF_VERSION_METADATA?.id ?? undefined;
   const theme = readThemeCookie(c);
+  c.header("Cache-Control", "no-cache, no-store, must-revalidate");
   return c.html(
     <BetaPage
       identityEmail={identity?.email ?? null}

@@ -56,3 +56,10 @@ test("sw.js is served no-cache so the browser always re-fetches it", () => {
   const block = indexTsx.slice(i, i + 500);
   assert.match(block, /Cache-Control["']\s*,\s*["'][^"']*no-cache/, "sw.js must be no-cache");
 });
+
+test("the HTML app shell is served no-cache so relaunch re-fetches current bundle hashes", () => {
+  const i = indexTsx.indexOf("const renderApp = ");
+  assert.ok(i >= 0, "renderApp present");
+  const block = indexTsx.slice(i, i + 500);
+  assert.match(block, /Cache-Control["']\s*,\s*["'][^"']*no-cache/, "the app-shell HTML must be no-cache; a heuristically-cached shell pins stale ?v=/bundle hashes and freezes an installed PWA on an old build");
+});
