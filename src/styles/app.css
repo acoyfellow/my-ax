@@ -1032,11 +1032,24 @@ html {
   .tool-call__inline-image {
     display: block;
     box-sizing: border-box;
-    width: 100%;
-    max-height: 32rem;
+    width: min(14rem, calc(100% - 1rem));
+    height: 9rem;
+    margin: 0.5rem;
     object-fit: contain;
     background: #0a0a0a;
-    border-top: 1px solid var(--line);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+  }
+  .msg-body img[data-image-lightbox="1"] {
+    display: inline-block;
+    width: auto;
+    max-width: min(14rem, 100%);
+    height: auto;
+    max-height: 9rem;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: #0a0a0a;
   }
   .tool-call__inline-video {
     display: block;

@@ -9,6 +9,7 @@
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
   import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
+  import ImageLightbox from "./ImageLightbox.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
@@ -2699,3 +2700,5 @@
 
   </div>
 </div>
+
+<ImageLightbox />
