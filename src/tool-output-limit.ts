@@ -1,3 +1,5 @@
+import { asSchema, jsonSchema, type FlexibleSchema } from "ai";
+
 export const MODEL_TOOL_OUTPUT_LIMIT_BYTES = 24 * 1024;
 
 const encoder = new TextEncoder();
@@ -42,17 +44,89 @@ export function limitToolResultValue(value: unknown): unknown {
 }
 
 const unsupportedRegexConstruct = /\(\?(?:[=!]|<[=!])/u;
+const aiSdkSchemaSymbol = Symbol.for("vercel.ai.schema");
 
-export function sanitizeModelToolSchema(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sanitizeModelToolSchema);
-  if (!value || typeof value !== "object") return value;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
+function copyJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(copyJsonValue);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, nestedValue]) => [key, copyJsonValue(nestedValue)]));
+}
+
+function sanitizeSchemaValue(value: unknown): unknown {
+  return isRecord(value) ? sanitizeSchemaObject(value) : copyJsonValue(value);
+}
+
+function sanitizeSchemaMap(value: unknown): unknown {
+  if (!isRecord(value)) return copyJsonValue(value);
+  return Object.fromEntries(Object.entries(value).map(([key, nestedValue]) => [key, sanitizeSchemaValue(nestedValue)]));
+}
+
+function sanitizePatternProperties(value: unknown): unknown {
+  if (!isRecord(value)) return copyJsonValue(value);
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([pattern]) => !unsupportedRegexConstruct.test(pattern))
+      .map(([pattern, schema]) => [pattern, sanitizeSchemaValue(schema)]),
+  );
+}
+
+function sanitizeSchemaArray(value: unknown): unknown {
+  return Array.isArray(value) ? value.map(sanitizeSchemaValue) : copyJsonValue(value);
+}
+
+function sanitizeDependencies(value: unknown): unknown {
+  if (!isRecord(value)) return copyJsonValue(value);
+  return Object.fromEntries(Object.entries(value).map(([key, dependency]) => [
+    key,
+    isRecord(dependency) || typeof dependency === "boolean" ? sanitizeSchemaValue(dependency) : copyJsonValue(dependency),
+  ]));
+}
+
+function sanitizeSchemaObject(schema: Record<string, unknown>): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
-  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
-    if (key === "pattern" && typeof nestedValue === "string" && unsupportedRegexConstruct.test(nestedValue)) continue;
-    sanitized[key] = sanitizeModelToolSchema(nestedValue);
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "pattern" && typeof value === "string" && unsupportedRegexConstruct.test(value)) continue;
+    if (key === "patternProperties") {
+      sanitized[key] = sanitizePatternProperties(value);
+      continue;
+    }
+    if (key === "properties" || key === "$defs" || key === "definitions" || key === "dependentSchemas") {
+      sanitized[key] = sanitizeSchemaMap(value);
+      continue;
+    }
+    if (key === "allOf" || key === "anyOf" || key === "oneOf" || key === "prefixItems") {
+      sanitized[key] = sanitizeSchemaArray(value);
+      continue;
+    }
+    if (key === "additionalProperties" || key === "additionalItems" || key === "contains" || key === "contentSchema" || key === "else" || key === "if" || key === "items" || key === "not" || key === "propertyNames" || key === "then" || key === "unevaluatedItems" || key === "unevaluatedProperties") {
+      sanitized[key] = Array.isArray(value) && key === "items" ? sanitizeSchemaArray(value) : sanitizeSchemaValue(value);
+      continue;
+    }
+    if (key === "dependencies") {
+      sanitized[key] = sanitizeDependencies(value);
+      continue;
+    }
+    sanitized[key] = copyJsonValue(value);
   }
   return sanitized;
+}
+
+function isAiSdkCompatibleSchema(value: unknown): value is FlexibleSchema {
+  return typeof value === "function" || (isRecord(value) && (aiSdkSchemaSymbol in value || "~standard" in value));
+}
+
+export function sanitizeModelToolSchema(value: unknown): unknown {
+  if (!isAiSdkCompatibleSchema(value)) return sanitizeSchemaValue(value);
+
+  const sourceSchema = asSchema(value);
+  return jsonSchema(
+    async () => sanitizeSchemaValue(await sourceSchema.jsonSchema) as Awaited<typeof sourceSchema.jsonSchema>,
+    { validate: sourceSchema.validate },
+  );
 }
 
 export function limitToolSetOutput<T extends Record<string, unknown>>(tools: T): T {
