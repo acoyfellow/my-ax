@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-// Guards the service-worker freshness contract that fixes the iOS-PWA stale
-// asset trap (owner: "closed/opened the PWA 10x, still no fix").
-//
-// The bug: a CACHE-FIRST sw served /static/*?v=<old> forever to an installed
-// PWA, because iOS restores a frozen shell (same old ?v=) instead of doing a
-// real navigation that would fetch the new build. These assertions pin the fix:
-//   1. static assets are served NETWORK-FIRST (cache is offline fallback only)
-//   2. the SW honors a skip-waiting message so a deploy takes over immediately
-//   3. the runtime cache name was bumped (old caches purged on activate)
-//   4. sw.js is served no-cache by the worker so the browser re-fetches it
-// Static-source assertions (no bundler/browser needed) so this runs in CI.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -18,22 +7,9 @@ const sw = readFileSync(new URL("../../public/sw.js", import.meta.url), "utf8");
 const indexTsx = readFileSync(new URL("../../src/index.tsx", import.meta.url), "utf8");
 const layout = readFileSync(new URL("../../src/views/Layout.tsx", import.meta.url), "utf8");
 
-test("static asset handler is network-first, not cache-first", () => {
-  const i = sw.indexOf("if (cacheableStatic(url)) {");
-  assert.ok(i >= 0, "cacheableStatic branch present");
-  const block = sw.slice(i, i + 900);
-  // Network-first: the FIRST thing inside respondWith is fetch(request), and
-  // caches.match is only reached in the .catch (offline) path.
-  assert.match(block, /event\.respondWith\(\s*fetch\(request\)/, "must try the network first");
-  const fetchPos = block.indexOf("fetch(request)");
-  const catchPos = block.indexOf(".catch(");
-  const matchPos = block.indexOf("caches.match(request)");
-  assert.ok(fetchPos >= 0 && catchPos >= 0 && matchPos > catchPos,
-    "caches.match must only be reached in the offline .catch fallback (cache-first regression)");
-  // The old cache-first shape (caches.match(request).then(cached => cached ? ...))
-  // must be gone.
-  assert.doesNotMatch(block, /caches\.match\(request\)\.then\(\s*\(cached\)/,
-    "the cache-first-then-network shape must not return");
+test("the service worker never intercepts or caches application requests", () => {
+  assert.doesNotMatch(sw, /addEventListener\("fetch"/, "the service worker must not intercept requests");
+  assert.doesNotMatch(sw, /caches\.(open|match)\(/, "the service worker must not populate or serve Cache Storage");
 });
 
 test("SW activates a new deploy immediately (skip-waiting message + bumped cache)", () => {
@@ -41,7 +17,8 @@ test("SW activates a new deploy immediately (skip-waiting message + bumped cache
     "SW must skipWaiting on the my-ax:skip-waiting message");
   const cache = sw.match(/const CACHE = "(my-ax-static-v\d+)"/);
   assert.ok(cache, "cache name is versioned");
-  assert.ok(Number(cache[1].match(/v(\d+)/)[1]) >= 11, "cache name bumped to purge the old cache-first cache");
+  assert.ok(Number(cache[1].match(/v(\d+)/)[1]) >= 12, "cache name bumped to purge the old cache-first cache");
+  assert.match(sw, /key\.startsWith\("my-ax-"\)[\s\S]{0,100}caches\.delete\(key\)/, "activation purges every historical My AX cache");
 });
 
 test("the page reloads on controllerchange and nudges updates on focus", () => {
@@ -62,4 +39,15 @@ test("the HTML app shell is served no-cache so relaunch re-fetches current bundl
   assert.ok(i >= 0, "renderApp present");
   const block = indexTsx.slice(i, i + 500);
   assert.match(block, /Cache-Control["']\s*,\s*["'][^"']*no-cache/, "the app-shell HTML must be no-cache; a heuristically-cached shell pins stale ?v=/bundle hashes and freezes an installed PWA on an old build");
+});
+
+test("pwa-reset unregisters workers and deletes caches without loading an application bundle", () => {
+  const i = indexTsx.indexOf('app.get("/pwa-reset"');
+  assert.ok(i >= 0, "/pwa-reset route present");
+  const block = indexTsx.slice(i, i + 4000);
+  assert.match(block, /getRegistrations\(\)/, "reset enumerates service-worker registrations");
+  assert.match(block, /registration\.unregister\(\)/, "reset unregisters every service worker");
+  assert.match(block, /caches\.keys\(\)/, "reset enumerates Cache Storage");
+  assert.match(block, /caches\.delete\(key\)/, "reset deletes every cache");
+  assert.doesNotMatch(block, /<SvelteEmbed|<Layout/, "reset must not depend on the application bundle");
 });
