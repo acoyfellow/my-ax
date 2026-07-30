@@ -590,9 +590,60 @@ app.get("/docs/:slug", (c) => {
     />,
   );
 });
-// A non-personalized document fallback the service worker can cache. It is
-// intentionally outside Access: when a previously-opened installed PWA goes
-// offline, the browser needs a safe same-origin HTML response to render.
+app.get("/pwa-reset", (c) => {
+  c.header("Cache-Control", "no-cache, no-store, must-revalidate");
+  return c.html(
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+        <meta name="theme-color" content="#0a0a0a" />
+        <title>Resetting · My Agent Experience</title>
+        <style dangerouslySetInnerHTML={{ __html: `
+          :root { color-scheme: dark; }
+          * { box-sizing: border-box; }
+          body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #0a0a0a; color: #e9e9ec; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+          main { width: min(32rem, 100%); padding: 28px; border: 1px solid #27272a; border-radius: 20px; background: #111113; }
+          p { color: #b4b4ba; line-height: 1.55; }
+          button { border: 0; padding: 10px 14px; border-radius: 999px; background: #f6821f; color: #0a0a0a; font: inherit; font-weight: 700; }
+        ` }} />
+      </head>
+      <body>
+        <main>
+          <h1>Resetting my · ax</h1>
+          <p id="pwa-reset-status">Removing the installed app cache and service worker…</p>
+          <button id="pwa-reset-retry" type="button" hidden>Try again</button>
+        </main>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){
+            var status=document.getElementById('pwa-reset-status');
+            var retry=document.getElementById('pwa-reset-retry');
+            async function reset(){
+              retry.hidden=true;
+              status.textContent='Removing the installed app cache and service worker…';
+              try {
+                var registrations='serviceWorker' in navigator?await navigator.serviceWorker.getRegistrations():[];
+                await Promise.all(registrations.map(function(registration){return registration.unregister();}));
+                var keys='caches' in window?await caches.keys():[];
+                await Promise.all(keys.map(function(key){return caches.delete(key);}));
+                status.textContent='Reset complete. Loading the current version…';
+                var url=new URL('/',location.origin);
+                url.searchParams.set('_pwa_reset',Date.now().toString(36));
+                setTimeout(function(){location.replace(url.href);},250);
+              } catch(error) {
+                status.textContent='Reset failed. Check your connection and try again.';
+                retry.hidden=false;
+              }
+            }
+            retry.addEventListener('click',reset);
+            reset();
+          })();
+        ` }} />
+      </body>
+    </html>,
+  );
+});
+
 app.get("/offline", (c) => c.html(
   <html lang="en">
     <head>
