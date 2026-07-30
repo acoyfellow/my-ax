@@ -43,8 +43,34 @@ export function limitToolResultValue(value: unknown): unknown {
   return limitModelToolOutput(serialized);
 }
 
-const unsupportedRegexConstruct = /\(\?(?:[=!]|<[=!])/u;
 const aiSdkSchemaSymbol = Symbol.for("vercel.ai.schema");
+
+function hasUnsupportedRegexLookaround(pattern: string): boolean {
+  let insideCharacterClass = false;
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      insideCharacterClass = true;
+      continue;
+    }
+    if (character === "]" && insideCharacterClass) {
+      insideCharacterClass = false;
+      continue;
+    }
+    if (insideCharacterClass || character !== "(" || pattern[index + 1] !== "?") continue;
+
+    const assertionType = pattern[index + 2];
+    if (assertionType === "=" || assertionType === "!") return true;
+    if (assertionType === "<" && (pattern[index + 3] === "=" || pattern[index + 3] === "!")) return true;
+  }
+
+  return false;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -69,7 +95,7 @@ function sanitizePatternProperties(value: unknown): unknown {
   if (!isRecord(value)) return copyJsonValue(value);
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([pattern]) => !unsupportedRegexConstruct.test(pattern))
+      .filter(([pattern]) => !hasUnsupportedRegexLookaround(pattern))
       .map(([pattern, schema]) => [pattern, sanitizeSchemaValue(schema)]),
   );
 }
@@ -89,7 +115,7 @@ function sanitizeDependencies(value: unknown): unknown {
 function sanitizeSchemaObject(schema: Record<string, unknown>): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
-    if (key === "pattern" && typeof value === "string" && unsupportedRegexConstruct.test(value)) continue;
+    if (key === "pattern" && typeof value === "string" && hasUnsupportedRegexLookaround(value)) continue;
     if (key === "patternProperties") {
       sanitized[key] = sanitizePatternProperties(value);
       continue;

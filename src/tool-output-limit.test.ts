@@ -59,10 +59,13 @@ test("wraps native MCP Zod schemas with sanitized JSON Schema and preserved vali
     required: ["email"],
     additionalProperties: false,
   };
-  const sourceDefinitionBefore = JSON.parse(JSON.stringify(sourceDefinition));
-  const sourceInputSchema = z.fromJSONSchema(sourceDefinition);
+  const sourceDefinitionBefore = structuredClone(sourceDefinition);
+  const sourceInputSchema = z.fromJSONSchema(sourceDefinition).transform((value) => {
+    const input = value as { email: string };
+    return { ...input, email: input.email.toLowerCase() };
+  });
   const sourceSchema = asSchema(sourceInputSchema);
-  const sourceJsonSchema = await sourceSchema.jsonSchema;
+  const sourceJsonSchemaBefore = structuredClone(await sourceSchema.jsonSchema);
   const set = limitToolSetOutput({
     mcp_email: {
       inputSchema: sourceInputSchema,
@@ -80,9 +83,12 @@ test("wraps native MCP Zod schemas with sanitized JSON Schema and preserved vali
     additionalProperties: false,
   });
   assert.ok(validate);
-  assert.equal((await validate({ email: "jane@example.com" })).success, true);
+  assert.deepEqual(await validate({ email: "JANE@example.com" }), {
+    success: true,
+    value: { email: "jane@example.com" },
+  });
   assert.equal((await validate({ email: "jane..doe@example.com" })).success, false);
-  assert.deepEqual(await sourceSchema.jsonSchema, sourceJsonSchema);
+  assert.deepEqual(await sourceSchema.jsonSchema, sourceJsonSchemaBefore);
   assert.deepEqual(sourceDefinition, sourceDefinitionBefore);
 });
 
@@ -140,4 +146,47 @@ test("sanitizes JSON Schema regex locations without changing data values", () =>
     "x-tool-metadata": { pattern: "(?=extension)", patternProperties: { "(?=extension)": { pattern: "(?!extension)" } } },
   });
   assert.deepEqual(schema, source);
+});
+
+test("distinguishes lookaround assertions from escaped and character-class text", () => {
+  const supportedPatterns = [
+    "\\(?=literal",
+    "\\(?!literal",
+    "\\(?<=literal",
+    "\\(?<!literal",
+    "[(?=]",
+    "[(?!]",
+    "[(?<=]",
+    "[(?<!]",
+  ];
+  const unsupportedPatterns = [
+    "prefix(?=suffix)",
+    "prefix(?!suffix)",
+    "(?<=prefix)suffix",
+    "(?<!prefix)suffix",
+    "\\\\(?=literal)",
+  ];
+  const schema = {
+    type: "object",
+    properties: Object.fromEntries([
+      ...supportedPatterns.map((pattern, index) => [`supported${index}`, { type: "string", pattern }]),
+      ...unsupportedPatterns.map((pattern, index) => [`unsupported${index}`, { type: "string", pattern }]),
+    ]),
+    patternProperties: Object.fromEntries([
+      ...supportedPatterns.map((pattern) => [pattern, { type: "string", pattern }]),
+      ...unsupportedPatterns.map((pattern) => [pattern, { type: "number" }]),
+    ]),
+  };
+  const sourceBefore = structuredClone(schema);
+  const sanitized = sanitizeModelToolSchema(schema) as typeof schema;
+
+  for (const [index, pattern] of supportedPatterns.entries()) {
+    assert.equal(sanitized.properties[`supported${index}`].pattern, pattern);
+    assert.equal(Object.hasOwn(sanitized.patternProperties, pattern), true);
+  }
+  for (const [index, pattern] of unsupportedPatterns.entries()) {
+    assert.equal(Object.hasOwn(sanitized.properties[`unsupported${index}`], "pattern"), false);
+    assert.equal(Object.hasOwn(sanitized.patternProperties, pattern), false);
+  }
+  assert.deepEqual(schema, sourceBefore);
 });
