@@ -562,7 +562,13 @@
   }
   function sendVisibility() {
     if (ws && (ws as any).readyState === WebSocket.OPEN) {
-      (ws as any).send(JSON.stringify({ type: "my_ax_visibility", visible: document.visibilityState === "visible" }));
+      (ws as any).send(JSON.stringify({
+        type: "my_ax_visibility",
+        visible: document.visibilityState === "visible",
+        standalone: window.matchMedia("(display-mode: standalone)").matches,
+        platform: navigator.platform,
+        uaMobile: (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile ?? /Mobile|iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+      }));
     }
   }
   function onVisibilityChange() {
