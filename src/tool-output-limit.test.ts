@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { asSchema, type FlexibleSchema } from "ai";
+import { z } from "zod";
 import { limitModelToolOutput, MODEL_TOOL_OUTPUT_LIMIT_BYTES, limitToolSetOutput, limitToolResultValue, sanitizeModelToolSchema } from "./tool-output-limit";
 
 const bytes = (value: string) => new TextEncoder().encode(value).byteLength;
@@ -48,39 +50,94 @@ test("limitToolResultValue leaves small values unchanged", () => {
   assert.equal(limitToolResultValue(small), small);
 });
 
-test("removes unsupported regex lookarounds from nested model tool schemas", () => {
+test("wraps native MCP Zod schemas with sanitized JSON Schema and preserved validation", async () => {
+  const sourceDefinition = {
+    type: "object" as const,
+    properties: {
+      email: { type: "string" as const, pattern: "^(?!.*\\.\\.)[^@]+@[^@]+$" },
+    },
+    required: ["email"],
+    additionalProperties: false,
+  };
+  const sourceDefinitionBefore = JSON.parse(JSON.stringify(sourceDefinition));
+  const sourceInputSchema = z.fromJSONSchema(sourceDefinition);
+  const sourceSchema = asSchema(sourceInputSchema);
+  const sourceJsonSchema = await sourceSchema.jsonSchema;
+  const set = limitToolSetOutput({
+    mcp_email: {
+      inputSchema: sourceInputSchema,
+      execute: async () => "ok",
+    },
+  });
+  const modelSchema = asSchema((set.mcp_email as { inputSchema: FlexibleSchema }).inputSchema);
+  const validate = modelSchema.validate;
+
+  assert.deepEqual(await modelSchema.jsonSchema, {
+    $schema: "http://json-schema.org/draft-07/schema#",
+    type: "object",
+    properties: { email: { type: "string" } },
+    required: ["email"],
+    additionalProperties: false,
+  });
+  assert.ok(validate);
+  assert.equal((await validate({ email: "jane@example.com" })).success, true);
+  assert.equal((await validate({ email: "jane..doe@example.com" })).success, false);
+  assert.deepEqual(await sourceSchema.jsonSchema, sourceJsonSchema);
+  assert.deepEqual(sourceDefinition, sourceDefinitionBefore);
+});
+
+test("sanitizes JSON Schema regex locations without changing data values", () => {
   const schema = {
     type: "object",
     properties: {
-      email: { type: "string", pattern: "^(?!.*\\.\\.)[^@]+@[^@]+$", description: "Email address" },
+      email: { type: "string", pattern: "^(?!.*\\.\\.)[^@]+@[^@]+$" },
       slug: { type: "string", pattern: "^[a-z0-9-]+$" },
     },
-    required: ["email"],
+    patternProperties: {
+      "^(?!reserved_)[a-z]+$": { type: "string" },
+      "^[a-z]+$": {
+        type: "string",
+        pattern: "(?<=prefix)name$",
+        examples: ["(?=example)"],
+        default: "(?!default)",
+      },
+    },
+    examples: [
+      {
+        pattern: "(?=example)",
+        patternProperties: { "(?=example)": { pattern: "(?!example)" } },
+      },
+    ],
+    default: { pattern: "(?=default)", patternProperties: { "(?=default)": true } },
+    const: { pattern: "(?=const)" },
+    enum: [{ pattern: "(?=enum)" }],
+    "x-tool-metadata": { pattern: "(?=extension)", patternProperties: { "(?=extension)": { pattern: "(?!extension)" } } },
   };
+  const source = JSON.parse(JSON.stringify(schema));
 
   assert.deepEqual(sanitizeModelToolSchema(schema), {
     type: "object",
     properties: {
-      email: { type: "string", description: "Email address" },
+      email: { type: "string" },
       slug: { type: "string", pattern: "^[a-z0-9-]+$" },
     },
-    required: ["email"],
-  });
-  assert.equal(schema.properties.email.pattern, "^(?!.*\\.\\.)[^@]+@[^@]+$");
-});
-
-test("limitToolSetOutput sanitizes model-visible input schemas", () => {
-  const set = limitToolSetOutput({
-    mcp_email: {
-      inputSchema: {
-        type: "object",
-        properties: { email: { type: "string", pattern: "(?<=@)cloudflare\\.com$" } },
+    patternProperties: {
+      "^[a-z]+$": {
+        type: "string",
+        examples: ["(?=example)"],
+        default: "(?!default)",
       },
     },
+    examples: [
+      {
+        pattern: "(?=example)",
+        patternProperties: { "(?=example)": { pattern: "(?!example)" } },
+      },
+    ],
+    default: { pattern: "(?=default)", patternProperties: { "(?=default)": true } },
+    const: { pattern: "(?=const)" },
+    enum: [{ pattern: "(?=enum)" }],
+    "x-tool-metadata": { pattern: "(?=extension)", patternProperties: { "(?=extension)": { pattern: "(?!extension)" } } },
   });
-
-  assert.deepEqual((set.mcp_email as any).inputSchema, {
-    type: "object",
-    properties: { email: { type: "string" } },
-  });
+  assert.deepEqual(schema, source);
 });
