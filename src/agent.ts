@@ -33,6 +33,7 @@ import { makeOAuthClientStore } from "./oauth-store";
 import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
+import { selectPageConnection, type PageConnectionState } from "./page-connection";
 import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
@@ -714,7 +715,7 @@ export class MyAgent extends Think<Env> {
 
   async onMessage(connection: Parameters<Think<Env>["onMessage"]>[0], message: unknown) {
     try {
-      const parsed = typeof message === "string" ? JSON.parse(message) as { type?: string; visible?: boolean } : null;
+      const parsed = typeof message === "string" ? JSON.parse(message) as { type?: string; visible?: boolean; standalone?: boolean; platform?: string; uaMobile?: boolean } : null;
       // Liveness ping keeps the client's watchdog from treating a healthy, idle
       // socket as stale and force-reconnecting it.
       if (parsed?.type === "my_ax_ping") {
@@ -722,7 +723,13 @@ export class MyAgent extends Think<Env> {
         return;
       }
       if (parsed?.type === "my_ax_visibility") {
-        connection.setState({ ...((connection.state ?? {}) as Record<string, unknown>), chatVisible: parsed.visible === true });
+        connection.setState({
+          ...((connection.state ?? {}) as Record<string, unknown>),
+          chatVisible: parsed.visible === true,
+          standalone: parsed.standalone === true,
+          platform: typeof parsed.platform === "string" ? parsed.platform.slice(0, 80) : null,
+          uaMobile: parsed.uaMobile === true,
+        });
         return;
       }
       // page.* codemode connector: the live client's reply to a page_call.
@@ -988,15 +995,10 @@ export class MyAgent extends Think<Env> {
     };
   }
 
-  /**
-   * page.* codemode connector bridge. Marshal one curated verb to the live chat
-   * client over the existing WebSocket and await its page_result. Prefers a
-   * chat-visible connection; falls back to any live connection. Rejects with a
-   * typed error if no client is connected or the client does not reply in time.
-   */
   private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
-    const connections = [...this.getConnections<{ chatVisible?: boolean }>()];
-    if (connections.length === 0) return Promise.reject(new Error("page_unavailable: no live browser client connected to this session"));
+    const connections = [...this.getConnections<PageConnectionState>()];
+    const target = selectPageConnection(connections);
+    if (!target) return Promise.reject(new Error("page_unavailable: no live browser client connected to this session"));
     const requestId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const timeoutMs = Math.min(Math.max(opts?.timeoutMs ?? 10_000, 1000), 30_000);
     return new Promise<unknown>((resolve, reject) => {
@@ -1006,10 +1008,7 @@ export class MyAgent extends Think<Env> {
       }, timeoutMs);
       this.pendingPageCalls.set(requestId, { resolve, reject, timer });
       try {
-        // broadcast (not connection.send): the socket-owning isolate delivers
-        // reliably under hibernation; the client filters by requestId and only
-        // the tab holding this conversation replies with page_result.
-        this.broadcast(JSON.stringify({ type: "page_call", requestId, verb, args: args ?? {} }));
+        target.send(JSON.stringify({ type: "page_call", requestId, verb, args: args ?? {} }));
       } catch (e) {
         this.pendingPageCalls.delete(requestId);
         clearTimeout(timer);
