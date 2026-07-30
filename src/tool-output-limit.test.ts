@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { limitModelToolOutput, MODEL_TOOL_OUTPUT_LIMIT_BYTES, limitToolSetOutput, limitToolResultValue } from "./tool-output-limit";
+import { limitModelToolOutput, MODEL_TOOL_OUTPUT_LIMIT_BYTES, limitToolSetOutput, limitToolResultValue, sanitizeModelToolSchema } from "./tool-output-limit";
 
 const bytes = (value: string) => new TextEncoder().encode(value).byteLength;
 
@@ -46,4 +46,41 @@ test("limitToolResultValue leaves small values unchanged", () => {
   assert.equal(limitToolResultValue("ok"), "ok");
   const small = { a: 1 };
   assert.equal(limitToolResultValue(small), small);
+});
+
+test("removes unsupported regex lookarounds from nested model tool schemas", () => {
+  const schema = {
+    type: "object",
+    properties: {
+      email: { type: "string", pattern: "^(?!.*\\.\\.)[^@]+@[^@]+$", description: "Email address" },
+      slug: { type: "string", pattern: "^[a-z0-9-]+$" },
+    },
+    required: ["email"],
+  };
+
+  assert.deepEqual(sanitizeModelToolSchema(schema), {
+    type: "object",
+    properties: {
+      email: { type: "string", description: "Email address" },
+      slug: { type: "string", pattern: "^[a-z0-9-]+$" },
+    },
+    required: ["email"],
+  });
+  assert.equal(schema.properties.email.pattern, "^(?!.*\\.\\.)[^@]+@[^@]+$");
+});
+
+test("limitToolSetOutput sanitizes model-visible input schemas", () => {
+  const set = limitToolSetOutput({
+    mcp_email: {
+      inputSchema: {
+        type: "object",
+        properties: { email: { type: "string", pattern: "(?<=@)cloudflare\\.com$" } },
+      },
+    },
+  });
+
+  assert.deepEqual((set.mcp_email as any).inputSchema, {
+    type: "object",
+    properties: { email: { type: "string" } },
+  });
 });

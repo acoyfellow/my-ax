@@ -41,18 +41,36 @@ export function limitToolResultValue(value: unknown): unknown {
   return limitModelToolOutput(serialized);
 }
 
-/** Wrap every executable tool in a tool set so its result is bounded. Used for
- * native MCP / Code Mode tools, which do not pass through createThinkTools. */
+const unsupportedRegexConstruct = /\(\?(?:[=!]|<[=!])/u;
+
+export function sanitizeModelToolSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeModelToolSchema);
+  if (!value || typeof value !== "object") return value;
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "pattern" && typeof nestedValue === "string" && unsupportedRegexConstruct.test(nestedValue)) continue;
+    sanitized[key] = sanitizeModelToolSchema(nestedValue);
+  }
+  return sanitized;
+}
+
 export function limitToolSetOutput<T extends Record<string, unknown>>(tools: T): T {
   const out: Record<string, unknown> = {};
   for (const [name, def] of Object.entries(tools)) {
-    const execute = (def as { execute?: unknown })?.execute;
-    if (def && typeof execute === "function") {
-      const original = (execute as (...args: unknown[]) => unknown).bind(def);
-      out[name] = { ...(def as object), execute: async (...args: unknown[]) => limitToolResultValue(await original(...args)) };
-    } else {
+    if (!def || typeof def !== "object") {
       out[name] = def;
+      continue;
     }
+
+    const safeDefinition = { ...(def as Record<string, unknown>) };
+    if ("inputSchema" in safeDefinition) safeDefinition.inputSchema = sanitizeModelToolSchema(safeDefinition.inputSchema);
+    const execute = safeDefinition.execute;
+    if (typeof execute === "function") {
+      const original = (execute as (...args: unknown[]) => unknown).bind(def);
+      safeDefinition.execute = async (...args: unknown[]) => limitToolResultValue(await original(...args));
+    }
+    out[name] = safeDefinition;
   }
   return out as T;
 }
