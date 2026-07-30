@@ -7,6 +7,24 @@ const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif
 const INLINE_RASTER_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=\r\n]+)$/;
 const INLINE_MEDIA_RE = /^data:((?:image\/(?:png|jpeg|webp|gif))|(?:video\/(?:quicktime|mp4|webm)));base64,([A-Za-z0-9+/=\r\n]+)$/;
 const ARTIFACT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const IMAGE_SIGNATURE_BYTES = 12;
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
+const WEBP_RIFF_SIGNATURE = [0x52, 0x49, 0x46, 0x46];
+const WEBP_SIGNATURE = [0x57, 0x45, 0x42, 0x50];
+const GIF87A_SIGNATURE = [0x47, 0x49, 0x46, 0x38, 0x37, 0x61];
+const GIF89A_SIGNATURE = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61];
+
+function matchesSignature(bytes: Uint8Array, signature: number[], offset = 0): boolean {
+  return bytes.length >= offset + signature.length && signature.every((byte, index) => bytes[offset + index] === byte);
+}
+
+function matchesImageSignature(type: string, bytes: Uint8Array): boolean {
+  if (type === "image/png") return matchesSignature(bytes, PNG_SIGNATURE);
+  if (type === "image/jpeg") return matchesSignature(bytes, JPEG_SIGNATURE);
+  if (type === "image/webp") return matchesSignature(bytes, WEBP_RIFF_SIGNATURE) && matchesSignature(bytes, WEBP_SIGNATURE, 8);
+  return matchesSignature(bytes, GIF87A_SIGNATURE) || matchesSignature(bytes, GIF89A_SIGNATURE);
+}
 
 function uploadsBucket(env: Env): R2Bucket {
   const bucket = (env as Env & { USER_UPLOADS?: R2Bucket }).USER_UPLOADS;
@@ -40,6 +58,8 @@ export async function storeImageUpload(
 ): Promise<Attachment> {
   if (!IMAGE_TYPES.has(file.type)) throw new Error("Only PNG, JPEG, WebP, or GIF images are supported");
   if (file.size <= 0 || file.size > MAX_IMAGE_BYTES) throw new Error("Image must be between 1 byte and 10 MB");
+  const leadingBytes = new Uint8Array(await file.slice(0, IMAGE_SIGNATURE_BYTES).arrayBuffer());
+  if (!matchesImageSignature(file.type, leadingBytes)) throw new Error("Image contents do not match its declared type");
   const id = crypto.randomUUID();
   // Session IDs originate in the client. Keep them a single R2 key segment so
   // every returned key remains readable through assertOwnedUploadKey.

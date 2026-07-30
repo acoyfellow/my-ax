@@ -39,5 +39,8 @@ assertIncludes(settings, 'These are callable tools. They are not raw credentials
 assertIncludes(settings, 'import { classifyJobHealth, jobResultAttr } from "./job-health";', "jobs use the shared health classifier");
 assertIncludes(settings, 'const health = classifyJobHealth(job)', "each job row is health-classified");
 assertIncludes(settings, 'data-job-result={jobResultAttr(health)} data-job-health={health.state} data-job-tone={health.tone}', "job result exposes classified health state/tone");
+assertIncludes(settings, 'const registration = await navigator.serviceWorker.ready;', "push refresh awaits service worker registration inside its recovery path");
+assertIncludes(settings, 'setPushUi("available", "Push setup is temporarily unavailable. Tap Enable push to retry.");', "failed initial push refresh leaves Enable push available");
+assertIncludes(settings, 'void refreshPushUi();', "initial push refresh does not leave an unhandled promise");
 
-console.log("✓ reusable tools settings smoke: owner-selectable approval mode, explicit approval, and labeled mobile actions");
+console.log("✓ reusable tools settings smoke: owner-selectable approval mode, explicit approval, labeled mobile actions");
