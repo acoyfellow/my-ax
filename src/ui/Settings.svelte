@@ -247,29 +247,30 @@
       setPushUi("denied", "Notifications are blocked in browser/site settings.");
       return;
     }
-    const sub = await navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription());
-    if (sub) {
-      try {
-        const publicKey = await currentVapidPublicKey();
-        if (!subscriptionMatchesServerKey(sub, publicKey)) {
-          pushNeedsRelink = true;
-          setPushUi("available", "Notifications were registered with an old server key. Tap Relink push to repair.");
-          return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager.getSubscription();
+      if (sub) {
+        try {
+          const publicKey = await currentVapidPublicKey();
+          if (!subscriptionMatchesServerKey(sub, publicKey)) {
+            pushNeedsRelink = true;
+            setPushUi("available", "Notifications were registered with an old server key. Tap Relink push to repair.");
+            return;
+          }
+          await savePushSubscription(sub);
+          pushNeedsRelink = false;
+          setPushUi("enabled", "Push enabled and registered for this browser.");
+        } catch {
+          setPushUi("available", "Push is enabled locally but could not sync. Tap Enable push to retry.");
         }
-        // The browser can retain its endpoint after the server row is lost or
-        // stale. Re-upsert it whenever the app loads so an apparent local
-        // “enabled” state cannot leave notify_owner with zero devices.
-        await savePushSubscription(sub);
-        pushNeedsRelink = false;
-        setPushUi("enabled", "Push enabled and registered for this browser.");
-      } catch {
-        // Keep the repair action tappable rather than claiming an endpoint is
-        // usable when it could not be stored for agent delivery.
-        setPushUi("available", "Push is enabled locally but could not sync. Tap Enable push to retry.");
+        return;
       }
-      return;
+      setPushUi("available", Notification.permission === "granted" ? "Permission granted — finish push setup." : "Not configured.");
+    } catch {
+      pushNeedsRelink = false;
+      setPushUi("available", "Push setup is temporarily unavailable. Tap Enable push to retry.");
     }
-    setPushUi("available", Notification.permission === "granted" ? "Permission granted — finish push setup." : "Not configured.");
   }
   async function enablePush(forceRelink = false) {
     try {
@@ -847,7 +848,7 @@
 
   onMount(() => {
     setupPwa();
-    refreshPushUi();
+    void refreshPushUi();
     relocateExtras();
     // Settings open/close events
     window.addEventListener("my-ax:settings-open", openDrawer);
