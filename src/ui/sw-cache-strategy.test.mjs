@@ -27,6 +27,11 @@ test("the page reloads on controllerchange and nudges updates on focus", () => {
   assert.match(layout, /getRegistration\(\)[\s\S]{0,80}update\(\)/, "client re-checks for a SW update when the PWA becomes visible");
 });
 
+test("iOS uses a non-translucent status bar so the reserved viewport height stays at the top", () => {
+  assert.match(layout, /apple-mobile-web-app-status-bar-style" content="black"/, "the iOS status bar must not subtract its height from the bottom of a top-overlay viewport");
+  assert.doesNotMatch(layout, /apple-mobile-web-app-status-bar-style" content="black-translucent"/, "black-translucent leaves the physical status-bar height outside the viewport at the bottom on the proven iPhone");
+});
+
 test("sw.js is served no-cache so the browser always re-fetches it", () => {
   const i = indexTsx.indexOf('app.get("/sw.js"');
   assert.ok(i >= 0, "/sw.js route present");

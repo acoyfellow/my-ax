@@ -763,8 +763,6 @@ html {
   flex-direction: column;
 }
 
-/* apple-mobile-web-app-status-bar-style=black-translucent lets the app draw
- * underneath the OS status bar. Reserve the top safe area on chrome. */
 .safe-area-appbar {
   padding-top: max(0.5rem, env(safe-area-inset-top));
   /* Landscape notch / rounded corners: keep controls clear of the side insets
