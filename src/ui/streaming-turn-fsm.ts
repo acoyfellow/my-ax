@@ -192,7 +192,7 @@ export function agentStatusFor(state: StreamingTurnState): "idle" | "thinking" |
 }
 
 export function progressEligible(state: StreamingTurnState): boolean {
-  return state.tag === "active" && !state.producedVisibleText;
+  return state.tag === "active";
 }
 
 export function activeRequestIdOf(state: StreamingTurnState): string | null {
