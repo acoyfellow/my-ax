@@ -86,6 +86,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
           <span>Exit</span>
         </button>
+        <button type="button" class="svelte-artifact-close-strip" aria-label="Close fullscreen artifact" onclick={closeFullscreen}>Close artifact</button>
       {:else}
         <button
           type="button"

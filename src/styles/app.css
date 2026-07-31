@@ -446,6 +446,7 @@
   height: 100dvh;
   min-height: 0;
   margin: 0;
+  isolation: isolate;
 }
 .svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-fullscreen {
   position: fixed;
@@ -476,9 +477,30 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  pointer-events: auto;
+}
+.svelte-artifact-close-strip {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 2;
+  min-height: 44px;
+  transform: translateX(-50%);
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 17, 23, 0.88);
+  color: #fff;
+  font: 600 14px/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  touch-action: manipulation;
+  pointer-events: auto;
 }
 .svelte-artifact-exit:hover,
-.svelte-artifact-exit:active {
+.svelte-artifact-exit:active,
+.svelte-artifact-close-strip:hover,
+.svelte-artifact-close-strip:active {
   background: rgba(40, 44, 58, 0.95);
 }
 .svelte-artifact-exit svg {
@@ -548,6 +570,9 @@
   .reusable-tool-candidate__actions > button { flex: 1 1 100%; }
 }
 .svelte-artifact-shell[data-fullscreen="1"] .svelte-artifact-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   width: 100vw;
   height: 100dvh;
   border: 0;
