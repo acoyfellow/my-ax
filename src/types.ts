@@ -139,8 +139,10 @@ export interface ToolContext {
   writeFile: (path: string, content: string) => Promise<void>;
   listFiles: (path: string, opts?: { recursive?: boolean; includeHidden?: boolean }) => Promise<Array<{ path: string; name?: string; type?: string; size?: number }>>;
   searchConversations: (query: string, limit?: number) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
-  /** Compile and persist one owner-scoped Svelte artifact attached to this conversation. */
-  createSvelteArtifact: (input: { title: string; source: string }) => Promise<{ kind: "svelte-artifact"; artifactId: string; title: string; src: string; sourceHash: string }>;
+  /** Search the owner-scoped artifact library by reusable intent/title. */
+  searchArtifacts: (query: string, limit?: number) => Promise<Array<{ id: string; sessionId: string; kind: string; title: string; sourceHash: string; createdAt: string; updatedAt: string; score: number }>>;
+  /** Compile and persist one owner-scoped Svelte artifact attached to this conversation. Exact source duplicates are reused. */
+  createSvelteArtifact: (input: { title: string; source: string }) => Promise<{ kind: "svelte-artifact"; artifactId: string; title: string; src: string; sourceHash: string; reused?: boolean }>;
   /** Generate a short TTS clip, store it (7-day TTL), and deliver a push notification. */
   sendVoiceMessage: (input: { text: string; voice?: string }) => Promise<{ kind: "audio-message"; audioId: string; title: string; voice: string; src: string; bytes: number; createdAt: string; expiresAt: string }>;
   /** Optional saved-recipe execution guard. Undefined means unrestricted normal Code Mode. */

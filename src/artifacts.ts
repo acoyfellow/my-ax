@@ -68,13 +68,25 @@ async function sha256(input: string): Promise<string> {
 
 export async function createSvelteArtifact(env: Env, identity: AccessIdentity, sessionId: string, input: { title: string; source: string }) {
   const title = input.title.trim().slice(0, MAX_TITLE_CHARS);
-  const source = input.source.trim();
+  const source = input.source.trim().replace(/\r\n?/g, "\n");
   if (!title) throw new Error("Artifact title is required.");
   if (!source) throw new Error("Artifact source is empty.");
   const sourceBytes = new TextEncoder().encode(source).byteLength;
   if (sourceBytes > MAX_SOURCE_BYTES) throw new Error(`Artifact source exceeds ${MAX_SOURCE_BYTES} bytes.`);
 
   assertSelfContainedSource(source);
+
+  const ownerEmail = normalizedEmail(identity);
+  const owned = await env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?")
+    .bind(sessionId, ownerEmail).first<{ id: string }>();
+  if (!owned) throw new Error("Artifact conversation was not found or is not owned by the current user.");
+
+  const sourceHash = await sha256(source);
+  const existing = await env.DB.prepare("SELECT id, title FROM artifacts WHERE owner_email = ? AND source_hash = ? ORDER BY created_at DESC LIMIT 1")
+    .bind(ownerEmail, sourceHash).first<{ id: string; title: string }>();
+  if (existing) {
+    return { kind: "svelte-artifact" as const, artifactId: existing.id, title: existing.title, src: `/api/artifacts/${existing.id}/preview`, sourceHash, reused: true };
+  }
 
   let compiled;
   try {
@@ -83,13 +95,7 @@ export async function createSvelteArtifact(env: Env, identity: AccessIdentity, s
     throw new Error(`Svelte compile failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const ownerEmail = normalizedEmail(identity);
-  const owned = await env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?")
-    .bind(sessionId, ownerEmail).first<{ id: string }>();
-  if (!owned) throw new Error("Artifact conversation was not found or is not owned by the current user.");
-
   const id = crypto.randomUUID();
-  const sourceHash = await sha256(source);
   const storageKey = widgetStorageKey(identity, sessionId, id);
   const createdAt = new Date().toISOString();
   const manifest: SvelteArtifactManifest = {
@@ -148,6 +154,22 @@ export async function listOwnedArtifacts(env: Env, identity: AccessIdentity, lim
   const result = await env.DB.prepare("SELECT id, session_id, kind, title, source_hash, created_at, COALESCE(updated_at, created_at) AS updated_at FROM artifacts WHERE owner_email = ? ORDER BY COALESCE(updated_at, created_at) DESC LIMIT ?")
     .bind(normalizedEmail(identity), safeLimit).all<{ id: string; session_id: string; kind: string; title: string; source_hash: string; created_at: string; updated_at: string }>();
   return (result.results ?? []).map((row) => ({ id: row.id, sessionId: row.session_id, kind: row.kind, title: row.title, sourceHash: row.source_hash, createdAt: row.created_at, updatedAt: row.updated_at }));
+}
+
+export async function searchOwnedArtifacts(env: Env, identity: AccessIdentity, queryInput: string, limit = 10) {
+  const query = queryInput.trim().toLowerCase();
+  if (!query) return [];
+  const tokens = [...new Set(query.match(/[\p{L}\p{N}]+/gu) ?? [])].filter((token) => token.length > 1);
+  if (!tokens.length) return [];
+  const artifacts = await listOwnedArtifacts(env, identity, 200);
+  const scored = artifacts.map((artifact) => {
+    const title = artifact.title.toLowerCase();
+    const titleTokens = new Set(title.match(/[\p{L}\p{N}]+/gu) ?? []);
+    const overlap = tokens.filter((token) => titleTokens.has(token)).length;
+    const score = (title === query ? 100 : 0) + (title.includes(query) ? 40 : 0) + overlap * 10 + overlap / Math.max(tokens.length, titleTokens.size, 1);
+    return { ...artifact, score };
+  }).filter((artifact) => artifact.score > 0);
+  return scored.sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt)).slice(0, Math.max(1, Math.min(Math.floor(limit), 20)));
 }
 
 export async function renameOwnedArtifact(env: Env, identity: AccessIdentity, id: string, titleInput: string): Promise<boolean> {

@@ -26,7 +26,7 @@ import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { readUploadBytes } from "./uploads";
-import { createSvelteArtifact } from "./artifacts";
+import { createSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
 import type { Attachment } from "./types";
 import { makeOAuthClientStore } from "./oauth-store";
@@ -68,7 +68,8 @@ For actions that change external or interactive state, distinguish intent, attem
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Terrarium are needed.
 - browser_open opens a public web page in a real headless browser session with replay recording. Use it for public websites and rendered UI checks; do not claim authenticated browser access.
-- create_svelte_artifact creates a durable interactive Svelte 5 artifact attached to this conversation when the user asks for a widget, visualization, dashboard, calculator, or interactive UI. Provide complete self-contained Svelte source with no external imports.
+- search_artifacts searches the owner’s reusable artifact library. Before creating an artifact, search for the intended purpose and reuse a strong match instead of generating another variant.
+- create_svelte_artifact creates or reuses a durable interactive Svelte 5 artifact attached to this conversation when the user asks for a widget, visualization, dashboard, calculator, or interactive UI. Provide complete self-contained Svelte source with no external imports. Exact-source duplicates are automatically reused.
 - search_conversations searches earlier conversation memory indexed in D1 full-text search. When the user asks about previous discussions, use this — don't grep workspace files for chat memory.
 - ask_user asks the owner one multiple-choice question and pauses for their answer. Use it when you genuinely need a human decision (approval, a choice between options, missing direction) before continuing — especially when the user may be away. It pushes a notification; after calling it, stop and wait. The choice returns as a new user message.
 - Any MCP servers the user has connected (Settings → Connectors) appear as native tools. Their names come from the MCP server's tools/list. If an MCP server needs re-authorization, tell the user to open Settings → Connectors and re-authorize, then STOP.
@@ -915,6 +916,7 @@ export class MyAgent extends Think<Env> {
         const result = await env.DB.prepare(`SELECT e.session_id AS sessionId, e.ts, e.role, snippet(conversation_entries_fts, 0, '<<', '>>', '…', 24) AS snippet FROM conversation_entries_fts JOIN conversation_entries e ON e.id = conversation_entries_fts.rowid WHERE conversation_entries_fts MATCH ? AND e.owner_email = ? ORDER BY bm25(conversation_entries_fts) LIMIT ?`).bind(ftsQuery, identity.email.toLowerCase(), Math.max(1, Math.min(limit, 100))).all<{ sessionId: string; ts: string; role: string; snippet: string }>();
         return result.results ?? [];
       },
+      searchArtifacts: (query, limit = 10) => searchOwnedArtifacts(env, identity, query, limit),
       createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
       sendVoiceMessage: async (input) => {
         const clip = await createAudioMessage(env, identity, sessionId, input);
