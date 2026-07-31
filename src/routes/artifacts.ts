@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
+import { deleteOwnedArtifact, listOwnedArtifacts, readOwnedSvelteArtifact, renameOwnedArtifact } from "../artifacts";
 
 function artifactPreview(manifest: { title: string; clientJs: string; css: string }): string {
   const css = manifest.css.replace(/<\/style/gi, "<\\/style");
@@ -19,6 +19,23 @@ export function registerArtifactRoutes(app: Hono<AppEnv>) {
     const raw = Number.parseInt(c.req.query("limit") ?? "100", 10);
     const artifacts = await listOwnedArtifacts(c.env, c.get("identity"), raw);
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { artifacts }, next_actions: [] });
+  });
+
+  app.patch("/api/artifacts/:id", async (c) => {
+    const body: { title?: string } = await c.req.json<{ title?: string }>().catch(() => ({}));
+    try {
+      const renamed = await renameOwnedArtifact(c.env, c.get("identity"), c.req.param("id"), body.title ?? "");
+      if (!renamed) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { renamed: true }, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 400);
+    }
+  });
+
+  app.delete("/api/artifacts/:id", async (c) => {
+    const deleted = await deleteOwnedArtifact(c.env, c.get("identity"), c.req.param("id"));
+    if (!deleted) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { deleted: true }, next_actions: [] });
   });
 
   app.get("/api/artifacts/:id/preview", async (c) => {
