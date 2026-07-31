@@ -26,6 +26,7 @@
     chunkMessageId,
     idleStreamingTurnState,
     isComposerLocked,
+    progressEligible,
     transition as transitionStreamingTurn,
     type StreamingTurnEvent,
     type StreamingTurnState,
@@ -470,9 +471,7 @@
   // ── Status state machine ───────────────────────────────────────────
   // Wraps wsState.status to also drive the thinking indicator.
   let thinkingShowTimer: ReturnType<typeof setTimeout> | null = null;
-  let thinkingInactivityTimer: ReturnType<typeof setTimeout> | null = null;
   const THINKING_SHOW_DELAY_MS = 200;
-  const THINKING_INACTIVITY_MS = 600;
   let turnState = $state<StreamingTurnState>(idleStreamingTurnState);
 
   function dispatchTurn(event: StreamingTurnEvent) {
@@ -502,20 +501,16 @@
       clearTimeout(thinkingShowTimer);
       thinkingShowTimer = null;
     }
-    if (thinkingInactivityTimer !== null) {
-      clearTimeout(thinkingInactivityTimer);
-      thinkingInactivityTimer = null;
-    }
+  }
+  function scheduleThinking() {
+    if (thinkingVisible || thinkingShowTimer !== null) return;
+    thinkingShowTimer = setTimeout(() => {
+      thinkingShowTimer = null;
+      if (progressEligible(turnState)) showThinking();
+    }, THINKING_SHOW_DELAY_MS);
   }
   function noteAgentActivity() {
-    hideThinking();
-    if (thinkingInactivityTimer !== null) clearTimeout(thinkingInactivityTimer);
-    thinkingInactivityTimer = setTimeout(() => {
-      thinkingInactivityTimer = null;
-      if (wsState.status !== "idle" && wsState.status !== "done") {
-        showThinking();
-      }
-    }, THINKING_INACTIVITY_MS);
+    scheduleThinking();
   }
 
   function applyStatus(s: "idle" | "thinking" | "running" | "done") {
@@ -524,11 +519,7 @@
       clearThinkingTimers();
       hideThinking();
     } else {
-      if (thinkingShowTimer !== null) clearTimeout(thinkingShowTimer);
-      thinkingShowTimer = setTimeout(() => {
-        thinkingShowTimer = null;
-        if (wsState.status !== "idle" && wsState.status !== "done") showThinking();
-      }, THINKING_SHOW_DELAY_MS);
+      scheduleThinking();
     }
   }
 

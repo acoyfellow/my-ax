@@ -46,7 +46,7 @@ function activeState(requestId = "r1"): StreamingTurnState {
   return transition(idleStreamingTurnState, { type: "submit", requestId });
 }
 
-test("keeps pre-text progress eligible through reasoning and step-only gaps until text", () => {
+test("keeps progress eligible through every active pre-text frame", () => {
   let state = activeState("r1");
   for (const chunkType of ["start", "start-step", "reasoning-delta", "finish-step", "tool-input-available"]) {
     state = transition(state, frame("r1", chunkType));
@@ -55,22 +55,18 @@ test("keeps pre-text progress eligible through reasoning and step-only gaps unti
     assert.equal(agentStatusFor(state), "thinking");
     assert.equal(progressEligible(state), true);
   }
-
-  state = transition(state, frame("r1", "text-delta"));
-  assert.equal(state.tag, "active");
-  assert.equal(agentStatusFor(state), "running");
-  assert.equal(progressEligible(state), false);
 });
 
-test("post-text tool and reasoning frames do not re-enter pre-text progress eligibility", () => {
+test("keeps progress continuously eligible between text and tool frames until terminal settlement", () => {
   let state = activeState("r1");
-  state = transition(state, frame("r1", "text-delta"));
-  assert.equal(progressEligible(state), false);
-  state = transition(state, frame("r1", "tool-input-available"));
-  assert.equal(progressEligible(state), false);
-  state = transition(state, frame("r1", "reasoning-delta"));
-  assert.equal(progressEligible(state), false);
+  for (const chunkType of ["text-delta", "tool-input-available", "tool-output-available", "finish-step", "start-step", "reasoning-delta"]) {
+    state = transition(state, frame("r1", chunkType));
+    assert.equal(progressEligible(state), true, chunkType);
+  }
   assert.equal(agentStatusFor(state), "running");
+
+  state = transition(state, done("r1"));
+  assert.equal(progressEligible(state), false);
 });
 
 test("tool-only output is valid output and empty completed turns remain detectable", () => {
