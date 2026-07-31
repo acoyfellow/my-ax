@@ -28,6 +28,7 @@ type ArtifactRow = {
   storage_key: string;
   source_hash: string;
   created_at: string;
+  updated_at: string;
 };
 
 function bucket(env: Env): R2Bucket {
@@ -138,15 +139,34 @@ function isSvelteArtifactManifest(value: unknown): value is SvelteArtifactManife
 
 export async function getOwnedArtifactRow(env: Env, identity: AccessIdentity, id: string): Promise<ArtifactRow | null> {
   if (!ARTIFACT_ID_RE.test(id)) return null;
-  return env.DB.prepare("SELECT id, owner_email, session_id, kind, title, storage_key, source_hash, created_at FROM artifacts WHERE id = ? AND owner_email = ?")
+  return env.DB.prepare("SELECT id, owner_email, session_id, kind, title, storage_key, source_hash, created_at, COALESCE(updated_at, created_at) AS updated_at FROM artifacts WHERE id = ? AND owner_email = ?")
     .bind(id, normalizedEmail(identity)).first<ArtifactRow>();
 }
 
 export async function listOwnedArtifacts(env: Env, identity: AccessIdentity, limit = 100) {
   const safeLimit = Math.max(1, Math.min(Number.isFinite(limit) ? Math.floor(limit) : 100, 200));
-  const result = await env.DB.prepare("SELECT id, session_id, kind, title, source_hash, created_at FROM artifacts WHERE owner_email = ? ORDER BY created_at DESC LIMIT ?")
-    .bind(normalizedEmail(identity), safeLimit).all<{ id: string; session_id: string; kind: string; title: string; source_hash: string; created_at: string }>();
-  return (result.results ?? []).map((row) => ({ id: row.id, sessionId: row.session_id, kind: row.kind, title: row.title, sourceHash: row.source_hash, createdAt: row.created_at }));
+  const result = await env.DB.prepare("SELECT id, session_id, kind, title, source_hash, created_at, COALESCE(updated_at, created_at) AS updated_at FROM artifacts WHERE owner_email = ? ORDER BY COALESCE(updated_at, created_at) DESC LIMIT ?")
+    .bind(normalizedEmail(identity), safeLimit).all<{ id: string; session_id: string; kind: string; title: string; source_hash: string; created_at: string; updated_at: string }>();
+  return (result.results ?? []).map((row) => ({ id: row.id, sessionId: row.session_id, kind: row.kind, title: row.title, sourceHash: row.source_hash, createdAt: row.created_at, updatedAt: row.updated_at }));
+}
+
+export async function renameOwnedArtifact(env: Env, identity: AccessIdentity, id: string, titleInput: string): Promise<boolean> {
+  if (!ARTIFACT_ID_RE.test(id)) return false;
+  const title = titleInput.trim().slice(0, MAX_TITLE_CHARS);
+  if (!title) throw new Error("Artifact title is required.");
+  const result = await env.DB.prepare("UPDATE artifacts SET title = ?, updated_at = ? WHERE id = ? AND owner_email = ?")
+    .bind(title, new Date().toISOString(), id, normalizedEmail(identity)).run();
+  return Number(result.meta.changes ?? 0) > 0;
+}
+
+export async function deleteOwnedArtifact(env: Env, identity: AccessIdentity, id: string): Promise<boolean> {
+  const row = await getOwnedArtifactRow(env, identity, id);
+  if (!row) return false;
+  await env.DB.prepare("DELETE FROM artifacts WHERE id = ? AND owner_email = ?").bind(id, normalizedEmail(identity)).run();
+  await bucket(env).delete(row.storage_key).catch((error) => {
+    console.error("artifact_object_delete_failed", { artifactId: id, err: error instanceof Error ? error.message : String(error) });
+  });
+  return true;
 }
 
 export async function readOwnedSvelteArtifact(env: Env, identity: AccessIdentity, id: string): Promise<SvelteArtifactManifest | null> {
@@ -166,12 +186,12 @@ export async function readOwnedSvelteArtifact(env: Env, identity: AccessIdentity
 
 export async function deleteSessionArtifacts(env: Env, identity: AccessIdentity, sessionId: string): Promise<{ deleted: number }> {
   const ownerEmail = normalizedEmail(identity);
-  const result = await env.DB.prepare("SELECT storage_key FROM artifacts WHERE session_id = ? AND owner_email = ?")
+  const result = await env.DB.prepare("SELECT storage_key FROM artifacts WHERE session_id = ? AND owner_email = ? AND library_saved = 0")
     .bind(sessionId, ownerEmail).all<{ storage_key: string }>();
   const keys = (result.results ?? []).map((row) => row.storage_key);
   // Delete metadata first so a failed R2 cleanup can leave only unreachable
   // garbage rather than a now-deleted conversation's artifact still visible.
-  await env.DB.prepare("DELETE FROM artifacts WHERE session_id = ? AND owner_email = ?").bind(sessionId, ownerEmail).run();
+  await env.DB.prepare("DELETE FROM artifacts WHERE session_id = ? AND owner_email = ? AND library_saved = 0").bind(sessionId, ownerEmail).run();
   if (keys.length) await bucket(env).delete(keys).catch((error) => {
     console.error("artifact_object_cleanup_failed", {
       sessionId,

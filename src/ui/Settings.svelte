@@ -40,12 +40,17 @@
   let open = $state(false);
   let dialogEl = $state<HTMLDialogElement | null>(null);
   let searchInput = $state<HTMLInputElement | null>(null);
+  type LibraryArtifact = { id: string; sessionId: string; kind: string; title: string; sourceHash: string; createdAt: string; updatedAt: string };
+  let artifacts = $state<LibraryArtifact[]>([]);
+  let artifactsLoading = $state(false);
+  let artifactStatus = $state("");
   let settingsQuery = $state("");
-  let activeSection = $state<"general" | "capabilities" | "recipes" | "jobs" | "starters" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "artifacts" | "recipes" | "jobs" | "starters" | "connections">("general");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
+    { id: "artifacts" as const, label: "Artifacts", hint: "Reusable widgets and dashboards" },
     { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
     { id: "starters" as const, label: "Starters", hint: "New-conversation suggestions" },
@@ -93,7 +98,9 @@
   ];
   const visibleSections = $derived.by(() => {
     const query = settingsQuery.trim().toLowerCase();
-    return query ? sections.filter((section) => `${section.label} ${section.hint}`.toLowerCase().includes(query)) : sections;
+    if (!query) return sections;
+    const artifactMatch = artifacts.some((artifact) => (artifact.title + " " + artifact.kind).toLowerCase().includes(query));
+    return sections.filter((section) => (section.label + " " + section.hint).toLowerCase().includes(query) || (section.id === "artifacts" && artifactMatch));
   });
   $effect(() => {
     if (settingsQuery && visibleSections.length && !visibleSections.some((section) => section.id === activeSection)) {
@@ -107,9 +114,11 @@
     const requestedSection = detail?.section ?? query.get("section");
     const requestedRecipeName = detail?.recipeName ?? query.get("recipe");
     if (requestedSection === "recipes") activeSection = "recipes";
+    if (requestedSection === "artifacts") activeSection = "artifacts";
     if (requestedSection === "starters") activeSection = "starters";
     open = true;
     refreshJobs();
+    void refreshArtifacts();
     void refreshStarters();
     void refreshRecipePreferences();
     void refreshRecipes().then(async () => {
@@ -158,6 +167,38 @@
       const delta = e.key === "ArrowDown" ? 1 : -1;
       activeSection = options[(current + delta + options.length) % options.length].id;
     }
+  }
+
+  const visibleArtifacts = $derived.by(() => {
+    const query = settingsQuery.trim().toLowerCase();
+    return query ? artifacts.filter((artifact) => (artifact.title + " " + artifact.kind).toLowerCase().includes(query)) : artifacts;
+  });
+  async function refreshArtifacts() {
+    artifactsLoading = true; artifactStatus = "";
+    try {
+      const response = await fetch("/api/artifacts?limit=200", { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Artifact library request failed");
+      artifacts = body?.result?.artifacts ?? [];
+    } catch (error) { artifactStatus = "Could not load artifacts: " + (error instanceof Error ? error.message : String(error)); }
+    finally { artifactsLoading = false; }
+  }
+  function openArtifact(artifact: LibraryArtifact) { window.open("/api/artifacts/" + encodeURIComponent(artifact.id) + "/preview", "_blank", "noopener,noreferrer"); }
+  function openArtifactConversation(artifact: LibraryArtifact) { closeDrawer(); window.location.href = "/?session=" + encodeURIComponent(artifact.sessionId); }
+  async function renameArtifact(artifact: LibraryArtifact) {
+    const title = window.prompt("Rename artifact", artifact.title)?.trim();
+    if (!title || title === artifact.title) return;
+    const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
+    const body = await response.json();
+    if (!response.ok) { artifactStatus = body?.error?.message || "Rename failed"; return; }
+    await refreshArtifacts(); artifactStatus = "Artifact renamed.";
+  }
+  async function deleteArtifact(artifact: LibraryArtifact) {
+    if (!window.confirm("Delete ‘" + artifact.title + "’ from your artifact library?")) return;
+    const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "DELETE", credentials: "include" });
+    const body = await response.json();
+    if (!response.ok) { artifactStatus = body?.error?.message || "Delete failed"; return; }
+    artifacts = artifacts.filter((item) => item.id !== artifact.id); artifactStatus = "Artifact deleted.";
   }
 
   // ── PWA install ─────────────────────────────────────────────────────
@@ -1093,6 +1134,36 @@
             <li>Work Code Mode only calls named callbacks.</li>
           </ul>
         </section>
+      </div>
+
+      <div hidden={activeSection !== "artifacts"} class="space-y-4">
+        <header class="flex items-start justify-between gap-3">
+          <div><h3 class="text-sm font-semibold text-fg">Artifact Library</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Reusable widgets, dashboards, forms, and visualizations generated in your conversations. They remain in this owner-scoped library even if the origin conversation is removed.</p></div>
+          <button type="button" onclick={refreshArtifacts} class="job-action-button shrink-0 hover:border-brand/60" disabled={artifactsLoading}>Refresh</button>
+        </header>
+        {#if artifactsLoading && artifacts.length === 0}
+          <p class="text-xs text-fg-mut">Loading artifacts…</p>
+        {:else if visibleArtifacts.length === 0}
+          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No artifacts found</strong><p class="mt-1 text-xs text-fg-mut">Ask My AX to create a dashboard, calculator, form, visualization, or other interactive artifact.</p></section>
+        {:else}
+          <div class="grid gap-3 sm:grid-cols-2">
+            {#each visibleArtifacts as artifact (artifact.id)}
+              <article class="overflow-hidden rounded-lg border border-line bg-bg">
+                <button type="button" class="block w-full text-left" onclick={() => openArtifact(artifact)} aria-label={"Open " + artifact.title}>
+                  <iframe title={artifact.title + " preview"} src={"/api/artifacts/" + artifact.id + "/preview"} loading="lazy" tabindex="-1" class="pointer-events-none h-36 w-full border-0 bg-black"></iframe>
+                  <div class="p-3"><strong class="block truncate text-sm text-fg">{artifact.title}</strong><span class="mt-1 block text-[11px] text-fg-mut">{artifact.kind} · {new Date(artifact.updatedAt || artifact.createdAt).toLocaleDateString()}</span></div>
+                </button>
+                <div class="flex flex-wrap justify-end gap-1.5 border-t border-line p-2">
+                  <button type="button" class="job-action-button text-brand hover:border-brand/60" onclick={() => openArtifact(artifact)}>Open</button>
+                  <button type="button" class="job-action-button hover:border-brand/60" onclick={() => openArtifactConversation(artifact)}>Conversation</button>
+                  <button type="button" class="job-action-button hover:border-brand/60" onclick={() => renameArtifact(artifact)}>Rename</button>
+                  <button type="button" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500" onclick={() => deleteArtifact(artifact)}>Delete</button>
+                </div>
+              </article>
+            {/each}
+          </div>
+        {/if}
+        {#if artifactStatus}<p class="text-xs text-fg-mut" role="status" aria-live="polite">{artifactStatus}</p>{/if}
       </div>
 
       <div hidden={activeSection !== "recipes"} class="space-y-4">

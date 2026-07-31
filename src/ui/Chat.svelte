@@ -1368,18 +1368,29 @@
         renderThinkHistory(m.messages || []);
       }
     } else if (m.type === "cf_agent_use_chat_response" && m.id !== activeRequestId && !activeRequestId) {
-      // A turn we didn't start from the composer — i.e. a VOICE turn running
-      // in this same DO. Adopt its request id so the assistant text streams
-      // into the chat log live (and is finalized on done), instead of being
-      // dropped. This is what makes spoken replies visible.
+      // A turn started by another live client (another device, tab, voice, or
+      // automation) belongs to this session too. Adopt the server request id
+      // before consuming its first chunk so every subscriber uses the same
+      // authoritative stream identity and can resume it after reconnect.
+      if (typeof m.id === "string" && m.id) {
+        activeRequestId = m.id;
+        restoredActiveTurn = false;
+        rememberActiveTurn(m.id, "remote-client");
+        applyStatus("running");
+      }
       if (m.error) {
         dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Voice turn failed" } });
-        pushError(m.body || "Voice turn failed");
+        pushError(m.body || "Agent request failed");
+        activeRequestId = null;
+        streamingMsgId = null;
+        forgetActiveTurn();
         applyStatus("idle");
       } else if (m.done) {
         dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, done: true } });
         finalizeStreaming();
+        activeRequestId = null;
         streamingMsgId = null;
+        forgetActiveTurn();
         applyStatus("idle");
         (window as any).__refreshConnectors?.();
       } else if (m.body) {
