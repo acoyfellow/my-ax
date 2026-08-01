@@ -70,8 +70,14 @@ export function mergeTranscript<T extends MergeableMessage>(
       chosen.set(msg.id, msg);
       return;
     }
-    // Collision: pick per preference. incomingSide === true means `msg` is from `incoming`.
-    if (incomingSide === preferIncoming) chosen.set(msg.id, msg);
+    const preferred = incomingSide === preferIncoming ? msg : prior;
+    const fallback = incomingSide === preferIncoming ? prior : msg;
+    chosen.set(
+      msg.id,
+      typeof preferred.timestamp === "number" || typeof fallback.timestamp !== "number"
+        ? preferred
+        : { ...preferred, timestamp: fallback.timestamp },
+    );
   };
 
   for (const m of existing) {
@@ -88,4 +94,35 @@ export function mergeTranscript<T extends MergeableMessage>(
     return (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0);
   });
   return merged;
+}
+
+export function fillChronologicalTimestamps(values: Array<number | undefined>): Array<number | undefined> {
+  const filled = [...values];
+  let index = 0;
+
+  while (index < filled.length) {
+    if (typeof filled[index] === "number") {
+      index += 1;
+      continue;
+    }
+
+    const start = index;
+    while (index < filled.length && typeof filled[index] !== "number") index += 1;
+    const end = index;
+    const previous = start > 0 ? filled[start - 1] : undefined;
+    const next = end < filled.length ? filled[end] : undefined;
+    const count = end - start;
+
+    for (let offset = 0; offset < count; offset += 1) {
+      if (typeof previous === "number" && typeof next === "number" && next > previous) {
+        filled[start + offset] = previous + ((next - previous) * (offset + 1)) / (count + 1);
+      } else if (typeof previous === "number") {
+        filled[start + offset] = previous;
+      } else if (typeof next === "number") {
+        filled[start + offset] = next;
+      }
+    }
+  }
+
+  return filled;
 }

@@ -14,7 +14,7 @@
   import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
-  import { mergeTranscript } from "./transcript-merge";
+  import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
   import { ArtifactToolRegistry } from "./artifact-tools";
@@ -1592,6 +1592,12 @@
     // transcript-merge.ts. Alignment is by id (D1 meta.uiMessageId === Think id).
     const priorMessages = messages;
     const thinkViews: MessageView[] = [];
+    const thinkTimestamps = fillChronologicalTimestamps(
+      thinkMessages.map((message: any) => {
+        const rawId = typeof message.id === "string" && message.id ? message.id : "";
+        return toMillis(message.createdAt) ?? existingTimestamps.get(rawId);
+      }),
+    );
     if (thinkMessages.length > 0) {
       onboardingHidden = true;
       if (wasResuming) {
@@ -1605,7 +1611,7 @@
     }
     resumingExistingSession = false;
     const seenViewIds = new Map<string, number>();
-    for (const message of thinkMessages) {
+    for (const [messageIndex, message] of thinkMessages.entries()) {
       const text = (message.parts || [])
         .filter((p: any) => p.type === "text")
         .map((p: any) => p.text || "")
@@ -1660,9 +1666,7 @@
         parts: orderedParts,
         reasoning: reasoning || undefined,
         attachments,
-        // Think UIMessage.createdAt is a Date or ISO string, not a number;
-        // coerce so assistant messages get a timestamp (bug: agent rows had none).
-        timestamp: toMillis(message.createdAt) ?? existingTimestamps.get(rawId),
+        timestamp: thinkTimestamps[messageIndex],
         streaming: false,
         pending: false,
       };

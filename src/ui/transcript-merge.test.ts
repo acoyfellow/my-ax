@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeTranscript } from "./transcript-merge";
+import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
 
 const msg = (
   id: string,
@@ -46,6 +46,14 @@ test("Think's version wins for a message present in both (authoritative content)
   const merged = mergeTranscript(d1, think);
   assert.equal(merged.length, 1);
   assert.equal(merged[0].content, "think full");
+});
+
+test("Think content cannot erase the durable timestamp on collision", () => {
+  const d1 = [msg("a1", "assistant", 20, { content: "d1 partial" })];
+  const think = [msg("a1", "assistant", undefined, { content: "think full" })];
+  const merged = mergeTranscript(d1, think);
+  assert.equal(merged[0].content, "think full");
+  assert.equal(merged[0].timestamp, 20);
 });
 
 test("empty Think replay keeps the full D1 transcript", () => {
@@ -108,4 +116,23 @@ test("no duplicate ids in output when both sides share ids", () => {
   const merged = mergeTranscript(d1, think);
   assert.equal(merged.length, 2);
   assert.equal(new Set(merged.map((m) => m.id)).size, 2);
+});
+
+test("fills missing assistant timestamps from chronological neighbors", () => {
+  assert.deepEqual(fillChronologicalTimestamps([100, undefined, undefined, 400]), [100, 200, 300, 400]);
+  assert.deepEqual(fillChronologicalTimestamps([undefined, 200, undefined]), [200, 200, 200]);
+  assert.deepEqual(fillChronologicalTimestamps([undefined, undefined]), [undefined, undefined]);
+});
+
+test("filled Think timestamps keep long-turn agent messages ordered", () => {
+  const timestamps = fillChronologicalTimestamps([100, undefined, undefined, 400]);
+  const think = [
+    msg("u1", "user", timestamps[0]),
+    msg("a1", "assistant", timestamps[1]),
+    msg("a2", "assistant", timestamps[2]),
+    msg("u2", "user", timestamps[3]),
+  ];
+  const merged = mergeTranscript([msg("u2", "user", 400)], think);
+  assert.deepEqual(merged.map((message) => message.id), ["u1", "a1", "a2", "u2"]);
+  assert.equal(merged.every((message) => typeof message.timestamp === "number"), true);
 });
