@@ -1763,7 +1763,10 @@
     if (decision !== "send") return;
     e.preventDefault();
     if (wsState.status !== "idle" && wsState.status !== "done") return;
-    if (wsState.conn !== "live") return;
+    if (wsState.conn !== "live") {
+      pushError("Message not sent: reconnecting. Your draft is still in the composer — retry when the connection is live.");
+      return;
+    }
     formEl?.requestSubmit();
   }
   async function onInputPaste(e: ClipboardEvent) {
@@ -1858,7 +1861,10 @@
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (composerLocked) return;
-    if (wsState.conn !== "live" && ws) return;
+    if (ws && wsState.conn !== "live") {
+      pushError("Message not sent: reconnecting. Your draft is still in the composer — retry when the connection is live.");
+      return;
+    }
     const text = composerText.trim();
     if (!text && pendingAttachments.length === 0) return;
 
@@ -2676,7 +2682,7 @@
             type="submit"
             onclick={wsState.conn === "offline" ? retryConnection : onSendClick}
             data-status={sendStatus}
-            disabled={sendStatus === "offline" && wsState.conn !== "offline"}
+            disabled={wsState.conn === "reconnecting" || (sendStatus === "offline" && wsState.conn !== "offline")}
             class="flex-none flex items-center justify-center rounded-lg w-11 h-11 transition-all duration-150 border border-transparent
               data-[status=idle]:bg-brand/10 data-[status=idle]:text-brand data-[status=idle]:border-brand/25 data-[status=idle]:hover:bg-brand/20 data-[status=idle]:hover:border-brand/40 data-[status=idle]:active:bg-brand/25
               data-[status=thinking]:bg-brand data-[status=thinking]:text-white data-[status=thinking]:hover:bg-brand/90
