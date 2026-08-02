@@ -96,9 +96,15 @@ function summarizeArgs(tool: string, args: Record<string, unknown>) {
         ? ["harnessId", "cwd", "model", "thinking", "continueRecent"]
         : ["harness_status", "harness_stop", "harness_abort", "harness_control", "pi_status", "pi_stop", "pi_abort", "pi_command"].includes(tool)
           ? ["harnessId", "id", "command"]
-          : tool.startsWith("cmux_")
-            ? ["workspaceId", "surfaceId", "lines"]
-            : [];
+          : ["harness_prompt", "harness_steer", "harness_follow_up", "pi_prompt", "pi_steer", "pi_follow_up"].includes(tool)
+            ? ["harnessId", "id"]
+            : tool === "harness_logs"
+              ? ["harnessId", "id", "tailChars"]
+              : tool === "harness_list"
+                ? ["harnessId", "limit"]
+                : tool.startsWith("cmux_")
+                  ? ["workspaceId", "surfaceId", "lines"]
+                  : [];
   const summary: Record<string, unknown> = {};
   for (const key of allowedKeys) {
     if (key in args) summary[key] = args[key];
