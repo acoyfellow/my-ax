@@ -6,7 +6,7 @@ import { DynamicWorkerExecutor, sanitizeToolName } from "@cloudflare/codemode";
 import type { Context, Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ToolDef } from "../types";
-import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
+import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { storeInlineMediaArtifact } from "../uploads";
 import { parseMachineShellContent } from "../machinectl-output";
 
@@ -14,7 +14,6 @@ interface PublishedTool { name: string; description: string; inputSchema: Record
 type MachineResult = { ok?: boolean; content?: string; error?: string };
 type ObserveSessionBody = { runId?: string; session?: { harness?: string; id?: string; label?: string; state?: string }; note?: string };
 const MACHINE_STATUS_CACHE_MS = 5_000;
-const SESSION_HARNESS_IDS = new Set(["pi", "vscode"]);
 const machineStatusCache = new Map<string, { at: number; status: { connected: boolean; machineName?: string; tools?: PublishedTool[] } }>();
 
 function hostFor(c: Context<AppEnv>) {
@@ -43,7 +42,7 @@ export function registerMachinectlRoutes(app: Hono<AppEnv>) {
     const harness = body?.session?.harness?.trim().toLowerCase() ?? "";
     const sessionId = body?.session?.id?.trim() ?? "";
     if (!runId) return c.json({ ok: false, error: { code: "BAD_RUN_ID", message: "runId is required" } }, 400);
-    if (!SESSION_HARNESS_IDS.has(harness)) return c.json({ ok: false, error: { code: "BAD_SESSION_HARNESS", message: "session.harness must be pi or vscode" } }, 400);
+    if (!isValidSessionHarnessId(harness)) return c.json({ ok: false, error: { code: "BAD_SESSION_HARNESS", message: "session.harness must be a harness id, for example pi, codex or opencode" } }, 400);
     if (!sessionId) return c.json({ ok: false, error: { code: "BAD_SESSION_ID", message: "session.id is required" } }, 400);
 
     const status = await hostFor(c).fetch("http://internal/status").then((response) => response.json<{ connected?: boolean; machineName?: string | null }>());

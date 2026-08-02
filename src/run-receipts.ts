@@ -33,6 +33,12 @@ export class RunReceiptTerminalError extends Error {
   }
 }
 
+const SESSION_HARNESS_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+export function isValidSessionHarnessId(harness: string): boolean {
+  return SESSION_HARNESS_ID_PATTERN.test(harness);
+}
+
 export function runEventId(type: string): string {
   const safeType = type.replace(/[^a-z0-9_.-]/gi, "-").slice(0, 64) || "event";
   return `evt-${safeType}-${crypto.randomUUID()}`;

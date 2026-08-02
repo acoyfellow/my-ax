@@ -2,7 +2,7 @@ import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getSessionAgent } from "../agent-stub";
-import { appendOwnedRunEvent, RunReceiptNotFoundError } from "../run-receipts";
+import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { JobService } from "../job-service";
 import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
@@ -28,12 +28,12 @@ const TOOLS = [
   },
   {
     name: "my_ax_observe_connected_session",
-    description: "Append one explicit connected-laptop Pi or VSCode session observation to an existing owner-scoped Run Receipt. This records only the supplied observation; it does not discover sessions, attach to a TUI, mirror transcripts, synchronize a session, or add control authority.",
+    description: "Append one explicit connected-laptop delegated-agent session observation to an existing owner-scoped Run Receipt. The harness is any harness id the laptop reports, for example pi, vscode, codex or opencode. This records only the supplied observation; it does not discover sessions, attach to a TUI, mirror transcripts, synchronize a session, or add control authority.",
     inputSchema: {
       type: "object",
       properties: {
         runId: { type: "string" },
-        harness: { type: "string", enum: ["pi", "vscode"] },
+        harness: { type: "string", pattern: "^[a-z0-9][a-z0-9_-]{0,31}$" },
         sessionId: { type: "string" },
         machineName: { type: "string" },
         label: { type: "string" },
@@ -150,7 +150,7 @@ async function observeConnectedSession(c: CoordinatorContext, args: Record<strin
   const harness = typeof args.harness === "string" ? args.harness.trim().toLowerCase() : "";
   const sessionId = typeof args.sessionId === "string" ? args.sessionId.trim() : "";
   if (!runId) throw new Error("runId is required");
-  if (harness !== "pi" && harness !== "vscode") throw new Error("harness must be pi or vscode");
+  if (!isValidSessionHarnessId(harness)) throw new Error("harness must be a harness id, for example pi, codex or opencode");
   if (!sessionId) throw new Error("sessionId is required");
   return appendOwnedRunEvent(c, runId, {
     actor: { id: `machinectl:${typeof args.machineName === "string" && args.machineName.trim() ? args.machineName.trim() : "connected-laptop"}`, kind: "machinectl", mode: "live" },
