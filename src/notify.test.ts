@@ -76,6 +76,7 @@ test("push clicks target the exact durable notification before its source", () =
   assert.match(worker, /event\.action === "destination"/);
   assert.match(worker, /event\.notification\.data\?\.href \|\| "\/\?action=attention"/);
   assert.match(panel, /data-notification-detail=\{selected\.id\}/);
+  assert.match(panel, /if \(attentionId\) replaceAttentionUrl\(attentionId, true\)/);
   assert.match(panel, /Open conversation/);
 });
 

@@ -163,6 +163,7 @@
   }
   async function openPanel(attentionId: string | null = null) {
     selectedId = attentionId;
+    if (attentionId) replaceAttentionUrl(attentionId, true);
     open = true;
     await tick();
     if (dialogEl && !dialogEl.open) dialogEl.showModal();
