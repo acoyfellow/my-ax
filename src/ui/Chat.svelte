@@ -11,7 +11,7 @@
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import ImageLightbox from "./ImageLightbox.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
-  import { parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
+  import { myAxDeepLinkIntent, parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
@@ -2152,19 +2152,17 @@
     document.addEventListener("visibilitychange", onVisibilityChange);
     const onSwitch = (e: Event) => { const id = (e as CustomEvent<{ id?: string }>).detail?.id; if (id) { window.dispatchEvent(new Event("my-ax:switch-session-ack")); switchToSession(id); } };
     const followDeepLink = (target: MyAxDeepLink) => {
-      if (target.sessionId) {
+      const intent = myAxDeepLinkIntent(target);
+      if (intent.kind === "preserve") return;
+      if (intent.kind === "session") {
         history.replaceState(null, "", location.pathname + location.hash);
-        switchToSession(target.sessionId);
+        switchToSession(intent.sessionId);
         return;
       }
-      if (target.action === "attention") { window.dispatchEvent(new Event("my-ax:attention-open")); return; }
-      if (target.action === "settings") { window.dispatchEvent(new Event("my-ax:settings-open")); return; }
-      // A run receipt (/runs/<id>) opens as a nested modal above this
-      // conversation rather than a full-page navigation that would replace the
-      // conversation context. The modal owns its own history/Back semantics.
-      const receiptMatch = /^\/runs\/([^/?#]+)$/.exec(target.href.split("?")[0].split("#")[0]);
-      if (receiptMatch) { window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: decodeURIComponent(receiptMatch[1]) } })); return; }
-      location.assign(target.href);
+      if (intent.kind === "attention") { window.dispatchEvent(new Event("my-ax:attention-open")); return; }
+      if (intent.kind === "settings") { window.dispatchEvent(new Event("my-ax:settings-open")); return; }
+      if (intent.kind === "run-receipt") { window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: intent.runId } })); return; }
+      location.assign(intent.href);
     };
     const onNavigate = (event: Event) => {
       const detail = (event as CustomEvent<MyAxDeepLink>).detail;

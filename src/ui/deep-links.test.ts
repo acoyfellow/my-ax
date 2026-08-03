@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseMyAxDeepLink } from "./deep-links";
+import { myAxDeepLinkIntent, parseMyAxDeepLink } from "./deep-links";
 
 const current = "https://my.ax.example/?session=current";
 
@@ -16,6 +16,24 @@ test("parses an owner-session deep link without falling back to the current sess
 test("preserves attention actions and ordinary same-origin paths", () => {
   assert.equal(parseMyAxDeepLink("/?action=attention", current)?.action, "attention");
   assert.equal(parseMyAxDeepLink("/decisions/abc", current)?.href, "/decisions/abc");
+});
+
+test("an informational root push preserves the warm client's active conversation", () => {
+  const target = parseMyAxDeepLink("/", current);
+  assert.ok(target);
+  assert.deepEqual(myAxDeepLinkIntent(target), { kind: "preserve" });
+});
+
+test("deep-link intents distinguish session, attention, receipt, and ordinary navigation", () => {
+  const session = parseMyAxDeepLink("/?session=target", current);
+  const attention = parseMyAxDeepLink("/?action=attention", current);
+  const receipt = parseMyAxDeepLink("/runs/run-123", current);
+  const ordinary = parseMyAxDeepLink("/decisions/abc", current);
+  assert.ok(session && attention && receipt && ordinary);
+  assert.deepEqual(myAxDeepLinkIntent(session), { kind: "session", sessionId: "target" });
+  assert.deepEqual(myAxDeepLinkIntent(attention), { kind: "attention" });
+  assert.deepEqual(myAxDeepLinkIntent(receipt), { kind: "run-receipt", runId: "run-123" });
+  assert.deepEqual(myAxDeepLinkIntent(ordinary), { kind: "navigate", href: "/decisions/abc" });
 });
 
 test("rejects external notification destinations", () => {
