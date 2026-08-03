@@ -79,7 +79,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "notify_owner",
-    description: "Send an attention notification to this user's subscribed my-ax installed apps. Use only when the user explicitly asks to be notified, or for a completed/background task or important action requiring their attention. Never use for routine chat replies. Delivery is always restricted to the current owner.",
+    description: "Send an immediate one-off Web Push notification to this user's subscribed my-ax installed apps. When the user explicitly asks to send a push or notify them now, call this tool exactly once; no recurring job is needed. Also use for a completed background task or important action requiring attention. Never use for routine chat replies. Delivery is always restricted to the current owner.",
     parameters: {
       type: "object",
       properties: {
