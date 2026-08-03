@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Env } from "./types";
 import { notifyOwner, DEDUPE_WINDOW_MS } from "./notify";
@@ -161,6 +162,19 @@ test("a malformed stored subscription is a single deterministic failure, not ret
   assert.equal(result.failed, 1);
   assert.equal(result.delivered, 0);
   assert.equal(reads, 1, "a deterministic parse failure is not retried");
+});
+
+test("notify_owner explicitly supports an immediate one-off push", () => {
+  const source = readFileSync(new URL("./tools.ts", import.meta.url), "utf8");
+  assert.match(source, /immediate one-off Web Push/);
+  assert.match(source, /no recurring job is needed/);
+});
+
+test("the MCP bridge exposes notify_owner through the owner-scoped push implementation", () => {
+  const source = readFileSync(new URL("./routes/mcp.ts", import.meta.url), "utf8");
+  assert.match(source, /name: "notify_owner"/);
+  assert.match(source, /await notifyOwner\(c\.env, c\.get\("identity"\)\.email/);
+  assert.doesNotMatch(source, /attention_create/);
 });
 
 test("boundedPushPayload includes a normal sessionId but omits an oversized one", async () => {

@@ -15,7 +15,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/notify.ts` + `src/push.ts` | Owner-scoped Web Push transport and agent-notification delivery. |
 | `src/browser-tools.ts` | Cloudflare Browser Run `browser_open` tool and inline replay-receipt payload. |
 | `src/routes/browser.ts` | Replay page and server-side Browser Run recording retrieval for rrweb playback. |
-| `src/routes/mcp.ts` | Direct MCP coordinator: bounded Code Mode orchestration for owner chat sessions plus one explicit Run Receipt connected-laptop observation tool. |
+| `src/routes/mcp.ts` | Direct MCP coordinator: bounded Code Mode orchestration for owner chat sessions, owner-scoped one-off push delivery through `notify_owner`, and one explicit Run Receipt connected-laptop observation tool. |
 | `src/saved-recipes.ts` + `src/routes/recipes.ts` | Owner-approved saved `work_code` recipes. They run only against an owned session, reuse the normal Work Code Mode bridge, and append start/terminal Run Receipt events. |
 | `src/llm.ts` + `src/models.ts` | Model/provider routing helpers and the operator-controlled catalog used by Think agents. |
 | `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
@@ -140,7 +140,7 @@ my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configure
 - **`browser_open`** — a native Think tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
 - **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the persistent My AX Workspace, the connected physical machine, bounded Terrarium cloud agent runs, the live-UI Page connector, and a codemode namespace. Child calls carry location, method, status, and duration metadata.
 - **Recurring jobs** — `JobService` is the sole business boundary for list/create/update/pause/resume/run/delete/history. Every adapter supplies the verified owner; all reads and mutations scope SQL by that owner. Active updates create the replacement native schedule before persistence, cancel it if persistence fails, and retire the old schedule only after the new row is durable. `job_events` retains mutation/run evidence and idempotency keys bound repeated create/run requests.
-- **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration plus explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
+- **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration, immediate one-off `notify_owner` Web Push delivery, and explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 
 ## Durable Object History
 

@@ -6,9 +6,17 @@ import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError }
 import { JobService } from "../job-service";
 import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
+import { notifyOwner } from "../notify";
 
 const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history"] as const;
 type Method = typeof METHODS[number];
+const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
+type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
+const MCP_NOTIFICATION_KIND_SET: ReadonlySet<string> = new Set(MCP_NOTIFICATION_KINDS);
+
+function isMcpNotificationKind(value: unknown): value is McpNotificationKind {
+  return typeof value === "string" && MCP_NOTIFICATION_KIND_SET.has(value);
+}
 
 const TOOLS = [
   {
@@ -25,6 +33,21 @@ const TOOLS = [
     name: "my_ax_call",
     description: "Discover or directly invoke one narrow owner-scoped my-ax coordinator method. Use method=catalog for discovery; prefer my_ax_code for multi-step orchestration.",
     inputSchema: { type: "object", properties: { method: { type: "string", enum: ["catalog", ...METHODS] }, arguments: { type: "object" } }, required: ["method"] },
+  },
+  {
+    name: "notify_owner",
+    description: "Send an immediate one-off Web Push notification to this owner’s subscribed My AX apps and create a durable Attention entry. Use when the owner explicitly asks to be notified now. Delivery is restricted to the authenticated owner.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: MCP_NOTIFICATION_KINDS },
+        title: { type: "string" },
+        body: { type: "string" },
+        href: { type: "string", description: "Optional same-origin My AX deep link." },
+      },
+      required: ["kind", "title", "body"],
+      additionalProperties: false,
+    },
   },
   {
     name: "my_ax_observe_connected_session",
@@ -238,9 +261,25 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
       }
       if (name === "my_ax_call") {
         const method = args.method;
-        if (method === "catalog") return c.json(rpc(req.id, text({ methods: METHODS, receiptTools: ["my_ax_observe_connected_session"], checkInTool: "my_ax_check_in" })));
+        if (method === "catalog") return c.json(rpc(req.id, text({ methods: METHODS, receiptTools: ["my_ax_observe_connected_session"], notificationTools: ["notify_owner"], checkInTool: "my_ax_check_in" })));
         if (typeof method !== "string" || !METHODS.includes(method as Method)) throw new Error("unknown coordinator method");
         return c.json(rpc(req.id, text(await coordinatorCall(c, method as Method, (args.arguments as Record<string, unknown> | undefined) ?? {}))));
+      }
+      if (name === "notify_owner") {
+        const kind = args.kind;
+        const title = typeof args.title === "string" ? args.title.trim() : "";
+        const body = typeof args.body === "string" ? args.body.trim() : "";
+        if (!isMcpNotificationKind(kind)) throw new Error("valid notification kind is required");
+        if (!title) throw new Error("title is required");
+        if (!body) throw new Error("body is required");
+        const receipt = await notifyOwner(c.env, c.get("identity").email, {
+          kind,
+          title,
+          body,
+          href: typeof args.href === "string" ? args.href : undefined,
+        });
+        const delivered = receipt.delivered > 0 && receipt.failed === 0;
+        return c.json(rpc(req.id, { ...text({ ok: delivered, ...receipt }), ...(delivered ? {} : { isError: true }) }));
       }
       if (name === "my_ax_observe_connected_session") {
         try {
