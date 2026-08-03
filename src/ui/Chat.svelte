@@ -2159,7 +2159,10 @@
         switchToSession(intent.sessionId);
         return;
       }
-      if (intent.kind === "attention") { window.dispatchEvent(new Event("my-ax:attention-open")); return; }
+      if (intent.kind === "attention") {
+        window.dispatchEvent(new CustomEvent("my-ax:attention-open", { detail: { attentionId: intent.attentionId } }));
+        return;
+      }
       if (intent.kind === "settings") { window.dispatchEvent(new Event("my-ax:settings-open")); return; }
       if (intent.kind === "run-receipt") { window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: intent.runId } })); return; }
       location.assign(intent.href);

@@ -193,6 +193,34 @@ test("parseAttentionSessionSummaryRows normalizes exact grouped SQL rows", () =>
   ]);
 });
 
+test("GET /api/attention/:id returns only the authenticated owner's exact notification", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const app = new Hono<AppEnv>();
+  app.use("*", async (c, next) => {
+    c.set("identity", { email: "owner@example.com", sub: "owner" });
+    await next();
+  });
+  registerAttentionRoutes(app);
+  const binds: unknown[][] = [];
+  const DB = {
+    prepare() {
+      let values: unknown[] = [];
+      const statement = {
+        bind(...nextValues: unknown[]) { values = nextValues; binds.push(values); return statement; },
+        async first() {
+          if (values[0] !== "owner@example.com" || values[1] !== id) return null;
+          return { id, session_id: "session-1", kind: "job.complete", title: "Done", body: "Result", href: "/?session=session-1", created_at: "2026-08-03 17:49:22", seen_at: null };
+        },
+      };
+      return statement;
+    },
+  };
+  const response = await app.fetch(new Request(`http://my-ax.test/api/attention/${id}`), { DB } as any);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json() as any).result.item.id, id);
+  assert.deepEqual(binds, [["owner@example.com", id]]);
+});
+
 // ────────────────────────────────────────────────────────────────────────
 // R1A regression: the rendered POST /attention/seen route mutates the
 // attention_items table through owner() (which reads c.get("identity").email).

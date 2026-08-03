@@ -22,7 +22,7 @@ assertIncludes(attention, "inset: max(0.5rem, env(safe-area-inset-top)) auto aut
 assertIncludes(attention, 'import {', "imports the pure notification-stream model");
 assertIncludes(attention, "buildNotificationStream", "builds the unified stream from the pure model");
 assertIncludes(attention, "unread notifications", "bell aria uses plain 'notifications' language");
-assertIncludes(attention, ">Notifications<", "panel title is plainly 'Notifications'");
+assertIncludes(attention, 'selectedId ? "Notification" : "Notifications"', "panel title distinguishes the selected notification from the list");
 assertIncludes(attention, "You're all caught up.", "empty state drops 'No recent pings' jargon");
 assertIncludes(attention, "notif-list", "renders a single flat notification list");
 assertIncludes(attention, "notif-pill", "each row carries a typed pill");
@@ -34,10 +34,10 @@ assertIncludes(attention, "/dismiss", "failed runs can be dismissed via the new 
 assertIncludes(attention, "/api/runs/dismiss-all", "clear-all also dismisses failed runs");
 assertIncludes(attention, "Clear all", "a single clear-all lives in the header");
 
-// Actions: primary=conversation (follow), secondary=widget/receipt modal.
-assertIncludes(attention, "function follow(", "primary action navigates to the conversation/deep-link");
-assertIncludes(attention, "my-ax:run-receipt-open", "secondary action opens the run receipt as a nested modal");
-assertIncludes(attention, "openWidget", "a secondary 'View' action opens the widget/artifact");
+assertIncludes(attention, "function showDetail(", "primary action opens the durable notification detail");
+assertIncludes(attention, "data-notification-detail", "selected notification content has a stable detail marker");
+assertIncludes(attention, "Open conversation", "conversation navigation is a secondary source action");
+assertIncludes(attention, "my-ax:run-receipt-open", "run receipts remain available as a nested modal");
 
 // Mobile geometry: single scroll region, bottom sheet, no two-column nav.
 assertIncludes(attention, "overscroll-behavior: contain;", "one bounded scroll region");

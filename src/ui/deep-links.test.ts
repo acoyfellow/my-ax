@@ -10,6 +10,7 @@ test("parses an owner-session deep link without falling back to the current sess
     href: "/?session=target-123",
     sessionId: "target-123",
     action: null,
+    attentionId: null,
   });
 });
 
@@ -26,12 +27,12 @@ test("an informational root push preserves the warm client's active conversation
 
 test("deep-link intents distinguish session, attention, receipt, and ordinary navigation", () => {
   const session = parseMyAxDeepLink("/?session=target", current);
-  const attention = parseMyAxDeepLink("/?action=attention", current);
+  const attention = parseMyAxDeepLink("/?action=attention&attentionId=note-123", current);
   const receipt = parseMyAxDeepLink("/runs/run-123", current);
   const ordinary = parseMyAxDeepLink("/decisions/abc", current);
   assert.ok(session && attention && receipt && ordinary);
   assert.deepEqual(myAxDeepLinkIntent(session), { kind: "session", sessionId: "target" });
-  assert.deepEqual(myAxDeepLinkIntent(attention), { kind: "attention" });
+  assert.deepEqual(myAxDeepLinkIntent(attention), { kind: "attention", attentionId: "note-123" });
   assert.deepEqual(myAxDeepLinkIntent(receipt), { kind: "run-receipt", runId: "run-123" });
   assert.deepEqual(myAxDeepLinkIntent(ordinary), { kind: "navigate", href: "/decisions/abc" });
 });

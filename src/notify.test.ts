@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Env } from "./types";
-import { notifyOwner, DEDUPE_WINDOW_MS } from "./notify";
+import { attentionDeepLink, notifyOwner, DEDUPE_WINDOW_MS } from "./notify";
 
 // Regression coverage for the push 429 flood: notifyOwner accepted a dedupeKey
 // but never used it, so repeat events (recurring-job ticks, dead-session
@@ -67,6 +67,17 @@ function nowSql(): string {
 
 const OWNER = "owner@example.com";
 const base = { kind: "job.complete" as const, title: "Job done", body: "ok", href: "/" };
+
+test("push clicks target the exact durable notification before its source", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  assert.equal(attentionDeepLink(id), `/?action=attention&attentionId=${id}`);
+  const worker = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("./ui/Attention.svelte", import.meta.url), "utf8");
+  assert.match(worker, /event\.action === "destination"/);
+  assert.match(worker, /event\.notification\.data\?\.href \|\| "\/\?action=attention"/);
+  assert.match(panel, /data-notification-detail=\{selected\.id\}/);
+  assert.match(panel, /Open conversation/);
+});
 
 test("same dedupeKey within the window suppresses the resend (no second push)", async () => {
   const h = makeEnv();

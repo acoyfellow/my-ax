@@ -224,6 +224,20 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     }, next_actions: [] });
   });
 
+  app.get("/api/attention/:id", async (c) => {
+    const email = owner(c);
+    const id = c.req.param("id");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ATTENTION_ID", message: "unsupported notification id" }, next_actions: [] }, 400);
+    }
+    const item = await c.env.DB.prepare(`SELECT id, session_id, kind, title, body, href, created_at, seen_at
+      FROM attention_items WHERE owner_email = ? AND id = ?`).bind(email, id).first<AttentionRow>();
+    if (!item) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ATTENTION_NOT_FOUND", message: "notification not found" }, next_actions: [] }, 404);
+    }
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { item }, next_actions: [] });
+  });
+
   app.delete("/api/attention", async (c) => {
     const email = owner(c);
     const result = await c.env.DB.prepare("DELETE FROM attention_items WHERE owner_email = ?").bind(email).run();
