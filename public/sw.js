@@ -1,4 +1,4 @@
-const CACHE = "my-ax-static-v12";
+const CACHE = "my-ax-static-v13";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -33,15 +33,7 @@ async function setAttentionBadge(count) {
 
 function notificationActions(payload) {
   if (Array.isArray(payload.actions) && payload.actions.length) return payload.actions.slice(0, 2);
-  if (payload.kind === "deploy.gate") return [
-    { action: "open", title: "Review gate" },
-    { action: "attention", title: "Inbox" },
-  ];
-  if (payload.kind === "job.complete" || payload.kind === "job.needs_input") return [
-    { action: "open", title: "Open job" },
-    { action: "attention", title: "Inbox" },
-  ];
-  return [{ action: "open", title: "Open" }, { action: "attention", title: "Inbox" }];
+  return [{ action: "open", title: "Open notification" }, { action: "attention", title: "All notifications" }];
 }
 
 self.addEventListener("push", (event) => {
@@ -50,7 +42,11 @@ self.addEventListener("push", (event) => {
   event.waitUntil((async () => {
     await self.registration.showNotification(payload.title || "my · ax", {
       body: payload.body || "You have a new my · ax notification.",
-      data: { href: payload.href || "/", attentionHref: "/?action=attention" },
+      data: {
+        href: payload.href || "/?action=attention",
+        attentionHref: "/?action=attention",
+        destinationHref: payload.destinationHref || "/",
+      },
       tag: payload.attentionId || undefined,
       renotify: !!payload.attentionId,
       requireInteraction: payload.kind === "deploy.gate" || payload.kind === "job.needs_input",
@@ -64,7 +60,11 @@ self.addEventListener("push", (event) => {
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const href = event.action === "attention" ? (event.notification.data?.attentionHref || "/?action=attention") : (event.notification.data?.href || "/");
+  const href = event.action === "attention"
+    ? (event.notification.data?.attentionHref || "/?action=attention")
+    : event.action === "destination"
+      ? (event.notification.data?.destinationHref || "/")
+      : (event.notification.data?.href || "/?action=attention");
   event.waitUntil((async () => {
     const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
     const sameOrigin = windows.filter((client) => new URL(client.url).origin === self.location.origin);

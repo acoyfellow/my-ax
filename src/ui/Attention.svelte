@@ -18,11 +18,13 @@
   let loading = $state(false);
   let clearing = $state(false);
   let error = $state<string | null>(null);
+  let selectedId = $state<string | null>(null);
   let dialogEl: HTMLDialogElement | null = null;
 
   // The single unified, reverse-chronological stream (attention pings + failed
   // runs), with owner-dismissed runs filtered out. See notification-stream.ts.
   const stream = $derived(buildNotificationStream(items, failedRuns, dismissedRuns));
+  const selected = $derived(stream.find((note) => note.id === selectedId) ?? null);
 
   function updateBadge() {
     if (unread > 0) void (navigator as any).setAppBadge?.(unread).catch?.(() => {});
@@ -136,22 +138,69 @@
       }
     } catch {}
   }
+  function replaceAttentionUrl(attentionId: string | null, keepPanel: boolean) {
+    const url = new URL(location.href);
+    if (keepPanel) url.searchParams.set("action", "attention");
+    else if (url.searchParams.get("action") === "attention") url.searchParams.delete("action");
+    if (attentionId) url.searchParams.set("attentionId", attentionId);
+    else url.searchParams.delete("attentionId");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+  async function ensureItem(id: string) {
+    if (stream.some((note) => note.id === id) || id.startsWith("run:")) return;
+    const response = await fetch(`/api/attention/${encodeURIComponent(id)}`, { credentials: "include" });
+    if (!response.ok) throw new Error("That notification is no longer available");
+    const body = await response.json();
+    const item = body?.result?.item;
+    if (!item?.id) throw new Error("That notification is no longer available");
+    items = [item, ...items.filter((candidate) => candidate.id !== item.id)];
+  }
   function closePanel() {
     open = false;
+    selectedId = null;
+    replaceAttentionUrl(null, false);
     if (dialogEl?.open) dialogEl.close();
   }
-  async function openPanel() {
+  async function openPanel(attentionId: string | null = null) {
+    selectedId = attentionId;
     open = true;
     await tick();
     if (dialogEl && !dialogEl.open) dialogEl.showModal();
     loading = true;
     await Promise.all([refresh(), refreshFailedRuns()]);
+    if (attentionId) {
+      try {
+        await ensureItem(attentionId);
+        await markSeenOne(attentionId);
+      } catch (err: any) {
+        error = err?.message || "That notification is no longer available";
+      }
+    }
     loading = false;
-    await markSeen();
+    if (!attentionId) await markSeen();
   }
   async function toggle() {
     if (open) closePanel();
     else await openPanel();
+  }
+  function showDetail(event: MouseEvent, note: Notification) {
+    event.preventDefault();
+    selectedId = note.id;
+    replaceAttentionUrl(note.source === "attention" ? note.id : null, true);
+    if (note.source === "attention") void markSeenOne(note.id);
+  }
+  function showList() {
+    selectedId = null;
+    replaceAttentionUrl(null, true);
+  }
+  function sourceLabel(href: string | null) {
+    if (!href) return null;
+    const target = parseMyAxDeepLink(href, location.href);
+    if (!target) return null;
+    if (target.sessionId) return "Open conversation";
+    if (/^\/runs\//.test(target.href)) return "Open run";
+    if (target.action === "settings") return "Open settings";
+    return "Open source";
   }
   function runReceiptId(href: string): string | null {
     try {
@@ -201,7 +250,10 @@
     const refreshVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     const refreshMessage = (event: MessageEvent) => { if (event.data?.type === "my-ax:attention") void refresh(); };
     document.addEventListener("visibilitychange", refreshVisible);
-    const openFromLaunch = () => { void openPanel(); };
+    const openFromLaunch = (event: Event) => {
+      const attentionId = (event as CustomEvent<{ attentionId?: string | null }>).detail?.attentionId ?? null;
+      void openPanel(attentionId);
+    };
     navigator.serviceWorker?.addEventListener("message", refreshMessage);
     window.addEventListener("my-ax:attention-open", openFromLaunch);
     return () => {
@@ -228,16 +280,37 @@
       data-attention-owner-panel
     >
       <div class="notif-header safe-area-appbar">
-        <h2 class="text-sm font-semibold text-fg">Notifications</h2>
+        <div class="flex min-w-0 items-center gap-2">
+          {#if selectedId}
+            <button type="button" onclick={showList} class="notif-close" aria-label="Back to notifications">←</button>
+          {/if}
+          <h2 class="truncate text-sm font-semibold text-fg">{selectedId ? "Notification" : "Notifications"}</h2>
+        </div>
         <div class="flex items-center gap-1">
-          {#if stream.length > 0}
+          {#if !selectedId && stream.length > 0}
             <button type="button" onclick={clearAll} disabled={clearing} class="notif-clear-all">{clearing ? "Clearing…" : "Clear all"}</button>
           {/if}
           <button type="button" onclick={closePanel} class="notif-close" aria-label="Close notifications">×</button>
         </div>
       </div>
       <div class="notif-body" data-attention-owner-content>
-        {#if loading && stream.length === 0}
+        {#if selected}
+          <article class="notif-detail" data-notification-detail={selected.id}>
+            <div class="flex items-center gap-2">
+              <span class="notif-pill" data-tone={selected.tone}>{selected.label}</span>
+              <time class="notif-detail-time">{new Date(selected.ts).toLocaleString()}</time>
+            </div>
+            <h3 class="notif-detail-title">{selected.title}</h3>
+            {#if selected.body}<p class="notif-detail-body">{selected.body}</p>{/if}
+            {#if sourceLabel(selected.href)}
+              <button type="button" class="notif-detail-source" onclick={(event) => follow(event, selected.href)}>{sourceLabel(selected.href)}</button>
+            {/if}
+          </article>
+        {:else if selectedId && loading}
+          <p class="notif-empty">Loading notification…</p>
+        {:else if selectedId}
+          <p class="notif-empty text-bad">{error ?? "That notification is no longer available"}</p>
+        {:else if loading && stream.length === 0}
           <p class="notif-empty">Loading…</p>
         {:else if error && stream.length === 0}
           <p class="notif-empty text-bad">{error}</p>
@@ -247,7 +320,7 @@
           <ul class="notif-list">
             {#each stream as note (note.id)}
               <li class="notif-item" data-tone={note.tone} data-unread={note.unread ? "1" : undefined}>
-                <a class="notif-item-main" href={note.href ?? "#"} onclick={(event) => follow(event, note.href)}>
+                <a class="notif-item-main" href={note.source === "attention" ? `/?action=attention&attentionId=${encodeURIComponent(note.id)}` : "#"} onclick={(event) => showDetail(event, note)}>
                   <span class="notif-row">
                     <span class="notif-pill" data-tone={note.tone}>{note.label}</span>
                     <strong class="notif-title">{note.title}</strong>
@@ -367,6 +440,38 @@
     line-height: 1.45;
     color: var(--fg-mut);
   }
+  .notif-detail {
+    display: flex;
+    min-height: 280px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 22px;
+  }
+  .notif-detail-time { font-size: 11px; color: var(--fg-mut); }
+  .notif-detail-title {
+    margin-top: 18px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--fg);
+  }
+  .notif-detail-body {
+    margin-top: 12px;
+    white-space: pre-wrap;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--fg);
+  }
+  .notif-detail-source {
+    margin-top: 24px;
+    border-radius: 0.5rem;
+    background: var(--brand);
+    padding: 0.6rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: white;
+  }
+  .notif-detail-source:hover { opacity: 0.9; }
   .notif-actions { display: flex; flex: none; align-items: center; gap: 4px; }
   .notif-action {
     border: 1px solid var(--line);

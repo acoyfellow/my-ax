@@ -84,6 +84,10 @@ const MAX_HREF_LENGTH = 2048;
 // 1-byte padding delimiter, so JSON payload must be <= 4079 bytes).
 export const MAX_PUSH_PAYLOAD_BYTES = 4_079;
 
+export function attentionDeepLink(attentionId: string): string {
+  return `/?action=attention&attentionId=${encodeURIComponent(attentionId)}`;
+}
+
 /** Include the optional, caller-supplied sessionId ONLY when the full serialized
  *  payload stays within the push record budget; otherwise omit it so an oversized
  *  id cannot make every device's delivery throw. Never truncates the id. Pure. */
@@ -151,12 +155,13 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   ).bind(email).all<{ endpoint: string; subscription_json: string }>();
   const rows = result.results ?? [];
   const receipt: NotificationReceipt = { delivered: 0, expired: 0, failed: 0, devices: rows.length };
-  const href = safeHref(notification, env.BRIDGE_BASE_URL);
+  const destinationHref = safeHref(notification, env.BRIDGE_BASE_URL);
   const attentionId = crypto.randomUUID();
+  const attentionHref = attentionDeepLink(attentionId);
   await env.DB.prepare(`INSERT INTO attention_items(id, owner_email, session_id, kind, title, body, href, created_at, dedupe_key)
     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
       attentionId, email, notification.sessionId ?? null, notification.kind,
-      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), href, dedupeKey,
+      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), destinationHref, dedupeKey,
     ).run();
   // Keep the tiny recent-attention surface bounded. Push is a wake-up hint,
   // not an unbounded activity-log product.
@@ -164,17 +169,14 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
     SELECT id FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 200
   )`).bind(email, email).run();
   const unreadRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>();
-  const actions = notification.kind === "deploy.gate"
-    ? [{ action: "open", title: "Review gate" }, { action: "attention", title: "Inbox" }]
-    : notification.kind === "job.complete" || notification.kind === "job.needs_input"
-      ? [{ action: "open", title: "Open job" }, { action: "attention", title: "Inbox" }]
-      : notification.kind === "delegate.complete" || notification.kind === "delegate.needs_input"
-        ? [{ action: "open", title: "Open delegation" }, { action: "attention", title: "Inbox" }]
-        : [{ action: "open", title: "Open" }, { action: "attention", title: "Inbox" }];
+  const actions = destinationHref === "/"
+    ? [{ action: "open", title: "Open notification" }, { action: "attention", title: "All notifications" }]
+    : [{ action: "open", title: "Open notification" }, { action: "destination", title: "Open source" }];
   const basePayload = {
     title: cleanText(notification.title, 80) || "my · ax",
     body: cleanText(notification.body, 300),
-    href,
+    href: attentionHref,
+    destinationHref,
     kind: notification.kind,
     attentionId,
     unread: Number(unreadRow?.count ?? 1),

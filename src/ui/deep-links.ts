@@ -2,12 +2,13 @@ export type MyAxDeepLink = {
   href: string;
   sessionId: string | null;
   action: string | null;
+  attentionId: string | null;
 };
 
 export type MyAxDeepLinkIntent =
   | { kind: "preserve" }
   | { kind: "session"; sessionId: string }
-  | { kind: "attention" }
+  | { kind: "attention"; attentionId: string | null }
   | { kind: "settings" }
   | { kind: "run-receipt"; runId: string }
   | { kind: "navigate"; href: string };
@@ -27,6 +28,7 @@ export function parseMyAxDeepLink(rawHref: string, currentHref: string): MyAxDee
       href: `${target.pathname}${target.search}${target.hash}`,
       sessionId: target.searchParams.get("session"),
       action: target.searchParams.get("action"),
+      attentionId: target.searchParams.get("attentionId"),
     };
   } catch {
     return null;
@@ -35,7 +37,7 @@ export function parseMyAxDeepLink(rawHref: string, currentHref: string): MyAxDee
 
 export function myAxDeepLinkIntent(target: MyAxDeepLink): MyAxDeepLinkIntent {
   if (target.sessionId) return { kind: "session", sessionId: target.sessionId };
-  if (target.action === "attention") return { kind: "attention" };
+  if (target.action === "attention") return { kind: "attention", attentionId: target.attentionId };
   if (target.action === "settings") return { kind: "settings" };
   const receiptMatch = /^\/runs\/([^/?#]+)$/.exec(target.href.split("?")[0].split("#")[0]);
   if (receiptMatch) return { kind: "run-receipt", runId: decodeURIComponent(receiptMatch[1]) };
