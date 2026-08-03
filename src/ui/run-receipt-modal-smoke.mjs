@@ -55,12 +55,12 @@ assertIncludes(attention, 'window.dispatchEvent(new CustomEvent("my-ax:run-recei
 
 // Chat: the deep-link follower opens the modal for /runs/<id> instead of
 // location.assign (the previous full-page breakout).
-assertIncludes(chat, 'window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: decodeURIComponent(receiptMatch[1]) } }));', "Chat routes receipt deep links to the nested modal");
+assertIncludes(chat, 'window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: intent.runId } }));', "Chat routes receipt deep links to the nested modal");
 {
   const followStart = chat.indexOf("const followDeepLink =");
   const followSlice = chat.slice(followStart, followStart + 1200);
   const receiptBranch = followSlice.indexOf("my-ax:run-receipt-open");
-  const assign = followSlice.indexOf("location.assign(target.href)");
+  const assign = followSlice.indexOf("location.assign(intent.href)");
   if (!(receiptBranch >= 0 && assign >= 0 && receiptBranch < assign)) {
     throw new Error("Chat must handle /runs/<id> as a modal BEFORE the location.assign fallback");
   }

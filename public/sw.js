@@ -67,9 +67,12 @@ self.addEventListener("notificationclick", (event) => {
   const href = event.action === "attention" ? (event.notification.data?.attentionHref || "/?action=attention") : (event.notification.data?.href || "/");
   event.waitUntil((async () => {
     const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
-    const absolute = new URL(href, self.location.origin).href;
+    const sameOrigin = windows.filter((client) => new URL(client.url).origin === self.location.origin);
+    const existing = sameOrigin.find((client) => client.focused) || sameOrigin.find((client) => client.visibilityState === "visible") || sameOrigin[0];
+    const target = new URL(href, self.location.origin);
+    const absolute = target.href;
     if (existing) {
+      if (target.pathname === "/" && !target.search && !target.hash) return existing.focus();
       // Navigating an already-open standalone PWA can restore its cached
       // conversation before the query-string target reaches Chat bootstrap.
       // Prefer the live in-page switch: post the target and wait briefly for

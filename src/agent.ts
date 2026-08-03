@@ -615,6 +615,8 @@ export class MyAgent extends Think<Env> {
     if (!identity) return;
     await this.recordCurrentCycleCost(result).catch((error) => console.error("cycle_cost_record_failed", { sessionId: this.name, err: String(error) }));
     await this.logAcceptedUsers();
+    const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
+    const recurringJobRun = recurringJobIdFromClientMessageId(lastUser?.id) !== null;
     await this.completeInjectedRecurringJobRun(result).catch((error) => console.error("recurring_job_terminal_receipt_failed", { sessionId: this.name, err: String(error) }));
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
@@ -654,10 +656,10 @@ export class MyAgent extends Think<Env> {
       hasVisibleChat,
       ownerNotified: this.notifiedOwnerThisTurn,
       automaticRecovery: identity.sub === "system:auto-revive",
+      recurringJobRun,
     })) {
       // Carry the actual reply (and the prompt for context) into the push so a
       // completion notification is useful on its own, not just "turn complete".
-      const lastUser = [...this.messages].reverse().find((m) => m.role === "user");
       const prompt = lastUser ? textParts(lastUser) : "";
       const title = prompt ? deriveSessionTitle(prompt) : "";
       const reply = visibleCompletionNotificationBody(visibleContent.replace(/\s+/g, " ").trim());

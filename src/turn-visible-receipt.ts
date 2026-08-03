@@ -50,6 +50,6 @@ export function visibleCompletionNotificationBody(content: string): string {
   return content.trim() || "The agent turn completed without a visible response.";
 }
 
-export function shouldSendCompletionNotification(input: { status: string; hasVisibleChat: boolean; ownerNotified: boolean; automaticRecovery?: boolean }): boolean {
-  return input.status === "completed" && !input.hasVisibleChat && !input.ownerNotified && !input.automaticRecovery;
+export function shouldSendCompletionNotification(input: { status: string; hasVisibleChat: boolean; ownerNotified: boolean; automaticRecovery?: boolean; recurringJobRun?: boolean }): boolean {
+  return input.status === "completed" && !input.hasVisibleChat && !input.ownerNotified && !input.automaticRecovery && !input.recurringJobRun;
 }
