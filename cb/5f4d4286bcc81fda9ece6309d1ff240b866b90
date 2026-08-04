@@ -1,0 +1,19 @@
+src/ui/auth-recovery.test.ts
+  s_5ef55672c203f4::t_62c1fba84d50c7 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cb5f4d4286bcc81fda9ece6309d1ff240b866b90",
+  "prompts": {},
+  "sessions": {
+    "s_5ef55672c203f4": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fb25a-228d-7953-81fc-99672300b01b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
