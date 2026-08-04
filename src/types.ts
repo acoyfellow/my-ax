@@ -87,6 +87,8 @@ declare global {
       LLM_GATEWAY_URL?: string;
       LLM_GATEWAY_TOKEN?: string;
       LLM_GATEWAY_AUTH_HEADER?: string;
+      LLM_GATEWAY_SERVICE_TOKEN_ID?: string;
+      LLM_GATEWAY_SERVICE_TOKEN_SECRET?: string;
 
       /** Explicit opt-in: saved recipe promotions skip pending gate and become enabled. */
       MY_AX_RECIPE_AUTOTRUST?: string;

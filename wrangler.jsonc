@@ -9,8 +9,9 @@
 //   - R2_ACCESS_KEY_ID      # R2 S3 creds for sandbox workspace snapshots
 //   - R2_SECRET_ACCESS_KEY  # R2 S3 creds for sandbox workspace snapshots
 //   - VAPID_SUBJECT / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY  # web push
-// Optional model-gateway secret:
-//   - LLM_GATEWAY_TOKEN    # enables the curated gateway-backed models
+// Optional model-gateway secrets:
+//   - LLM_GATEWAY_TOKEN    # bearer authentication for curated gateway-backed models
+//   - LLM_GATEWAY_SERVICE_TOKEN_ID / LLM_GATEWAY_SERVICE_TOKEN_SECRET  # durable Access service authentication
 //
 // Required at-deploy vars (override below or via `wrangler deploy --var`):
 //   - CLOUDFLARE_ACCOUNT_ID # your Cloudflare account id

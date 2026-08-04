@@ -106,7 +106,9 @@ export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
 export const DEFAULT_GATEWAY_MODEL_ID = "gpt-5.6-terra";
 
 export function hasModelGateway(env: Env): boolean {
-  return Boolean(env.LLM_GATEWAY_URL?.trim() && env.LLM_GATEWAY_TOKEN?.trim());
+  const hasBearer = Boolean(env.LLM_GATEWAY_TOKEN?.trim());
+  const hasServiceToken = Boolean(env.LLM_GATEWAY_SERVICE_TOKEN_ID?.trim() && env.LLM_GATEWAY_SERVICE_TOKEN_SECRET?.trim());
+  return Boolean(env.LLM_GATEWAY_URL?.trim() && (hasBearer || hasServiceToken));
 }
 
 // Keep the catalog honest per installation. Workers AI rows are available in
