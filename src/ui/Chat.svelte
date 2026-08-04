@@ -16,6 +16,7 @@
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
+  import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
   import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
   import { ArtifactToolRegistry } from "./artifact-tools";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
@@ -1022,6 +1023,27 @@
     state: "needs-auth" as "needs-auth" | "upstream-auth",
     server: null as string | null,
   });
+  const authenticationRecovery = $state({
+    accessRequired: false,
+    modelRequired: false,
+    message: "",
+  });
+
+  async function detectAccessAuthenticationExpiry() {
+    try {
+      const response = await fetch("/api/health", {
+        credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      authenticationRecovery.accessRequired = responseRequiresAuthentication(response);
+    } catch {}
+  }
+
+  function retryAfterModelAuthenticationFailure() {
+    authenticationRecovery.modelRequired = false;
+    if (wsState.conn === "live" && (wsState.status === "idle" || wsState.status === "done")) formEl?.requestSubmit();
+  }
 
   async function refreshPendingDecision(sessionId: string | null) {
     pendingDecision = null;
@@ -1207,6 +1229,7 @@
       // "Reconnecting…" forever and show a truthful offline state with Retry.
       onExhausted() {
         setConn("offline");
+        void detectAccessAuthenticationExpiry();
       },
     }, undefined, { maxAttempts: 8 });
   }
@@ -1356,6 +1379,12 @@
       connectorBanner.server = m.server;
       connectorBanner.visible = true;
       (window as any).__refreshConnectors?.();
+    } else if (m.type === "my_ax_model_auth_required") {
+      if (typeof m.fallbackModel === "string" && m.fallbackModel) setModel(m.fallbackModel, "Kimi K2.7 Code", true);
+      authenticationRecovery.modelRequired = true;
+      authenticationRecovery.message = typeof m.message === "string" ? m.message : "Model access expired. Retry with the fallback model.";
+      const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+      if (!composerText.trim() && typeof lastUserMessage?.content === "string") composerText = lastUserMessage.content;
     } else if (m.type === "cf_agent_chat_messages") {
       dispatchTurn({ type: "history-loaded" });
       if (activeRequestId && !restoredActiveTurn) {
@@ -2295,6 +2324,33 @@
 </script>
 
 <div class="h-full flex flex-col">
+  {#if authenticationRecovery.accessRequired}
+    <div class="connector-banner" data-show="1" data-state="needs-auth" role="alert">
+      <span class="connector-banner__dot" aria-hidden="true"></span>
+      <div class="connector-banner__body">
+        <strong class="connector-banner__title">Your My AX session expired</strong>
+        <span class="connector-banner__hint">Sign in again to return to this conversation. Your draft stays in the composer.</span>
+      </div>
+      <a
+        href={accessReauthenticationHref(location.origin, localStorage.getItem(SESSION_KEY))}
+        class="connector-banner__cta"
+      >
+        Sign in again
+      </a>
+    </div>
+  {:else if authenticationRecovery.modelRequired}
+    <div class="connector-banner" data-show="1" data-state="upstream-auth" role="alert">
+      <span class="connector-banner__dot" aria-hidden="true"></span>
+      <div class="connector-banner__body">
+        <strong class="connector-banner__title">Model access expired</strong>
+        <span class="connector-banner__hint">{authenticationRecovery.message}</span>
+      </div>
+      <button type="button" class="connector-banner__cta" onclick={retryAfterModelAuthenticationFailure}>
+        Retry with fallback
+      </button>
+    </div>
+  {/if}
+
   <!-- Connector banner -->
   {#if connectorBanner.visible}
     <div

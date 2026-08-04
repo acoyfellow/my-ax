@@ -13,23 +13,29 @@ type GatewayEnv = {
   LLM_GATEWAY_URL?: string;
   LLM_GATEWAY_TOKEN?: string;
   LLM_GATEWAY_AUTH_HEADER?: string;
+  LLM_GATEWAY_SERVICE_TOKEN_ID?: string;
+  LLM_GATEWAY_SERVICE_TOKEN_SECRET?: string;
 };
 
-export function gatewayConfig(env: Env) {
+export function gatewayConfig(env: Env): { baseURL: string; headers: Record<string, string> } {
   const e = env as unknown as GatewayEnv;
   const baseURL = e.LLM_GATEWAY_URL?.trim();
-  const token = e.LLM_GATEWAY_TOKEN;
+  const token = e.LLM_GATEWAY_TOKEN?.trim();
+  const serviceTokenId = e.LLM_GATEWAY_SERVICE_TOKEN_ID?.trim();
+  const serviceTokenSecret = e.LLM_GATEWAY_SERVICE_TOKEN_SECRET?.trim();
   if (!baseURL) throw new Error("This model requires the configured model gateway.");
-  if (!token) throw new Error("This model requires LLM_GATEWAY_TOKEN.");
+  if (!token && !(serviceTokenId && serviceTokenSecret)) throw new Error("This model requires gateway authentication.");
   const authHeader = e.LLM_GATEWAY_AUTH_HEADER?.trim() || "authorization";
-  // Authorization tokens use the Bearer scheme. Cloudflare Access service/user
-  // tokens in cf-access-token are already JWTs and must be sent verbatim.
-  const authValue = authHeader.toLowerCase() === "authorization" ? `Bearer ${token}` : token;
+  const tokenHeaders: Record<string, string> = token
+    ? { [authHeader]: authHeader.toLowerCase() === "authorization" ? `Bearer ${token}` : token }
+    : {
+        "CF-Access-Client-Id": serviceTokenId!,
+        "CF-Access-Client-Secret": serviceTokenSecret!,
+      };
   return {
     baseURL,
     headers: {
-      [authHeader]: authValue,
-      // Some Access-gated gateways require an explicit non-navigation request marker.
+      ...tokenHeaders,
       "X-Requested-With": "xmlhttprequest",
     },
   };

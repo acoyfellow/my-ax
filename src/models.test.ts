@@ -5,6 +5,7 @@ import type { Env } from "./types";
 
 const minimalEnv = {} as Env;
 const gatewayEnv = { LLM_GATEWAY_URL: "https://gateway.example/openai", LLM_GATEWAY_TOKEN: "token" } as Env;
+const serviceGatewayEnv = { LLM_GATEWAY_URL: "https://gateway.example/openai", LLM_GATEWAY_SERVICE_TOKEN_ID: "id", LLM_GATEWAY_SERVICE_TOKEN_SECRET: "secret" } as Env;
 
 describe("model catalog", () => {
   it("keeps Workers AI and AI Gateway rows in the full catalog", () => {
@@ -21,6 +22,7 @@ describe("model catalog", () => {
   it("shows gateway rows only when the installation has gateway config", () => {
     assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2"]);
     assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-4-8", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
   });
 
   it("removes alpha rows while healing stale alpha ids", () => {

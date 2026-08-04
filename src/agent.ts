@@ -6,7 +6,8 @@ import { createCompactFunction } from "agents/experimental/memory/utils";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
-import { defaultModelId, findModel } from "./models";
+import { DEFAULT_MODEL_ID, defaultModelId, findModel } from "./models";
+import { gatewayAuthenticationFailure } from "./model-auth";
 import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
 import { createThinkTools } from "./tools";
@@ -834,16 +835,31 @@ export class MyAgent extends Think<Env> {
   }
 
   onChatError(error: unknown) {
+    const current = this.getConfig<MyAgentConfig>() ?? {};
+    const failedModel = current.model ?? defaultModelId(this.env);
+    const authenticationFailure = findModel(failedModel)?.route !== "workers-ai"
+      ? gatewayAuthenticationFailure(error)
+      : { failed: false, message: "" };
+    const surfacedError = authenticationFailure.failed ? new Error(authenticationFailure.message) : error;
+    if (authenticationFailure.failed) {
+      this.configure<MyAgentConfig>({ ...current, model: DEFAULT_MODEL_ID });
+      this.broadcast(JSON.stringify({
+        type: "my_ax_model_auth_required",
+        failedModel,
+        fallbackModel: DEFAULT_MODEL_ID,
+        message: authenticationFailure.message,
+      }));
+    }
     const identity = this.identity();
     if (identity) {
       appendConversationLog(this.env, identity, this.name, {
         ts: new Date().toISOString(),
         role: "error",
-        content: error instanceof Error ? error.message : String(error),
-        meta: errorConversationMeta(error),
+        content: surfacedError instanceof Error ? surfacedError.message : String(surfacedError),
+        meta: errorConversationMeta(surfacedError),
       }).catch(() => {});
     }
-    return error;
+    return surfacedError;
   }
 
   private buildToolContext(): ToolContext {
