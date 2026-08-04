@@ -6,6 +6,7 @@ describe("Access authentication recovery", () => {
   it("recognizes rejected and redirected API responses", () => {
     assert.equal(responseRequiresAuthentication(new Response("", { status: 401 })), true);
     assert.equal(responseRequiresAuthentication(new Response("", { status: 403 })), true);
+    assert.equal(responseRequiresAuthentication({ type: "opaqueredirect", status: 0 } as Response), true);
     assert.equal(responseRequiresAuthentication(new Response("{}", { status: 200, headers: { "content-type": "application/json" } })), false);
     assert.equal(responseRequiresAuthentication(new Response("login", { status: 200, headers: { "content-type": "text/html" } })), true);
   });

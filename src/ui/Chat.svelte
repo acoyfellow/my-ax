@@ -1034,6 +1034,7 @@
       const response = await fetch("/api/health", {
         credentials: "include",
         cache: "no-store",
+        redirect: "manual",
         headers: { Accept: "application/json" },
       });
       authenticationRecovery.accessRequired = responseRequiresAuthentication(response);

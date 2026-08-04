@@ -1,4 +1,5 @@
 export function responseRequiresAuthentication(response: Response): boolean {
+  if (response.type === "opaqueredirect" || response.status === 0) return true;
   if (response.status === 401 || response.status === 403) return true;
   if (response.redirected) return true;
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
