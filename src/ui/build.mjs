@@ -79,7 +79,7 @@ const pierreFilename = `pierre-diffs.${pierreHash}.js`;
 writeFileSync(here(`build/${pierreFilename}`), pierreJs);
 const bundlesPath = here("bundles.generated.ts");
 const generatedBundles = readFileSync(bundlesPath, "utf8");
-const pierreBundle = JSON.stringify({ js: "", css: "", hash: pierreHash });
+const pierreBundle = JSON.stringify({ js: pierreJs, css: "", hash: pierreHash });
 const bundleEnd = generatedBundles.lastIndexOf("\n};");
 if (bundleEnd < 0) throw new Error("Svelte bundle registry was not generated");
 writeFileSync(bundlesPath, `${generatedBundles.slice(0, bundleEnd)},\n  "pierre-diffs": ${pierreBundle}\n};\n`);
