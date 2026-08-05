@@ -1,0 +1,25 @@
+README.md
+  s_694baa247e5078::t_cde5d67179f7fc 33,70
+docs/architecture.md
+  s_694baa247e5078::t_c779d53328db04 31,80,98,108
+src/computer-retained-write-budget.test.ts
+  s_694baa247e5078::t_09682edebc330a 1-67
+src/computer-retained-write-budget.ts
+  s_694baa247e5078::t_9c3e6c0c5cec85 1-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bb583245ef26586209f3dd2eea88a41a9fc4f77f",
+  "prompts": {},
+  "sessions": {
+    "s_694baa247e5078": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd1f8-8cf7-7cef-8c73-8a2dc302a2dc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
