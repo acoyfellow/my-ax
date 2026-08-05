@@ -10,6 +10,7 @@
 // `wrangler.jsonc` bindings, so the contract stays in one place.
 
 import type { AccessIdentity } from "./auth";
+import type { WorkCodeExecutionState } from "./computer-work-budget";
 
 // ---------------------------------------------------------------------------
 // Module augmentation: extend the wrangler-generated Cloudflare.Env with the
@@ -153,7 +154,8 @@ export interface ToolContext {
   exposeSavedRecipes?: boolean;
   /** Enabled owner-approved saved snippets projected into work_code through the codemode namespace. */
   listSavedRecipes?: () => Promise<Array<{ id: string; name: string; description: string; inputSchema: unknown; capabilities: string[]; codemodeExecutionId?: string; sourceRecipeId?: string | null; provenance?: "projected" | "native" }>>;
-  runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown>; callerCapabilities?: string[] }) => Promise<unknown>;
+  runSavedRecipe?: (input: { id?: string; name?: string; input?: Record<string, unknown>; callerCapabilities?: string[]; workCodeExecutionState?: WorkCodeExecutionState }) => Promise<unknown>;
+  workCodeExecutionState?: WorkCodeExecutionState;
   broadcast: (msg: string) => void;
 
   /**

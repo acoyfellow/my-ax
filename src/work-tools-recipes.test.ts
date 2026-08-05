@@ -252,7 +252,16 @@ test("buildSnippetHook forwards callerCapabilities to runSavedRecipe so capabili
   // the source threads ctx.allowedWorkCapabilities through the hook into
   // runSavedRecipe so the intersection happens at the call boundary.
   assert.match(source, /callerCapabilities:\s*ctx\.allowedWorkCapabilities/);
+  assert.match(source, /workCodeExecutionState:\s*ctx\.workCodeExecutionState/);
+  assert.match(agent, /reserveSavedRecipeInvocation\(body\.workCodeExecutionState\)/);
+  assert.match(agent, /workCodeExecutionState:\s*input\.workCodeExecutionState/);
+  assert.match(agent, /workCodeExecutionState:\s*executionState/);
   assert.match(agent, /intersectCapabilities\(\s*body\.callerCapabilities\s*,\s*declaredCapabilities\s*\)/);
+});
+
+test("saved recipe root budget is reserved before receipts and nested recipes remain disabled", () => {
+  assert.ok(agent.indexOf("reserveSavedRecipeInvocation(body.workCodeExecutionState)") < agent.indexOf("INSERT INTO runs"));
+  assert.match(agent, /exposeSavedRecipes: false/);
 });
 
 test("work_code wires saved recipes through the codemode snippet hook with capability intersection", () => {

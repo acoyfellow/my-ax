@@ -209,28 +209,37 @@ export function instrumentWorkCodeFunctions<Where extends string, T extends Work
 }
 
 export function capWorkCodeCollectionWithMetadata(values: readonly unknown[], maxEntries: number, maxBytes: number): CappedWorkCodeCollection {
+  if (!Number.isFinite(maxBytes) || maxBytes < 2) throw new RangeError("maxBytes must fit an empty JSON array");
   const output: unknown[] = [];
-  let used = 0;
+  const entryLimit = Math.max(0, Math.floor(maxEntries));
+  const byteLimit = Math.floor(maxBytes);
+  let used = 2;
   let truncated = false;
   for (const value of values) {
-    if (output.length >= maxEntries) {
+    if (output.length >= entryLimit) {
       truncated = true;
       break;
     }
-    const remaining = maxBytes - used;
+    const separatorBytes = output.length ? 1 : 0;
+    const remaining = byteLimit - used - separatorBytes;
     if (remaining <= 0) {
       truncated = true;
       break;
     }
-    const capped = capWorkCodeValue(value, Math.max(128, Math.min(1024, remaining)));
-    const serialized = JSON.stringify(capped);
-    const bytes = byteLength(serialized);
+    let capped = capWorkCodeValue(value, 1024);
+    let serialized = JSON.stringify(capped);
+    let bytes = byteLength(serialized);
+    if (bytes > remaining) {
+      capped = capWorkCodeValue(value, remaining);
+      serialized = JSON.stringify(capped);
+      bytes = byteLength(serialized);
+    }
     if (bytes > remaining) {
       truncated = true;
       break;
     }
     output.push(capped);
-    used += bytes;
+    used += separatorBytes + bytes;
   }
   return { values: output, truncated };
 }

@@ -5,7 +5,10 @@ import {
   COMPUTER_WORK_CODE_MAX_CONCURRENCY,
   COMPUTER_WORK_CODE_MAX_CUMULATIVE_READ_BYTES,
   COMPUTER_WORK_CODE_MAX_CUMULATIVE_WRITE_BYTES,
+  WORK_CODE_SAVED_RECIPE_MAX_INVOCATIONS,
   applyComputerWorkBudget,
+  createWorkCodeExecutionState,
+  reserveSavedRecipeInvocation,
 } from "./computer-work-budget";
 
 function deferred<T>() {
@@ -51,4 +54,28 @@ test("Computer work_code budget reserves actual write bytes before provider writ
   }
   await assert.rejects(() => functions.write({ content: "x" }), /cumulative write budget/);
   assert.equal(calls.length, writes);
+});
+
+test("Computer work_code budget shares one root state across nested executions", async () => {
+  const state = createWorkCodeExecutionState();
+  let providerCalls = 0;
+  const outer = applyComputerWorkBudget({ list: async () => { providerCalls += 1; return "outer"; } }, state);
+  const nested = applyComputerWorkBudget({ list: async () => { providerCalls += 1; return "nested"; } }, state);
+
+  for (let index = 0; index < COMPUTER_WORK_CODE_MAX_CALLS / 2; index += 1) {
+    assert.equal(await outer.list({}), "outer");
+    assert.equal(await nested.list({}), "nested");
+  }
+
+  await assert.rejects(() => nested.list({}), /call budget/);
+  assert.equal(providerCalls, COMPUTER_WORK_CODE_MAX_CALLS);
+});
+
+test("saved recipe invocation budgets are fresh for each top-level root", () => {
+  const firstRoot = reserveSavedRecipeInvocation(undefined);
+  for (let index = 1; index < WORK_CODE_SAVED_RECIPE_MAX_INVOCATIONS; index += 1) reserveSavedRecipeInvocation(firstRoot);
+  assert.throws(() => reserveSavedRecipeInvocation(firstRoot), /invocation budget/);
+
+  const secondRoot = reserveSavedRecipeInvocation(undefined);
+  assert.notEqual(secondRoot, firstRoot);
 });
