@@ -33,6 +33,7 @@ function filesystem(nodes: Record<string, Node>) {
   const readPaths: string[] = [];
   const lstatPaths: string[] = [];
   const mkdirPaths: string[] = [];
+  const rmPaths: Array<{ path: string; options: { recursive?: boolean; force?: boolean } | undefined }> = [];
   const fs: ComputerFilesystem = {
     async lstat(path) {
       lstatPaths.push(path);
@@ -73,8 +74,14 @@ function filesystem(nodes: Record<string, Node>) {
       mkdirPaths.push(path);
       if (!entries.has(path)) entries.set(path, { size: 0, isFile: false, isDirectory: true, isSymbolicLink: false });
     },
+    async rm(path, options) {
+      rmPaths.push({ path, options });
+      for (const candidate of entries.keys()) {
+        if (candidate === path || (options?.recursive && candidate.startsWith(`${path}/`))) entries.delete(candidate);
+      }
+    },
   };
-  return { fs, writes, readPaths, lstatPaths, mkdirPaths, entries };
+  return { fs, writes, readPaths, lstatPaths, mkdirPaths, rmPaths, entries };
 }
 
 function baseNodes(): Record<string, Node> {
@@ -173,6 +180,86 @@ test("Computer writes enforce byte and owner quotas before writeFile", async () 
     /storage quota/,
   );
   assert.equal(storageQuota.writes.length, 0);
+});
+
+test("Computer rejects a deep write at the full 4 MiB live storage quota without creating requested parents", async () => {
+  const nodes = baseNodes();
+  nodes["/home/user/full.txt"] = { size: COMPUTER_OWNER_MAX_STORAGE_BYTES, isFile: true, isDirectory: false, isSymbolicLink: false, content: "" };
+  const fixture = filesystem(nodes);
+  const path = "/home/user/requested/deep/note.txt";
+
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: fixture.fs }, { path, content: "safe" }),
+    /storage quota/,
+  );
+
+  assert.deepEqual(fixture.mkdirPaths, []);
+  assert.deepEqual(fixture.rmPaths, []);
+  assert.equal(fixture.writes.length, 0);
+  assert.deepEqual([...fixture.entries.keys()].sort(), Object.keys(nodes).sort());
+});
+
+test("Computer rejects a deep write at the full file quota without creating requested parents", async () => {
+  const nodes = baseNodes();
+  for (let index = 0; index < COMPUTER_OWNER_MAX_FILES; index += 1) {
+    nodes[`/home/user/file-${index}.txt`] = { size: 0, isFile: true, isDirectory: false, isSymbolicLink: false, content: "" };
+  }
+  const fixture = filesystem(nodes);
+  const path = "/home/user/requested/deep/note.txt";
+
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: fixture.fs }, { path, content: "safe" }),
+    /file quota/,
+  );
+
+  assert.deepEqual(fixture.mkdirPaths, []);
+  assert.deepEqual(fixture.rmPaths, []);
+  assert.equal(fixture.writes.length, 0);
+  assert.deepEqual([...fixture.entries.keys()].sort(), Object.keys(nodes).sort());
+});
+
+test("Computer rolls back requested parents after a VFS write failure while preserving pre-existing data", async () => {
+  const nodes = baseNodes();
+  nodes["/home/user/requested"] = { size: 0, isFile: false, isDirectory: true, isSymbolicLink: false };
+  nodes["/home/user/requested/keep.txt"] = { size: 4, isFile: true, isDirectory: false, isSymbolicLink: false, content: "keep" };
+  const fixture = filesystem(nodes);
+  const writeFile = fixture.fs.writeFile;
+  fixture.fs.writeFile = async (path, content) => {
+    await writeFile(path, content);
+    throw new Error("VFS write failed");
+  };
+  const path = "/home/user/requested/new/deep/note.txt";
+
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: fixture.fs }, { path, content: "safe" }),
+    /VFS write failed/,
+  );
+
+  assert.deepEqual(fixture.rmPaths, [{ path: "/home/user/requested/new", options: { recursive: true, force: true } }]);
+  assert.deepEqual([...fixture.entries.keys()].sort(), Object.keys(nodes).sort());
+  assert.equal(fixture.entries.get("/home/user/requested/keep.txt")?.content, "keep");
+});
+
+test("Computer rolls back the first requested parent subtree after a later mkdir failure", async () => {
+  const nodes = baseNodes();
+  nodes["/home/user/requested"] = { size: 0, isFile: false, isDirectory: true, isSymbolicLink: false };
+  nodes["/home/user/requested/keep.txt"] = { size: 4, isFile: true, isDirectory: false, isSymbolicLink: false, content: "keep" };
+  const fixture = filesystem(nodes);
+  const mkdir = fixture.fs.mkdir;
+  fixture.fs.mkdir = async (path, options) => {
+    if (path === "/home/user/requested/new/deep") throw new Error("VFS mkdir failed");
+    await mkdir(path, options);
+  };
+  const path = "/home/user/requested/new/deep/note.txt";
+
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: fixture.fs }, { path, content: "safe" }),
+    /VFS mkdir failed/,
+  );
+
+  assert.deepEqual(fixture.rmPaths, [{ path: "/home/user/requested/new", options: { recursive: true, force: true } }]);
+  assert.deepEqual([...fixture.entries.keys()].sort(), Object.keys(nodes).sort());
+  assert.equal(fixture.entries.get("/home/user/requested/keep.txt")?.content, "keep");
 });
 
 test("Computer rejects deep parent creation before any requested-prefix mkdir", async () => {

@@ -44,6 +44,7 @@ export type ComputerFilesystem = {
   readdir: (path: string, options?: { limit?: number }) => Promise<ComputerDirectoryEntry[]>;
   writeFile: (path: string, content: string) => Promise<void>;
   mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>;
+  rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>;
 };
 
 export type ComputerWorkspaceClient = {
@@ -131,7 +132,11 @@ async function ensureComputerHome(fs: ComputerFilesystem): Promise<void> {
   if (!home?.isDirectory) throw new Error("Computer home is not a directory.");
 }
 
-async function prepareComputerParent(fs: ComputerFilesystem, path: string): Promise<ComputerUsage> {
+type ComputerWritePreparation = {
+  missingDirectories: string[];
+};
+
+async function prepareComputerWrite(fs: ComputerFilesystem, path: string, contentBytes: number): Promise<ComputerWritePreparation> {
   await ensureComputerHome(fs);
   const relative = parentPath(path).slice(COMPUTER_HOME.length).split("/").filter(Boolean);
   const missingDirectories: string[] = [];
@@ -146,13 +151,15 @@ async function prepareComputerParent(fs: ComputerFilesystem, path: string): Prom
     if (stat.isSymbolicLink) throw new Error(`Computer paths cannot traverse symbolic links: ${current}`);
     if (!stat.isDirectory) throw new Error(`Computer path component is not a directory: ${current}`);
   }
+  const existing = missingDirectories.length ? null : await assertExistingPathIsSafe(fs, path, true);
+  if (existing?.isDirectory || (existing && !existing.isFile)) throw new Error("Computer write requires a regular file path.");
+  if (existing?.isFile) assertFileSize(existing, COMPUTER_OWNER_MAX_STORAGE_BYTES, "Computer file has an invalid size.");
   const usage = await computerUsage(fs);
   if (usage.directories + missingDirectories.length > COMPUTER_OWNER_MAX_DIRECTORIES) {
     throw new Error(`Computer owner directory quota exceeded (${COMPUTER_OWNER_MAX_DIRECTORIES}).`);
   }
-  for (const directory of missingDirectories) await fs.mkdir(directory);
-  await assertExistingPathIsSafe(fs, parentPath(path));
-  return usage;
+  assertOwnerWriteQuota(usage, existing, contentBytes);
+  return { missingDirectories };
 }
 
 function requireBoundedString(value: unknown, field: string, maxBytes: number, allowEmpty = true): string {
@@ -261,12 +268,18 @@ export function parseComputerWriteInput(input: unknown): ComputerWriteInput {
 
 export async function writeComputerFileFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
   const { path, content, contentBytes } = parseComputerWriteInput(input);
-  const usage = await prepareComputerParent(workspace.fs, path);
-  const existing = await assertExistingPathIsSafe(workspace.fs, path, true);
-  if (existing?.isDirectory || (existing && !existing.isFile)) throw new Error("Computer write requires a regular file path.");
-  if (existing?.isFile) assertFileSize(existing, COMPUTER_OWNER_MAX_STORAGE_BYTES, "Computer file has an invalid size.");
-  assertOwnerWriteQuota(usage, existing, contentBytes);
-  await workspace.fs.writeFile(path, content);
+  const { missingDirectories } = await prepareComputerWrite(workspace.fs, path, contentBytes);
+  let createdParentRoot: string | null = null;
+  try {
+    for (const directory of missingDirectories) {
+      await workspace.fs.mkdir(directory);
+      createdParentRoot ??= directory;
+    }
+    await workspace.fs.writeFile(path, content);
+  } catch (error) {
+    if (createdParentRoot) await workspace.fs.rm(createdParentRoot, { recursive: true, force: true });
+    throw error;
+  }
   return { path, bytesWritten: contentBytes };
 }
 
