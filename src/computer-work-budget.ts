@@ -34,14 +34,15 @@ function reservationForComputerMethod(method: string, input: unknown): ComputerR
 }
 
 export function applyComputerWorkBudget<T extends ComputerFunctions>(functions: T): { [K in keyof T]: ComputerFunction } {
-  let calls = 0;
+  let attempts = 0;
   let concurrent = 0;
   let reservedReadBytes = 0;
   let reservedWriteBytes = 0;
 
   return Object.fromEntries(Object.entries(functions).map(([method, invoke]) => [method, async (input: unknown) => {
     const reservation = reservationForComputerMethod(method, input);
-    if (calls >= COMPUTER_WORK_CODE_MAX_CALLS) {
+    attempts = Math.min(COMPUTER_WORK_CODE_MAX_CALLS + 1, attempts + 1);
+    if (attempts > COMPUTER_WORK_CODE_MAX_CALLS) {
       throw new Error(`Computer work_code call budget exceeded (${COMPUTER_WORK_CODE_MAX_CALLS}).`);
     }
     if (concurrent >= COMPUTER_WORK_CODE_MAX_CONCURRENCY) {
@@ -54,7 +55,6 @@ export function applyComputerWorkBudget<T extends ComputerFunctions>(functions: 
       throw new Error(`Computer work_code cumulative write budget exceeded (${COMPUTER_WORK_CODE_MAX_CUMULATIVE_WRITE_BYTES} bytes).`);
     }
 
-    calls += 1;
     concurrent += 1;
     reservedReadBytes += reservation.readBytes;
     reservedWriteBytes += reservation.writeBytes;

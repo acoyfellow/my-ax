@@ -39,13 +39,15 @@ type WorkCodeReceipt = {
   callsTruncated?: unknown;
 };
 
+export function isSandboxMutationWorkCodeCall(call: WorkCodeCall): boolean {
+  return call.where === "workspace"
+    && typeof call.method === "string"
+    && !SANDBOX_READ_ONLY_WORKSPACE_METHODS.has(call.method);
+}
+
 export function summarizeWorkCodeSnapshot(calls: readonly WorkCodeCall[]) {
   return {
-    sandboxMutation: calls.some((call) =>
-      call.where === "workspace"
-      && typeof call.method === "string"
-      && !SANDBOX_READ_ONLY_WORKSPACE_METHODS.has(call.method),
-    ),
+    sandboxMutation: calls.some(isSandboxMutationWorkCodeCall),
     codemodeInvoked: calls.some((call) => call.where === "codemode"),
   };
 }
