@@ -57,16 +57,29 @@ test("verified diff reads reject self-attested text and unsupported sources", as
   );
 });
 
-test("bounded workspace reads cap bytes before loading and preserve unreadable files as null", async () => {
+test("bounded workspace reads reject outside symlinks, read in-root files, and preserve byte caps", async () => {
   const commands: string[] = [];
-  const content = await readBoundedWorkspaceFile({
-    exec: async (command) => {
+  const outsideLink = "/home/user/outside-link";
+  const insideFile = "/home/user/inside.ts";
+  const sandbox = {
+    exec: async (command: string) => {
       commands.push(command);
-      return { exitCode: 0, stdout: "bounded\n" };
+      return command.includes(`'${outsideLink}'`)
+        ? { exitCode: 1, stdout: "" }
+        : { exitCode: 0, stdout: "bounded\n" };
     },
-  }, "/home/user/large.ts", CODE_DIFF_MAX_TEXT_BYTES + 1);
-  assert.equal(content, "bounded\n");
-  assert.deepEqual(commands, [`dd if='/home/user/large.ts' bs=1 count=${CODE_DIFF_MAX_TEXT_BYTES + 1} status=none`]);
+  };
+
+  assert.equal(await readBoundedWorkspaceFile(sandbox, outsideLink, CODE_DIFF_MAX_TEXT_BYTES + 1), null);
+  assert.equal(await readBoundedWorkspaceFile(sandbox, insideFile, CODE_DIFF_MAX_TEXT_BYTES + 1), "bounded\n");
+  assert.equal(commands.length, 2);
+  for (const command of commands) {
+    assert.match(command, /exec 3< "\$1"/);
+    assert.match(command, /realpath -e -- \/proc\/self\/fd\/3/);
+    assert.match(command, /case "\$resolved" in\n  \/home\/user\/\*\) ;;/);
+    assert.match(command, new RegExp(`dd if=/proc/self/fd/3 bs=1 count="\\$2" status=none.* ${CODE_DIFF_MAX_TEXT_BYTES + 1}$`));
+    assert.ok(command.indexOf("realpath -e") < command.indexOf("dd if=/proc/self/fd/3"));
+  }
 
   const missing = await readBoundedWorkspaceFile({
     exec: async () => ({ exitCode: 1, stdout: "" }),
