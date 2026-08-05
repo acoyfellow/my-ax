@@ -7,6 +7,7 @@ function workCodeReceipt(calls: WorkCodeCall[]) {
   const snapshot = summarizeWorkCodeSnapshot(calls);
   const capped = capWorkCodeCollectionWithMetadata(calls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
   return {
+    ok: true,
     calls: capped.values,
     callsTruncated: capped.truncated,
     sandboxMutation: snapshot.sandboxMutation,
@@ -35,6 +36,7 @@ test("codemode.run of a workspace-writing saved tool requires a Sandbox snapshot
 
 test("truncated work_code calls fail closed for Sandbox snapshots", () => {
   const receipt = {
+    ok: true,
     calls: [{ where: "computer", method: "write" }],
     callsTruncated: true,
     sandboxMutation: false,
@@ -43,8 +45,32 @@ test("truncated work_code calls fail closed for Sandbox snapshots", () => {
   assert.equal(shouldSnapshotSandboxForToolCall("work_code", JSON.stringify(receipt)), true);
 });
 
+test("failed work_code receipts with empty calls require a Sandbox snapshot", () => {
+  const receipt = {
+    ok: false,
+    calls: [],
+    callsTruncated: false,
+    sandboxMutation: false,
+    codemodeInvoked: false,
+  };
+  assert.equal(shouldSnapshotSandboxForToolCall("work_code", JSON.stringify(receipt)), true);
+});
+
+test("work_code execution errors fail closed despite false capped snapshot metadata", () => {
+  const receipt = {
+    ...workCodeReceipt([]),
+    ok: false,
+    error: "execution timed out",
+  };
+  assert.equal(receipt.callsTruncated, false);
+  assert.equal(receipt.sandboxMutation, false);
+  assert.equal(receipt.codemodeInvoked, false);
+  assert.equal(shouldSnapshotSandboxForToolCall("work_code", JSON.stringify(receipt)), true);
+});
+
 test("Computer-only work_code does not request a Sandbox snapshot", () => {
   const receipt = workCodeReceipt([{ where: "computer", method: "write" }]);
+  assert.equal(receipt.ok, true);
   assert.equal(receipt.callsTruncated, false);
   assert.equal(receipt.sandboxMutation, false);
   assert.equal(receipt.codemodeInvoked, false);
