@@ -63,6 +63,7 @@
       summary: "Available in a normal chat.",
       items: [
         { name: "Workspace", tools: "work_search · work_code", description: "Read files, search, edit, and run bounded commands in your workspace." },
+        { name: "Computer preview", tools: "computer.* through work_code", description: "Use bounded file methods in a separate preview SQLite workspace. It has no execution backend or automatic sync." },
         { name: "Reusable tools", tools: "codemode.search · codemode.run", description: "Run owner-approved Code Mode shortcuts from work_code." },
         { name: "Recurring work", tools: "manage_jobs", description: "Create and inspect scheduled prompts." },
       ],

@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   COMPUTER_GREP_MAX_MATCHES,
   COMPUTER_LIST_MAX_ENTRIES,
+  COMPUTER_OWNER_MAX_FILES,
+  COMPUTER_OWNER_MAX_STORAGE_BYTES,
   COMPUTER_READ_MAX_BYTES,
   COMPUTER_WRITE_MAX_BYTES,
   grepComputerFilesFromWorkspace,
@@ -25,9 +27,10 @@ type Node = {
   content?: string;
 };
 
-function filesystem(nodes: Record<string, Node>, grepMatches: Array<{ path: string; line: number; text: string }> = []) {
+function filesystem(nodes: Record<string, Node>) {
   const entries = new Map(Object.entries(nodes));
   const writes: Array<{ path: string; content: string }> = [];
+  const readPaths: string[] = [];
   const fs: ComputerFilesystem = {
     async lstat(path) {
       const node = entries.get(path);
@@ -39,6 +42,7 @@ function filesystem(nodes: Record<string, Node>, grepMatches: Array<{ path: stri
       return node;
     },
     async readFile(path) {
+      readPaths.push(path);
       const node = entries.get(path);
       if (!node?.isFile) {
         const error = new Error("ENOENT") as Error & { code?: string };
@@ -47,11 +51,16 @@ function filesystem(nodes: Record<string, Node>, grepMatches: Array<{ path: stri
       }
       return node.content ?? "";
     },
-    async readdir() {
-      return [];
-    },
-    async grep() {
-      return grepMatches;
+    async readdir(path) {
+      const prefix = `${path}/`;
+      return [...entries.entries()]
+        .filter(([candidate]) => candidate.startsWith(prefix) && !candidate.slice(prefix.length).includes("/"))
+        .map(([candidate, node]) => ({
+          name: candidate.slice(prefix.length),
+          isFile: node.isFile,
+          isDirectory: node.isDirectory,
+          isSymbolicLink: node.isSymbolicLink,
+        }));
     },
     async writeFile(path, content) {
       writes.push({ path, content });
@@ -61,7 +70,7 @@ function filesystem(nodes: Record<string, Node>, grepMatches: Array<{ path: stri
       if (!entries.has(path)) entries.set(path, { size: 0, isFile: false, isDirectory: true, isSymbolicLink: false });
     },
   };
-  return { fs, writes };
+  return { fs, writes, readPaths };
 }
 
 function baseNodes(): Record<string, Node> {
@@ -107,6 +116,7 @@ test("Computer reads reject oversized files before loading content", async () =>
     () => readComputerFileFromWorkspace({ fs: fixture.fs }, { path: "/home/user/large.txt" }),
     /read limit/,
   );
+  assert.deepEqual(fixture.readPaths, []);
 });
 
 test("Computer listing bounds entry output", async () => {
@@ -123,7 +133,7 @@ test("Computer listing bounds entry output", async () => {
   assert.equal(result.truncated, true);
 });
 
-test("Computer writes enforce byte bounds and reject symlink parents", async () => {
+test("Computer writes enforce byte and owner quotas before writeFile", async () => {
   const oversized = filesystem(baseNodes());
   await assert.rejects(
     () => writeComputerFileFromWorkspace({ fs: oversized.fs }, { path: "/home/user/note.txt", content: "x".repeat(COMPUTER_WRITE_MAX_BYTES + 1) }),
@@ -131,45 +141,82 @@ test("Computer writes enforce byte bounds and reject symlink parents", async () 
   );
   assert.equal(oversized.writes.length, 0);
 
-  const nodes = baseNodes();
-  nodes["/home/user/link"] = { size: 0, isFile: false, isDirectory: false, isSymbolicLink: true };
-  const linked = filesystem(nodes);
+  const linkedNodes = baseNodes();
+  linkedNodes["/home/user/link"] = { size: 0, isFile: false, isDirectory: false, isSymbolicLink: true };
+  const linked = filesystem(linkedNodes);
   await assert.rejects(
     () => writeComputerFileFromWorkspace({ fs: linked.fs }, { path: "/home/user/link/note.txt", content: "safe" }),
     /symbolic links/,
   );
   assert.equal(linked.writes.length, 0);
+
+  const fileQuotaNodes = baseNodes();
+  for (let index = 0; index < COMPUTER_OWNER_MAX_FILES; index += 1) {
+    fileQuotaNodes[`/home/user/file-${index}.txt`] = { size: 0, isFile: true, isDirectory: false, isSymbolicLink: false, content: "" };
+  }
+  const fileQuota = filesystem(fileQuotaNodes);
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: fileQuota.fs }, { path: "/home/user/one-more.txt", content: "safe" }),
+    /file quota/,
+  );
+  assert.equal(fileQuota.writes.length, 0);
+
+  const storageQuotaNodes = baseNodes();
+  storageQuotaNodes["/home/user/full.txt"] = { size: COMPUTER_OWNER_MAX_STORAGE_BYTES, isFile: true, isDirectory: false, isSymbolicLink: false, content: "" };
+  const storageQuota = filesystem(storageQuotaNodes);
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: storageQuota.fs }, { path: "/home/user/one-more.txt", content: "safe" }),
+    /storage quota/,
+  );
+  assert.equal(storageQuota.writes.length, 0);
 });
 
-test("Computer grep bounds matches and refuses symlink match paths", async () => {
+test("Computer grep host traversal caps matches and prechecks file sizes", async () => {
+  const source = readFileSync(new URL("./computer-filesystem.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\.fs\.grep\(/);
+  assert.match(source, /workspace\.fs\.readdir\(/);
   const nodes = baseNodes();
-  const matches = Array.from({ length: COMPUTER_GREP_MAX_MATCHES + 5 }, (_, index) => {
-    const path = `/home/user/note-${index}.txt`;
-    nodes[path] = { size: 5, isFile: true, isDirectory: false, isSymbolicLink: false, content: "match" };
-    return { path, line: index + 1, text: "match" };
-  });
-  const result = await grepComputerFilesFromWorkspace({ fs: filesystem(nodes, matches).fs }, { path: "/home/user", query: "match" });
+  for (let index = 0; index < COMPUTER_GREP_MAX_MATCHES + 5; index += 1) {
+    nodes[`/home/user/note-${index}.txt`] = { size: 5, isFile: true, isDirectory: false, isSymbolicLink: false, content: "match" };
+  }
+  const fixture = filesystem(nodes);
+  const result = await grepComputerFilesFromWorkspace({ fs: fixture.fs }, { path: "/home/user", query: "match" });
   assert.equal((result.matches as unknown[]).length, COMPUTER_GREP_MAX_MATCHES);
   assert.equal(result.truncated, true);
-  const longText = await grepComputerFilesFromWorkspace(
-    { fs: filesystem(nodes, [{ path: "/home/user/note-0.txt", line: 1, text: "x".repeat(700) }]).fs },
-    { query: "match" },
-  );
+
+  nodes["/home/user/long.txt"] = { size: 700, isFile: true, isDirectory: false, isSymbolicLink: false, content: "x".repeat(700) };
+  const longText = await grepComputerFilesFromWorkspace({ fs: filesystem(nodes).fs }, { path: "/home/user/long.txt", query: "x" });
   assert.ok(((longText.matches as Array<{ text: string }>)[0].text.length) < 700);
+
+  const precheckedNodes = baseNodes();
+  precheckedNodes["/home/user/large.txt"] = { size: COMPUTER_READ_MAX_BYTES + 1, isFile: true, isDirectory: false, isSymbolicLink: false, content: "match" };
+  precheckedNodes["/home/user/small.txt"] = { size: 5, isFile: true, isDirectory: false, isSymbolicLink: false, content: "match" };
+  const prechecked = filesystem(precheckedNodes);
+  const precheckedResult = await grepComputerFilesFromWorkspace({ fs: prechecked.fs }, { query: "match" });
+  assert.equal((precheckedResult.matches as unknown[]).length, 1);
+  assert.equal(precheckedResult.truncated, true);
+  assert.ok(!prechecked.readPaths.includes("/home/user/large.txt"));
 
   nodes["/home/user/link.txt"] = { size: 0, isFile: false, isDirectory: false, isSymbolicLink: true };
   await assert.rejects(
-    () => grepComputerFilesFromWorkspace({ fs: filesystem(nodes, [{ path: "/home/user/link.txt", line: 1, text: "match" }]).fs }, { query: "match" }),
+    () => grepComputerFilesFromWorkspace({ fs: filesystem(nodes).fs }, { path: "/home/user/link.txt", query: "match" }),
     /symbolic links/,
   );
 });
 
-test("Computer work methods are cataloged, capability-instrumented, and bound into code mode", () => {
+test("Computer work methods are cataloged, capability-instrumented, budgeted, and bound into code mode", () => {
   const source = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
+  const workspace = readFileSync(new URL("./computer-workspace.ts", import.meta.url), "utf8");
+  const settings = readFileSync(new URL("./ui/Settings.svelte", import.meta.url), "utf8");
   assert.match(source, /COMPUTER_WORK_METHODS\.map\(\(method\) => catalogEntry\("computer"/);
-  assert.match(source, /instrument\("computer", restrictByCapabilities\("computer", checkedComputerProvider/);
+  assert.match(source, /applyComputerWorkBudget\(checkedComputerProvider\(ctx\)\)/);
+  assert.match(source, /instrument\("computer", restrictByCapabilities\("computer"/);
   assert.match(source, /namespace\("computer", Object\.keys\(computerFns\)\)/);
   assert.match(source, /computer:globalThis\.computer/);
+  assert.match(settings, /Computer preview/);
+  assert.match(settings, /automatic sync/);
+  assert.match(workspace, /blockConcurrencyWhile/);
+  assert.match(workspace, /write: \(input: unknown\) => computer\.write\(input\)/);
 });
 
 test("Computer-only work code does not classify as a Sandbox snapshot mutation", () => {
@@ -178,13 +225,15 @@ test("Computer-only work code does not classify as a Sandbox snapshot mutation",
   assert.equal(shouldSnapshotSandboxForToolCall("work_code", "not-json"), true);
 });
 
-test("Computer binding and append-only migration exist in production and dev", () => {
+test("Computer binding, package pin, and append-only migration exist in production and dev", () => {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(packageJson.dependencies["@cloudflare/computer"], "0.1.1");
   const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   assert.equal((wrangler.match(/"name": "COMPUTER", "class_name": "ComputerWorkspace"/g) ?? []).length, 2);
   assert.equal((wrangler.match(/"tag": "v11-computer-workspace", "new_sqlite_classes": \["ComputerWorkspace"\]/g) ?? []).length, 2);
   const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
   assert.match(index, /export \{ ComputerWorkspace \} from "\.\/computer-workspace"/);
   const systemRoutes = readFileSync(new URL("./routes/system.ts", import.meta.url), "utf8");
-  assert.match(systemRoutes, /app\.get\("\/api\/system\/computer"/);
+  assert.match(systemRoutes, /app\.get\("\/api\/system\/computer-workspace"/);
   assert.match(systemRoutes, /getComputerHealth\(c\.env, c\.get\("identity"\)\)/);
 });

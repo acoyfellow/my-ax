@@ -79,6 +79,8 @@ test("native CodemodeRuntime seam is held (round 04): runNativeCodemode is avail
     /^export \{ CodemodeRuntime \} from "\.\/code-mode-runtime\.worker"/m,
     "src/index.tsx must not actively export CodemodeRuntime until the binding and call site land together",
   );
+  assert.match(indexSource, /HELD:/);
+  assert.match(indexSource, /code-mode-runtime\.worker/);
 });
 
 test("wrangler.jsonc holds CODEMODE_RUNTIME until a real runNativeCodemode call site exists", () => {
@@ -97,6 +99,7 @@ test("wrangler.jsonc holds CODEMODE_RUNTIME until a real runNativeCodemode call 
     /"tag":\s*"v12-codemode-runtime"/,
     "wrangler.jsonc must not declare the v12-codemode-runtime migration while runNativeCodemode has no call site",
   );
+  assert.match(wrangler, /intentionally NOT bound here yet/);
 });
 
 test("snippet description stays honest about projected provenance (no claim of native CodemodeRuntime promotion)", () => {
@@ -200,6 +203,24 @@ test("codemode.run dispatches connector tools and snippet by name through the ho
 test("codemode.run on an unknown name without a snippet hook surfaces a clear error", async () => {
   const wr = createCodemodeWorkRuntime([makeSource("workspace", [{ name: "read", description: "Read a file." }])], undefined);
   await assert.rejects(() => wr.namespace.run("nope"), /codemode\.run: unknown tool/);
+});
+
+test("owner-approved Computer saved recipes replay through the codemode snippet path", async () => {
+  const computer = makeSource("computer", [{ name: "read", description: "Read a Computer preview file." }]);
+  let replayInput: Record<string, unknown> | undefined;
+  const snippetHook: CodemodeSnippetHook = {
+    async list() {
+      return [{ id: "computer-recipe", name: "read_preview_file", description: "Read a Computer preview file.", inputSchema: { type: "object", properties: { path: { type: "string" } } }, capabilities: ["computer.read"] }];
+    },
+    async run(input) {
+      replayInput = input.input;
+      return computer.fns.read(input.input ?? {});
+    },
+  };
+  const runtime = createCodemodeWorkRuntime([computer], snippetHook);
+  const result = await runtime.namespace.run("read_preview_file", { path: "/home/user/note.txt" });
+  assert.deepEqual(replayInput, { path: "/home/user/note.txt" });
+  assert.deepEqual(result, { ran: "computer.read", input: { path: "/home/user/note.txt" }, result: null });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

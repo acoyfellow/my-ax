@@ -25,7 +25,14 @@ class ComputerWorkspaceBase extends DurableObject {
 export class ComputerWorkspace extends withWorkspace(
   ComputerWorkspaceBase,
   (self) => ({ storage: self.workspaceStorage() as unknown as DurableObjectStorageLike }),
-) {}
+) {
+  async write(input: unknown) {
+    return this.ctx.blockConcurrencyWhile(() => withComputerWorkspace(
+      () => getWorkspace(this as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
+      (workspace) => writeComputerFileFromWorkspace(workspace, input),
+    ));
+  }
+}
 
 export async function withOwnerComputerWorkspace<T>(
   env: Pick<Env, "COMPUTER">,
@@ -46,10 +53,12 @@ export async function getComputerHealth(env: Pick<Env, "COMPUTER">, identity: Pi
 export function createComputerWorkProvider(ctx: Pick<ToolContext, "env" | "identity">) {
   const open = <T>(operation: (workspace: ComputerWorkspaceClient) => Promise<T>) =>
     withOwnerComputerWorkspace(ctx.env, ctx.identity, operation);
+  const id = ctx.env.COMPUTER.idFromName(computerWorkspaceName(ctx.identity));
+  const computer = ctx.env.COMPUTER.get(id);
   return {
     fns: {
       read: (input: unknown) => open((workspace) => readComputerFileFromWorkspace(workspace, input)),
-      write: (input: unknown) => open((workspace) => writeComputerFileFromWorkspace(workspace, input)),
+      write: (input: unknown) => computer.write(input),
       list: (input: unknown) => open((workspace) => listComputerFilesFromWorkspace(workspace, input)),
       grep: (input: unknown) => open((workspace) => grepComputerFilesFromWorkspace(workspace, input)),
     },

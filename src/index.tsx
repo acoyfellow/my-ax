@@ -62,6 +62,7 @@ export { UserAgent } from "./user-agent";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
 export { Sandbox } from "@cloudflare/sandbox";
+export const CODEMODE_RUNTIME_HOLD = "HELD: ./code-mode-runtime.worker remains unbound until the first runNativeCodemode call site ships with the v12-codemode-runtime migration and regenerated Wrangler types.";
 export { ComputerWorkspace } from "./computer-workspace";
 const app = new Hono<AppEnv>();
 
