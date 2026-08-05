@@ -14,6 +14,7 @@
   import { myAxDeepLinkIntent, parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
+  import { d1EntryToTranscriptMessage } from "./d1-transcript";
   import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
@@ -1532,10 +1533,9 @@
     return;
   }
 
-  function d1EntryToMessage(entry: any): Message {
-    const role = entry.role === "tool" ? "system" : entry.role;
-    const label = entry.role === "tool" ? `[${entry.tool || "tool"}] ` : "";
-    return { id: entry.meta?.uiMessageId || `d1-${entry.id}`, role, content: `${label}${entry.content || ""}`, parts: [{ kind: "text", text: `${label}${entry.content || ""}`, rendered: role === "assistant" ? renderMarkdown(entry.content || "") : undefined }], timestamp: Date.parse(entry.createdAt) || Date.now(), streaming: false };
+  function d1EntryToMessage(entry: any): MessageView {
+    const message = d1EntryToTranscriptMessage(entry, renderMarkdown);
+    return { ...message, id: entry.meta?.uiMessageId || message.id };
   }
 
   async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {

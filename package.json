@@ -22,7 +22,7 @@
     "build:docs": "node scripts/build-docs.mjs",
     "build:svelte": "node src/ui/build.mjs",
     "test:tool-widgets": "node src/ui/tool-result-widgets-smoke.mjs",
-    "test:code-diff": "tsx --test src/code-diff.test.ts",
+    "test:code-diff": "tsx --test src/code-diff.test.ts src/show-diff.test.ts src/ui/d1-transcript.test.ts",
     "test:code-diff-widget": "node src/ui/code-diff-widget-smoke.mjs && npm run build:svelte && node src/ui/pierre-diffs-bundle-smoke.mjs",
     "test:image-lightbox": "node src/ui/image-lightbox-smoke.mjs",
     "test:chat-composer": "node src/ui/chat-composer-smoke.mjs",
