@@ -4,7 +4,8 @@ import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type Codemod
 import { createMachineWorkProvider } from "./routes/machinectl";
 import { COMPUTER_WORK_METHODS, createComputerWorkProvider } from "./computer-workspace";
 import { applyComputerWorkBudget } from "./computer-work-budget";
-import { capWorkCodeCollection, capWorkCodeValue, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
+import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
+import { summarizeWorkCodeSnapshot } from "./workspace-snapshot-classification";
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
@@ -128,7 +129,7 @@ function catalogEntry(where: WorkCall["where"] | "codemode" | "snippet", name: s
 // `codemode.run(name, input)` and dispatches to whichever underlying
 // connector (workspace / machine / terrarium) or snippet owns the tool.
 const CODEMODE_METHODS = [
-  { name: "search", description: "List or filter codemode tools across workspace, machine, terrarium, and reusable tools." },
+  { name: "search", description: "List or filter codemode tools across Workspace, Computer, My Machine, Terrarium, My AX Page, and reusable tools." },
   { name: "describe", description: "Return the description and input schema for one codemode tool by qualified name." },
   { name: "run", description: "Invoke one codemode tool or owner-approved reusable tool by name with a structured input." },
 ] as const;
@@ -263,7 +264,8 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
   const execution = await executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]);
   const sortedCalls = calls.sort((a, b) => a.index - b.index);
-  const serializedCalls = capWorkCodeCollection(sortedCalls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
+  const snapshot = summarizeWorkCodeSnapshot(sortedCalls);
+  const serializedCalls = capWorkCodeCollectionWithMetadata(sortedCalls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
   const serializedLogs = capWorkCodeCollection(execution.logs ?? [], WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES);
   const serializedResult = capWorkCodeValue(execution.result, WORK_CODE_RESULT_MAX_BYTES);
   const serializedError = execution.error === undefined ? undefined : capWorkCodeValue(execution.error, 1024);
@@ -299,7 +301,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     result: serializedResult,
     ...(execution.error ? { error: serializedError } : {}),
     logs: serializedLogs,
-    calls: serializedCalls,
+    calls: serializedCalls.values,
+    callsTruncated: serializedCalls.truncated,
+    sandboxMutation: snapshot.sandboxMutation,
+    codemodeInvoked: snapshot.codemodeInvoked,
     sourceCode: code,
     inferredCapabilities,
     portable,

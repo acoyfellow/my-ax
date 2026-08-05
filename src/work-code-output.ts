@@ -93,18 +93,38 @@ export function capWorkCodeValue(value: unknown, maxBytes: number): unknown {
   };
 }
 
-export function capWorkCodeCollection(values: unknown[], maxEntries: number, maxBytes: number): unknown[] {
+export type CappedWorkCodeCollection = {
+  values: unknown[];
+  truncated: boolean;
+};
+
+export function capWorkCodeCollectionWithMetadata(values: unknown[], maxEntries: number, maxBytes: number): CappedWorkCodeCollection {
   const output: unknown[] = [];
   let used = 0;
-  for (const value of values.slice(0, maxEntries)) {
+  let truncated = false;
+  for (const value of values) {
+    if (output.length >= maxEntries) {
+      truncated = true;
+      break;
+    }
     const remaining = maxBytes - used;
-    if (remaining <= 0) break;
+    if (remaining <= 0) {
+      truncated = true;
+      break;
+    }
     const capped = capWorkCodeValue(value, Math.max(128, Math.min(1024, remaining)));
     const serialized = JSON.stringify(capped);
     const bytes = byteLength(serialized);
-    if (bytes > remaining) break;
+    if (bytes > remaining) {
+      truncated = true;
+      break;
+    }
     output.push(capped);
     used += bytes;
   }
-  return output;
+  return { values: output, truncated };
+}
+
+export function capWorkCodeCollection(values: unknown[], maxEntries: number, maxBytes: number): unknown[] {
+  return capWorkCodeCollectionWithMetadata(values, maxEntries, maxBytes).values;
 }
