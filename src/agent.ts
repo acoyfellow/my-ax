@@ -39,6 +39,8 @@ import { selectPageConnection, type PageConnectionState } from "./page-connectio
 import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
+import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
+import { RecipeUsageCollector } from "./recipe-usage-collector";
 import { resolveBridgeOrigin } from "./bridge-origin";
 import { reusableToolApprovalMode } from "./reusable-tool-preferences";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
@@ -175,7 +177,7 @@ export class MyAgent extends Think<Env> {
   // resolved when the live client replies with a page_result frame (onMessage).
   private pendingPageCalls = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private cycleStepUsage: Array<{ usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null }; finishReason?: string }> = [];
-  private recipesUsedThisTurn: unknown[] = [];
+  private recipesUsedThisTurn = new RecipeUsageCollector();
   private recipesSavedThisTurn: unknown[] = [];
   /** Native agents MCP registrations are per-session DO, but bearer tokens
    * remain per-user in OAuthClientDO. Lazily hydrate once per isolate and
@@ -251,11 +253,12 @@ export class MyAgent extends Think<Env> {
     await notifyOwner(this.env, identity.email, delegateCompletionNotification({ sessionId: this.name, results }));
   }
 
-  async runSavedRecipe(body: { recipeId?: string; input?: Record<string, unknown>; callerCapabilities?: string[] }) {
+  async runSavedRecipe(body: { recipeId?: string; input?: Record<string, unknown>; callerCapabilities?: string[]; workCodeExecutionState?: WorkCodeExecutionState }) {
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity?.email) throw new Error("session identity not seeded");
     const recipeId = body.recipeId?.trim();
     if (!recipeId) throw new Error("recipeId is required");
+    const executionState = reserveSavedRecipeInvocation(body.workCodeExecutionState);
     const recipe = await new SavedRecipeService(this.env, identity.email).requireEnabled(recipeId);
     const runInput = validateRecipeRunInput(body.input ?? {}, JSON.parse(recipe.input_schema_json));
     // Capability intersection (Round 02 objection #7): a snippet/recipe run
@@ -310,6 +313,7 @@ export class MyAgent extends Think<Env> {
       ...this.buildToolContext(),
       allowedWorkCapabilities: effectiveCapabilities,
       exposeSavedRecipes: false,
+      workCodeExecutionState: executionState,
     });
     const terminal = result.ok ? "completed" : "failed";
     await this.env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
@@ -978,9 +982,10 @@ export class MyAgent extends Think<Env> {
           recipeId,
           input: input.input ?? {},
           callerCapabilities: input.callerCapabilities,
+          workCodeExecutionState: input.workCodeExecutionState,
         });
         const resultWithRecipe = result as { recipe?: { name?: string }; codemodeExecutionId?: string };
-        this.recipesUsedThisTurn.push({
+        this.recipesUsedThisTurn.add({
           recipeId,
           name: resultWithRecipe?.recipe?.name ?? input.name ?? null,
           codemodeExecutionId: resultWithRecipe?.codemodeExecutionId ?? null,
@@ -1163,7 +1168,7 @@ export class MyAgent extends Think<Env> {
     const identity = this.identity();
     if (!identity) return;
     const steps = this.cycleStepUsage.splice(0);
-    const recipesUsed = this.recipesUsedThisTurn.splice(0);
+    const recipesUsed = this.recipesUsedThisTurn.take();
     const recipesSaved = this.recipesSavedThisTurn.splice(0);
     await this.promoteSuggestedRecipe(result).catch((error) => {
       recipesSaved.push({ ok: false, error: error instanceof Error ? error.message : String(error) });

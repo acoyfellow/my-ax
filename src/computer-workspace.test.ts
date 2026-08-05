@@ -320,7 +320,8 @@ test("Computer work methods are cataloged, capability-instrumented, budgeted, an
   const workspace = readFileSync(new URL("./computer-workspace.ts", import.meta.url), "utf8");
   const settings = readFileSync(new URL("./ui/Settings.svelte", import.meta.url), "utf8");
   assert.match(source, /COMPUTER_WORK_METHODS\.map\(\(method\) => catalogEntry\("computer"/);
-  assert.match(source, /applyComputerWorkBudget\(checkedComputerProvider\(ctx\)\)/);
+  assert.match(source, /applyComputerWorkBudget\(checkedComputerProvider\(ctx\), executionState\)/);
+  assert.match(source, /resolveWorkCodeExecutionState\(ctx\.workCodeExecutionState\)/);
   assert.match(source, /instrument\("computer", restrictByCapabilities\("computer"/);
   assert.match(source, /namespace\("computer", Object\.keys\(computerFns\)\)/);
   assert.match(source, /computer:globalThis\.computer/);

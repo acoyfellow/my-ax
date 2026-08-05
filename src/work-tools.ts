@@ -3,7 +3,7 @@ import { createTerrariumWorkProvider, TERRARIUM_WORK_METHODS } from "./terrarium
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import { COMPUTER_WORK_METHODS, createComputerWorkProvider } from "./computer-workspace";
-import { applyComputerWorkBudget } from "./computer-work-budget";
+import { applyComputerWorkBudget, resolveWorkCodeExecutionState } from "./computer-work-budget";
 import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, instrumentWorkCodeFunctions, WorkCodeCallCollector, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
 import { isSandboxMutationWorkCodeCall } from "./workspace-snapshot-classification";
 import type { ToolContext, ToolDef } from "./types";
@@ -164,12 +164,15 @@ function buildSnippetHook(ctx: ToolContext): CodemodeSnippetHook | undefined {
       name: typeof input?.name === "string" ? input.name : undefined,
       input: typeof input?.input === "object" && input.input ? input.input as Record<string, unknown> | undefined : {},
       callerCapabilities: ctx.allowedWorkCapabilities,
+      workCodeExecutionState: ctx.workCodeExecutionState,
     }),
   };
 }
 
 export async function executeWorkCode(code: string, ctx: ToolContext) {
   if (!code || new TextEncoder().encode(code).byteLength > 32_000) return { ok: false, error: "code is required and must be <= 32000 bytes" };
+  const executionState = resolveWorkCodeExecutionState(ctx.workCodeExecutionState);
+  const executionContext = { ...ctx, workCodeExecutionState: executionState };
   const machine = await createMachineWorkProvider(ctx);
   const terrariumProvider = createTerrariumWorkProvider(ctx);
   const calls = new WorkCodeCallCollector<WorkCall["where"]>();
@@ -178,7 +181,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   // so model code can call `workspace.read({...})` directly or hop through
   // `codemode.run("workspace.read", {...})` / `codemode.search()`.
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
-  const computerFns = instrument("computer", restrictByCapabilities("computer", applyComputerWorkBudget(checkedComputerProvider(ctx)), ctx.allowedWorkCapabilities), calls);
+  const computerFns = instrument("computer", restrictByCapabilities("computer", applyComputerWorkBudget(checkedComputerProvider(ctx), executionState), ctx.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
   const terrariumFns = instrument("terrarium", restrictByCapabilities("terrarium", terrariumProvider.fns, ctx.allowedWorkCapabilities), calls);
   // page.* connector: each verb marshals to the live browser client via
@@ -218,7 +221,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
       fns: pageFns,
     }] : []),
   ];
-  const snippetHook = buildSnippetHook(ctx);
+  const snippetHook = buildSnippetHook(executionContext);
   const codemodeRuntime = createCodemodeWorkRuntime(codemodeSources, snippetHook);
   // Instrument the codemode entry points (search/describe/run) so their use
   // shows up in receipts and cost accounting alongside the underlying call.

@@ -37,6 +37,23 @@ test("work_code collection metadata records omitted receipt calls without exposi
   assert.ok(bytes(capped.values) <= WORK_CODE_CALLS_MAX_BYTES);
 });
 
+test("work_code collection budgets JSON array brackets, commas, and exact element bytes", () => {
+  const values = [{ method: "read" }, { method: "write" }];
+  const maxBytes = bytes(values);
+  const capped = capWorkCodeCollectionWithMetadata([...values, { method: "delete" }], values.length + 1, maxBytes);
+  assert.deepEqual(capped.values, values);
+  assert.equal(capped.truncated, true);
+  assert.equal(bytes(capped.values), maxBytes);
+});
+
+test("work_code collection remains byte-bounded after 5,000 rejected entries", () => {
+  const values = Array.from({ length: 5_000 }, (_, index) => ({ index, error: "x".repeat(2_048) }));
+  const capped = capWorkCodeCollectionWithMetadata(values, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
+  assert.equal(capped.truncated, true);
+  assert.ok(capped.values.length <= WORK_CODE_CALLS_MAX_ENTRIES);
+  assert.ok(bytes(capped.values) <= WORK_CODE_CALLS_MAX_BYTES);
+});
+
 test("work_code result cap handles circular values without propagating them to serialization", () => {
   const result: { self?: unknown } = {};
   result.self = result;

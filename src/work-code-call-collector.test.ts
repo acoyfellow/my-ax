@@ -79,7 +79,7 @@ test("sequential caught Computer budget retries keep the host receipt collector 
     },
   }), collector);
 
-  for (let index = 0; index < 2_000; index += 1) {
+  for (let index = 0; index < 5_000; index += 1) {
     await computer.list({}).catch(() => undefined);
   }
 
@@ -101,13 +101,13 @@ test("concurrent caught Computer budget retries cannot reset provider calls or g
     },
   }), collector);
   const active = gates.map(() => computer.list({}));
-  const rejected = Promise.all(Array.from({ length: 2_000 }, () => computer.list({})
+  const rejected = Promise.all(Array.from({ length: 5_000 }, () => computer.list({})
     .catch(() => computer.list({}).catch(() => undefined))));
 
   await rejected;
   for (const gate of gates) gate.resolve("ok");
   await Promise.all(active);
-  for (let index = 0; index < 2_000; index += 1) {
+  for (let index = 0; index < 5_000; index += 1) {
     await computer.list({}).catch(() => undefined);
   }
   await recordLateWorkspaceAndCodemodeCalls(collector);
