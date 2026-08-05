@@ -46,6 +46,7 @@ import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe 
 import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
 import { recipeApprovalDecision, shouldPersistSuggestedRecipe } from "./recipe-approval-policy";
+import { shouldSnapshotSandboxForToolCall } from "./workspace-snapshot-classification";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -56,8 +57,8 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 ## Tools
 
 Computer work is exposed through two tools:
-- work_search discovers capabilities and helps choose the right place: workspace.* is the persistent My AX Workspace, machine.* is the user's connected physical machine and authenticated local state, and terrarium.* spawns bounded cloud agent runs with verified receipts.
-- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, machine, terrarium, page, codemode }, and the same namespaces are also available as globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. Prefer My AX Workspace for conversation-adjacent files and transforms, My Machine for current local checkouts/authenticated state/cmux, and Terrarium for bounded cloud agent runs that produce verified receipts (spawn work without the laptop, isolated verification, proof-producing tasks): terrarium.spawn({task}) waits for the receipt, terrarium.spawn_background({task}) returns a runId immediately, terrarium.status({runId}) checks a run. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input). Treat enabled reusable tools as the owner's operational Pantry: for multi-step, recurring, stateful, or easy-to-half-complete work, search codemode before inventing an ad-hoc procedure; describe a strong match when its contract is unclear; run it by default when it safely satisfies the request. Do not force a weak match or search for ordinary conversation and trivial one-step work. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner controls whether marked candidates wait as Pending or are enabled automatically in Settings → Reusable tools; unmarked runs stay inline forever. When no strong match exists and you must write a genuinely reusable operational procedure, mark that implementation so it can become a future Pantry tool; do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
+- work_search discovers capabilities and helps choose the right place: workspace.* is the canonical Sandbox-backed My AX Workspace for shell commands, processes, and previews; computer.* is a separate preview owner-scoped SQLite filesystem with bounded file-only methods and no execution backend; machine.* is the user's connected physical machine and authenticated local state; and terrarium.* spawns bounded cloud agent runs with verified receipts.
+- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, computer, machine, terrarium, page, codemode }, and the same namespaces are also available as globals. Computer paths stay under /home/user, but Computer does not replace workspace.*, does not offer shell/process/preview methods, and does not copy data to or from Sandbox. Prefer My AX Workspace for conversation-adjacent transforms that need shell/process/preview support, Computer only for its isolated bounded file-only preview slice, My Machine for current local checkouts/authenticated state/cmux, and Terrarium for bounded cloud agent runs that produce verified receipts. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input). Treat enabled reusable tools as the owner's operational Pantry: for multi-step, recurring, stateful, or easy-to-half-complete work, search codemode before inventing an ad-hoc procedure; describe a strong match when its contract is unclear; run it by default when it safely satisfies the request. Do not force a weak match or search for ordinary conversation and trivial one-step work. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner controls whether marked candidates wait as Pending or are enabled automatically in Settings → Reusable tools; unmarked runs stay inline forever. When no strong match exists and you must write a genuinely reusable operational procedure, mark that implementation so it can become a future Pantry tool; do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
 
 ## When to use Terrarium (bounded cloud agent runs)
 
@@ -145,27 +146,6 @@ function attachmentParts(message: UIMessage): Attachment[] {
  * Think owns chat persistence, protocol streaming, recovery, and durable submissions;
  * my-ax supplies its Cloud Computer workspace, connectors, memory mirror, and push channel.
  */
-/** Tool names that NEVER mutate /home/user. Anything outside this set is
- *  treated as potentially-writing; a successful call sets the per-turn
- *  dirty flag that triggers a single workspace snapshot at turn end. */
-const READ_ONLY_TOOLS = new Set<string>([
-  "read_file",
-  "work_search",
-  "show_diff",
-  "search_files",
-  "list_directory",
-  "process_status",
-  "process_logs",
-  "process_cancel",
-  "search_conversations",
-  "notify_owner",
-  "create_svelte_artifact",
-  "list_preview_services",
-  "preview_service",
-  "close_preview_service",
-  "think",
-]);
-
 export class MyAgent extends Think<Env> {
   maxSteps = 25;
   maxConcurrentAgentTools = 2;
@@ -647,8 +627,6 @@ export class MyAgent extends Think<Env> {
     // Workspace durability: one snapshot per turn that touched /home/user.
     // Sandbox containers idle out and get recycled; without a snapshot,
     // anything the agent wrote (write_file, shell_exec mkdir, etc.) is
-    // lost on next page load. afterToolCall sets dirtyFsThisTurn on every
-    // non-read-only successful tool; we capture it here once per turn.
     //
     // PREREQUISITE: R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY must be set
     // via `wrangler secret put`. Without them, sandbox.createBackup throws
@@ -805,7 +783,7 @@ export class MyAgent extends Think<Env> {
     // Mark the turn dirty if this tool MAY have written under /home/user.
     // Repository tools may snapshot inline; marking the turn dirty is still safe
     // because an additional workspace snapshot is a no-op delta.
-    if (ctx.success && !READ_ONLY_TOOLS.has(ctx.toolName)) {
+    if (ctx.success && shouldSnapshotSandboxForToolCall(ctx.toolName, ctx.output)) {
       this.dirtyFsThisTurn = true;
     }
     if (ctx.success && ctx.toolName === "notify_owner") {

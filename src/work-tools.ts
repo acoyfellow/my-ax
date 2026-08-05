@@ -2,6 +2,7 @@ import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { createTerrariumWorkProvider, TERRARIUM_WORK_METHODS } from "./terrarium-tools";
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
+import { COMPUTER_WORK_METHODS, createComputerWorkProvider } from "./computer-workspace";
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
@@ -42,7 +43,7 @@ const PAGE_WORK_METHODS = [
 
 type WorkCall = {
   index: number;
-  where: "workspace" | "machine" | "terrarium" | "codemode" | "page";
+  where: "workspace" | "computer" | "machine" | "terrarium" | "codemode" | "page";
   method: string;
   status: "ok" | "error";
   durationMs: number;
@@ -71,6 +72,13 @@ function checkedWorkspaceProvider(ctx: ToolContext) {
   const fns = workspaceProvider(ctx);
   const missing = WORKSPACE_METHODS.filter((method) => !(method.name in fns));
   if (missing.length) throw new Error(`Workspace catalog/dispatcher drift: ${missing.map((method) => method.name).join(", ")}`);
+  return fns;
+}
+
+function checkedComputerProvider(ctx: ToolContext) {
+  const fns = createComputerWorkProvider(ctx).fns;
+  const missing = COMPUTER_WORK_METHODS.filter((method) => !(method.name in fns));
+  if (missing.length) throw new Error(`Computer catalog/dispatcher drift: ${missing.map((method) => method.name).join(", ")}`);
   return fns;
 }
 
@@ -125,14 +133,16 @@ const CODEMODE_METHODS = [
 
 export const WORK_SEARCH_TOOL: ToolDef = {
   name: "work_search",
-  description: "Discover where My AX can do work. My AX Workspace is persistent conversation-adjacent storage and processes; My Machine is the connected physical computer with local/authenticated state; Terrarium spawns bounded cloud agent runs with verified receipts. Search before choosing when the destination is not obvious.",
+  description: "Discover where My AX can do work. My AX Workspace is the canonical persistent Sandbox path for shell commands, processes, and previews. Computer is a separate preview SQLite filesystem with bounded file-only methods and no execution backend; it does not replace or copy My AX Workspace. My Machine is the connected physical computer with local/authenticated state; Terrarium spawns bounded cloud agent runs with verified receipts. Search before choosing when the destination is not obvious.",
   parameters: { type: "object", properties: { query: { type: "string", description: "What capability or kind of work is needed." } } },
   execute: async (args, ctx) => {
     checkedWorkspaceProvider(ctx);
+    checkedComputerProvider(ctx);
     const machine = await createMachineWorkProvider(ctx);
     const snippets = ctx.listSavedRecipes ? await ctx.listSavedRecipes().catch(() => []) : [];
     const catalog = [
       ...WORKSPACE_METHODS.map((method) => catalogEntry("workspace", method.name, method.description)),
+      ...COMPUTER_WORK_METHODS.map((method) => catalogEntry("computer", method.name, method.description)),
       ...machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema)),
       ...TERRARIUM_WORK_METHODS.map((method) => catalogEntry("terrarium", method.name, method.description, Boolean(ctx.env.TERRARIUM_URL && ctx.env.TERRARIUM_CONTROL_TOKEN))),
       ...PAGE_WORK_METHODS.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage))),
@@ -141,7 +151,7 @@ export const WORK_SEARCH_TOOL: ToolDef = {
     ];
     const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
     const filtered = query ? catalog.filter((entry) => `${entry.method} ${entry.description} ${entry.where}`.toLowerCase().includes(query)) : catalog;
-    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace", machine: "My Machine", terrarium: "Terrarium (bounded cloud agent runs)", page: "My AX Page (live browser UI)" }, matches: filtered.length ? filtered : catalog });
+    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace (Sandbox shell/process/preview)", computer: "Computer (preview SQLite filesystem, file-only)", machine: "My Machine", terrarium: "Terrarium (bounded cloud agent runs)", page: "My AX Page (live browser UI)" }, matches: filtered.length ? filtered : catalog });
   },
 };
 
@@ -174,6 +184,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   // so model code can call `workspace.read({...})` directly or hop through
   // `codemode.run("workspace.read", {...})` / `codemode.search()`.
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
+  const computerFns = instrument("computer", restrictByCapabilities("computer", checkedComputerProvider(ctx), ctx.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
   const terrariumFns = instrument("terrarium", restrictByCapabilities("terrarium", terrariumProvider.fns, ctx.allowedWorkCapabilities), calls);
   // page.* connector: each verb marshals to the live browser client via
@@ -189,8 +200,12 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   // keeps a single receipt/cost path for both call styles.
   const codemodeSources: CodemodeWorkSource[] = [
     {
-      connector: { name: "workspace", description: "My AX Workspace — persistent conversation-adjacent storage and processes.", tools: WORKSPACE_METHODS.map((method) => ({ name: method.name, description: method.description, execute: workspaceFns[method.name] })) },
+      connector: { name: "workspace", description: "My AX Workspace — canonical Sandbox-backed storage, shell, processes, and previews.", tools: WORKSPACE_METHODS.map((method) => ({ name: method.name, description: method.description, execute: workspaceFns[method.name] })) },
       fns: workspaceFns,
+    },
+    {
+      connector: { name: "computer", description: "Computer preview — separate owner-scoped SQLite filesystem with bounded file methods only; no shell, processes, previews, or Sandbox data copy.", tools: COMPUTER_WORK_METHODS.map((method) => ({ name: method.name, description: method.description, execute: computerFns[method.name] })) },
+      fns: computerFns,
     },
     {
       connector: { name: "machine", description: "My Machine — the connected physical computer with local/authenticated state.", tools: machine.catalog.map((method) => ({ name: method.name, description: method.description, inputSchema: method.inputSchema, execute: machineFns[method.name] ?? (async () => { throw new Error(`machine method ${method.name} not available`); }) })) },
@@ -221,6 +236,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
   const bridgeFns = {
     ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
+    ...Object.fromEntries(Object.entries(computerFns).map(([name, fn]) => [`computer_${name}`, fn])),
     ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
     ...Object.fromEntries(Object.entries(terrariumFns).map(([name, fn]) => [`terrarium_${name}`, fn])),
     ...Object.fromEntries(Object.entries(pageFns).map(([name, fn]) => [`page_${name}`, fn])),
@@ -233,11 +249,12 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const pagePrelude = ctx.callPage ? namespace("page", Object.keys(pageFns)) : "globalThis.page=undefined;";
   const prelude = [
     namespace("workspace", Object.keys(workspaceFns)),
+    namespace("computer", Object.keys(computerFns)),
     namespace("machine", Object.keys(machineFns)),
     namespace("terrarium", Object.keys(terrariumFns)),
     pagePrelude,
     codemodeRuntime.prelude,
-    "globalThis.ctx={workspace:globalThis.workspace,machine:globalThis.machine,terrarium:globalThis.terrarium,page:globalThis.page,codemode:globalThis.codemode};",
+    "globalThis.ctx={workspace:globalThis.workspace,computer:globalThis.computer,machine:globalThis.machine,terrarium:globalThis.terrarium,page:globalThis.page,codemode:globalThis.codemode};",
   ].join("\n");
   const submittedCode = code.trim().replace(/;+$/, "");
   const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
@@ -288,7 +305,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
-  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,machine,terrarium,page,codemode}; the same namespaces are also globals, so both async (ctx) => ctx.machine.shell(...) and async () => machine.shell(...) are valid. My AX Workspace methods: workspace.read({path}), workspace.write({path,content}) where path is a required file path such as /home/user/note.txt, workspace.list({path,recursive,includeHidden}), workspace.search({query,path,timeoutMs}), workspace.exec({command,cwd,timeoutMs}), workspace.process_start/status/logs/cancel, workspace.run_code, and workspace.preview_open/list/close. My Machine methods come from work_search with their inputSchema (for example machine.shell({command,cwd})). Terrarium methods spawn bounded cloud agent runs with verified receipts: terrarium.spawn({task,timeoutMs?,model?}) waits for the receipt, terrarium.spawn_background({task}) returns a runId immediately, and terrarium.status({runId}) checks a run. My AX Page methods drive the owner's LIVE browser UI for this conversation (only while a tab is open): page.listSessions(), page.readHealth(), page.readTranscriptTail({n}), page.readViewport(), page.setViewportDebug({on}), page.switchSession({id}), page.openSettings({section}), page.openAttention(), page.openSessions(), page.notify({text,kind}), page.navigate({target}), page.listArtifactTools(), page.invokeArtifactTool({artifactId,name,args}); each errors page_unavailable when no live tab is connected. Interactive artifacts created with create_svelte_artifact can self-register tools the agent then drives: discover with page.listArtifactTools() and call with page.invokeArtifactTool(). A codemode-shaped namespace is also reachable as codemode.search(query) to discover tools and reusable tools, codemode.describe(name) to inspect one, and codemode.run(name, input) to invoke a tool or owner-approved reusable tool by name. For multi-step, recurring, stateful, or easy-to-half-complete operational work, search codemode first and run a strong reusable-tool match by default instead of rebuilding the procedure; do not force weak matches for trivial work. Reusable-tool runs are bounded to the caller's capabilities (intersected, never widened), create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks (not a one-off shell/exec, not throwaway scratch, not tied to today's specific paths), add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
-  parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, terrarium, page, and/or codemode namespaces." } }, required: ["code"] },
+  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,computer,machine,terrarium,page,codemode}; the same namespaces are also globals. My AX Workspace is the canonical Sandbox-backed path for workspace.read/write/list/search, shell commands, processes, code, and previews. Computer is a separate preview owner-scoped SQLite filesystem with computer.read({path}), computer.write({path,content}), computer.list({path}), and computer.grep({query,path,ignoreCase}); all Computer paths stay under /home/user, it has no execution backend, it does not replace My AX Workspace, and no data is copied between them. My Machine methods come from work_search with their inputSchema. Terrarium methods spawn bounded cloud agent runs with verified receipts. My AX Page methods drive the owner's LIVE browser UI for this conversation while a tab is open. A codemode-shaped namespace is also reachable as codemode.search(query), codemode.describe(name), and codemode.run(name, input) to discover and invoke tools or owner-approved reusable tools. For multi-step, recurring, stateful, or easy-to-half-complete operational work, search codemode first and run a strong reusable-tool match by default instead of rebuilding the procedure; do not force weak matches for trivial work. Reusable-tool runs are bounded to the caller's capabilities, create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks, add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
+  parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, computer, machine, terrarium, page, and/or codemode namespaces." } }, required: ["code"] },
   execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };

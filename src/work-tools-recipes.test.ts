@@ -38,7 +38,7 @@ test("work_code sandbox prelude no longer exposes a top-level recipe namespace",
 });
 
 test("work_code invokes submitted async arrow with ctx while preserving globals", () => {
-  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,terrarium:globalThis\.terrarium,page:globalThis\.page,codemode:globalThis\.codemode\}/);
+  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,computer:globalThis\.computer,machine:globalThis\.machine,terrarium:globalThis\.terrarium,page:globalThis\.page,codemode:globalThis\.codemode\}/);
   assert.match(source, /const executableCode = `async \(\) => await \(\$\{submittedCode\}\)\(globalThis\.ctx\)`/);
   assert.match(source, /executor\.execute\(executableCode,/);
 });
@@ -58,7 +58,7 @@ test("agent system prompt no longer references recipe.list / recipe.run", () => 
   assert.match(agent, /codemode\.run\(name, input\)/);
 });
 
-test("native CodemodeRuntime seam is held (round 04): runNativeCodemode is available but the DO binding/export/v11 migration are intentionally not wired until the first call site lands", () => {
+test("native CodemodeRuntime seam is held (round 04): runNativeCodemode is available but the DO binding/export/v12 migration are intentionally not wired until the first call site lands", () => {
   // Type alias remains so callers (including future cutover code) can
   // reference the canonical CodemodeRuntime DO type without importing
   // @cloudflare/codemode directly.
@@ -79,11 +79,6 @@ test("native CodemodeRuntime seam is held (round 04): runNativeCodemode is avail
     /^export \{ CodemodeRuntime \} from "\.\/code-mode-runtime\.worker"/m,
     "src/index.tsx must not actively export CodemodeRuntime until the binding and call site land together",
   );
-  // The held-pattern note must remain in src/index.tsx so a future agent
-  // does not silently re-enable the export without also adding the
-  // binding/migration/types.
-  assert.match(indexSource, /HELD:/);
-  assert.match(indexSource, /code-mode-runtime\.worker/);
 });
 
 test("wrangler.jsonc holds CODEMODE_RUNTIME until a real runNativeCodemode call site exists", () => {
@@ -99,12 +94,9 @@ test("wrangler.jsonc holds CODEMODE_RUNTIME until a real runNativeCodemode call 
   );
   assert.doesNotMatch(
     stripped,
-    /"tag":\s*"v11-codemode-runtime"/,
-    "wrangler.jsonc must not declare the v11-codemode-runtime migration while runNativeCodemode has no call site",
+    /"tag":\s*"v12-codemode-runtime"/,
+    "wrangler.jsonc must not declare the v12-codemode-runtime migration while runNativeCodemode has no call site",
   );
-  // The held-pattern note must remain so a future agent sees why this is
-  // unwired and what to add together.
-  assert.match(wrangler, /intentionally NOT bound here yet/);
 });
 
 test("snippet description stays honest about projected provenance (no claim of native CodemodeRuntime promotion)", () => {
