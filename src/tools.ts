@@ -80,7 +80,7 @@ export const SHOW_DIFF_TOOL: ToolDef = {
     required: ["old", "new", "path"],
   },
   execute: async (args, ctx) => JSON.stringify(await createVerifiedCodeDiffReceipt(args, {
-    readWorkspace: (path) => ctx.readFile(path),
+    readWorkspace: (path, maxBytes) => ctx.readFile(path, { maxBytes }),
     readMachine: (path) => readMachineDiffFile(ctx, path),
   })),
 };

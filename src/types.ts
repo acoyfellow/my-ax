@@ -137,7 +137,7 @@ export interface ToolContext {
   tunnelGet: (port: number) => Promise<{ id: string; port: number; url: string; hostname: string; createdAt: string }>;
   tunnelList: () => Promise<Array<{ id: string; port: number; url: string; hostname: string; createdAt: string }>>;
   tunnelDestroy: (port: number) => Promise<void>;
-  readFile: (path: string) => Promise<string>;
+  readFile: (path: string, options?: { maxBytes?: number }) => Promise<string | null>;
   writeFile: (path: string, content: string) => Promise<void>;
   listFiles: (path: string, opts?: { recursive?: boolean; includeHidden?: boolean }) => Promise<Array<{ path: string; name?: string; type?: string; size?: number }>>;
   searchConversations: (query: string, limit?: number) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;

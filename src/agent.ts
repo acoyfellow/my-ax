@@ -14,6 +14,7 @@ import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
+import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
 import { completeRecurringJobRun, recurringJobIdFromClientMessageId } from "./recurring-job-run";
 import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
@@ -921,7 +922,10 @@ export class MyAgent extends Think<Env> {
         const { sandbox } = await getUserWorkspace(env, identity);
         await sandbox.tunnels.destroy(port);
       },
-      readFile: async (path) => (await new SandboxThinkWorkspace(env, () => identity).readFile(path)) ?? "",
+      readFile: async (path, options) => {
+        if (options?.maxBytes === undefined) return new SandboxThinkWorkspace(env, () => identity).readFile(path);
+        return readBoundedWorkspaceFile((await getUserWorkspace(env, identity)).sandbox, path, options.maxBytes);
+      },
       writeFile: async (path, content) => new SandboxThinkWorkspace(env, () => identity).writeFile(path, content),
       listFiles: async (path, opts) => {
         const { sandbox } = await getUserWorkspace(env, identity);
