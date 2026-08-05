@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CodeDiffWidget from "./CodeDiffWidget.svelte";
   import DelegationGroup from "./DelegationGroup.svelte";
   import { resolveToolResultWidget } from "./tool-result-widgets";
 
@@ -65,7 +66,9 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if widget.kind === "delegation-group"}
+{#if widget.kind === "code-diff"}
+  <CodeDiffWidget diff={widget} />
+{:else if widget.kind === "delegation-group"}
   <DelegationGroup group={widget} />
 {:else if widget.kind === "svelte-artifact"}
   <section class="svelte-artifact-shell" data-fullscreen={fullscreen ? "1" : "0"}>

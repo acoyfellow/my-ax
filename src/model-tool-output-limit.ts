@@ -1,0 +1,1 @@
+export const MODEL_TOOL_OUTPUT_LIMIT_BYTES = 24 * 1024;

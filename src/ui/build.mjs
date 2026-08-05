@@ -18,9 +18,10 @@
 import { build } from "esbuild";
 import sveltePlugin from "esbuild-svelte";
 import { buildHonoSvelte } from "svelte-hono/build";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readdirSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const here = (p) => join(__dirname, p);
@@ -62,10 +63,32 @@ const result = await buildHonoSvelte({
   skipWorkerBundle: true,
 });
 
+const pierreOutput = await build({
+  entryPoints: [here("pierre-diffs-client.ts")],
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  write: false,
+  logLevel: "silent",
+});
+const pierreJs = new TextDecoder().decode(pierreOutput.outputFiles[0].contents);
+const pierreHash = createHash("sha256").update(pierreJs).digest("hex").slice(0, 8);
+const pierreFilename = `pierre-diffs.${pierreHash}.js`;
+writeFileSync(here(`build/${pierreFilename}`), pierreJs);
+const bundlesPath = here("bundles.generated.ts");
+const generatedBundles = readFileSync(bundlesPath, "utf8");
+const pierreBundle = JSON.stringify({ js: "", css: "", hash: pierreHash });
+const bundleEnd = generatedBundles.lastIndexOf("\n};");
+if (bundleEnd < 0) throw new Error("Svelte bundle registry was not generated");
+writeFileSync(bundlesPath, `${generatedBundles.slice(0, bundleEnd)},\n  "pierre-diffs": ${pierreBundle}\n};\n`);
+
 console.log("✓ svelte-hono spike client artifacts");
 for (const [id, sz] of Object.entries(result.bundleSizes)) {
   console.log(`    ${id.padEnd(10)}  ${(sz.js / 1024).toFixed(1)} KB JS + ${(sz.css / 1024).toFixed(2)} KB CSS`);
 }
+console.log(`    pierre-diffs  ${(pierreJs.length / 1024).toFixed(1)} KB JS lazy`);
 
 // ── 2. Pre-compiled <Name>.ssr.mjs modules for each component, imported ──
 // Wrangler's bundler doesn't know how to load .svelte files; we hand it a

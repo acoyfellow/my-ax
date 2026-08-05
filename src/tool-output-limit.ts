@@ -1,6 +1,7 @@
 import { asSchema, jsonSchema, type FlexibleSchema } from "ai";
+import { MODEL_TOOL_OUTPUT_LIMIT_BYTES } from "./model-tool-output-limit";
 
-export const MODEL_TOOL_OUTPUT_LIMIT_BYTES = 24 * 1024;
+export { MODEL_TOOL_OUTPUT_LIMIT_BYTES };
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });

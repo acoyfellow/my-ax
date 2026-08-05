@@ -43,6 +43,8 @@ try {
 
   const svg = resolve("data:image/svg+xml;base64,PHN2Zz4=", "machinectl_call");
   const arbitrary = resolve({ html: "<script>alert(1)</script>", component: "Anything" }, "tool");
+  const codeDiff = resolve(JSON.stringify({ kind: "code-diff", version: 1, path: "src/example.ts", title: "Example update", language: "typescript", oldText: "export const answer = 41;\n", newText: "export const answer = 42;\n", source: { old: "workspace", new: "machine" } }), "show_diff");
+  const unsafeCodeDiff = resolve({ kind: "code-diff", version: 1, path: "https://evil.example/file.ts", title: "Unsafe", oldText: "old", newText: "new", source: { old: "workspace", new: "machine" } }, "show_diff");
 
   // ── Reusable-tool candidate: frozen producer shape (work_code result carries
   //    suggestedRecipe AND reusableToolCandidate metadata). Fails closed on any
@@ -173,6 +175,8 @@ try {
   if (externalSvelteArtifact.kind !== "raw-text") throw new Error("external Svelte artifact URL must remain inert raw text");
   if (svg.kind !== "raw-text") throw new Error("SVG must remain inert raw text");
   if (arbitrary.kind !== "raw-text") throw new Error("arbitrary model-adjacent widget payload must remain inert raw text");
+  if (codeDiff.kind !== "code-diff" || codeDiff.path !== "src/example.ts" || codeDiff.source.new !== "machine") throw new Error("validated show_diff receipt must render as a code diff");
+  if (unsafeCodeDiff.kind !== "raw-text") throw new Error("unsafe code diff receipt must remain inert raw text");
   if (delegation.kind !== "delegation-group" || delegation.live !== false || delegation.runs.length !== 2) throw new Error("delegate_many terminal snapshot missing or unbounded");
   if (delegation.runs[0].taskFingerprint !== "a1b2c3d4" || delegation.runs[0].label !== "Research evidence" || delegation.runs[1].status !== "interrupted" || delegation.runs[1].attempts !== 2) throw new Error("delegation metadata/status/attempts missing");
 

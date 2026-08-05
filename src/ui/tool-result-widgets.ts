@@ -4,6 +4,8 @@
 // iframe src values, or dynamic component names. Each widget type is an
 // explicit allowlisted projection with bounded fields and safe fallbacks.
 
+import { parseCodeDiffReceipt, type CodeDiffReceipt } from "../code-diff";
+
 const INLINE_IMAGE_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,\s*([A-Za-z0-9+/=\r\n\t ]+)\s*$/;
 // A physical-laptop screenshot can be a full Retina PNG. Keep the allowlist
 // narrow, but leave enough room for the real machinectl screenshot payload
@@ -48,6 +50,7 @@ export type ToolResultWidget =
   | { kind: "inline-video"; src: string; label: string }
   | { kind: "svelte-artifact"; src: string; title: string; artifactId: string }
   | { kind: "audio-message"; src: string; title: string; audioId: string; voice: string }
+  | CodeDiffReceipt
   | {
       kind: "reusable-tool-candidate";
       /** Nonempty, model-adjacent identity used to collapse duplicate cards within one conversation. */
@@ -182,6 +185,11 @@ function delegationGroupWidget(value: unknown, toolName: string): ToolResultWidg
     }];
   });
   return runs.length ? { kind: "delegation-group", runs, live: false } : null;
+}
+
+function codeDiffWidget(value: unknown, toolName: string): CodeDiffReceipt | null {
+  if (toolName !== "show_diff") return null;
+  return parseCodeDiffReceipt(decodeJsonOnce(value));
 }
 
 function browserRunWidget(value: unknown): ToolResultWidget | null {
@@ -358,6 +366,9 @@ function rawText(value: unknown): string {
 /** Resolve a tool output to exactly one allowlisted renderer. Add future
  * widgets here deliberately; unknown payloads remain inert raw text. */
 export function resolveToolResultWidget(value: unknown, toolName = "tool"): ToolResultWidget {
+  const codeDiff = codeDiffWidget(value, toolName);
+  if (codeDiff) return codeDiff;
+
   // The Svelte chat transport does not currently expose the official
   // `agent-tool-event` EventTarget consumed by useAgentToolEvents. Render the
   // retained delegate_many result truthfully as a terminal snapshot; do not
