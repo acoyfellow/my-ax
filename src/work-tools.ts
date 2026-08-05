@@ -3,6 +3,8 @@ import { createTerrariumWorkProvider, TERRARIUM_WORK_METHODS } from "./terrarium
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import { COMPUTER_WORK_METHODS, createComputerWorkProvider } from "./computer-workspace";
+import { applyComputerWorkBudget } from "./computer-work-budget";
+import { capWorkCodeCollection, capWorkCodeValue, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
@@ -133,7 +135,7 @@ const CODEMODE_METHODS = [
 
 export const WORK_SEARCH_TOOL: ToolDef = {
   name: "work_search",
-  description: "Discover where My AX can do work. My AX Workspace is the canonical persistent Sandbox path for shell commands, processes, and previews. Computer is a separate preview SQLite filesystem with bounded file-only methods and no execution backend; it does not replace or copy My AX Workspace. My Machine is the connected physical computer with local/authenticated state; Terrarium spawns bounded cloud agent runs with verified receipts. Search before choosing when the destination is not obvious.",
+  description: "Discover where My AX can do work. My AX Workspace is the canonical persistent Sandbox path for shell commands, processes, and previews. Computer is a separate preview SQLite filesystem with bounded file-only methods and no execution backend; it does not replace or copy My AX Workspace, and there is no automatic sync. My Machine is the connected physical computer with local/authenticated state; Terrarium spawns bounded cloud agent runs with verified receipts. Search before choosing when the destination is not obvious.",
   parameters: { type: "object", properties: { query: { type: "string", description: "What capability or kind of work is needed." } } },
   execute: async (args, ctx) => {
     checkedWorkspaceProvider(ctx);
@@ -184,7 +186,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   // so model code can call `workspace.read({...})` directly or hop through
   // `codemode.run("workspace.read", {...})` / `codemode.search()`.
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
-  const computerFns = instrument("computer", restrictByCapabilities("computer", checkedComputerProvider(ctx), ctx.allowedWorkCapabilities), calls);
+  const computerFns = instrument("computer", restrictByCapabilities("computer", applyComputerWorkBudget(checkedComputerProvider(ctx)), ctx.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
   const terrariumFns = instrument("terrarium", restrictByCapabilities("terrarium", terrariumProvider.fns, ctx.allowedWorkCapabilities), calls);
   // page.* connector: each verb marshals to the live browser client via
@@ -261,6 +263,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
   const execution = await executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]);
   const sortedCalls = calls.sort((a, b) => a.index - b.index);
+  const serializedCalls = capWorkCodeCollection(sortedCalls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
+  const serializedLogs = capWorkCodeCollection(execution.logs ?? [], WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES);
+  const serializedResult = capWorkCodeValue(execution.result, WORK_CODE_RESULT_MAX_BYTES);
+  const serializedError = execution.error === undefined ? undefined : capWorkCodeValue(execution.error, 1024);
   const inferredCapabilities = [...new Set(sortedCalls.map((call) => `${call.where}.${call.method}`))].sort();
   // Portability signal: portable when it needs no host namespace — its logic
   // runs in any harness. Surfaced so the owner can tell shelf-worthy (portable)
@@ -290,10 +296,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const reusableToolApprovalMode = await resolveReusableToolApprovalMode(ctx.env, ctx.identity.email);
   return {
     ok: !execution.error,
-    result: execution.result,
-    ...(execution.error ? { error: execution.error } : {}),
-    logs: execution.logs ?? [],
-    calls: sortedCalls,
+    result: serializedResult,
+    ...(execution.error ? { error: serializedError } : {}),
+    logs: serializedLogs,
+    calls: serializedCalls,
     sourceCode: code,
     inferredCapabilities,
     portable,
@@ -305,7 +311,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
-  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,computer,machine,terrarium,page,codemode}; the same namespaces are also globals. My AX Workspace is the canonical Sandbox-backed path for workspace.read/write/list/search, shell commands, processes, code, and previews. Computer is a separate preview owner-scoped SQLite filesystem with computer.read({path}), computer.write({path,content}), computer.list({path}), and computer.grep({query,path,ignoreCase}); all Computer paths stay under /home/user, it has no execution backend, it does not replace My AX Workspace, and no data is copied between them. My Machine methods come from work_search with their inputSchema. Terrarium methods spawn bounded cloud agent runs with verified receipts. My AX Page methods drive the owner's LIVE browser UI for this conversation while a tab is open. A codemode-shaped namespace is also reachable as codemode.search(query), codemode.describe(name), and codemode.run(name, input) to discover and invoke tools or owner-approved reusable tools. For multi-step, recurring, stateful, or easy-to-half-complete operational work, search codemode first and run a strong reusable-tool match by default instead of rebuilding the procedure; do not force weak matches for trivial work. Reusable-tool runs are bounded to the caller's capabilities, create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks, add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
+  description: "Execute one bounded JavaScript async function across the right place for the job. Code must be an async arrow function. The function receives ctx with {workspace,computer,machine,terrarium,page,codemode}; the same namespaces are also globals. My AX Workspace is the canonical Sandbox-backed path for workspace.read/write/list/search, shell commands, processes, code, and previews. Computer is a separate preview owner-scoped SQLite filesystem with computer.read({path}), computer.write({path,content}), computer.list({path}), and computer.grep({query,path,ignoreCase}); all Computer paths stay under /home/user, it has no execution backend, it does not replace My AX Workspace, no data is copied between them, and there is no automatic sync. My Machine methods come from work_search with their inputSchema. Terrarium methods spawn bounded cloud agent runs with verified receipts. My AX Page methods drive the owner's LIVE browser UI for this conversation while a tab is open. A codemode-shaped namespace is also reachable as codemode.search(query), codemode.describe(name), and codemode.run(name, input) to discover and invoke tools or owner-approved reusable tools. For multi-step, recurring, stateful, or easy-to-half-complete operational work, search codemode first and run a strong reusable-tool match by default instead of rebuilding the procedure; do not force weak matches for trivial work. Reusable-tool runs are bounded to the caller's capabilities, create receipts that carry the codemode execution id, and appear in Check-in. Reusable-tool candidates: if — and only if — the code is broadly reusable across future tasks, add exactly one leading comment `// reusable-tool: <short meaningful name>` on the first line. The owner chooses in Settings → Reusable tools whether qualifying tools wait for review or are enabled automatically. Never add the marker to one-off commands or ad-hoc scripts. No raw network, credentials, environment, or publication authority is exposed.",
   parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, computer, machine, terrarium, page, and/or codemode namespaces." } }, required: ["code"] },
   execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
 };

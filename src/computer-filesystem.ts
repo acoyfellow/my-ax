@@ -4,7 +4,14 @@ export const COMPUTER_WRITE_MAX_BYTES = 32 * 1024;
 export const COMPUTER_LIST_MAX_ENTRIES = 100;
 export const COMPUTER_GREP_MAX_MATCHES = 100;
 export const COMPUTER_GREP_MAX_PATTERN_LENGTH = 256;
+export const COMPUTER_GREP_MAX_FILES = 128;
+export const COMPUTER_GREP_MAX_DIRECTORIES = 64;
+export const COMPUTER_GREP_MAX_TOTAL_BYTES = 256 * 1024;
+export const COMPUTER_GREP_DEADLINE_MS = 2_000;
 export const COMPUTER_OUTPUT_MAX_BYTES = 32 * 1024;
+export const COMPUTER_OWNER_MAX_FILES = 512;
+export const COMPUTER_OWNER_MAX_STORAGE_BYTES = 4 * 1024 * 1024;
+export const COMPUTER_OWNER_MAX_DIRECTORIES = 256;
 
 export const COMPUTER_WORK_METHODS = [
   { name: "read", description: "Read one bounded UTF-8 file from the isolated Computer workspace." },
@@ -27,17 +34,10 @@ type ComputerDirectoryEntry = {
   isSymbolicLink: boolean;
 };
 
-type ComputerGrepMatch = {
-  path: string;
-  line: number;
-  text: string;
-};
-
 export type ComputerFilesystem = {
   readFile: (path: string, encoding: "utf8") => Promise<string>;
   lstat: (path: string) => Promise<ComputerStat>;
   readdir: (path: string, options?: { limit?: number }) => Promise<ComputerDirectoryEntry[]>;
-  grep: (pattern: string, path: string, options?: { ignoreCase?: boolean }) => Promise<ComputerGrepMatch[]>;
   writeFile: (path: string, content: string) => Promise<void>;
   mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>;
 };
@@ -47,8 +47,10 @@ export type ComputerWorkspaceClient = {
   [Symbol.dispose](): void;
 };
 
+const encoder = new TextEncoder();
+
 export function resolveComputerPath(value: unknown): string {
-  if (typeof value !== "string" || !value || new TextEncoder().encode(value).byteLength > 1024 || value.includes("\0")) {
+  if (typeof value !== "string" || !value || encoder.encode(value).byteLength > 1024 || value.includes("\0")) {
     throw new Error("Computer path must be a non-empty string of at most 1024 bytes without NUL.");
   }
   if (value.includes("//")) throw new Error("Computer paths must not contain empty segments.");
@@ -86,6 +88,15 @@ async function lstatOrNull(fs: ComputerFilesystem, path: string): Promise<Comput
 function parentPath(path: string): string {
   const index = path.lastIndexOf("/");
   return index <= 0 ? "/" : path.slice(0, index);
+}
+
+function childPath(parent: string, name: string): string | null {
+  if (!name || name === "." || name === ".." || name.includes("/") || name.includes("\0")) return null;
+  return resolveComputerPath(`${parent}/${name}`);
+}
+
+function assertFileSize(stat: ComputerStat, maximum: number, message: string): void {
+  if (!Number.isSafeInteger(stat.size) || stat.size < 0 || stat.size > maximum) throw new Error(message);
 }
 
 async function assertExistingPathIsSafe(fs: ComputerFilesystem, path: string, allowMissingLeaf = false): Promise<ComputerStat | null> {
@@ -131,12 +142,11 @@ async function prepareComputerParent(fs: ComputerFilesystem, path: string): Prom
 
 function requireBoundedString(value: unknown, field: string, maxBytes: number, allowEmpty = true): string {
   if (typeof value !== "string" || (!allowEmpty && value.length === 0)) throw new Error(`Computer ${field} must be ${allowEmpty ? "a string" : "a non-empty string"}.`);
-  if (new TextEncoder().encode(value).byteLength > maxBytes) throw new Error(`Computer ${field} must be at most ${maxBytes} bytes.`);
+  if (encoder.encode(value).byteLength > maxBytes) throw new Error(`Computer ${field} must be at most ${maxBytes} bytes.`);
   return value;
 }
 
 function truncateUtf8(value: string, maxBytes: number): string {
-  const encoder = new TextEncoder();
   if (encoder.encode(value).byteLength <= maxBytes) return value;
   const suffix = "…";
   const available = maxBytes - encoder.encode(suffix).byteLength;
@@ -149,7 +159,6 @@ function truncateUtf8(value: string, maxBytes: number): string {
 }
 
 function boundedItems<T>(items: T[], toSafeValue: (item: T) => unknown): { items: unknown[]; truncated: boolean } {
-  const encoder = new TextEncoder();
   const result: unknown[] = [];
   let bytes = 0;
   for (const item of items) {
@@ -162,16 +171,63 @@ function boundedItems<T>(items: T[], toSafeValue: (item: T) => unknown): { items
   return { items: result, truncated: result.length < items.length };
 }
 
+type ComputerUsage = {
+  files: number;
+  bytes: number;
+};
+
+async function computerUsage(fs: ComputerFilesystem): Promise<ComputerUsage> {
+  const directories = [COMPUTER_HOME];
+  let directoryCount = 0;
+  let files = 0;
+  let bytes = 0;
+  while (directories.length) {
+    const directory = directories.shift()!;
+    directoryCount += 1;
+    if (directoryCount > COMPUTER_OWNER_MAX_DIRECTORIES) throw new Error(`Computer owner directory quota exceeded (${COMPUTER_OWNER_MAX_DIRECTORIES}).`);
+    const remainingEntries = COMPUTER_OWNER_MAX_FILES + COMPUTER_OWNER_MAX_DIRECTORIES + 1 - files - directoryCount;
+    if (remainingEntries <= 0) throw new Error(`Computer owner file quota exceeded (${COMPUTER_OWNER_MAX_FILES}).`);
+    const entries = (await fs.readdir(directory, { limit: remainingEntries + 1 })).slice(0, remainingEntries + 1);
+    if (entries.length > remainingEntries) throw new Error(`Computer owner file quota exceeded (${COMPUTER_OWNER_MAX_FILES}).`);
+    for (const entry of entries) {
+      const path = childPath(directory, entry.name);
+      if (!path) continue;
+      const stat = await lstatOrNull(fs, path);
+      if (!stat || stat.isSymbolicLink) continue;
+      if (stat.isDirectory) {
+        directories.push(path);
+        continue;
+      }
+      if (!stat.isFile) continue;
+      assertFileSize(stat, COMPUTER_OWNER_MAX_STORAGE_BYTES, "Computer file has an invalid size.");
+      files += 1;
+      bytes += stat.size;
+      if (files > COMPUTER_OWNER_MAX_FILES) throw new Error(`Computer owner file quota exceeded (${COMPUTER_OWNER_MAX_FILES}).`);
+      if (bytes > COMPUTER_OWNER_MAX_STORAGE_BYTES) throw new Error(`Computer owner storage quota exceeded (${COMPUTER_OWNER_MAX_STORAGE_BYTES} bytes).`);
+    }
+  }
+  return { files, bytes };
+}
+
+async function assertOwnerWriteQuota(fs: ComputerFilesystem, existing: ComputerStat | null, contentBytes: number): Promise<void> {
+  const usage = await computerUsage(fs);
+  const existingBytes = existing?.isFile ? existing.size : 0;
+  if (usage.files + (existing?.isFile ? 0 : 1) > COMPUTER_OWNER_MAX_FILES) {
+    throw new Error(`Computer owner file quota exceeded (${COMPUTER_OWNER_MAX_FILES}).`);
+  }
+  if (usage.bytes - existingBytes + contentBytes > COMPUTER_OWNER_MAX_STORAGE_BYTES) {
+    throw new Error(`Computer owner storage quota exceeded (${COMPUTER_OWNER_MAX_STORAGE_BYTES} bytes).`);
+  }
+}
+
 export async function readComputerFileFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
   const path = resolveComputerPath((input as { path?: unknown } | null)?.path);
   await ensureComputerHome(workspace.fs);
   const stat = await assertExistingPathIsSafe(workspace.fs, path);
   if (!stat?.isFile) throw new Error("Computer read requires a regular file.");
-  if (!Number.isSafeInteger(stat.size) || stat.size < 0 || stat.size > COMPUTER_READ_MAX_BYTES) {
-    throw new Error(`Computer file exceeds the ${COMPUTER_READ_MAX_BYTES}-byte read limit.`);
-  }
+  assertFileSize(stat, COMPUTER_READ_MAX_BYTES, `Computer file exceeds the ${COMPUTER_READ_MAX_BYTES}-byte read limit.`);
   const content = await workspace.fs.readFile(path, "utf8");
-  const bytes = new TextEncoder().encode(content).byteLength;
+  const bytes = encoder.encode(content).byteLength;
   if (bytes > COMPUTER_READ_MAX_BYTES) throw new Error(`Computer file exceeds the ${COMPUTER_READ_MAX_BYTES}-byte read limit.`);
   return { path, content, bytes };
 }
@@ -179,11 +235,14 @@ export async function readComputerFileFromWorkspace(workspace: Pick<ComputerWork
 export async function writeComputerFileFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
   const path = resolveComputerPath((input as { path?: unknown } | null)?.path);
   const content = requireBoundedString((input as { content?: unknown } | null)?.content, "content", COMPUTER_WRITE_MAX_BYTES);
+  const contentBytes = encoder.encode(content).byteLength;
   await prepareComputerParent(workspace.fs, path);
   const existing = await assertExistingPathIsSafe(workspace.fs, path, true);
-  if (existing?.isDirectory) throw new Error("Computer write requires a file path.");
+  if (existing?.isDirectory || (existing && !existing.isFile)) throw new Error("Computer write requires a regular file path.");
+  if (existing?.isFile) assertFileSize(existing, COMPUTER_OWNER_MAX_STORAGE_BYTES, "Computer file has an invalid size.");
+  await assertOwnerWriteQuota(workspace.fs, existing, contentBytes);
   await workspace.fs.writeFile(path, content);
-  return { path, bytesWritten: new TextEncoder().encode(content).byteLength };
+  return { path, bytesWritten: contentBytes };
 }
 
 export async function listComputerFilesFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
@@ -199,24 +258,95 @@ export async function listComputerFilesFromWorkspace(workspace: Pick<ComputerWor
   return { path, entries: bounded.items, truncated: bounded.truncated };
 }
 
+function matchingLines(content: string, query: string, ignoreCase: boolean, path: string, matches: Array<{ path: string; line: number; text: string }>): void {
+  const needle = ignoreCase ? query.toUpperCase() : query;
+  for (const [index, line] of content.split("\n").entries()) {
+    if ((ignoreCase ? line.toUpperCase() : line).includes(needle)) {
+      matches.push({ path, line: index + 1, text: truncateUtf8(line, 512) });
+      if (matches.length >= COMPUTER_GREP_MAX_MATCHES) return;
+    }
+  }
+}
+
 export async function grepComputerFilesFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
   const values = input as { path?: unknown; query?: unknown; ignoreCase?: unknown } | null;
   const path = resolveComputerPath(values?.path ?? COMPUTER_HOME);
   const query = requireBoundedString(values?.query, "grep query", COMPUTER_GREP_MAX_PATTERN_LENGTH, false);
   await ensureComputerHome(workspace.fs);
-  const stat = await assertExistingPathIsSafe(workspace.fs, path);
-  if (!stat?.isDirectory && !stat?.isFile) throw new Error("Computer grep requires a file or directory.");
-  const rawMatches = await workspace.fs.grep(query, path, { ignoreCase: values?.ignoreCase === true });
-  const safeMatches: ComputerGrepMatch[] = [];
-  for (const match of rawMatches) {
-    if (safeMatches.length >= COMPUTER_GREP_MAX_MATCHES) break;
-    const matchPath = resolveComputerPath(match.path);
-    const matchStat = await assertExistingPathIsSafe(workspace.fs, matchPath);
-    if (!matchStat?.isFile) continue;
-    safeMatches.push({ path: matchPath, line: match.line, text: truncateUtf8(match.text, 512) });
+  const root = await assertExistingPathIsSafe(workspace.fs, path);
+  if (!root?.isDirectory && !root?.isFile) throw new Error("Computer grep requires a file or directory.");
+
+  const deadline = Date.now() + COMPUTER_GREP_DEADLINE_MS;
+  const directories = root.isDirectory ? [path] : [];
+  const files = root.isFile ? [path] : [];
+  const matches: Array<{ path: string; line: number; text: string }> = [];
+  let directoryCount = 0;
+  let fileCount = 0;
+  let scannedBytes = 0;
+  let truncated = false;
+
+  while (directories.length || files.length) {
+    if (Date.now() > deadline) {
+      truncated = true;
+      break;
+    }
+    if (files.length) {
+      const file = files.shift()!;
+      fileCount += 1;
+      if (fileCount > COMPUTER_GREP_MAX_FILES) {
+        truncated = true;
+        break;
+      }
+      const stat = await assertExistingPathIsSafe(workspace.fs, file);
+      if (!stat?.isFile) continue;
+      if (!Number.isSafeInteger(stat.size) || stat.size < 0 || stat.size > COMPUTER_READ_MAX_BYTES) {
+        truncated = true;
+        continue;
+      }
+      if (scannedBytes + stat.size > COMPUTER_GREP_MAX_TOTAL_BYTES) {
+        truncated = true;
+        break;
+      }
+      const content = await workspace.fs.readFile(file, "utf8");
+      const bytes = encoder.encode(content).byteLength;
+      if (bytes > COMPUTER_READ_MAX_BYTES || scannedBytes + bytes > COMPUTER_GREP_MAX_TOTAL_BYTES) {
+        truncated = true;
+        break;
+      }
+      scannedBytes += bytes;
+      matchingLines(content, query, values?.ignoreCase === true, file, matches);
+      if (matches.length >= COMPUTER_GREP_MAX_MATCHES) {
+        truncated = true;
+        break;
+      }
+      continue;
+    }
+
+    const directory = directories.shift()!;
+    directoryCount += 1;
+    if (directoryCount > COMPUTER_GREP_MAX_DIRECTORIES) {
+      truncated = true;
+      break;
+    }
+    const remainingEntries = COMPUTER_GREP_MAX_FILES + COMPUTER_GREP_MAX_DIRECTORIES + 1 - fileCount - directoryCount - directories.length - files.length;
+    if (remainingEntries <= 0) {
+      truncated = true;
+      break;
+    }
+    const entries = (await workspace.fs.readdir(directory, { limit: remainingEntries + 1 })).slice(0, remainingEntries + 1);
+    if (entries.length > remainingEntries) truncated = true;
+    for (const entry of entries.slice(0, remainingEntries)) {
+      const child = childPath(directory, entry.name);
+      if (!child || entry.isSymbolicLink) continue;
+      const stat = await lstatOrNull(workspace.fs, child);
+      if (!stat || stat.isSymbolicLink) continue;
+      if (stat.isDirectory) directories.push(child);
+      else if (stat.isFile) files.push(child);
+    }
   }
-  const bounded = boundedItems(safeMatches, (match) => match);
-  return { path, matches: bounded.items, truncated: bounded.truncated || safeMatches.length < rawMatches.length };
+
+  const bounded = boundedItems(matches, (match) => match);
+  return { path, matches: bounded.items, truncated: truncated || bounded.truncated };
 }
 
 export async function computerHealthFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">) {
@@ -227,5 +357,9 @@ export async function computerHealthFromWorkspace(workspace: Pick<ComputerWorksp
     storage: "durable-object-sqlite",
     executionBackends: [] as string[],
     homeReady: Boolean(home?.isDirectory && !home.isSymbolicLink),
+    quotas: {
+      files: COMPUTER_OWNER_MAX_FILES,
+      storageBytes: COMPUTER_OWNER_MAX_STORAGE_BYTES,
+    },
   };
 }

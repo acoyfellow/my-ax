@@ -28,7 +28,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
 | `src/bridge.ts` | Mints scoped per-call tickets, attaches upstream auth, writes audit receipts. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
-| `src/computer-workspace.ts` | Preview owner-scoped Computer SQLite filesystem with bounded file-only methods under `/home/user`; it is separate from Sandbox and has no execution backend. |
+| `src/computer-workspace.ts` | Preview owner-scoped Computer SQLite filesystem with bounded, quota-limited file-only methods under `/home/user`; it is separate from Sandbox, has no execution backend, and has no automatic sync. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `BetaPage` (the single-root app served at `/` and `/beta`), `CapabilitiesPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. The legacy multi-mount `ChatPage` is retired. |
 | `src/ui/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results group into at most two compact child snapshots, each with status, summary, attempts, and bounded details. Agents 0.17.0 supports detached child runs and official progress frames. This custom Svelte socket does not yet expose the EventTarget that `useAgentToolEvents` needs. The UI therefore labels and renders retained raw tool output instead of claiming live progress. Reconnect and transcript replay reuse that output. Cancellation and child drill-in are absent because the current parent route exposes no safe official action surface. |
 | `migrations/` | D1 schema migrations. |
@@ -77,7 +77,7 @@ Wrangler bindings (see `wrangler.jsonc`):
 | `OAUTH_CLIENT` | Durable Object (`OAuthClientDO`) | One instance per user — encrypted bearer vault feeding native `Agent.mcp` registrations |
 | `MACHINE_HOST` | Durable Object (`MachineHost`) | One outbound-connected physical laptop relay per user |
 | `SANDBOX` | Durable Object (`Sandbox` from @cloudflare/sandbox) | One container per user; canonical shell/process/preview workspace |
-| `COMPUTER` | Durable Object (`ComputerWorkspace`) | One owner-scoped preview SQLite filesystem; bounded file-only `/home/user`, no execution backend |
+| `COMPUTER` | Durable Object (`ComputerWorkspace`) | One owner-scoped preview SQLite filesystem; bounded, quota-limited file-only `/home/user`, no execution backend, no automatic sync |
 | `BACKUP_BUCKET` | R2 | Sandbox workspace backup archives |
 | `DB` | D1 | Session registry, Think-turn mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
 | `AUDIT_KV` | KV | 90-day audit receipts written by `bridge.ts` |
@@ -95,7 +95,7 @@ chat WebSocket and only work while a chat tab is connected.
 
 ## Storage Layout
 
-**R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox. **ComputerWorkspace DO storage** separately holds a preview SQLite `/home/user` VFS. It has no execution backend, no shared files, no migration/copy path from Sandbox, and does not participate in Sandbox snapshots.
+**R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox. **ComputerWorkspace DO storage** separately holds a preview SQLite `/home/user` VFS. It has no execution backend, no shared files, no migration/copy path from Sandbox, no automatic sync, and does not participate in Sandbox snapshots.
 
 **Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). Owner/API injection and native recurring alarms both submit durable turns through Think's unified `runTurn({ mode: "submit" })` path. **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, Attention, recurring jobs and job evidence, saved recipes, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
 
@@ -105,10 +105,10 @@ chat WebSocket and only work while a chat tab is connected.
 
 | Need | Current canonical surface | Computer preview status |
 |---|---|---|
-| Bounded file reads/writes/listing/search | Sandbox `workspace.*` remains canonical for existing data | `computer.read/write/list/grep` is a separate SQLite-only dogfood slice |
+| Bounded file reads/writes/listing/search | Sandbox `workspace.*` remains canonical for existing data | `computer.read/write/list/grep` is a separate SQLite-only dogfood slice with per-owner quotas and no automatic sync |
 | Shell commands, processes, code execution, previews | Sandbox `workspace.*` | Not provided; no execution backend |
 | Durable file storage | Sandbox plus R2 snapshots | Durable Object SQLite only |
-| Data continuity | Existing Sandbox restore/snapshot flow | No data copy, sync, or replacement path |
+| Data continuity | Existing Sandbox restore/snapshot flow | No data copy, no automatic sync, and no replacement path |
 | Snapshot behavior | Sandbox mutations can trigger an R2 snapshot at turn end | Computer-only calls never trigger Sandbox snapshots |
 
 ## Identity Flow
@@ -153,7 +153,7 @@ my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configure
 - **Trusted inline widget registry** — `src/ui/tool-result-widgets.ts` classifies tool output into an explicit allowlisted Svelte renderer. It never accepts arbitrary component names, HTML, or iframe URLs from model-adjacent output. Unknown payloads fall back to inert raw text. For Svelte artifacts it accepts only same-origin `/api/artifacts/:uuid/preview` URLs and mounts them in an `allow-scripts` sandboxed iframe.
 - **`create_svelte_artifact`** — a native Think tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
 - **`browser_open`** — a native Think tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
-- **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the canonical Sandbox My AX Workspace, the separate preview Computer SQLite filesystem, the connected physical machine, bounded Terrarium cloud agent runs, the live-UI Page connector, and a codemode namespace. `computer.*` is bounded to file operations under `/home/user`, has no execution backend, and neither replaces nor copies My AX Workspace data. Child calls carry location, method, status, and duration metadata.
+- **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the canonical Sandbox My AX Workspace, the separate preview Computer SQLite filesystem, the connected physical machine, bounded Terrarium cloud agent runs, the live-UI Page connector, and a codemode namespace. `computer.*` is bounded to quota-limited file operations under `/home/user`, has no execution backend, neither replaces nor copies My AX Workspace data, and has no automatic sync. Child calls carry location, method, status, and duration metadata.
 - **Recurring jobs** — `JobService` is the sole business boundary for list/create/update/pause/resume/run/delete/history. Every adapter supplies the verified owner; all reads and mutations scope SQL by that owner. Active updates create the replacement native schedule before persistence, cancel it if persistence fails, and retire the old schedule only after the new row is durable. `job_events` retains mutation/run evidence and idempotency keys bound repeated create/run requests.
 - **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration, immediate one-off `notify_owner` Web Push delivery, and explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 

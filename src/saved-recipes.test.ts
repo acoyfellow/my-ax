@@ -23,6 +23,17 @@ test("saved recipe validation rejects generic extension-shaped power", () => {
   assert.throws(() => validateSavedRecipeInput({ name: "secret", description: "Secret", inputSchema: { type: "object" }, code: "return env.SECRET", capabilities: [] }), /capabilities must list/);
 });
 
+test("saved recipe validation admits a Computer capability for owner-approved save", () => {
+  const recipe = validateSavedRecipeInput({
+    name: "read_preview_file",
+    description: "Read one file from the Computer preview workspace.",
+    inputSchema: { type: "object", properties: { path: { type: "string" } } },
+    code: "return await computer.read({ path: input.path });",
+    capabilities: ["computer.read"],
+  });
+  assert.deepEqual(recipe.capabilities, ["computer.read"]);
+});
+
 test("saved recipe run input enforces the declared object schema subset", () => {
   const schema = { type: "object", required: ["path"], properties: { path: { type: "string", minLength: 2 }, retries: { type: "number", minimum: 0, maximum: 3 } } };
   assert.deepEqual(validateRecipeRunInput({ path: "/x", retries: 1 }, schema), { path: "/x", retries: 1 });

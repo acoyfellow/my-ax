@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-05",
+  "status": "owner-approved",
+  "scope": "ComputerWorkspace production preview dogfood using @cloudflare/computer 0.1.1",
+  "approval": {
+    "type": "four-person production preview risk exception",
+    "approverCount": 4,
+    "approverRoles": [
+      "owner",
+      "security reviewer",
+      "runtime reviewer",
+      "release reviewer"
+    ],
+    "identityRecord": "Retained by the owner outside this public repository."
+  },
+  "constraints": [
+    "Computer remains a separate owner-scoped file-only preview filesystem.",
+    "Computer has no execution backend and no automatic sync with Workspace.",
+    "Per-work_code Computer budgets and per-owner file and storage quotas remain enabled.",
+    "A real Durable Object production proof is deferred and this exception does not authorize deployment."
+  ],
+  "review": {
+    "dueBy": "2026-09-04",
+    "trigger": "Review on or before 2026-09-04, or before the next release, whichever comes first.",
+    "owner": "owner"
+  },
+  "rollback": {
+    "priorVersionCapture": "Before any preview deployment, record the immediately preceding Worker deployment version ID and git revision in the private deployment record.",
+    "action": "Use Worker deployment history to activate the recorded immediately preceding version.",
+    "postRollbackProof": "Verify the prior version is active and rerun its authenticated production journey.",
+    "escalation": "Stop the preview and notify the owner if the prior version cannot be activated or its proof fails."
+  }
+}

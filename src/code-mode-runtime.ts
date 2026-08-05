@@ -21,19 +21,7 @@
 //      proxy so a future cutover can swap the implementation without
 //      touching `work-tools.ts`.
 //
-// HONEST SCOPE NOTE: today's work_code path still routes through
-// `DynamicWorkerExecutor` because the native CodemodeRuntime needs a
-// DurableObjectState handle, and `executeWorkCode` runs on the agent's
-// own DO (not inside a child CodemodeRuntime facet). No call site in
-// this worker drives `runNativeCodemode` yet, so the `CodemodeRuntime`
-// Durable Object binding and `v11-codemode-runtime` migration are
-// intentionally HELD out of wrangler.jsonc (round 04 review) — wiring
-// them in without a call site would mean shipping a forward-only DO
-// migration for dead code. The `createCodemodeRuntime` builder remains
-// re-exported from `code-mode-runtime.worker.ts` so the future cutover
-// only needs to bind the DO and add the first call site at the same
-// time. Until then, snippet provenance stays projected/synthetic — see
-// `cm-snippets.ts` for the honest seam.
+export const CODEMODE_FUTURE_MIGRATION_TAG = "v12-codemode-runtime";
 
 import type { CodemodeRuntimeHandle, CodemodeConnector, Executor } from "@cloudflare/codemode";
 

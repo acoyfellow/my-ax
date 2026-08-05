@@ -30,6 +30,7 @@ The agent uses more than one place. It picks the place for each task. Each place
 | Place | Mechanism | Authority | What you can read back |
 |---|---|---|---|
 | Container workspace | container-backed `/home/user`, snapshotted to R2 | isolated per owner | files, command output |
+| Computer preview filesystem | separate owner-scoped SQLite `/home/user` | bounded, quota-limited file-only access; no execution backend or automatic sync | bounded file results |
 | A machine you connect | `machine.*` over an outbound companion ([machinectl](https://github.com/acoyfellow/machinectl)) | the companion's OS account, which you choose | the exact command, its output |
 | A bounded cloud run | `terrarium.spawn` returns a verified receipt | Terrarium's own container | `runId`, contract status, exit code |
 | A public web page | `browser_open` in a headless browser | no local cookies; public URLs only | rendered title, text, an rrweb replay |
@@ -66,6 +67,7 @@ The hard bounds, so you know what the agent cannot do.
 | Recurring jobs | At most 10 active jobs per owner. Cadence 60 seconds to 30 days. Names 200 characters, prompts 4,000. D1 drives the UI. The native scheduler drives execution. The two can disagree. There is no automatic repair. If the state drifts, pause, delete, and create the job again. |
 | Work Code Mode | The generated source has a limit of 32,000 bytes. Each run has a 60-second wall-clock limit and no ambient network. The limit does not reduce the authority of an allowlisted callback. |
 | Workspace | All conversations for one owner share `/home/user`. My AX tries an R2 snapshot after a change. Recent writes can be lost with the container. Two conversations can edit the same files with no merge. |
+| Computer | A separate preview SQLite `/home/user` with bounded, quota-limited file methods. It has no execution backend, does not copy Workspace data, and has no automatic sync. |
 | Machine | Commands run as the OS account that hosts the companion, with that account's permissions. My AX adds no privilege separation. |
 | Terrarium | The agent starts bounded cloud runs and reads verified receipts. Runs execute in Terrarium's own containers under its authority. My AX holds a bearer control token and adds no privilege separation. |
 | Page (live UI) | Works only while an owner chat tab is connected. Each verb returns `page_unavailable` at other times. Artifact-registered tools are per-artifact and capped. They are bound to the source window. They are checked against their schema. |

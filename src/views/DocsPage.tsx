@@ -14,7 +14,7 @@ interface Props {
 // no-overclaim lenses.
 const DIFFERENTIATORS: Array<{ title: string; body: string }> = [
   { title: "It runs in your own account", body: "My AX is single-tenant and single-operator. You deploy it into your own Cloudflare account, behind your own Access login. One verified identity owns every conversation, record, and tool call. No shared service holds your data." },
-  { title: "One agent, five places, one tool surface", body: "work_search and work_code give the agent one way to act across a container workspace, a machine you connect, bounded cloud runs, its own live browser UI, and a codemode namespace. The agent picks the place for each task. It does not need a separate integration per surface." },
+  { title: "One agent, six places, one tool surface", body: "work_search and work_code give the agent one way to act across a container workspace, a separate Computer preview filesystem, a machine you connect, bounded cloud runs, its own live browser UI, and a codemode namespace. The agent picks the place for each task. It does not need a separate integration per surface." },
   { title: "Inner runs cannot widen their authority", body: "When the agent runs a saved tool inside a turn, its capabilities are the intersection of the tool's declared needs and the caller's current grants. The set can only narrow, never widen. This is capability-based security, the same model as Sandstorm." },
   { title: "It builds instruments and then drives them", body: "The agent can build a UI with create_svelte_artifact, and that artifact can register its own tools. The agent then calls those tools to steer the artifact on a later turn. It builds an instrument once and operates it, instead of rebuilding it each time." },
   { title: "Bounded actions return a verified receipt", body: "A cloud run returns a runId, a verified contract status, and an exit code. A recurring run and a reusable-tool run write start and terminal events. A bridged tool call writes an audit receipt. You read the receipt instead of trusting a claim." },
@@ -100,6 +100,7 @@ const GUIDES: Array<{ anchor: string; goal: string; steps: string[]; result: str
 
 const SURFACES: Array<{ ns: string; use: string; receipt: string }> = [
   { ns: "workspace.*", use: "Read, write, and run in a container-backed /home/user.", receipt: "files, command output" },
+  { ns: "computer.*", use: "Read, write, list, and search a separate preview SQLite /home/user. It has no execution backend and no automatic sync with Workspace.", receipt: "bounded file results" },
   { ns: "machine.*", use: "Run commands on your connected laptop.", receipt: "the command and its output" },
   { ns: "terrarium.*", use: "Spawn a bounded cloud run: spawn waits, spawn_background returns a runId, status checks one.", receipt: "runId, contract status, exit code" },
   { ns: "page.*", use: "Drive the open chat tab: read sessions and health, switch sessions, open Settings.", receipt: "session list, health block" },
@@ -112,6 +113,7 @@ const LIMITS: Array<{ surface: string; bound: string }> = [
   { surface: "Recurring jobs", bound: "At most 10 active per owner. Cadence 60s to 30 days. No automatic repair if state drifts." },
   { surface: "Work Code Mode", bound: "Source limited to 32,000 bytes. 60-second wall-clock. No ambient network." },
   { surface: "Workspace", bound: "One shared /home/user per owner. Recent writes can be lost with the container." },
+  { surface: "Computer", bound: "Separate preview SQLite storage with bounded file operations, no execution backend, and no automatic sync with Workspace." },
   { surface: "Machine", bound: "Runs as the companion's OS account. Terminal-equivalent. No privilege separation added." },
   { surface: "Terrarium", bound: "Runs in Terrarium's own containers under its authority. My AX holds a bearer control token." },
   { surface: "Page (live UI)", bound: "Works only while a chat tab is connected. Artifact tools are capped and schema-validated." },
@@ -120,6 +122,7 @@ const LIMITS: Array<{ surface: string; bound: string }> = [
 const ENDPOINTS: Array<{ path: string; use: string }> = [
   { path: "GET /api/check-in", use: "One response: what needs you, what is running, what finished or failed." },
   { path: "GET /api/health", use: "Routing and bindings check. Returns ok: true when the worker is healthy." },
+  { path: "GET /api/system/computer-workspace", use: "Owner-scoped Computer preview filesystem health and quota limits." },
   { path: "GET /api/attention", use: "Owner-scoped unread items with source links." },
   { path: "GET /api/runs", use: "Run status summaries and receipt hrefs." },
   { path: "GET /api/jobs", use: "Recurring job status and history hrefs." },
@@ -128,7 +131,7 @@ const ENDPOINTS: Array<{ path: string; use: string }> = [
 
 const CONCEPTS: Array<{ title: string; body: string }> = [
   { title: "You leave; the agent keeps working", body: "You give the agent a task and close the tab. It works while you are away. Check-in reports what needs you, what is running, and what finished. You read the receipt and decide the next step. The product is built so you can leave." },
-  { title: "The agent has more than one computer", body: "The agent picks the place for each task. It uses the workspace for files tied to the conversation. It uses your laptop for local and authenticated state. It uses Terrarium for cloud runs that do not need you present. It uses its own browser for public pages. One tool surface covers all four." },
+  { title: "The agent has more than one computer", body: "The agent picks the place for each task. It uses the workspace for files tied to the conversation and Computer for a separate file-only preview with no automatic sync. It uses your laptop for local and authenticated state. It uses Terrarium for cloud runs that do not need you present. It uses its own browser for public pages. One tool surface covers all of them." },
   { title: "Every action leaves a receipt", body: "A cloud run returns a runId and a verified contract status. A recurring run writes start and terminal events. A reusable-tool run records an execution id. The receipt is the proof. Do not trust a claim; read the receipt." },
   { title: "The owner authorizes the agent", body: "My AX is single-operator. One verified Cloudflare Access identity owns every conversation, record, and tool call. The agent acts with the authority the owner already holds. It is not a remote-access tool and takes no inbound connection to a machine the owner connects. The owner configures each path, gates it with Access, and can stop it." },
   { title: "Confinement does not grant authority", body: "Generated code runs in a bounded sandbox with no direct database, secret, or network access. It calls allowlisted server-side handlers. A handler keeps its normal authority; the sandbox does not add or remove it." },

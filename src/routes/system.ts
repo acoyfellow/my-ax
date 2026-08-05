@@ -18,7 +18,7 @@ import type { ApiResponse } from "../types";
 import { recordRecoveryExhaustion } from "../recovery-exhaustion";
 
 export function registerSystemRoutes(app: Hono<AppEnv>) {
-  app.get("/api/system/computer", async (c) => {
+  app.get("/api/system/computer-workspace", async (c) => {
     try {
       return c.json<ApiResponse>({
         ok: true,
