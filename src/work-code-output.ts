@@ -98,7 +98,117 @@ export type CappedWorkCodeCollection = {
   truncated: boolean;
 };
 
-export function capWorkCodeCollectionWithMetadata(values: unknown[], maxEntries: number, maxBytes: number): CappedWorkCodeCollection {
+export type WorkCodeCallRecord<Where extends string = string> = {
+  index: number;
+  where: Where;
+  method: string;
+  status: "ok" | "error";
+  durationMs: number;
+  error?: string;
+};
+
+export type WorkCodeCallMetadata = {
+  sandboxMutation: boolean;
+  codemodeInvoked: boolean;
+};
+
+type WorkCodeFunction = (input: unknown) => Promise<unknown>;
+type WorkCodeFunctions = Record<string, WorkCodeFunction>;
+
+export class WorkCodeCallCollector<Where extends string = string> {
+  #calls: WorkCodeCallRecord<Where>[] = [];
+  #attemptedCalls = 0;
+  #callsTruncated = false;
+  #sandboxMutation = false;
+  #codemodeInvoked = false;
+  #inferredCapabilities = new Set<string>();
+  #inferredCapabilitiesTruncated = false;
+
+  recordAttempt(where: Where, method: string, metadata: WorkCodeCallMetadata): WorkCodeCallRecord<Where> | undefined {
+    this.#attemptedCalls = Math.min(WORK_CODE_CALLS_MAX_ENTRIES + 1, this.#attemptedCalls + 1);
+    this.#sandboxMutation ||= metadata.sandboxMutation;
+    this.#codemodeInvoked ||= metadata.codemodeInvoked;
+    const capability = `${where}.${method}`;
+    if (!this.#inferredCapabilities.has(capability)) {
+      if (this.#inferredCapabilities.size < WORK_CODE_CALLS_MAX_ENTRIES) {
+        this.#inferredCapabilities.add(capability);
+      } else {
+        this.#inferredCapabilitiesTruncated = true;
+      }
+    }
+    if (this.#calls.length >= WORK_CODE_CALLS_MAX_ENTRIES) {
+      this.#callsTruncated = true;
+      return undefined;
+    }
+    const call: WorkCodeCallRecord<Where> = { index: this.#attemptedCalls - 1, where, method, status: "ok", durationMs: 0 };
+    this.#calls.push(call);
+    return call;
+  }
+
+  recordSuccess(call: WorkCodeCallRecord<Where> | undefined, durationMs: number) {
+    if (!call) return;
+    call.status = "ok";
+    call.durationMs = durationMs;
+    delete call.error;
+  }
+
+  recordFailure(call: WorkCodeCallRecord<Where> | undefined, durationMs: number, error: unknown) {
+    if (!call) return;
+    call.status = "error";
+    call.durationMs = durationMs;
+    call.error = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+  }
+
+  get calls(): readonly WorkCodeCallRecord<Where>[] {
+    return this.#calls;
+  }
+
+  get attemptedCalls(): number {
+    return this.#attemptedCalls;
+  }
+
+  get callsTruncated(): boolean {
+    return this.#callsTruncated;
+  }
+
+  get sandboxMutation(): boolean {
+    return this.#sandboxMutation;
+  }
+
+  get codemodeInvoked(): boolean {
+    return this.#codemodeInvoked;
+  }
+
+  get inferredCapabilities(): string[] {
+    return [...this.#inferredCapabilities].sort();
+  }
+
+  get inferredCapabilitiesTruncated(): boolean {
+    return this.#inferredCapabilitiesTruncated;
+  }
+}
+
+export function instrumentWorkCodeFunctions<Where extends string, T extends WorkCodeFunctions>(
+  where: Where,
+  functions: T,
+  collector: WorkCodeCallCollector<Where>,
+  metadataForMethod: (method: string) => WorkCodeCallMetadata,
+): T {
+  return Object.fromEntries(Object.entries(functions).map(([method, invoke]) => [method, async (input: unknown) => {
+    const call = collector.recordAttempt(where, method, metadataForMethod(method));
+    const started = Date.now();
+    try {
+      const result = await invoke(input);
+      collector.recordSuccess(call, Date.now() - started);
+      return result;
+    } catch (error) {
+      collector.recordFailure(call, Date.now() - started, error);
+      throw error;
+    }
+  }])) as T;
+}
+
+export function capWorkCodeCollectionWithMetadata(values: readonly unknown[], maxEntries: number, maxBytes: number): CappedWorkCodeCollection {
   const output: unknown[] = [];
   let used = 0;
   let truncated = false;
@@ -125,6 +235,6 @@ export function capWorkCodeCollectionWithMetadata(values: unknown[], maxEntries:
   return { values: output, truncated };
 }
 
-export function capWorkCodeCollection(values: unknown[], maxEntries: number, maxBytes: number): unknown[] {
+export function capWorkCodeCollection(values: readonly unknown[], maxEntries: number, maxBytes: number): unknown[] {
   return capWorkCodeCollectionWithMetadata(values, maxEntries, maxBytes).values;
 }

@@ -4,8 +4,8 @@ import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type Codemod
 import { createMachineWorkProvider } from "./routes/machinectl";
 import { COMPUTER_WORK_METHODS, createComputerWorkProvider } from "./computer-workspace";
 import { applyComputerWorkBudget } from "./computer-work-budget";
-import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
-import { summarizeWorkCodeSnapshot } from "./workspace-snapshot-classification";
+import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, instrumentWorkCodeFunctions, WorkCodeCallCollector, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
+import { isSandboxMutationWorkCodeCall } from "./workspace-snapshot-classification";
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
@@ -103,21 +103,12 @@ function restrictByCapabilities(
 function instrument(
   where: WorkCall["where"],
   fns: Record<string, (input: any) => Promise<unknown>>,
-  calls: WorkCall[],
+  calls: WorkCodeCallCollector<WorkCall["where"]>,
 ) {
-  return Object.fromEntries(Object.entries(fns).map(([method, invoke]) => [method, async (input: unknown) => {
-    const index = calls.length;
-    const started = Date.now();
-    try {
-      const result = await invoke(input);
-      calls.push({ index, where, method, status: "ok", durationMs: Date.now() - started });
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      calls.push({ index, where, method, status: "error", durationMs: Date.now() - started, error: message.slice(0, 300) });
-      throw error;
-    }
-  }]));
+  return instrumentWorkCodeFunctions(where, fns, calls, (method) => ({
+    sandboxMutation: isSandboxMutationWorkCodeCall({ where, method }),
+    codemodeInvoked: where === "codemode",
+  }));
 }
 
 function catalogEntry(where: WorkCall["where"] | "codemode" | "snippet", name: string, description: string, available = true, inputSchema?: unknown) {
@@ -181,7 +172,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   if (!code || new TextEncoder().encode(code).byteLength > 32_000) return { ok: false, error: "code is required and must be <= 32000 bytes" };
   const machine = await createMachineWorkProvider(ctx);
   const terrariumProvider = createTerrariumWorkProvider(ctx);
-  const calls: WorkCall[] = [];
+  const calls = new WorkCodeCallCollector<WorkCall["where"]>();
   // Build the workspace/machine/terrarium dispatchers up-front, then route them
   // through both the legacy raw bridge namespaces AND the new codemode runtime
   // so model code can call `workspace.read({...})` directly or hop through
@@ -263,17 +254,15 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
   const execution = await executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]);
-  const sortedCalls = calls.sort((a, b) => a.index - b.index);
-  const snapshot = summarizeWorkCodeSnapshot(sortedCalls);
-  const serializedCalls = capWorkCodeCollectionWithMetadata(sortedCalls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
+  const serializedCalls = capWorkCodeCollectionWithMetadata(calls.calls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
   const serializedLogs = capWorkCodeCollection(execution.logs ?? [], WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES);
   const serializedResult = capWorkCodeValue(execution.result, WORK_CODE_RESULT_MAX_BYTES);
   const serializedError = execution.error === undefined ? undefined : capWorkCodeValue(execution.error, 1024);
-  const inferredCapabilities = [...new Set(sortedCalls.map((call) => `${call.where}.${call.method}`))].sort();
+  const inferredCapabilities = calls.inferredCapabilities;
   // Portability signal: portable when it needs no host namespace — its logic
   // runs in any harness. Surfaced so the owner can tell shelf-worthy (portable)
   // snippets from machine-bound ones without reading the code. (recipe audit)
-  const portable = isPortable(inferredCapabilities);
+  const portable = !calls.inferredCapabilitiesTruncated && isPortable(inferredCapabilities);
   // Marker-driven promotion candidacy. suggestedRecipe stays on the response
   // shape for backward compatibility (existing callers/tests still receive
   // it verbatim), but the actual promotion gate in agent.ts now keys off
@@ -290,7 +279,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     portable,
   };
   const reusableToolCandidate = evaluateReusableToolCandidate({
-    executionSucceeded: !execution.error,
+    executionSucceeded: !execution.error && !calls.inferredCapabilitiesTruncated,
     sourceCode: code,
     inferredCapabilities,
     suggestedRecipe,
@@ -302,11 +291,12 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     ...(execution.error ? { error: serializedError } : {}),
     logs: serializedLogs,
     calls: serializedCalls.values,
-    callsTruncated: serializedCalls.truncated,
-    sandboxMutation: snapshot.sandboxMutation,
-    codemodeInvoked: snapshot.codemodeInvoked,
+    callsTruncated: calls.callsTruncated || serializedCalls.truncated,
+    sandboxMutation: calls.sandboxMutation,
+    codemodeInvoked: calls.codemodeInvoked,
     sourceCode: code,
     inferredCapabilities,
+    inferredCapabilitiesTruncated: calls.inferredCapabilitiesTruncated,
     portable,
     suggestedRecipe,
     reusableToolCandidate,
