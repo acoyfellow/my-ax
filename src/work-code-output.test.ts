@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   capWorkCodeCollection,
+  capWorkCodeCollectionWithMetadata,
   capWorkCodeValue,
   WORK_CODE_CALLS_MAX_BYTES,
   WORK_CODE_CALLS_MAX_ENTRIES,
@@ -26,6 +27,14 @@ test("work_code collection caps calls and logs by entry and byte budgets", () =>
   const calls = capWorkCodeCollection(values, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
   assert.ok(calls.length <= WORK_CODE_CALLS_MAX_ENTRIES);
   assert.ok(bytes(calls) <= WORK_CODE_CALLS_MAX_BYTES);
+});
+
+test("work_code collection metadata records omitted receipt calls without exposing them", () => {
+  const values = Array.from({ length: WORK_CODE_CALLS_MAX_ENTRIES + 5 }, (_, index) => ({ index }));
+  const capped = capWorkCodeCollectionWithMetadata(values, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
+  assert.equal(capped.truncated, true);
+  assert.equal(capped.values.length, WORK_CODE_CALLS_MAX_ENTRIES);
+  assert.ok(bytes(capped.values) <= WORK_CODE_CALLS_MAX_BYTES);
 });
 
 test("work_code result cap handles circular values without propagating them to serialization", () => {
