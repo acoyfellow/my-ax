@@ -1,0 +1,51 @@
+package.json
+  s_a243e708e67e6a::t_4e4d2b52e80bff 62
+src/computer-work-budget.ts
+  s_8d6369f0c792e6::t_44e7595528b1d6 37,44-45
+src/work-code-output.ts
+  s_dac98c4f962671::t_863a9590feee79 101-211,238
+src/work-tools.ts
+  s_a243e708e67e6a::t_bf502ab54d61c0 7-8,106,108-111,175,257,261,265,282,294-296,299
+src/workspace-snapshot-classification.ts
+  s_d1090cfb0916ea::t_b02adb60b44103 42-47,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "47d3ceda7fcedb88f2d121c4349d5e71cdf09e5b",
+  "prompts": {},
+  "sessions": {
+    "s_8d6369f0c792e6": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd2c3-f907-7769-81d3-57c5fae041df",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_a243e708e67e6a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd2c3-f903-7222-bf69-ca742e64d0cd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_d1090cfb0916ea": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd2c3-f8f6-7430-aeb5-140ab7bc4181",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_dac98c4f962671": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd2c3-f909-7c57-8ce0-7e860b0436a9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
