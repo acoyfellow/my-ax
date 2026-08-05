@@ -15,13 +15,14 @@ describe("model catalog", () => {
     assert.equal(findModel("gpt-5.6-luna")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-sol")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-terra")?.route, "gateway-openai");
+    assert.equal(findModel("claude-opus-5")?.route, "gateway-anthropic");
     assert.equal(findModel("claude-opus-4-8")?.route, "gateway-anthropic");
     for (const model of MODELS) assert.equal(model.tools, true, model.id);
   });
 
   it("shows gateway rows only when the installation has gateway config", () => {
     assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2"]);
-    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-4-8", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-5", "claude-opus-4-8", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
     assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
   });
 
@@ -38,6 +39,7 @@ describe("model catalog", () => {
     assert.equal(resolveModelId("gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveModelId("gpt-5.6-sol"), "gpt-5.6-sol");
     assert.equal(resolveModelId("gpt-5.6-terra"), "gpt-5.6-terra");
+    assert.equal(resolveModelId("claude-opus-5"), "claude-opus-5");
     assert.equal(resolveModelId("claude-opus-4-8"), "claude-opus-4-8");
   });
 
@@ -45,7 +47,9 @@ describe("model catalog", () => {
     // Gateway-less: the only runnable rows are Workers-AI, so a stale gateway id
     // heals to the Workers-AI fallback default.
     assert.equal(resolveAvailableModelId(minimalEnv, "gpt-5.5"), DEFAULT_MODEL_ID);
+    assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-5"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-4-8"), DEFAULT_MODEL_ID);
+    assert.equal(resolveAvailableModelId(gatewayEnv, "claude-opus-5"), "claude-opus-5");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), "gpt-5.5");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-sol"), "gpt-5.6-sol");
