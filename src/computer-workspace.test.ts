@@ -31,8 +31,11 @@ function filesystem(nodes: Record<string, Node>) {
   const entries = new Map(Object.entries(nodes));
   const writes: Array<{ path: string; content: string }> = [];
   const readPaths: string[] = [];
+  const lstatPaths: string[] = [];
+  const mkdirPaths: string[] = [];
   const fs: ComputerFilesystem = {
     async lstat(path) {
+      lstatPaths.push(path);
       const node = entries.get(path);
       if (!node) {
         const error = new Error("ENOENT") as Error & { code?: string };
@@ -67,10 +70,11 @@ function filesystem(nodes: Record<string, Node>) {
       entries.set(path, { size: new TextEncoder().encode(content).byteLength, isFile: true, isDirectory: false, isSymbolicLink: false, content });
     },
     async mkdir(path) {
+      mkdirPaths.push(path);
       if (!entries.has(path)) entries.set(path, { size: 0, isFile: false, isDirectory: true, isSymbolicLink: false });
     },
   };
-  return { fs, writes, readPaths };
+  return { fs, writes, readPaths, lstatPaths, mkdirPaths, entries };
 }
 
 function baseNodes(): Record<string, Node> {
@@ -171,6 +175,26 @@ test("Computer writes enforce byte and owner quotas before writeFile", async () 
   assert.equal(storageQuota.writes.length, 0);
 });
 
+test("Computer rejects deep parent creation before any requested-prefix mkdir", async () => {
+  const nodes: Record<string, Node> = {
+    "/home": { size: 0, isFile: false, isDirectory: true, isSymbolicLink: false },
+  };
+  const segments = Array.from({ length: 320 }, () => "x");
+  const path = `${"/home/user/"}${segments.join("/")}/leaf.txt`;
+  const fixture = filesystem(nodes);
+
+  await assert.rejects(
+    () => writeComputerFileFromWorkspace({ fs: fixture.fs }, { path, content: "safe" }),
+    /directory quota/,
+  );
+
+  const requestedParent = path.slice(0, path.lastIndexOf("/"));
+  assert.ok(fixture.lstatPaths.includes(requestedParent));
+  assert.deepEqual(fixture.mkdirPaths, ["/home/user"]);
+  assert.equal(fixture.writes.length, 0);
+  assert.deepEqual([...fixture.entries.keys()].sort(), ["/home", "/home/user"]);
+});
+
 test("Computer grep host traversal caps matches and prechecks file sizes", async () => {
   const source = readFileSync(new URL("./computer-filesystem.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /\.fs\.grep\(/);
@@ -217,7 +241,9 @@ test("Computer work methods are cataloged, capability-instrumented, budgeted, an
   assert.match(settings, /automatic sync/);
   assert.doesNotMatch(workspace, /blockConcurrencyWhile/);
   assert.match(workspace, /#writeTail: Promise<void> = Promise\.resolve\(\)/);
-  assert.match(workspace, /this\.serializeWrite\(\(\) => withComputerWorkspace/);
+  assert.match(workspace, /this\.serializeWrite\(async \(\) =>/);
+  assert.match(workspace, /withReservedComputerRetainedWrite\(this\.ctx\.storage, COMPUTER_RETAINED_WRITE_RESERVATION_BYTES/);
+  assert.ok(workspace.indexOf("withReservedComputerRetainedWrite") < workspace.indexOf("writeComputerFileFromWorkspace(workspace, input)"));
   assert.match(workspace, /this\.#writeTail = next\.then\(\(\) => undefined, \(\) => undefined\)/);
   assert.match(workspace, /write: \(input: unknown\) => computer\.write\(input\)/);
 });

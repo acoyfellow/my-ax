@@ -11,7 +11,9 @@ const wrangler = join(root, "node_modules", "wrangler", "bin", "wrangler.js");
 const config = join(root, "wrangler.computer-integration.jsonc");
 const ownerA = "owner-a@example.test";
 const ownerB = "owner-b@example.test";
+const budgetOwner = "owner-budget@example.test";
 const path = "/home/user/proof/exact.txt";
+const budgetPath = "/home/user/proof/budget.txt";
 const content = "persisted UTF-8 bytes:\nπ=3.14159\nemoji=🙂\n";
 const expectedBytes = Buffer.from(content, "utf8");
 
@@ -104,19 +106,23 @@ function assertByteExact(value) {
   assert.equal(value.bytes, expectedBytes.byteLength);
 }
 
-async function writeOwnerA(baseUrl) {
-  const response = await request(baseUrl, "/write", {
+async function writeOwner(baseUrl, owner, writePath, writeContent) {
+  return request(baseUrl, "/write", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ owner: ownerA, path, content }),
+    body: JSON.stringify({ owner, path: writePath, content: writeContent }),
   });
+}
+
+async function writeOwnerA(baseUrl) {
+  const response = await writeOwner(baseUrl, ownerA, path, content);
   assert.equal(response.status, 200);
   const value = await responseJson(response);
   assert.deepEqual(value, { path, bytesWritten: expectedBytes.byteLength });
 }
 
-async function readOwner(baseUrl, owner) {
-  const parameters = new URLSearchParams({ owner, path });
+async function readOwner(baseUrl, owner, readPath = path) {
+  const parameters = new URLSearchParams({ owner, path: readPath });
   return request(baseUrl, `/read?${parameters}`);
 }
 
@@ -139,21 +145,62 @@ async function proveOwnerIsolation(baseUrl) {
   assert.equal(JSON.stringify(value).includes(content), false);
 }
 
-async function proveHealth(baseUrl) {
-  const response = await request(baseUrl, `/health?${new URLSearchParams({ owner: ownerA })}`);
+async function health(baseUrl, owner) {
+  const response = await request(baseUrl, `/health?${new URLSearchParams({ owner })}`);
   assert.equal(response.status, 200);
-  const value = await responseJson(response);
+  return responseJson(response);
+}
+
+async function proveHealth(baseUrl) {
+  const value = await health(baseUrl, ownerA);
   assert.equal(value.ownerScoped, true);
   assert.equal(value.homeReady, true);
   assert.equal(value.storage, "durable-object-sqlite");
   assert.deepEqual(value.executionBackends, []);
   assert.equal(value.quotas.files, 512);
-  assert.equal(value.quotas.storageBytes, 4 * 1024 * 1024);
+  assert.equal(value.quotas.liveLogicalStorageBytes, 4 * 1024 * 1024);
+  assert.equal(value.quotas.retainedWriteBudgetBytes, 8 * 1024 * 1024);
+  assert.equal(value.quotas.retainedWriteReservedBytes, 32 * 1024);
+}
+
+async function proveRetainedWriteBudget(baseUrl) {
+  const initialContent = "readable before retained budget exhaustion";
+  const initialWrite = await writeOwner(baseUrl, budgetOwner, budgetPath, initialContent);
+  assert.equal(initialWrite.status, 200);
+  const beforeFailure = await health(baseUrl, budgetOwner);
+  const failedContent = "failed writes stay charged";
+  const failedWrite = await writeOwner(baseUrl, budgetOwner, "/home/user", failedContent);
+  assert.equal(failedWrite.status, 400);
+  assert.match((await responseJson(failedWrite)).error, /regular file path/);
+  const afterFailure = await health(baseUrl, budgetOwner);
+  assert.equal(afterFailure.quotas.retainedWriteReservedBytes, beforeFailure.quotas.retainedWriteReservedBytes + 32 * 1024);
+
+  let remaining = afterFailure.quotas.retainedWriteBudgetBytes - afterFailure.quotas.retainedWriteReservedBytes;
+  let overwrite = 0;
+  let lastContent = initialContent;
+  while (remaining > 0) {
+    const bytes = Math.min(32 * 1024, remaining);
+    lastContent = `${overwrite}:`.padEnd(bytes, "x");
+    const response = await writeOwner(baseUrl, budgetOwner, budgetPath, lastContent);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await responseJson(response), { path: budgetPath, bytesWritten: bytes });
+    remaining -= bytes;
+    overwrite += 1;
+  }
+
+  const rejected = await writeOwner(baseUrl, budgetOwner, budgetPath, "x");
+  assert.equal(rejected.status, 400);
+  assert.match((await responseJson(rejected)).error, /retained write budget/);
+  const readable = await readOwner(baseUrl, budgetOwner, budgetPath);
+  assert.equal(readable.status, 200);
+  assert.equal((await responseJson(readable)).content, lastContent);
+  return { lastContent, retainedWriteBudgetBytes: afterFailure.quotas.retainedWriteBudgetBytes };
 }
 
 const persistencePath = await mkdtemp(join(tmpdir(), "my-ax-computer-integration-"));
 let first;
 let second;
+let budgetProof;
 try {
   const port = await availablePort();
   first = await startWorker(port, persistencePath);
@@ -167,6 +214,7 @@ try {
   assertByteExact(await responseJson(afterBoundedFailure));
   await proveOwnerIsolation(first.baseUrl);
   await proveHealth(first.baseUrl);
+  budgetProof = await proveRetainedWriteBudget(first.baseUrl);
   await stopWorker(first.process, first.output);
   first = undefined;
   second = await startWorker(port, persistencePath);
@@ -174,6 +222,14 @@ try {
   assert.equal(afterRestart.status, 200);
   assertByteExact(await responseJson(afterRestart));
   await proveOwnerIsolation(second.baseUrl);
+  const retainedAfterRestart = await health(second.baseUrl, budgetOwner);
+  assert.equal(retainedAfterRestart.quotas.retainedWriteReservedBytes, budgetProof.retainedWriteBudgetBytes);
+  const rejectedAfterRestart = await writeOwner(second.baseUrl, budgetOwner, budgetPath, "x");
+  assert.equal(rejectedAfterRestart.status, 400);
+  assert.match((await responseJson(rejectedAfterRestart)).error, /retained write budget/);
+  const readableAfterRestart = await readOwner(second.baseUrl, budgetOwner, budgetPath);
+  assert.equal(readableAfterRestart.status, 200);
+  assert.equal((await responseJson(readableAfterRestart)).content, budgetProof.lastContent);
   console.log("Computer Durable Object integration proof passed.");
 } finally {
   if (first) await stopWorker(first.process, first.output);

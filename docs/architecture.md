@@ -28,7 +28,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
 | `src/bridge.ts` | Mints scoped per-call tickets, attaches upstream auth, writes audit receipts. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
-| `src/computer-workspace.ts` | Preview owner-scoped Computer SQLite filesystem with bounded, quota-limited file-only methods under `/home/user`; it is separate from Sandbox, has no execution backend, and has no automatic sync. |
+| `src/computer-workspace.ts` | Preview owner-scoped Computer SQLite filesystem with bounded file-only methods under `/home/user`, a 4 MiB live logical-file quota, and a separate 8 MiB cumulative retained-write budget; it is separate from Sandbox, has no execution backend, and has no automatic sync. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `BetaPage` (the single-root app served at `/` and `/beta`), `CapabilitiesPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. The legacy multi-mount `ChatPage` is retired. |
 | `src/ui/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results group into at most two compact child snapshots, each with status, summary, attempts, and bounded details. Agents 0.17.0 supports detached child runs and official progress frames. This custom Svelte socket does not yet expose the EventTarget that `useAgentToolEvents` needs. The UI therefore labels and renders retained raw tool output instead of claiming live progress. Reconnect and transcript replay reuse that output. Cancellation and child drill-in are absent because the current parent route exposes no safe official action surface. |
 | `migrations/` | D1 schema migrations. |
@@ -77,7 +77,7 @@ Wrangler bindings (see `wrangler.jsonc`):
 | `OAUTH_CLIENT` | Durable Object (`OAuthClientDO`) | One instance per user — encrypted bearer vault feeding native `Agent.mcp` registrations |
 | `MACHINE_HOST` | Durable Object (`MachineHost`) | One outbound-connected physical laptop relay per user |
 | `SANDBOX` | Durable Object (`Sandbox` from @cloudflare/sandbox) | One container per user; canonical shell/process/preview workspace |
-| `COMPUTER` | Durable Object (`ComputerWorkspace`) | One owner-scoped preview SQLite filesystem; bounded, quota-limited file-only `/home/user`, no execution backend, no automatic sync |
+| `COMPUTER` | Durable Object (`ComputerWorkspace`) | One owner-scoped preview SQLite filesystem; bounded file-only `/home/user`, 4 MiB live logical-file quota, separate 8 MiB cumulative retained-write budget, no execution backend, no automatic sync |
 | `BACKUP_BUCKET` | R2 | Sandbox workspace backup archives |
 | `DB` | D1 | Session registry, Think-turn mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
 | `AUDIT_KV` | KV | 90-day audit receipts written by `bridge.ts` |
@@ -95,7 +95,7 @@ chat WebSocket and only work while a chat tab is connected.
 
 ## Storage Layout
 
-**R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox. **ComputerWorkspace DO storage** separately holds a preview SQLite `/home/user` VFS. It has no execution backend, no shared files, no migration/copy path from Sandbox, no automatic sync, and does not participate in Sandbox snapshots.
+**R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox. **ComputerWorkspace DO storage** separately holds a preview SQLite `/home/user` VFS. Its live logical-file quota is 4 MiB. A separate per-owner 8 MiB cumulative retained-write reservation is persisted and charges the full 32 KiB write allowance before each valid package write because `@cloudflare/computer@0.1.1` retains historical VFS blobs on overwrite. A package-write failure can leave that bounded reservation charged; this is deliberate fail-closed accounting, not a claim that the upstream VFS garbage-collects blobs. It has no execution backend, no shared files, no migration/copy path from Sandbox, no automatic sync, and does not participate in Sandbox snapshots.
 
 **Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). Owner/API injection and native recurring alarms both submit durable turns through Think's unified `runTurn({ mode: "submit" })` path. **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, Attention, recurring jobs and job evidence, saved recipes, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
 
@@ -105,7 +105,7 @@ chat WebSocket and only work while a chat tab is connected.
 
 | Need | Current canonical surface | Computer preview status |
 |---|---|---|
-| Bounded file reads/writes/listing/search | Sandbox `workspace.*` remains canonical for existing data | `computer.read/write/list/grep` is a separate SQLite-only dogfood slice with per-owner quotas and no automatic sync |
+| Bounded file reads/writes/listing/search | Sandbox `workspace.*` remains canonical for existing data | `computer.read/write/list/grep` is a separate SQLite-only dogfood slice with a 4 MiB live logical-file quota, 8 MiB cumulative retained-write budget, and no automatic sync |
 | Shell commands, processes, code execution, previews | Sandbox `workspace.*` | Not provided; no execution backend |
 | Durable file storage | Sandbox plus R2 snapshots | Durable Object SQLite only |
 | Data continuity | Existing Sandbox restore/snapshot flow | No data copy, no automatic sync, and no replacement path |
