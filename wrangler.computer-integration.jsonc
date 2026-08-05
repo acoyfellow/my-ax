@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "my-ax-computer-integration",
+  "main": "test/computer-workspace.integration.worker.ts",
+  "compatibility_date": "2026-04-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "COMPUTER", "class_name": "ComputerWorkspace" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-computer-workspace-integration", "new_sqlite_classes": ["ComputerWorkspace"] }
+  ]
+}
