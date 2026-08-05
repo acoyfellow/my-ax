@@ -26,8 +26,16 @@ export class ComputerWorkspace extends withWorkspace(
   ComputerWorkspaceBase,
   (self) => ({ storage: self.workspaceStorage() as unknown as DurableObjectStorageLike }),
 ) {
+  #writeTail: Promise<void> = Promise.resolve();
+
+  private serializeWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.#writeTail.then(operation, operation);
+    this.#writeTail = next.then(() => undefined, () => undefined);
+    return next;
+  }
+
   async write(input: unknown) {
-    return this.ctx.blockConcurrencyWhile(() => withComputerWorkspace(
+    return this.serializeWrite(() => withComputerWorkspace(
       () => getWorkspace(this as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
       (workspace) => writeComputerFileFromWorkspace(workspace, input),
     ));

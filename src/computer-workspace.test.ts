@@ -215,7 +215,10 @@ test("Computer work methods are cataloged, capability-instrumented, budgeted, an
   assert.match(source, /computer:globalThis\.computer/);
   assert.match(settings, /Computer preview/);
   assert.match(settings, /automatic sync/);
-  assert.match(workspace, /blockConcurrencyWhile/);
+  assert.doesNotMatch(workspace, /blockConcurrencyWhile/);
+  assert.match(workspace, /#writeTail: Promise<void> = Promise\.resolve\(\)/);
+  assert.match(workspace, /this\.serializeWrite\(\(\) => withComputerWorkspace/);
+  assert.match(workspace, /this\.#writeTail = next\.then\(\(\) => undefined, \(\) => undefined\)/);
   assert.match(workspace, /write: \(input: unknown\) => computer\.write\(input\)/);
 });
 
