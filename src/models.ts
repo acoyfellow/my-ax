@@ -40,6 +40,16 @@ export const MODELS: ModelEntry[] = [
     label: "GLM 5.2",
   },
   {
+    id: "claude-opus-5",
+    route: "gateway-anthropic",
+    owned_by: "anthropic",
+    context: 1_000_000,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "Opus 5",
+  },
+  {
     id: "claude-opus-4-8",
     route: "gateway-anthropic",
     owned_by: "anthropic",
