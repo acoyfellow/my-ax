@@ -2,7 +2,9 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
-import { createCodeDiffReceipt } from "./code-diff";
+import { CODE_DIFF_MAX_TEXT_BYTES } from "./code-diff";
+import { createVerifiedCodeDiffReceipt } from "./code-diff-read";
+import { createMachineWorkProvider } from "./routes/machinectl";
 import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { limitModelToolOutput } from "./tool-output-limit";
@@ -30,31 +32,57 @@ export const ASK_USER_TOOL: ToolDef = {
   },
 };
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
+
+async function readMachineDiffFile(ctx: ToolContext, path: string): Promise<string> {
+  const machine = await createMachineWorkProvider(ctx);
+  if (!machine.connected) throw new Error("My Machine is not connected");
+  const shell = machine.fns.shell;
+  if (!shell) throw new Error("My Machine must publish the owner-authorized shell reader to show a diff");
+  const result = await shell({ command: `dd if=${shellQuote(path)} bs=1 count=${CODE_DIFF_MAX_TEXT_BYTES + 1} status=none` });
+  if (typeof result !== "object" || result === null || Array.isArray(result)) throw new Error("My Machine returned an invalid file-read receipt");
+  const output = result as { stdout?: unknown; exitCode?: unknown };
+  if (output.exitCode !== 0 || typeof output.stdout !== "string") throw new Error("My Machine file read failed");
+  return output.stdout;
+}
+
 export const SHOW_DIFF_TOOL: ToolDef = {
   name: "show_diff",
-  description: "Render a read-only code review diff from text you already read through an owner-authorized source. It never reads files, writes files, opens URLs, or applies changes. For a request such as ‘show me a diff of file X’, first use the available Workspace read tools or discover My Machine reads with work_search and call them through work_code, then pass the bounded old/new text here. path and title are display-only relative labels; source records where each side was read.",
+  description: "Render a read-only code review diff from two owner-authorized real-file reads. Supply old and new as {source: workspace|machine, path}; My AX reads both values server-side through Workspace or the connected Machine shell. Do not supply file text, source claims, URLs, browser paths, write/apply actions, or generated content. path and title are display-only relative labels.",
   parameters: {
     type: "object",
     additionalProperties: false,
     properties: {
-      oldText: { type: "string", maxLength: 64000, description: "Previous plain-text contents. An empty string is allowed for a newly added file." },
-      newText: { type: "string", maxLength: 64000, description: "Current plain-text contents. An empty string is allowed for a deleted file." },
-      path: { type: "string", maxLength: 240, description: "Safe display-only relative path, never an absolute path or URL." },
-      title: { type: "string", maxLength: 160, description: "Optional safe display-only title." },
-      language: { type: "string", maxLength: 48, description: "Optional syntax language identifier such as typescript or python." },
-      source: {
+      old: {
         type: "object",
         additionalProperties: false,
         properties: {
-          old: { type: "string", enum: ["workspace", "machine", "user", "generated"] },
-          new: { type: "string", enum: ["workspace", "machine", "user", "generated"] },
+          source: { type: "string", enum: ["workspace", "machine"] },
+          path: { type: "string", maxLength: 1024, description: "Actual owner-authorized file path to read." },
         },
-        required: ["old", "new"],
+        required: ["source", "path"],
       },
+      new: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: { type: "string", enum: ["workspace", "machine"] },
+          path: { type: "string", maxLength: 1024, description: "Actual owner-authorized file path to read." },
+        },
+        required: ["source", "path"],
+      },
+      path: { type: "string", maxLength: 240, description: "Safe display-only relative path, never an absolute path or URL." },
+      title: { type: "string", maxLength: 160, description: "Optional safe display-only title." },
+      language: { type: "string", maxLength: 48, description: "Optional syntax language identifier such as typescript or python." },
     },
-    required: ["oldText", "newText", "path", "source"],
+    required: ["old", "new", "path"],
   },
-  execute: async (args) => JSON.stringify(createCodeDiffReceipt(args)),
+  execute: async (args, ctx) => JSON.stringify(await createVerifiedCodeDiffReceipt(args, {
+    readWorkspace: (path) => ctx.readFile(path),
+    readMachine: (path) => readMachineDiffFile(ctx, path),
+  })),
 };
 
 export const TOOLS: ToolDef[] = [
