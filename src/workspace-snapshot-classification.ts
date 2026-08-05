@@ -31,6 +31,8 @@ export type WorkCodeCall = {
 };
 
 type WorkCodeReceipt = {
+  ok?: unknown;
+  error?: unknown;
   calls?: unknown;
   sandboxMutation?: unknown;
   codemodeInvoked?: unknown;
@@ -70,11 +72,16 @@ function hasValidSnapshotMetadata(receipt: WorkCodeReceipt): boolean {
     && typeof receipt.callsTruncated === "boolean";
 }
 
+function hasExecutionFailure(receipt: WorkCodeReceipt): boolean {
+  return "error" in receipt || receipt.ok === false;
+}
+
 export function shouldSnapshotSandboxForToolCall(toolName: string, output: unknown): boolean {
   if (READ_ONLY_TOOL_NAMES.has(toolName)) return false;
   if (toolName !== "work_code") return true;
   const receipt = parseWorkCodeReceipt(output);
   if (!receipt) return true;
+  if (hasExecutionFailure(receipt)) return true;
   if (hasSnapshotMetadata(receipt) && !hasValidSnapshotMetadata(receipt)) return true;
   if (receipt.sandboxMutation === true || receipt.codemodeInvoked === true || receipt.callsTruncated === true) return true;
   const calls = receipt.calls;
