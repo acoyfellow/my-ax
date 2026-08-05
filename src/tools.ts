@@ -2,6 +2,7 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
+import { createCodeDiffReceipt } from "./code-diff";
 import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { limitModelToolOutput } from "./tool-output-limit";
@@ -29,8 +30,36 @@ export const ASK_USER_TOOL: ToolDef = {
   },
 };
 
+export const SHOW_DIFF_TOOL: ToolDef = {
+  name: "show_diff",
+  description: "Render a read-only code review diff from text you already read through an owner-authorized source. It never reads files, writes files, opens URLs, or applies changes. For a request such as ‘show me a diff of file X’, first use the available Workspace read tools or discover My Machine reads with work_search and call them through work_code, then pass the bounded old/new text here. path and title are display-only relative labels; source records where each side was read.",
+  parameters: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      oldText: { type: "string", maxLength: 64000, description: "Previous plain-text contents. An empty string is allowed for a newly added file." },
+      newText: { type: "string", maxLength: 64000, description: "Current plain-text contents. An empty string is allowed for a deleted file." },
+      path: { type: "string", maxLength: 240, description: "Safe display-only relative path, never an absolute path or URL." },
+      title: { type: "string", maxLength: 160, description: "Optional safe display-only title." },
+      language: { type: "string", maxLength: 48, description: "Optional syntax language identifier such as typescript or python." },
+      source: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          old: { type: "string", enum: ["workspace", "machine", "user", "generated"] },
+          new: { type: "string", enum: ["workspace", "machine", "user", "generated"] },
+        },
+        required: ["old", "new"],
+      },
+    },
+    required: ["oldText", "newText", "path", "source"],
+  },
+  execute: async (args) => JSON.stringify(createCodeDiffReceipt(args)),
+};
+
 export const TOOLS: ToolDef[] = [
   ASK_USER_TOOL,
+  SHOW_DIFF_TOOL,
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
   {

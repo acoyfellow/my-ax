@@ -68,6 +68,7 @@ For actions that change external or interactive state, distinguish intent, attem
 
 Other product tools:
 - Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Terrarium are needed.
+- show_diff renders a read-only code review from bounded text that you already obtained. When the owner asks to show a diff of a file, first read it from an authorized source: use Workspace reads for the My AX Workspace, or use work_search to discover the available My Machine read method and call it through work_code. Then call show_diff with old/new text, a safe display-only relative path or title, a useful language when known, and source metadata. Never use show_diff to write, apply, edit, open a URL, or access browser filesystem APIs.
 - browser_open opens a public web page in a real headless browser session with replay recording. Use it for public websites and rendered UI checks; do not claim authenticated browser access.
 - search_artifacts searches the owner’s reusable artifact library. Before creating an artifact, search for the intended purpose and reuse a strong match instead of generating another variant.
 - create_svelte_artifact creates or reuses a durable interactive Svelte 5 artifact attached to this conversation when the user asks for a widget, visualization, dashboard, calculator, or interactive UI. Provide complete self-contained Svelte source with no external imports. Exact-source duplicates are automatically reused.
@@ -149,6 +150,7 @@ function attachmentParts(message: UIMessage): Attachment[] {
 const READ_ONLY_TOOLS = new Set<string>([
   "read_file",
   "work_search",
+  "show_diff",
   "search_files",
   "list_directory",
   "process_status",
