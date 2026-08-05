@@ -1,3 +1,7 @@
+import { COMPUTER_OWNER_MAX_RETAINED_WRITE_BYTES } from "./computer-retained-write-budget";
+
+export { COMPUTER_OWNER_MAX_RETAINED_WRITE_BYTES } from "./computer-retained-write-budget";
+
 export const COMPUTER_HOME = "/home/user";
 export const COMPUTER_READ_MAX_BYTES = 32 * 1024;
 export const COMPUTER_WRITE_MAX_BYTES = 32 * 1024;
@@ -118,26 +122,37 @@ async function assertExistingPathIsSafe(fs: ComputerFilesystem, path: string, al
 }
 
 async function ensureComputerHome(fs: ComputerFilesystem): Promise<void> {
-  await fs.mkdir(COMPUTER_HOME, { recursive: true });
+  const homeParent = await lstatOrNull(fs, "/home");
+  if (homeParent?.isSymbolicLink) throw new Error("Computer paths cannot traverse symbolic links: /home");
+  if (homeParent && !homeParent.isDirectory) throw new Error("Computer path component is not a directory: /home");
+  const existingHome = await lstatOrNull(fs, COMPUTER_HOME);
+  if (!existingHome) await fs.mkdir(COMPUTER_HOME, { recursive: true });
   const home = await assertExistingPathIsSafe(fs, COMPUTER_HOME);
   if (!home?.isDirectory) throw new Error("Computer home is not a directory.");
 }
 
-async function prepareComputerParent(fs: ComputerFilesystem, path: string): Promise<void> {
+async function prepareComputerParent(fs: ComputerFilesystem, path: string): Promise<ComputerUsage> {
   await ensureComputerHome(fs);
   const relative = parentPath(path).slice(COMPUTER_HOME.length).split("/").filter(Boolean);
+  const missingDirectories: string[] = [];
   let current = COMPUTER_HOME;
   for (const segment of relative) {
     current += `/${segment}`;
     const stat = await lstatOrNull(fs, current);
     if (!stat) {
-      await fs.mkdir(current);
+      missingDirectories.push(current);
       continue;
     }
     if (stat.isSymbolicLink) throw new Error(`Computer paths cannot traverse symbolic links: ${current}`);
     if (!stat.isDirectory) throw new Error(`Computer path component is not a directory: ${current}`);
   }
+  const usage = await computerUsage(fs);
+  if (usage.directories + missingDirectories.length > COMPUTER_OWNER_MAX_DIRECTORIES) {
+    throw new Error(`Computer owner directory quota exceeded (${COMPUTER_OWNER_MAX_DIRECTORIES}).`);
+  }
+  for (const directory of missingDirectories) await fs.mkdir(directory);
   await assertExistingPathIsSafe(fs, parentPath(path));
+  return usage;
 }
 
 function requireBoundedString(value: unknown, field: string, maxBytes: number, allowEmpty = true): string {
@@ -172,6 +187,7 @@ function boundedItems<T>(items: T[], toSafeValue: (item: T) => unknown): { items
 }
 
 type ComputerUsage = {
+  directories: number;
   files: number;
   bytes: number;
 };
@@ -206,11 +222,10 @@ async function computerUsage(fs: ComputerFilesystem): Promise<ComputerUsage> {
       if (bytes > COMPUTER_OWNER_MAX_STORAGE_BYTES) throw new Error(`Computer owner storage quota exceeded (${COMPUTER_OWNER_MAX_STORAGE_BYTES} bytes).`);
     }
   }
-  return { files, bytes };
+  return { directories: directoryCount, files, bytes };
 }
 
-async function assertOwnerWriteQuota(fs: ComputerFilesystem, existing: ComputerStat | null, contentBytes: number): Promise<void> {
-  const usage = await computerUsage(fs);
+function assertOwnerWriteQuota(usage: ComputerUsage, existing: ComputerStat | null, contentBytes: number): void {
   const existingBytes = existing?.isFile ? existing.size : 0;
   if (usage.files + (existing?.isFile ? 0 : 1) > COMPUTER_OWNER_MAX_FILES) {
     throw new Error(`Computer owner file quota exceeded (${COMPUTER_OWNER_MAX_FILES}).`);
@@ -232,15 +247,25 @@ export async function readComputerFileFromWorkspace(workspace: Pick<ComputerWork
   return { path, content, bytes };
 }
 
-export async function writeComputerFileFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
+export type ComputerWriteInput = {
+  path: string;
+  content: string;
+  contentBytes: number;
+};
+
+export function parseComputerWriteInput(input: unknown): ComputerWriteInput {
   const path = resolveComputerPath((input as { path?: unknown } | null)?.path);
   const content = requireBoundedString((input as { content?: unknown } | null)?.content, "content", COMPUTER_WRITE_MAX_BYTES);
-  const contentBytes = encoder.encode(content).byteLength;
-  await prepareComputerParent(workspace.fs, path);
+  return { path, content, contentBytes: encoder.encode(content).byteLength };
+}
+
+export async function writeComputerFileFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, input: unknown) {
+  const { path, content, contentBytes } = parseComputerWriteInput(input);
+  const usage = await prepareComputerParent(workspace.fs, path);
   const existing = await assertExistingPathIsSafe(workspace.fs, path, true);
   if (existing?.isDirectory || (existing && !existing.isFile)) throw new Error("Computer write requires a regular file path.");
   if (existing?.isFile) assertFileSize(existing, COMPUTER_OWNER_MAX_STORAGE_BYTES, "Computer file has an invalid size.");
-  await assertOwnerWriteQuota(workspace.fs, existing, contentBytes);
+  assertOwnerWriteQuota(usage, existing, contentBytes);
   await workspace.fs.writeFile(path, content);
   return { path, bytesWritten: contentBytes };
 }
@@ -349,7 +374,7 @@ export async function grepComputerFilesFromWorkspace(workspace: Pick<ComputerWor
   return { path, matches: bounded.items, truncated: truncated || bounded.truncated };
 }
 
-export async function computerHealthFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">) {
+export async function computerHealthFromWorkspace(workspace: Pick<ComputerWorkspaceClient, "fs">, retainedWriteReservedBytes: number) {
   const home = await lstatOrNull(workspace.fs, COMPUTER_HOME);
   return {
     ownerScoped: true,
@@ -359,7 +384,9 @@ export async function computerHealthFromWorkspace(workspace: Pick<ComputerWorksp
     homeReady: Boolean(home?.isDirectory && !home.isSymbolicLink),
     quotas: {
       files: COMPUTER_OWNER_MAX_FILES,
-      storageBytes: COMPUTER_OWNER_MAX_STORAGE_BYTES,
+      liveLogicalStorageBytes: COMPUTER_OWNER_MAX_STORAGE_BYTES,
+      retainedWriteReservedBytes,
+      retainedWriteBudgetBytes: COMPUTER_OWNER_MAX_RETAINED_WRITE_BYTES,
     },
   };
 }

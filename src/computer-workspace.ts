@@ -5,12 +5,18 @@ import {
   computerHealthFromWorkspace,
   grepComputerFilesFromWorkspace,
   listComputerFilesFromWorkspace,
+  parseComputerWriteInput,
   readComputerFileFromWorkspace,
   withComputerWorkspace,
   writeComputerFileFromWorkspace,
   type ComputerWorkspaceClient,
 } from "./computer-filesystem";
 import { computerWorkspaceName } from "./computer-owner";
+import {
+  COMPUTER_RETAINED_WRITE_RESERVATION_BYTES,
+  getComputerRetainedWriteBytes,
+  withReservedComputerRetainedWrite,
+} from "./computer-retained-write-budget";
 import type { Env, ToolContext } from "./types";
 
 export * from "./computer-filesystem";
@@ -35,10 +41,21 @@ export class ComputerWorkspace extends withWorkspace(
   }
 
   async write(input: unknown) {
-    return this.serializeWrite(() => withComputerWorkspace(
+    return this.serializeWrite(async () => {
+      parseComputerWriteInput(input);
+      return withReservedComputerRetainedWrite(this.ctx.storage, COMPUTER_RETAINED_WRITE_RESERVATION_BYTES, () => withComputerWorkspace(
+        () => getWorkspace(this as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
+        (workspace) => writeComputerFileFromWorkspace(workspace, input),
+      ));
+    });
+  }
+
+  async health() {
+    const retainedWriteReservedBytes = await getComputerRetainedWriteBytes(this.ctx.storage);
+    return withComputerWorkspace(
       () => getWorkspace(this as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
-      (workspace) => writeComputerFileFromWorkspace(workspace, input),
-    ));
+      (workspace) => computerHealthFromWorkspace(workspace, retainedWriteReservedBytes),
+    );
   }
 }
 
@@ -55,7 +72,8 @@ export async function withOwnerComputerWorkspace<T>(
 }
 
 export async function getComputerHealth(env: Pick<Env, "COMPUTER">, identity: Pick<AccessIdentity, "email">) {
-  return withOwnerComputerWorkspace(env, identity, computerHealthFromWorkspace);
+  const id = env.COMPUTER.idFromName(computerWorkspaceName(identity));
+  return env.COMPUTER.get(id).health();
 }
 
 export function createComputerWorkProvider(ctx: Pick<ToolContext, "env" | "identity">) {
