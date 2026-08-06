@@ -7,6 +7,7 @@
   import { VoiceClient } from "@cloudflare/voice/client";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
+  import { BrowserVoiceAudioInput, VoiceActivationLifecycle, createAndPrepareVoiceSession } from "./voice-activation";
   import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import ImageLightbox from "./ImageLightbox.svelte";
@@ -233,7 +234,7 @@
   }
 
   function refreshForDeploymentWhenSafe() {
-    if (!deployRefreshPending || voiceEnabled || voiceStarting) return;
+    if (!deployRefreshPending || voiceEnabled || voiceStarting || voicePreparing) return;
     if (wsState.status !== "idle" && wsState.status !== "done") return;
     deployRefreshPending = false;
     persistDeployRefreshDraft();
@@ -246,11 +247,17 @@
   type VoiceStatus = "idle" | "listening" | "thinking" | "speaking";
   let voiceEnabled = $state(false);
   let voiceStarting = $state(false);
+  let voicePreparing = $state(false);
+  let voicePreparationReady = $state(false);
   let voiceStatus = $state<VoiceStatus>("idle");
   let voiceInterim = $state<string | null>(null);
   let voiceAudioLevel = $state(0);
   let voiceError = $state<string | null>(null);
+  let voiceReady = $state(false);
   let voiceClient: VoiceClient | null = null;
+  const voiceActivation = new VoiceActivationLifecycle<VoiceClient>();
+  let voiceLifecycleGeneration = 0;
+  let voiceSessionPreparation: Promise<void> | null = null;
 
   // ── Half-duplex acoustic gate ──────────────────────────────────────
   // On a phone loudspeaker the mic hears the agent's own TTS; browser echo
@@ -354,12 +361,19 @@
     return "Audio active";
   }
 
+  function voicePreparationLabel(): string {
+    return voiceReady ? "Audio ready · tap the microphone again" : "Connecting audio…";
+  }
+
   function resetVoiceState() {
     voiceStarting = false;
+    voicePreparing = false;
+    voicePreparationReady = false;
     voiceStatus = "idle";
     voiceInterim = null;
     voiceAudioLevel = 0;
     voiceError = null;
+    voiceReady = false;
     clearVoiceRearmTimer();
     voiceGate = initialVoiceGateState();
     voiceMicSuppressed = false;
@@ -369,25 +383,33 @@
 
   async function stopVoiceMode() {
     clearVoiceRearmTimer();
-    voiceClient?.endCall();
-    voiceClient?.disconnect();
+    voiceLifecycleGeneration += 1;
+    voiceSessionPreparation = null;
+    voiceActivation.clear();
     voiceClient = null;
     voiceEnabled = false;
     localStorage.setItem("my-ax-voice-mode", "0");
-    try { await chimeCtx?.close?.(); } catch { /* ignore */ }
+    const context = chimeCtx;
     chimeCtx = null;
     resetVoiceState();
+    try { await context?.close?.(); } catch { /* ignore */ }
   }
 
-  function startVoiceClientForSession(sessionId: string) {
+  function createVoiceClientForSession(sessionId: string): VoiceClient {
     // Voice runs on its own DIRECT-routed DO (agent: "voice-think-agent"),
     // keyed by this session id. The facet socket that backs the chat (agent:
     // "my-agent") cannot carry the stock voice call lifecycle — see
     // docs/voice-mode-journey.md. The voice DO delegates each turn back into
     // the MyAgent facet by RPC, so the reply still lands in this session's
     // Think transcript and streams into the chat log via cf_agent_* frames.
-    const client = new VoiceClient({ agent: "voice-think-agent", name: sessionId, host: location.host });
+    const audioInput = new BrowserVoiceAudioInput();
+    const client = Object.assign(
+      new VoiceClient({ agent: "voice-think-agent", name: sessionId, host: location.host, audioInput }),
+      { prepareAudio: () => audioInput.prepare() },
+    );
+    const eventIsCurrent = () => voiceActivation.acceptsEvent(sessionId, client, localStorage.getItem(SESSION_KEY));
     client.addEventListener("statuschange", (status) => {
+      if (!eventIsCurrent()) return;
       voiceStatus = status;
       voiceStarting = false;
       // Half-duplex: suppress the mic while the agent produces audio, re-arm
@@ -402,55 +424,39 @@
     // Fail-closed: ignore interim transcripts observed while the gate is
     // suppressed or in the re-arm tail — those are probable loudspeaker
     // self-echo of the agent's own TTS, not user speech.
-    client.addEventListener("interimtranscript", (text) => { if (voiceTranscriptAllowed()) voiceInterim = text; });
-    client.addEventListener("audiolevelchange", (level) => { voiceAudioLevel = level; });
-    client.addEventListener("error", (error) => { voiceError = error; if (error) pushError(`Voice mode: ${error}`); });
-    client.addEventListener("metricschange", (metrics) => { if (metrics) console.info("[voice] pipeline metrics", metrics); });
-    client.addEventListener("connectionchange", async (connected) => { if (connected && voiceEnabled) await client.startCall(); });
+    client.addEventListener("interimtranscript", (text) => { if (eventIsCurrent() && voiceTranscriptAllowed()) voiceInterim = text; });
+    client.addEventListener("audiolevelchange", (level) => { if (eventIsCurrent()) voiceAudioLevel = level; });
+    client.addEventListener("error", (error) => {
+      if (!eventIsCurrent()) return;
+      voiceError = error;
+      const wasPreparing = voicePreparing;
+      voicePreparing = false;
+      voicePreparationReady = false;
+      if (error && (voiceEnabled || voiceStarting || wasPreparing)) pushError(`Voice mode: ${error}`);
+    });
+    client.addEventListener("metricschange", (metrics) => { if (eventIsCurrent() && metrics) console.info("[voice] pipeline metrics", metrics); });
+    client.addEventListener("connectionchange", (connected) => {
+      if (!eventIsCurrent()) return;
+      voiceReady = connected;
+      if (connected && voicePreparing) {
+        voicePreparing = false;
+        voicePreparationReady = true;
+      }
+      if (!connected) voicePreparationReady = false;
+    });
     voiceClient = client;
-    voiceEnabled = true;
-    localStorage.setItem("my-ax-voice-mode", "1");
-    client.connect();
+    return client;
   }
 
-  async function toggleVoiceMode() {
-    if (voiceEnabled) {
-      await stopVoiceMode();
-      return;
-    }
-    // Paint immediately before any mic/AudioContext/network awaits. On iOS a
-    // permission prompt or suspended audio call can otherwise make the tap
-    // appear to do nothing until the app is foregrounded again.
-    voiceStarting = true;
-    voiceEnabled = true;
-    voiceStatus = "idle";
-    localStorage.setItem("my-ax-voice-mode", "1");
-    // Acquire the mic permission SYNCHRONOUSLY inside this tap gesture, before
-    // any network await. The VoiceClient otherwise calls getUserMedia on the
-    // async `connectionchange` event — detached from the gesture — which on
-    // iOS PWAs makes the prompt feel extra/repeated. We can't defeat iOS's
-    // per-launch PWA permission reset (a WebKit limitation), but this keeps
-    // the single prompt in-gesture and primes the grant before startCall().
-    try {
-      const warm = await navigator.mediaDevices?.getUserMedia({ audio: true });
-      // Immediately release; VoiceClient re-acquires with its own constraints.
-      // The fresh in-gesture grant means its getUserMedia resolves silently.
-      warm?.getTracks().forEach((t) => t.stop());
-    } catch (error) {
-      await stopVoiceMode();
-      pushError(`Microphone access is required for voice mode: ${error instanceof Error ? error.message : String(error)}`);
-      return;
-    }
-    await tick();
-    let sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId) {
-      try { sessionId = await createSession(); }
-      catch (error) { await stopVoiceMode(); pushError(`Could not start voice conversation: ${error instanceof Error ? error.message : String(error)}`); return; }
-      localStorage.setItem(SESSION_KEY, sessionId);
-      setActiveSession(sessionId);
-      // Start immediately within this user gesture. The parallel voice socket
-      // targets the newly-created Think facet; no full-page reload needed.
-    }
+  function prepareVoiceClientForSession(sessionId: string): VoiceClient | null {
+    if (localStorage.getItem(SESSION_KEY) !== sessionId) return null;
+    const client = voiceActivation.prepare(sessionId, createVoiceClientForSession);
+    voiceClient = client;
+    voiceReady = client.connected;
+    return client;
+  }
+
+  function syncVoiceModelForSession(sessionId: string) {
     // Voice turns don't send a request body, so sync the UI-selected model
     // onto the session DO. CRITICAL: do NOT await this here — an await before
     // startCall() breaks the iOS user-gesture chain, leaving the AudioContext
@@ -462,8 +468,85 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: modelState.current, reasoningEffort: modelState.reasoning }),
     }).catch(() => {});
-    voiceStarting = false;
-    startVoiceClientForSession(sessionId);
+  }
+
+  async function createVoiceSession(): Promise<string> {
+    const response = await fetch("/api/sessions", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) throw new Error("session create HTTP " + response.status);
+    const session = (await response.json()).result;
+    if (!session?.sessionId) throw new Error("session create did not return a conversation ID");
+    return session.sessionId;
+  }
+
+  function prepareNewVoiceSession() {
+    if (voiceSessionPreparation) return;
+    const generation = voiceLifecycleGeneration;
+    const preparation = (async () => {
+      try {
+        await createAndPrepareVoiceSession(
+          createVoiceSession,
+          () => generation === voiceLifecycleGeneration && !localStorage.getItem(SESSION_KEY),
+          attachFreshVoiceChatSession,
+          prepareVoiceClientForSession,
+        );
+      } catch (error) {
+        if (generation !== voiceLifecycleGeneration) return;
+        void stopVoiceMode();
+        pushError(`Could not start voice conversation: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    })();
+    voiceSessionPreparation = preparation;
+    void preparation.finally(() => { if (voiceSessionPreparation === preparation) voiceSessionPreparation = null; });
+  }
+
+  function toggleVoiceMode() {
+    if (voiceEnabled || voiceStarting || voicePreparing) {
+      void stopVoiceMode();
+      return;
+    }
+    // Paint immediately before any mic/AudioContext/network awaits. On iOS a
+    // permission prompt or suspended audio call can otherwise make the tap
+    // appear to do nothing until the app is foregrounded again.
+    voicePreparing = true;
+    voicePreparationReady = false;
+    voiceStatus = "idle";
+    voiceError = null;
+    const sessionId = localStorage.getItem(SESSION_KEY);
+    const attempt = voiceActivation.activate(sessionId, createVoiceClientForSession);
+    if (attempt.kind === "needs-session") {
+      voiceClient = null;
+      voiceReady = false;
+      localStorage.setItem("my-ax-voice-mode", "0");
+      prepareNewVoiceSession();
+      return;
+    }
+    voiceClient = attempt.client;
+    voiceReady = attempt.client.connected;
+    if (attempt.kind === "preparing") {
+      localStorage.setItem("my-ax-voice-mode", "0");
+      return;
+    }
+    voicePreparing = false;
+    voicePreparationReady = false;
+    voiceStarting = true;
+    voiceEnabled = true;
+    localStorage.setItem("my-ax-voice-mode", "1");
+    syncVoiceModelForSession(sessionId!);
+    void attempt.completion.then(
+      () => {
+        if (voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) voiceStarting = false;
+      },
+      (error) => {
+        if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) return;
+        void stopVoiceMode();
+        pushError(`Microphone access is required for voice mode: ${error instanceof Error ? error.message : String(error)}`);
+      },
+    );
   }
 
   // Browser-native read-aloud (SpeechSynthesis) was removed when live voice
@@ -787,6 +870,7 @@
       // parent later does not either.
       if (activeRequestId) { try { ws?.send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId })); } catch {} }
       forgetActiveTurnFor(sessionId);
+      void stopVoiceMode();
       localStorage.setItem(SESSION_KEY, forkId);
       setActiveSession(forkId, body?.result?.name);
       sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1");
@@ -1061,6 +1145,19 @@
   const sessionWorkIsCurrent = (expected: SessionGeneration) =>
     sessionGeneration.isCurrent(expected, localStorage.getItem(SESSION_KEY));
 
+  function attachFreshVoiceChatSession(sessionId: string) {
+    localStorage.setItem(SESSION_KEY, sessionId);
+    setActiveSession(sessionId);
+    sessionGeneration.activate(sessionId);
+    onboardingHidden = true;
+    resumingExistingSession = false;
+    sessionResumeVisible = false;
+    setConn("reconnecting");
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${sessionId}`);
+    void refreshPendingDecision(sessionId);
+  }
+
   async function bootstrap() {
     setConn("offline");
     showOAuthCallbackToast();
@@ -1070,6 +1167,7 @@
       setConn("live");
       return;
     }
+    prepareVoiceClientForSession(sessionId);
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${sessionId}`);
     void refreshPendingDecision(sessionId);
@@ -1085,6 +1183,7 @@
   // history via cf_agent_chat_messages. Avoids the re-download/re-parse jank.
   function switchToSession(id: string) {
     if (!id || id === localStorage.getItem(SESSION_KEY)) return;
+    void stopVoiceMode();
     sessionGeneration.activate(id);
     try { ws?.close(); } catch {}
     ws = null;
@@ -1104,6 +1203,7 @@
     forgetActiveTurn();
     localStorage.setItem(SESSION_KEY, id);
     setActiveSession(id);
+    prepareVoiceClientForSession(id);
     void refreshPendingDecision(id);
     void refreshActiveSessionTitle(id);
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -1206,6 +1306,8 @@
     });
     if (!r.ok) throw new Error("session create HTTP " + r.status);
     const session = (await r.json()).result;
+    const previousSessionId = localStorage.getItem(SESSION_KEY);
+    if (previousSessionId && previousSessionId !== session.sessionId) void stopVoiceMode();
     localStorage.setItem(SESSION_KEY, session.sessionId);
     setActiveSession(session.sessionId, session.name);
     return session.sessionId;
@@ -2117,6 +2219,7 @@
     void wsState.status;
     void voiceEnabled;
     void voiceStarting;
+    void voicePreparing;
     if (deployRefreshPending) queueMicrotask(refreshForDeploymentWhenSafe);
   });
 
@@ -2615,11 +2718,11 @@
             type="button"
             onclick={toggleVoiceMode}
             class="voice-mode-button flex-none flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg-mut hover:text-fg hover:border-brand/60 data-[active='1']:border-brand/60 data-[active='1']:text-brand data-[active='1']:bg-brand/10"
-            data-active={voiceEnabled ? "1" : "0"}
+            data-active={voiceEnabled || voiceStarting || voicePreparing ? "1" : "0"}
             data-status={voiceStatus}
             style={voiceEnabled ? `--voice-level: ${Math.max(0.16, Math.min(1, voiceAudioLevel * 8))}` : undefined}
-            aria-label={voiceEnabled ? "End voice conversation" : "Start voice conversation"}
-            title={voiceEnabled ? `Voice mode · ${voiceStarting ? "starting" : voiceStatus}` : "Voice mode"}
+            aria-label={voiceEnabled || voiceStarting || voicePreparing ? "Stop speaking and close voice" : voiceReady ? "Start voice conversation, audio ready" : "Prepare voice conversation"}
+            title={voiceEnabled || voiceStarting || voicePreparing ? "Stop speaking and close voice" : "Voice mode"}
           >
             {#if voiceEnabled}
               <span class="voice-mode-button__live" aria-hidden="true"></span>
@@ -2651,6 +2754,21 @@
                 <span class="voice-mode-active__pulse" aria-hidden="true"></span>
                 <span class="voice-mode-active__label">{voiceActiveLabel(voiceStatus, voiceStarting)}</span>
               </div>
+            {:else if voicePreparing || voicePreparationReady}
+              <div class="voice-mode-active" data-voice-status="idle" aria-live="polite" role="status">
+                <span class="voice-mode-active__pulse" aria-hidden="true"></span>
+                <span class="voice-mode-active__label">{voicePreparationLabel()}</span>
+              </div>
+            {/if}
+            {#if voiceEnabled || voiceStarting || voicePreparing}
+              <button
+                type="button"
+                onclick={() => void stopVoiceMode()}
+                class="mt-2 rounded-md border border-line px-2 py-1 text-xs text-fg-mut hover:border-brand/60 hover:text-fg"
+                aria-label="Stop speaking and close voice"
+                title="Stop speaking and close voice"
+              >Stop speaking</button>
+              <p class="mt-1 text-xs text-fg-mut">Spoken barge-in is unavailable. Use Stop speaking to stop audio and listening on this device; the chat response may still finish.</p>
             {/if}
             {#if !voiceEnabled && pendingAttachments.length > 0}
               <div class="mb-2 flex flex-wrap gap-2">

@@ -8,7 +8,7 @@ import { clampEntriesLimit, pageConversationEntries, pageConversationEntriesDesc
 import { getSessionAgent } from "../agent-stub";
 import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
-import { cancelJobSchedule, type JobRow } from "../jobs";
+import { cancelJobSchedule, parkRecurringScheduleCancellation, type JobRow, type RecurringScheduleCancellation } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
 
@@ -279,11 +279,33 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
   app.delete("/api/sessions/:id", async (c) => {
     const id = c.req.param("id");
     try {
-      const email = c.get("identity").email;
-      // Cancel native alarms before removing their D1 index rows. Otherwise a
-      // deleted session can keep executing recurring prompts from its facet.
-      const jobs = await c.env.DB.prepare("SELECT owner_email, session_id, schedule_id FROM jobs WHERE session_id = ? AND owner_email = ?").bind(id, email).all<JobRow>();
-      for (const job of jobs.results ?? []) await cancelJobSchedule(c.env, job);
+      const email = c.get("identity").email.toLowerCase();
+      const jobs = await c.env.DB.prepare("SELECT id, owner_email, session_id, schedule_id FROM jobs WHERE session_id = ? AND owner_email = ?").bind(id, email).all<Pick<JobRow, "id" | "owner_email" | "session_id" | "schedule_id">>();
+      for (const job of jobs.results ?? []) {
+        if (!job.schedule_id) continue;
+        const parked = await parkRecurringScheduleCancellation(c.env, {
+          job_id: job.id,
+          owner_email: job.owner_email,
+          session_id: job.session_id,
+          schedule_id: job.schedule_id,
+        });
+        if (!parked) throw new Error("schedule cancellation could not be persisted");
+      }
+      const queuedBySession = await c.env.DB.prepare("SELECT id, job_id, owner_email, session_id, schedule_id, created_at FROM recurring_schedule_cancellations WHERE owner_email = ? AND session_id = ? ORDER BY created_at ASC, id ASC")
+        .bind(email, id).all<RecurringScheduleCancellation>();
+      const queuedByJob = await Promise.all((jobs.results ?? []).map(async (job) => {
+        const queued = await c.env.DB.prepare("SELECT id, job_id, owner_email, session_id, schedule_id, created_at FROM recurring_schedule_cancellations WHERE job_id = ? AND owner_email = ? ORDER BY created_at ASC, id ASC")
+          .bind(job.id, email).all<RecurringScheduleCancellation>();
+        return queued.results ?? [];
+      }));
+      const cancellations = new Map<string, RecurringScheduleCancellation>();
+      for (const cancellation of [...(queuedBySession.results ?? []), ...queuedByJob.flat()]) cancellations.set(cancellation.id, cancellation);
+      for (const cancellation of cancellations.values()) {
+        await cancelJobSchedule(c.env, cancellation);
+        const cleared = await c.env.DB.prepare("DELETE FROM recurring_schedule_cancellations WHERE id = ? AND owner_email = ?")
+          .bind(cancellation.id, email).run();
+        if (cleared.meta?.changes !== 1) throw new Error("schedule cancellation changed concurrently");
+      }
       await c.env.DB.prepare("DELETE FROM jobs WHERE session_id = ? AND owner_email = ?").bind(id, email).run();
       await deleteSessionArtifacts(c.env, c.get("identity"), id);
       await deleteSessionAudioMessages(c.env, c.get("identity"), id);

@@ -40,7 +40,7 @@ assertIncludes(chat, 'setConn("reconnecting");\n    ws = makeReconnectingSocket(
 // H3: active-turn latch is session-bound and cleared on the way out.
 assertIncludes(chat, 'activeTurnIsRestorable(saved, currentId)', "active-turn latch restore is gated by the session-bound freshness check");
 assertIncludes(chat, 'forgetActiveTurn();\n    localStorage.setItem(SESSION_KEY, id);', "switchToSession clears the outgoing latch before flipping SESSION_KEY");
-assertIncludes(chat, 'forgetActiveTurnFor(sessionId);\n      localStorage.setItem(SESSION_KEY, forkId);', "fork clears the parent latch before flipping SESSION_KEY");
+assertIncludes(chat, 'forgetActiveTurnFor(sessionId);\n      void stopVoiceMode();\n      localStorage.setItem(SESSION_KEY, forkId);', "fork clears the parent latch and stops voice before flipping SESSION_KEY");
 // H4: pending-first-message is bound to its session.
 assertIncludes(chat, 'sessionStorage.setItem("my-ax-pending-first-session", currentSessionId());', "pending first-message records the session it was typed for");
 assertIncludes(chat, 'pendingFirstBelongsHere(pendingFirstSession, currentSessionId())', "pending first-message is only adopted by its bound session");
@@ -65,7 +65,7 @@ assertIncludes(chat, 'applyVoiceGate(status)', "voice statuschange drives the ha
 assertIncludes(chat, 'voiceClient.toggleMute()', "half-duplex gate suppresses the mic via the voice client mute");
 // #5 hardening: fail-closed transcript-acceptance guard so assistant audio
 // can never become user input, even across status-frame latency / re-arm tail.
-assertIncludes(chat, 'if (voiceTranscriptAllowed()) voiceInterim = text;', "interim transcripts are gated by the fail-closed echo guard");
+assertIncludes(chat, 'if (eventIsCurrent() && voiceTranscriptAllowed()) voiceInterim = text;', "interim transcripts require the current voice generation and fail-closed echo guard");
 assertIncludes(chat, 'transcriptGuard = guardSuppress(transcriptGuard)', "the transcript guard suppresses on the agent-audio edge");
 assertIncludes(chat, 'transcriptGuard = guardReArm(transcriptGuard, Date.now())', "the transcript guard re-arms only after the debounce fires");
 

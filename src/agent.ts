@@ -1,9 +1,10 @@
 import { Think } from "@cloudflare/think";
+import { createVoiceTurnStream } from "./voice-turn-stream";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { createCompactFunction } from "agents/experimental/memory/utils";
-import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
+import type { ChatRecoveryExhaustedContext, ChatResponseResult, ThinkSubmissionInspection, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
 import { DEFAULT_MODEL_ID, defaultModelId, findModel } from "./models";
@@ -16,8 +17,8 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
-import { completeRecurringJobRun, recurringJobIdFromClientMessageId } from "./recurring-job-run";
-import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
+import { completeRecurringJobRun, recurringSubmissionTerminalError, settleInspectedRecurringJobRun } from "./recurring-job-run";
+import { claimRecurringScheduleDispatch, computeNextRun, currentRecurringSchedulePayload, findVersionedRecurringSchedule, isAuthoritativeLegacyRecurringSchedule, isLegacyRecurringSchedulePayload, isRecurringSchedulePayload, nativeScheduleId, parkRecurringScheduleCancellation, parseRecurringScheduleIdentity, recoveredRecurringScheduleDispatch, recurringScheduleFence, recurringScheduleIdentity, recurringScheduleRetryOptions, recurringScheduleRunMessageId, recurringScheduleRunTargetSessionId, runJobNow, scheduledJobRunPrompt, validateCurrentRecurringSchedule, type LegacyRecurringSchedulePayload, type RecurringJobState, type RecurringScheduleCancellation, type RecurringScheduleDispatchClaim, type RecurringSchedulePayload } from "./jobs";
 import { deriveSessionTitle } from "./session-title";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
@@ -123,12 +124,6 @@ export function requireBridgeOrigin(env: Env): string {
   return origin;
 }
 
-type RecurringPromptPayload = {
-  jobId: string;
-  ownerEmail: string;
-  prompt: string;
-};
-
 function textParts(message: UIMessage): string {
   return message.parts.filter((part) => part.type === "text").map((part) => part.text).join("");
 }
@@ -230,6 +225,7 @@ export class MyAgent extends Think<Env> {
     const attachments = (body.attachments ?? []).filter((attachment) => attachment.kind === "image");
     return this.runTurn({
       mode: "submit",
+      submissionId: body.clientMsgId,
       idempotencyKey: body.clientMsgId,
       input: [
         {
@@ -342,16 +338,144 @@ export class MyAgent extends Think<Env> {
     return { runId, recipe: { id: recipe.id, name: recipe.name }, execution: result, codemodeExecutionId, declaredCapabilities, effectiveCapabilities };
   }
 
-  async scheduleRecurringPrompt(payload: RecurringPromptPayload & { cadenceSecs: number }) {
+  async scheduleRecurringPrompt(payload: RecurringSchedulePayload & { cadenceSecs: number }) {
     return this.scheduleEvery(payload.cadenceSecs, "runRecurringPrompt", {
+      version: payload.version,
       jobId: payload.jobId,
       ownerEmail: payload.ownerEmail,
+      sessionId: payload.sessionId,
       prompt: payload.prompt,
-    });
+      generation: payload.generation,
+    }, recurringScheduleRetryOptions());
   }
 
   async cancelRecurringPrompt(scheduleId: string) {
     return this.cancelSchedule(scheduleId);
+  }
+
+  private async recurringJobState(jobId: string): Promise<RecurringJobState | null> {
+    return this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at, state_version, recurring_fire_key, recurring_fire_verifier_hash, recurring_fire_state, recurring_fire_scheduled_at, recurring_submission_id, recurring_fire_target_session_id, recurring_receipt_id FROM jobs WHERE id = ?")
+      .bind(jobId).first<RecurringJobState>().catch(() => null);
+  }
+
+  private async cancelNativeRecurringSchedule(ownerEmail: string, sessionId: string, scheduleId: string): Promise<void> {
+    const nativeId = nativeScheduleId(scheduleId);
+    if (!nativeId) return;
+    if (sessionId === this.name) {
+      await this.cancelRecurringPrompt(nativeId);
+      return;
+    }
+    const { getSessionAgent } = await import("./agent-stub");
+    const stub = await getSessionAgent(this.env, ownerEmail, sessionId);
+    await stub.cancelRecurringPrompt(nativeId);
+  }
+
+  private async parkRecurringCancellation(row: Pick<RecurringJobState, "id" | "owner_email">, scheduleId: string, sessionId: string): Promise<void> {
+    const parked = await parkRecurringScheduleCancellation(this.env, {
+      job_id: row.id,
+      owner_email: row.owner_email,
+      session_id: sessionId,
+      schedule_id: scheduleId,
+    });
+    if (!parked) throw new Error("recurring schedule cancellation could not be persisted");
+  }
+
+  private async retryQueuedRecurringCancellations(cancellations: readonly RecurringScheduleCancellation[]): Promise<void> {
+    let failure: unknown = null;
+    for (const cancellation of cancellations) {
+      try {
+        await this.cancelNativeRecurringSchedule(cancellation.owner_email, cancellation.session_id, cancellation.schedule_id);
+        const cleared = await this.env.DB.prepare("DELETE FROM recurring_schedule_cancellations WHERE id = ? AND owner_email = ?")
+          .bind(cancellation.id, cancellation.owner_email.toLowerCase()).run();
+        if (cleared.meta?.changes !== 1) throw new Error("recurring schedule cancellation changed concurrently");
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    if (failure) throw failure;
+  }
+
+  private async retryPendingRecurringCancellations(row: RecurringJobState): Promise<RecurringJobState> {
+    const queued = await this.env.DB.prepare("SELECT id, job_id, owner_email, session_id, schedule_id, created_at FROM recurring_schedule_cancellations WHERE job_id = ? AND owner_email = ? ORDER BY created_at ASC, id ASC")
+      .bind(row.id, row.owner_email.toLowerCase()).all<RecurringScheduleCancellation>();
+    await this.retryQueuedRecurringCancellations(queued.results ?? []);
+    return (await this.recurringJobState(row.id)) ?? row;
+  }
+
+  private async retrySessionRecurringCancellations(ownerEmail: string): Promise<void> {
+    const queued = await this.env.DB.prepare("SELECT id, job_id, owner_email, session_id, schedule_id, created_at FROM recurring_schedule_cancellations WHERE owner_email = ? AND session_id = ? ORDER BY created_at ASC, id ASC")
+      .bind(ownerEmail.toLowerCase(), this.name).all<RecurringScheduleCancellation>();
+    await this.retryQueuedRecurringCancellations(queued.results ?? []);
+  }
+
+  private async retireUnregisteredRecurringSchedule(row: RecurringJobState, scheduleId: string, sessionId: string): Promise<void> {
+    try {
+      await this.cancelNativeRecurringSchedule(row.owner_email, sessionId, scheduleId);
+    } catch {
+      try {
+        await this.parkRecurringCancellation(row, scheduleId, sessionId);
+      } catch (parkError) {
+        throw new Error(`recurring schedule cancellation failed and could not be retained: ${parkError instanceof Error ? parkError.message : String(parkError)}`);
+      }
+    }
+  }
+
+  private async retirePersistedRecurringSchedule(row: RecurringJobState, scheduleId: string, sessionId: string): Promise<boolean> {
+    await this.parkRecurringCancellation(row, scheduleId, sessionId);
+    const cancellation = await this.env.DB.prepare("SELECT id, job_id, owner_email, session_id, schedule_id, created_at FROM recurring_schedule_cancellations WHERE owner_email = ? AND session_id = ? AND schedule_id = ?")
+      .bind(row.owner_email.toLowerCase(), sessionId, scheduleId).first<RecurringScheduleCancellation>();
+    if (!cancellation) throw new Error("recurring schedule cancellation could not be loaded");
+    try {
+      await this.cancelNativeRecurringSchedule(row.owner_email, sessionId, scheduleId);
+      const cleared = await this.env.DB.prepare("DELETE FROM recurring_schedule_cancellations WHERE id = ? AND owner_email = ?")
+        .bind(cancellation.id, cancellation.owner_email.toLowerCase()).run();
+      if (cleared.meta?.changes !== 1) throw new Error("recurring schedule cancellation changed concurrently");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async reconcileLegacyRecurringSchedule(payload: LegacyRecurringSchedulePayload): Promise<void> {
+    let row = await this.recurringJobState(payload.jobId);
+    if (!row || row.status !== "active" || row.session_id !== this.name || row.owner_email.toLowerCase() !== payload.ownerEmail.toLowerCase() || row.prompt !== payload.prompt || row.schedule_id === null || nativeScheduleId(row.schedule_id) !== row.schedule_id) return;
+    row = await this.retryPendingRecurringCancellations(row);
+    if (row.schedule_id === null || nativeScheduleId(row.schedule_id) !== row.schedule_id) return;
+    const schedules = await this.listSchedules().catch(() => null);
+    if (!Array.isArray(schedules) || schedules.length > 100) return;
+    const legacy = schedules.find((schedule) => isAuthoritativeLegacyRecurringSchedule(schedule, row!, payload));
+    if (!legacy) return;
+    const replacement = findVersionedRecurringSchedule(schedules, row);
+    const generation = replacement?.payload.generation ?? crypto.randomUUID();
+    const replacementScheduleId = replacement
+      ? replacement.schedule.id
+      : (await this.scheduleEvery(row.cadence_secs, "runRecurringPrompt", currentRecurringSchedulePayload(row, generation), recurringScheduleRetryOptions())).id;
+    if (!replacementScheduleId) throw new Error("recurring job schedule did not return an id");
+    const nextScheduleId = recurringScheduleIdentity(replacementScheduleId, generation);
+    const persisted = await this.env.DB.prepare("UPDATE jobs SET schedule_id = ?, state_version = state_version + 1, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'active' AND session_id = ? AND schedule_id = ? AND state_version = ?")
+      .bind(nextScheduleId, row.id, row.owner_email, this.name, row.schedule_id, row.state_version).run().catch(() => undefined);
+    if (persisted?.meta?.changes !== 1) {
+      if (!replacement) await this.retireUnregisteredRecurringSchedule(row, nextScheduleId, row.session_id);
+      return;
+    }
+    const cancelled = await this.retirePersistedRecurringSchedule(row, row.schedule_id, row.session_id);
+    if (!cancelled) {
+      await this.env.DB.prepare("UPDATE jobs SET last_error = ? WHERE id = ? AND owner_email = ? AND schedule_id = ?")
+        .bind("schedule cancellation pending", row.id, row.owner_email, nextScheduleId).run().catch(() => undefined);
+    }
+  }
+
+  private async currentRecurringJob(payload: RecurringSchedulePayload): Promise<RecurringJobState | null> {
+    const row = await this.recurringJobState(payload.jobId);
+    if (!row) return null;
+    const reconciled = await this.retryPendingRecurringCancellations(row).catch(() => row);
+    const validation = await validateCurrentRecurringSchedule({
+      row: reconciled,
+      payload,
+      sessionId: this.name,
+      listSchedules: () => this.listSchedules(),
+    });
+    return validation.ok ? reconciled : null;
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -383,11 +507,12 @@ export class MyAgent extends Think<Env> {
       }
     }
     if (url.pathname === "/schedule-recurring-prompt") {
-      const payload = await request.json<RecurringPromptPayload & { cadenceSecs?: number }>();
-      if (!payload.jobId || !payload.ownerEmail || !payload.prompt || !Number.isInteger(payload.cadenceSecs)) {
-        return Response.json({ ok: false, error: "jobId, ownerEmail, prompt, cadenceSecs required" }, { status: 400 });
+      const requestPayload = await request.json<unknown>();
+      const cadenceSecs = typeof requestPayload === "object" && requestPayload !== null ? (requestPayload as { cadenceSecs?: unknown }).cadenceSecs : undefined;
+      if (!isRecurringSchedulePayload(requestPayload) || !Number.isInteger(cadenceSecs)) {
+        return Response.json({ ok: false, error: "version, jobId, ownerEmail, sessionId, prompt, generation, cadenceSecs required" }, { status: 400 });
       }
-      const schedule = await this.scheduleRecurringPrompt({ ...payload, cadenceSecs: payload.cadenceSecs! });
+      const schedule = await this.scheduleRecurringPrompt({ ...requestPayload, cadenceSecs: cadenceSecs as number });
       return Response.json({ ok: true, schedule });
     }
     if (url.pathname === "/cancel-recurring-prompt") {
@@ -397,67 +522,104 @@ export class MyAgent extends Think<Env> {
     return super.fetch(request);
   }
 
-  /** Native agents alarm callback for recurring prompt jobs. */
-  async runRecurringPrompt(payload: RecurringPromptPayload) {
-    const identity = this.identity() ?? { email: payload.ownerEmail, sub: `job:${payload.ownerEmail}` };
-    this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), identity });
-    const now = new Date();
-    const ownerEmail = payload.ownerEmail.toLowerCase();
-    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
-      .bind(payload.jobId, ownerEmail).first<JobRow>().catch(() => null);
-    if (row?.status === "paused") return;
-    if (row?.thread_mode === "new_session_per_run") {
-      const result = await runJobNow(this.env, row, now);
-      if (!result.ok) throw new Error(result.error ?? "recurring job failed");
-      return;
+  private async settleInspectedRecurringSubmission(row: RecurringJobState, claim: RecurringScheduleDispatchClaim): Promise<boolean> {
+    let inspection: ThinkSubmissionInspection | null;
+    if (claim.targetSessionId === this.name) {
+      inspection = await this.inspectSubmission(claim.submissionId);
+    } else {
+      const { getSessionAgent } = await import("./agent-stub");
+      inspection = await (await getSessionAgent(this.env, row.owner_email, claim.targetSessionId)).inspectSubmission(claim.submissionId);
     }
-    let error: string | null = null;
-    try {
-      await this.runTurn({
-        mode: "submit",
-        idempotencyKey: `job:${payload.jobId}:${now.getTime()}`,
-        input: [
-          { id: `job:${payload.jobId}:${now.getTime()}`, role: "user", parts: [{ type: "text", text: scheduledJobRunPrompt(payload.prompt) }] },
-        ],
-      });
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-    }
-    await completeRecurringJobRun(this.env, {
-      jobId: payload.jobId,
-      ownerEmail: payload.ownerEmail,
-      sessionId: this.name,
-      sourceSessionId: row?.session_id ?? this.name,
-      threadMode: row?.thread_mode ?? "same_session",
-      ranAt: now,
-      nextRunAt: row ? computeNextRun(now, row.cadence_secs) : null,
-      jobName: row?.name ?? null,
-      error,
+    if (!inspection) return false;
+    await settleInspectedRecurringJobRun(this.env, {
+      jobId: row.id,
+      ownerEmail: row.owner_email,
+      sessionId: claim.targetSessionId,
+      sourceSessionId: row.session_id,
+      threadMode: row.thread_mode,
+      ranAt: new Date(claim.scheduledAt),
+      nextRunAt: computeNextRun(new Date(claim.scheduledAt), row.cadence_secs),
+      jobName: row.name,
+      claim,
+      submission: inspection,
     });
-    if (error) throw new Error(error);
+    return true;
   }
 
-  private async completeInjectedRecurringJobRun(result: ChatResponseResult): Promise<void> {
-    if (result.status !== "completed" && result.status !== "error") return;
-    const identity = this.identity();
+  async runRecurringPrompt(payload: unknown) {
+    if (isLegacyRecurringSchedulePayload(payload)) {
+      await this.retrySessionRecurringCancellations(payload.ownerEmail);
+      await this.reconcileLegacyRecurringSchedule(payload);
+      return;
+    }
+    if (!isRecurringSchedulePayload(payload)) return;
+    await this.retrySessionRecurringCancellations(payload.ownerEmail);
+    const row = await this.currentRecurringJob(payload);
+    if (!row) return;
+    const scheduledAt = new Date(row.next_run_at);
+    if (!Number.isFinite(scheduledAt.getTime())) return;
+    const fence = recurringScheduleFence(row, payload.generation);
+    if (!fence) return;
+    const configuredIdentity = this.identity();
+    if (configuredIdentity && configuredIdentity.email.toLowerCase() !== row.owner_email.toLowerCase()) return;
+    const recovered = recoveredRecurringScheduleDispatch(row, fence, scheduledAt);
+    const targetSessionId = recovered?.targetSessionId ?? (row.thread_mode === "new_session_per_run" ? recurringScheduleRunTargetSessionId() : row.session_id);
+    const claim = recovered ?? await claimRecurringScheduleDispatch(this.env, fence, scheduledAt, targetSessionId);
+    if (!claim) return;
+    if (recovered && await this.settleInspectedRecurringSubmission(row, claim)) return;
+    const identity = configuredIdentity ?? { email: row.owner_email, sub: `job:${row.owner_email}` };
+    this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), identity });
+    const clientMsgId = recurringScheduleRunMessageId(claim);
+    if (row.thread_mode === "new_session_per_run") {
+      const result = await runJobNow(this.env, row, scheduledAt, {
+        clientMessageId: clientMsgId,
+        persistTerminalState: false,
+        targetSessionId: claim.targetSessionId,
+      });
+      if (!result.ok) throw new Error("recurring job submission was not confirmed");
+      await this.settleInspectedRecurringSubmission(row, claim);
+      return;
+    }
+    const submission = await this.runTurn({
+      mode: "submit",
+      submissionId: clientMsgId,
+      idempotencyKey: clientMsgId,
+      input: [
+        { id: clientMsgId, role: "user", parts: [{ type: "text", text: scheduledJobRunPrompt(row.prompt) }] },
+      ],
+    });
+    await this.completeRecurringSubmission(submission);
+  }
+
+  protected async onSubmissionStatus(submission: ThinkSubmissionInspection): Promise<void> {
+    await this.completeRecurringSubmission(submission);
+  }
+
+  private async completeRecurringSubmission(submission: ThinkSubmissionInspection): Promise<void> {
+    const error = recurringSubmissionTerminalError(submission.status, submission.error);
+    if (error === undefined || !submission.idempotencyKey) return;
+    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at, state_version, recurring_fire_key, recurring_fire_verifier_hash, recurring_fire_state, recurring_fire_scheduled_at, recurring_submission_id, recurring_fire_target_session_id, recurring_receipt_id FROM jobs WHERE recurring_submission_id = ? AND recurring_fire_target_session_id = ?")
+      .bind(submission.idempotencyKey, this.name).first<RecurringJobState>().catch(() => null);
+    if (!row) return;
+    const scheduledAt = row.recurring_fire_scheduled_at ? new Date(row.recurring_fire_scheduled_at) : new Date(NaN);
+    if (!Number.isFinite(scheduledAt.getTime())) return;
+    const identity = parseRecurringScheduleIdentity(row.schedule_id);
     if (!identity) return;
-    const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
-    const jobId = recurringJobIdFromClientMessageId(lastUser?.id);
-    if (!jobId) return;
-    const ownerEmail = identity.email.toLowerCase();
-    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
-      .bind(jobId, ownerEmail).first<JobRow>().catch(() => null);
-    if (!row || row.thread_mode !== "new_session_per_run") return;
+    const fence = recurringScheduleFence(row, identity.generation);
+    if (!fence) return;
+    const claim = recoveredRecurringScheduleDispatch(row, fence, scheduledAt);
+    if (!claim) return;
     await completeRecurringJobRun(this.env, {
       jobId: row.id,
-      ownerEmail,
+      ownerEmail: row.owner_email,
       sessionId: this.name,
       sourceSessionId: row.session_id,
       threadMode: row.thread_mode,
-      ranAt: new Date(),
-      nextRunAt: null,
+      ranAt: scheduledAt,
+      nextRunAt: computeNextRun(scheduledAt, row.cadence_secs),
       jobName: row.name,
-      error: result.status === "error" ? result.error : null,
+      error,
+      claim,
     });
   }
 
@@ -604,8 +766,7 @@ export class MyAgent extends Think<Env> {
     await this.recordCurrentCycleCost(result).catch((error) => console.error("cycle_cost_record_failed", { sessionId: this.name, err: String(error) }));
     await this.logAcceptedUsers();
     const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
-    const recurringJobRun = recurringJobIdFromClientMessageId(lastUser?.id) !== null;
-    await this.completeInjectedRecurringJobRun(result).catch((error) => console.error("recurring_job_terminal_receipt_failed", { sessionId: this.name, err: String(error) }));
+    const recurringJobRun = false;
     const content = textParts(result.message);
     const reasoning = reasoningParts(result.message);
     let visibleSource = content;
@@ -740,10 +901,10 @@ export class MyAgent extends Think<Env> {
 
 
   /**
-   * Run one chat turn for an EXTERNAL caller (the voice agent) and collect the
-   * full assistant text. This runs on the canonical MyAgent facet, so the
-   * reply is appended to this session's Think transcript and broadcast as
-   * cf_agent_* frames to any open chat socket. Returns the text for TTS.
+   * Run one chat turn for an EXTERNAL caller (the voice agent) and stream the
+   * assistant text. This runs on the canonical MyAgent facet, so the reply is
+   * appended to this session's Think transcript and broadcast as cf_agent_*
+   * frames to any open chat socket. Returns incremental text for streaming TTS.
    *
    * Why this exists: the @cloudflare/voice call lifecycle (start_call ->
    * audio_config/listening) does NOT survive the agents sub-agent WebSocket
@@ -752,32 +913,19 @@ export class MyAgent extends Think<Env> {
    * direct-routed DO (VoiceThinkAgent) and delegates the actual turn here by
    * RPC. See the direct-routed voice agent in src/voice-think-agent.ts.
    */
-  async runVoiceTurn(transcript: string): Promise<string> {
+  async runVoiceTurnStream(transcript: string): Promise<ReadableStream<string>> {
     const cfg = this.getConfig<MyAgentConfig>() ?? {};
     if (cfg.model && !findModel(cfg.model)) {
       this.configure<MyAgentConfig>({ ...cfg, model: defaultModelId(this.env) });
     }
+    return createVoiceTurnStream(transcript, (text, callbacks) =>
+      Think.prototype.chat.call(this, text, callbacks, {}) as Promise<void>,
+    );
+  }
+
+  async runVoiceTurn(transcript: string): Promise<string> {
     let full = "";
-    let failure: string | null = null;
-    await new Promise<void>((resolve) => {
-      let settled = false;
-      const done = () => { if (!settled) { settled = true; resolve(); } };
-      void (Think.prototype.chat.call(this, transcript, {
-        onStart: async () => {},
-        onEvent: async (json: string) => {
-          try {
-            const chunk = JSON.parse(json) as { type?: string; delta?: string };
-            if (chunk.type === "text-delta" && chunk.delta) full += chunk.delta;
-          } catch {}
-        },
-        onDone: async () => { done(); },
-        onError: async (error: string) => { failure = error; done(); },
-      }, {}) as Promise<void>).catch((e: unknown) => {
-        failure = failure ?? (e instanceof Error ? e.message : String(e));
-        done();
-      });
-    });
-    if (failure && !full) throw new Error(failure);
+    for await (const chunk of await this.runVoiceTurnStream(transcript)) full += chunk;
     return full;
   }
 
