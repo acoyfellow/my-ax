@@ -1,141 +1,117 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { completeRecurringJobRun } from "./recurring-job-run";
+import { completeRecurringJobRun, recurringSubmissionTerminalError, settleInspectedRecurringJobRun } from "./recurring-job-run";
+import { recurringScheduleFireKey, recurringScheduleIdentity, type RecurringScheduleDispatchClaim } from "./jobs";
 import type { Env } from "./types";
 
-function envMock(opts: { jobUpdateChanges?: number } = {}) {
-  const jobUpdateChanges = opts.jobUpdateChanges ?? 1;
+const scheduledAt = new Date("2026-06-24T12:00:00.000Z");
+const claim: RecurringScheduleDispatchClaim = {
+  jobId: "job-1",
+  ownerEmail: "owner@example.com",
+  sessionId: "session-1",
+  scheduleId: recurringScheduleIdentity("native-current", "generation-current"),
+  generation: "generation-current",
+  scheduledAt: scheduledAt.toISOString(),
+  fireKey: recurringScheduleFireKey("job-1", scheduledAt, "generation-current"),
+  verifierHash: "a39c3b1f47c55e660677342bed9e472e0d7ff052c1f7826b73ca00d0086fcb65",
+  submissionId: "24d377c3-9e9f-4e88-8e56-ac5b34fb7a01",
+  targetSessionId: "session-1",
+  receiptId: "a7d22e95-484a-4a48-a1c5-e0c7e0dfad54",
+};
+
+function envMock(batchResults: Array<{ success?: boolean; meta?: { changes?: number } }> = [
+  { success: true, meta: { changes: 1 } },
+  { success: true, meta: { changes: 1 } },
+  { success: true, meta: { changes: 1 } },
+]) {
   const calls: { sql: string; binds: unknown[] }[] = [];
-  const inserted: { title: string; body: string; href: string; kind: string }[] = [];
+  let batches = 0;
   const env = {
-    BRIDGE_BASE_URL: "https://my.ax.test",
     DB: {
       prepare(sql: string) {
         return {
           bind(...binds: unknown[]) {
             calls.push({ sql, binds });
             return {
-              async run() {
-                if (sql.includes("INSERT INTO attention_items")) {
-                  inserted.push({ title: String(binds[4]), body: String(binds[5]), href: String(binds[6]), kind: String(binds[3]) });
-                }
-                if (sql.includes("UPDATE jobs SET")) return { meta: { changes: jobUpdateChanges } };
-                return {};
-              },
-              async first() {
-                if (sql.includes("SELECT name FROM jobs")) return { name: "Fallback job" };
-                if (sql.includes("COUNT(*) AS count")) return { count: inserted.length };
-                return null;
-              },
-              async all() { return { results: [] }; },
+              async run() { return { success: true, meta: { changes: 1 } }; },
+              async first() { return sql.includes("SELECT name") ? { name: "Current job" } : null; },
             };
           },
         };
       },
+      async batch() { batches++; return batchResults; },
     },
   } as unknown as Env;
-  return { env, calls, inserted };
+  return { env, calls, batches: () => batches };
 }
 
-test("completeRecurringJobRun records terminal state and same-session receipt path", async () => {
-  const { env, calls, inserted } = envMock();
-  await completeRecurringJobRun(env, {
-    jobId: "job-1",
-    ownerEmail: "Owner@Example.COM",
-    sessionId: "session 1",
-    sourceSessionId: "session 1",
-    threadMode: "same_session",
-    ranAt: new Date("2026-06-24T12:00:00.000Z"),
+function input(overrides: Partial<Parameters<typeof completeRecurringJobRun>[1]> = {}) {
+  return {
+    jobId: claim.jobId,
+    ownerEmail: claim.ownerEmail,
+    sessionId: claim.targetSessionId,
+    sourceSessionId: claim.sessionId,
+    threadMode: "same_session" as const,
+    ranAt: scheduledAt,
     nextRunAt: "2026-06-24T13:00:00.000Z",
-    jobName: "Daily proof",
-  });
-  assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET next_run_at") && call.binds.includes("owner@example.com")));
-  assert.deepEqual(inserted, [{
-    kind: "job.complete",
-    title: "Daily proof completed",
-    body: "Completed successfully in the existing conversation. Next action: open it to review the result.",
-    href: "/?session=session%201",
-  }]);
+    jobName: "Current job",
+    claim,
+    ...overrides,
+  };
+}
+
+test("terminal persistence atomically progresses dispatched work, receipt, then terminal", async () => {
+  const { env, calls } = envMock();
+  assert.equal(await completeRecurringJobRun(env, input()), true);
+  assert.equal(calls.filter((call) => call.sql.startsWith("UPDATE jobs SET")).length, 2);
+  assert.ok(calls.some((call) => call.sql.includes("INSERT OR IGNORE INTO attention_items")));
+  assert.ok(calls.every((call) => !call.binds.includes("generation-current")));
 });
 
-test("completeRecurringJobRun records terminal state and new-session receipt path", async () => {
-  const { env, inserted } = envMock();
-  await completeRecurringJobRun(env, {
-    jobId: "job-1",
-    ownerEmail: "Owner@Example.COM",
-    sessionId: "session-new",
-    sourceSessionId: "session-source",
-    threadMode: "new_session_per_run",
-    ranAt: new Date("2026-06-24T12:00:00.000Z"),
-    nextRunAt: "2026-06-24T13:00:00.000Z",
-    jobName: "Daily proof",
-  });
-  assert.equal(inserted[0]?.href, "/?session=session-new");
-  assert.match(inserted[0]?.body ?? "", /new conversation/);
+test("rejected and partial D1 batches are surfaced so the same submission can settle on a later interval", async () => {
+  const partial = envMock([
+    { success: true, meta: { changes: 1 } },
+    { success: false, meta: { changes: 0 } },
+    { success: true, meta: { changes: 0 } },
+  ]);
+  await assert.rejects(() => completeRecurringJobRun(partial.env, input()), /not confirmed/);
+  const retry = envMock([
+    { success: true, meta: { changes: 0 } },
+    { success: true, meta: { changes: 1 } },
+    { success: true, meta: { changes: 1 } },
+  ]);
+  assert.equal(await completeRecurringJobRun(retry.env, input()), true);
 });
 
-test("completeRecurringJobRun uses the explicit destination for failed scheduled runs", async () => {
-  const { env, calls, inserted } = envMock();
-  await completeRecurringJobRun(env, {
-    jobId: "job-2",
-    ownerEmail: "owner@example.com",
-    sessionId: "session-2",
-    threadMode: "same_session",
-    ranAt: new Date("2026-06-24T12:00:00.000Z"),
-    error: "failed\nwith detail",
-  });
-  assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET last_run_at")));
-  assert.equal(inserted[0]?.title, "Fallback job failed");
-  assert.match(inserted[0]?.body ?? "", /failed with detail/);
-  assert.match(inserted[0]?.body ?? "", /Next action: open the existing conversation and retry or update the job\./);
+test("later authoritative terminal inspections settle once while nonterminal inspections do not write a receipt", async () => {
+  for (const submission of [
+    { status: "completed" as const },
+    { status: "error" as const, error: "provider unavailable" },
+    { status: "aborted" as const },
+    { status: "skipped" as const },
+  ]) {
+    const probe = envMock();
+    assert.equal(await settleInspectedRecurringJobRun(probe.env, { ...input(), submission }), "terminal");
+    assert.equal(probe.batches(), 1);
+  }
+  for (const submission of [{ status: "pending" as const }, { status: "running" as const }]) {
+    const probe = envMock();
+    assert.equal(await settleInspectedRecurringJobRun(probe.env, { ...input(), submission }), "nonterminal");
+    assert.equal(probe.batches(), 0);
+  }
 });
 
-test("completeRecurringJobRun suppresses the failure push for a transient gateway rate limit", async () => {
-  const { env, calls, inserted } = envMock();
-  await completeRecurringJobRun(env, {
-    jobId: "job-rl",
-    ownerEmail: "owner@example.com",
-    sessionId: "session-rl",
-    threadMode: "same_session",
-    ranAt: new Date("2026-06-24T12:00:00.000Z"),
-    error: "3021: rate limiting: inference request per min rate reached",
-  });
-  // last_error is still persisted for diagnostics.
-  assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET last_run_at") && call.binds.some((b) => String(b).includes("3021"))));
-  // But the owner sees a single coalesced heads-up, NOT a "<job> failed" receipt.
-  assert.equal(inserted.length, 1);
-  assert.equal(inserted[0]?.kind, "session.update");
-  assert.match(inserted[0]?.title ?? "", /rate limit/i);
-  assert.doesNotMatch(inserted[0]?.body ?? "", /3021/);
-  assert.doesNotMatch(inserted[0]?.title ?? "", /failed/i);
+test("an invalid or forged claim cannot settle an owner fire", async () => {
+  const { env, calls } = envMock();
+  assert.equal(await completeRecurringJobRun(env, input({ claim: { ...claim, targetSessionId: "other-session" } })), false);
+  assert.equal(calls.length, 0);
 });
 
-test("a non-rate-limit error still pushes a normal failure receipt", async () => {
-  const { env, inserted } = envMock();
-  await completeRecurringJobRun(env, {
-    jobId: "job-err",
-    ownerEmail: "owner@example.com",
-    sessionId: "session-err",
-    threadMode: "same_session",
-    ranAt: new Date("2026-06-24T12:00:00.000Z"),
-    error: "TypeError: cannot read property of undefined",
-  });
-  assert.equal(inserted[0]?.kind, "job.complete");
-  assert.match(inserted[0]?.title ?? "", /failed/i);
-});
-
-test("completeRecurringJobRun emits nothing when the owner-qualified UPDATE matched no row", async () => {
-  const { env, calls, inserted } = envMock({ jobUpdateChanges: 0 });
-  await completeRecurringJobRun(env, {
-    jobId: "job-1",
-    ownerEmail: "bob@example.com",
-    sessionId: "session-alice",
-    sourceSessionId: "session-alice",
-    threadMode: "same_session",
-    ranAt: new Date("2026-06-24T12:00:00.000Z"),
-    nextRunAt: "2026-06-24T13:00:00.000Z",
-    jobName: "Alice's payroll job",
-  });
-  assert.ok(calls.some((call) => call.sql.includes("UPDATE jobs SET")), "the UPDATE is still attempted");
-  assert.deepEqual(inserted, [], "no receipt/notification for an unpersisted terminal run");
+test("all Think terminal outcomes settle and unknown terminal values do not wedge", () => {
+  assert.equal(recurringSubmissionTerminalError("completed"), null);
+  assert.equal(recurringSubmissionTerminalError("error", "provider unavailable"), "provider unavailable");
+  assert.equal(recurringSubmissionTerminalError("aborted"), "scheduled run aborted");
+  assert.equal(recurringSubmissionTerminalError("skipped"), "scheduled run skipped");
+  assert.equal(recurringSubmissionTerminalError("pending"), undefined);
+  assert.equal(recurringSubmissionTerminalError("unexpected"), "scheduled run ended in an unexpected terminal state");
 });

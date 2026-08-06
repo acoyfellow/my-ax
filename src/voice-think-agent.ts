@@ -5,6 +5,8 @@ import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import { resolveVoiceThinkConfig, type VoiceThinkConfig } from "./voice-think-config";
 import { StillWorkingTimer, WORK_ACK } from "./voice-narration";
+import { VoiceTurnReplyBuffer, consumeVoiceTurnStream } from "./voice-turn-stream";
+import { MarkdownSpeechSanitizer } from "./markdown-speech";
 
 // If the turn resolves within this window, stay terse (just the reply). Only
 // past it do we speak the up-front ack and periodic "still working" check-ins,
@@ -14,8 +16,6 @@ const VOICE_ACK_THRESHOLD_MS = 3500;
 const VOICE_CHECKIN_POLL_MS = 1000;
 // Idle gap between spoken "still working" check-ins during a long turn.
 const VOICE_CHECKIN_IDLE_MS = 20000;
-
-function delay(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
 const VoiceAgent = withVoice(Agent);
 
@@ -30,8 +30,8 @@ const VoiceAgent = withVoice(Agent);
  * Each spoken turn is delegated by RPC to the canonical MyAgent facet
  * (runVoiceTurn), so the real Think transcript/tools/memory stay the single
  * source of truth and the reply broadcasts cf_agent_* frames to the open chat
- * socket (chat log updates live). We return the full assistant string so the
- * stock string TTS path synthesizes and speaks it.
+ * socket (chat log updates live). We return incremental assistant deltas so
+ * the streaming TTS path can begin at the first complete sentence.
  */
 export class VoiceThinkAgent extends VoiceAgent<Env> {
   transcriber = new WorkersAIFluxSTT(this.env.AI);
@@ -54,7 +54,8 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
   // heavier change (see designs/1c-server-narration-checkins.md).
   // Returns an AsyncIterable<string> (a TextSource); @cloudflare/voice speaks
   // each yielded segment as its own utterance.
-  async onTurn(transcript: string, _context: VoiceTurnContext): Promise<AsyncGenerator<string>> {
+  async onTurn(transcript: string, context: VoiceTurnContext): Promise<AsyncGenerator<string>> {
+    const speechSanitizer = new MarkdownSpeechSanitizer();
     const cfg = resolveVoiceThinkConfig((this.state ?? {}) as VoiceThinkConfig, this.name);
     if (!(this.state as VoiceThinkConfig | undefined)?.identity || !(this.state as VoiceThinkConfig | undefined)?.sessionId) {
       if (cfg.identity && cfg.sessionId) this.setState({ ...(this.state as VoiceThinkConfig | undefined), ...cfg } as VoiceThinkConfig);
@@ -63,39 +64,80 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
     async function* stream(): AsyncGenerator<string> {
       if (!cfg.identity || !cfg.sessionId) { yield "Voice session is not linked to a conversation yet."; return; }
 
-      let outcome: { reply: string } | { error: string } | null = null;
+      type VoiceTurnOutcome = { receivedText: boolean } | { error: string } | null;
+      const state: { outcome: VoiceTurnOutcome } = { outcome: null };
+      const replyBuffer = new VoiceTurnReplyBuffer();
       const runReply = (async () => {
         try {
           const parent = await getAgentByName(env.USER_AGENT, cfg.identity!.email.toLowerCase());
           const facet = await getSubAgentByName(parent, MyAgent, cfg.sessionId!);
           await facet.seedIdentity(cfg.identity!);
-          const reply = await facet.runVoiceTurn(transcript);
-          outcome = { reply: reply || "Sorry, I didn't catch a response." };
+          const response = await facet.runVoiceTurnStream(transcript);
+          const result = await consumeVoiceTurnStream(response, context.signal, (chunk) => replyBuffer.push(chunk));
+          if (result === null) {
+            replyBuffer.interrupt();
+            return;
+          }
+          state.outcome = result;
         } catch (e) {
           console.error("voice_turn_failed", { err: e instanceof Error ? e.message : String(e) });
-          outcome = { error: "Voice turn error: " + (e instanceof Error ? e.message : String(e)) };
+          state.outcome = { error: "Voice turn error: " + (e instanceof Error ? e.message : String(e)) };
+        } finally {
+          replyBuffer.complete();
         }
       })();
 
-      // Fast path: if the turn resolves quickly, stay terse.
-      await Promise.race([runReply, delay(VOICE_ACK_THRESHOLD_MS)]);
-      if (!outcome) {
-        // Slow turn: acknowledge, then emit bounded "still working" check-ins
-        // until the reply lands.
-        const now = Date.now();
-        const checkins = new StillWorkingTimer(VOICE_CHECKIN_IDLE_MS, now);
-        checkins.markSpoken(now);
+      const checkins = new StillWorkingTimer(VOICE_CHECKIN_IDLE_MS, Date.now());
+      const firstChunkReady = await replyBuffer.waitForChunk(VOICE_ACK_THRESHOLD_MS, context.signal);
+      if (context.signal.aborted) {
+        replyBuffer.interrupt();
+        return;
+      }
+      if (!firstChunkReady && !state.outcome) {
+        checkins.markSpoken(Date.now());
         yield WORK_ACK;
-        while (!outcome) {
-          await Promise.race([runReply, delay(VOICE_CHECKIN_POLL_MS)]);
-          if (outcome) break;
+      }
+      const firstChunks = replyBuffer.drain();
+      for (const chunk of firstChunks) {
+        const spoken = speechSanitizer.push(chunk);
+        if (spoken) yield spoken;
+      }
+      if (firstChunks.length > 0) checkins.markSpoken(Date.now());
+
+      while (!state.outcome && !context.signal.aborted) {
+        const chunkReady = await replyBuffer.waitForChunk(VOICE_CHECKIN_POLL_MS, context.signal);
+        const chunks = replyBuffer.drain();
+        for (const chunk of chunks) {
+          const spoken = speechSanitizer.push(chunk);
+          if (spoken) yield spoken;
+        }
+        if (chunks.length > 0) checkins.markSpoken(Date.now());
+        if (!chunkReady && !state.outcome) {
           const line = checkins.tick(Date.now());
           if (line) yield line;
         }
       }
 
-      const settled = outcome as { reply: string } | { error: string };
-      yield "error" in settled ? settled.error : settled.reply;
+      await runReply;
+      for (const chunk of replyBuffer.drain()) {
+        const spoken = speechSanitizer.push(chunk);
+        if (spoken) yield spoken;
+      }
+      if (context.signal.aborted) {
+        replyBuffer.interrupt();
+        return;
+      }
+      const outcome = state.outcome;
+      if (!outcome) return;
+      if ("receivedText" in outcome) {
+        for (const chunk of replyBuffer.finish(outcome.receivedText)) {
+          const spoken = speechSanitizer.push(chunk);
+          if (spoken) yield spoken;
+        }
+      }
+      const terminal = speechSanitizer.finish();
+      if (terminal) yield terminal;
+      if ("error" in outcome) yield outcome.error;
     }
     return stream();
   }

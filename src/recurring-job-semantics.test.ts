@@ -19,7 +19,7 @@ const row: JobRow = {
   last_error: null,
   schedule_id: "schedule-1",
   created_at: "2026-01-01T00:00:00.000Z",
-  updated_at: "2026-01-01T00:00:00.000Z",
+  updated_at: "2026-01-01T00:00:00.000Z", state_version: 0,
 };
 
 test("recurring job input requires a target conversation and defaults new jobs to fresh conversations", () => {
@@ -142,9 +142,33 @@ test("new-session target resolver creates a fresh owned conversation", async () 
   assert.equal(target.created, true);
   assert.notEqual(target.targetSessionId, "session-existing");
   assert.equal(inserts.length, 1);
-  assert.match(String(inserts[0][0]), /INSERT INTO sessions/);
+  assert.match(String(inserts[0][0]), /INSERT OR IGNORE INTO sessions/);
   assert.equal(inserts[0][2], "Morning check · Jan 1, 12:00 AM UTC");
   assert.equal(inserts[0][3], "owner@example.com");
+});
+
+test("a retried new-session fire reuses its existing deterministic target", async () => {
+  const calls: unknown[][] = [];
+  const env = {
+    DB: {
+      prepare(sql: string) {
+        return {
+          bind(...values: unknown[]) {
+            calls.push([sql, ...values]);
+            return { async run() { return { meta: { changes: 0 } }; } };
+          },
+        };
+      },
+    },
+  } as unknown as Env;
+  const target = await resolveRecurringJobTargetSession(env, { ...row, thread_mode: "new_session_per_run" }, new Date("2026-01-01T00:00:00.000Z"), "recurring-run-generation-1735689600000");
+  assert.deepEqual(target, {
+    targetSessionId: "recurring-run-generation-1735689600000",
+    sourceSessionId: "session-existing",
+    threadMode: "new_session_per_run",
+    created: false,
+  });
+  assert.match(String(calls[0]?.[0]), /INSERT OR IGNORE INTO sessions/);
 });
 
 test("an unknown persisted thread_mode fails closed (never mints a new session)", async () => {
