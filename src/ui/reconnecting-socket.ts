@@ -71,6 +71,24 @@ export function createReconnectingSocket(
   let socket: ReconnectingSocketLike | null = null;
   let retryTimer: TimerHandle | null = null;
   const queue: string[] = [];
+  // Dedup set of stable keys for currently-queued payloads. Guards against
+  // double-enqueue when the composer no longer blocks sends during a
+  // reconnect (see eed59d5 + Chat.svelte:onSubmit): a user retrying the same
+  // message while the socket is still reconnecting must NOT land twice on the
+  // server when the queue eventually flushes on open.
+  const queuedKeys = new Set<string>();
+
+  function payloadKey(data: string): string {
+    // Prefer a client-provided id when the payload is JSON with a top-level
+    // `id`; this matches how chat messages are constructed (agents SDK's
+    // `cf_agent_use_chat_request` carries the message id). Fall back to the
+    // raw payload string so non-JSON control frames still dedup.
+    try {
+      const parsed = JSON.parse(data) as { id?: unknown };
+      if (parsed && typeof parsed.id === "string" && parsed.id) return `id:${parsed.id}`;
+    } catch {}
+    return `raw:${data}`;
+  }
 
   function isCurrent(candidate: ReconnectingSocketLike): boolean {
     return !manuallyClosed && socket === candidate;
@@ -86,7 +104,14 @@ export function createReconnectingSocket(
       if (!isCurrent(candidate)) return;
       attempt = 0;
       exhausted = false;
-      while (queue.length) candidate.send(queue.shift()!);
+      // Flush the queue, releasing dedup keys as each payload leaves so a
+      // future legitimate retry of the same id (rare, e.g. edit-and-resend)
+      // is still accepted.
+      while (queue.length) {
+        const next = queue.shift()!;
+        queuedKeys.delete(payloadKey(next));
+        candidate.send(next);
+      }
       callbacks.onOpen();
     });
     candidate.addEventListener("close", (event) => {
@@ -120,8 +145,14 @@ export function createReconnectingSocket(
   return {
     send(data: string) {
       if (manuallyClosed) return;
-      if (socket?.readyState === SOCKET_OPEN) socket.send(data);
-      else queue.push(data);
+      if (socket?.readyState === SOCKET_OPEN) {
+        socket.send(data);
+        return;
+      }
+      const key = payloadKey(data);
+      if (queuedKeys.has(key)) return; // idempotent: same payload already queued
+      queuedKeys.add(key);
+      queue.push(data);
     },
     forceReconnect() {
       if (manuallyClosed) return;
@@ -138,6 +169,7 @@ export function createReconnectingSocket(
       if (manuallyClosed) return;
       manuallyClosed = true;
       queue.length = 0;
+      queuedKeys.clear();
       if (retryTimer !== null) dependencies.cancel(retryTimer);
       retryTimer = null;
       socket?.close();
