@@ -79,13 +79,30 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
 
   app.post("/api/system/workspace-restore-probe", async (c) => {
     const identity = c.get("identity");
+    const body = await c.req.json<{ target?: unknown }>().catch((): { target?: unknown } => ({}));
+    const target = body?.target;
+    if (target !== undefined && target !== "default" && target !== "node_modules") {
+      return c.json<ApiResponse>({
+        ok: false,
+        command: c.req.path,
+        error: { code: "INVALID_PROBE_TARGET", message: "Probe target must be \"default\" or \"node_modules\"" },
+        next_actions: [],
+      }, 400);
+    }
+
     const nonce = crypto.randomUUID();
+    const probe = target === "node_modules"
+      ? {
+          path: `/home/user/node_modules/.my-ax-restore-probe/${crypto.randomUUID()}.txt`,
+          content: `node-modules-restore:${nonce}`,
+        }
+      : {
+          path: "/home/user/.my-ax/restore-probe.txt",
+          content: nonce,
+        };
     const started = Date.now();
     try {
-      const result = await seedUserWorkspaceFile(c.env, identity, {
-        path: "/home/user/.my-ax/restore-probe.txt",
-        content: nonce,
-      });
+      const result = await seedUserWorkspaceFile(c.env, identity, probe);
       return c.json<ApiResponse>({
         ok: result.restoreMatches,
         command: c.req.path,

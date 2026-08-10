@@ -890,7 +890,8 @@ export class MyAgent extends Think<Env> {
       },
       runCode: async (code, options) => {
         const { sandbox } = await getUserWorkspace(env, identity);
-        return sandbox.runCode(code, { language: options?.language, timeout: options?.timeout, envVars: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config" } });
+        const context = await sandbox.createCodeContext({ language: options?.language ?? "python", cwd: workingDirectory });
+        return sandbox.runCode(code, { context, timeout: options?.timeout, envVars: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config" } });
       },
       tunnelGet: async (port) => {
         const { sandbox } = await getUserWorkspace(env, identity);
