@@ -1,0 +1,21 @@
+src/agent.ts
+  s_817e34548b9255::t_5a7105f49a973b 893-894
+src/workspace.ts
+  s_817e34548b9255::t_245731216e6410 90-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "119ee769abe79807317ee4d555581d4ebf0aa7f8",
+  "prompts": {},
+  "sessions": {
+    "s_817e34548b9255": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fec45-e16c-78c2-96ac-026f9cc8429c",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
