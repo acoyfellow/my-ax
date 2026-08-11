@@ -16,6 +16,7 @@ export type MergeableMessage = {
   id: string;
   role: string;
   timestamp?: number;
+  sequence?: number;
   // Stable logical id for dedup/ordering. When a view assigns a synthetic
   // per-render `id` (e.g. `${rawId}-replay-N` to avoid Svelte key crashes on a
   // duplicated Think replay), `sourceId` preserves the underlying identity so
@@ -30,6 +31,47 @@ export type MergeableMessage = {
 };
 
 const keyOf = (msg: MergeableMessage): string => msg.sourceId ?? msg.id;
+
+const finiteNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const orderOf = (message: MergeableMessage): number =>
+  finiteNumber(message.sequence) ?? finiteNumber(message.timestamp) ?? Number.POSITIVE_INFINITY;
+
+function lastMessageById<T extends MergeableMessage>(messages: T[]): Map<string, T> {
+  return new Map(messages.map((message) => [keyOf(message), message]));
+}
+
+function compareMessages(
+  [leftId, left]: [string, MergeableMessage],
+  [rightId, right]: [string, MergeableMessage],
+): number {
+  const leftOrder = orderOf(left);
+  const rightOrder = orderOf(right);
+  if (leftOrder < rightOrder) return -1;
+  if (leftOrder > rightOrder) return 1;
+  if (leftId < rightId) return -1;
+  if (leftId > rightId) return 1;
+  return 0;
+}
+
+function mergeVersions<T extends MergeableMessage>(preferred: T, fallback: T): T {
+  const preferredTimestamp = finiteNumber(preferred.timestamp);
+  const fallbackTimestamp = finiteNumber(fallback.timestamp);
+  const preferredRealTimestamp = preferredTimestamp !== undefined && !preferred.timestampInterpolated;
+  const fallbackRealTimestamp = fallbackTimestamp !== undefined && !fallback.timestampInterpolated;
+  let merged = preferred;
+  if (!preferredRealTimestamp && fallbackRealTimestamp) {
+    merged = { ...merged, timestamp: fallbackTimestamp, timestampInterpolated: false } as T;
+  } else if (preferredTimestamp === undefined && fallbackTimestamp !== undefined) {
+    merged = { ...merged, timestamp: fallbackTimestamp, timestampInterpolated: fallback.timestampInterpolated } as T;
+  }
+  if (finiteNumber(merged.sequence) === undefined) {
+    const fallbackSequence = finiteNumber(fallback.sequence);
+    if (fallbackSequence !== undefined) merged = { ...merged, sequence: fallbackSequence } as T;
+  }
+  return merged;
+}
 
 export type MergeOptions = {
   // When true (Think replay), incoming entries override existing on id collision.
@@ -52,9 +94,6 @@ export type MergeOptions = {
  * - id only in `existing` (D1-only, e.g. an assistant reply Think compacted away): KEPT.
  * - id only in `incoming`: added.
  *
- * Order: by timestamp ascending (chronological), stable for equal/absent timestamps
- * using first-seen order across [existing, incoming]. This preserves the interleaving
- * a user expects and never reorders equal-timestamp neighbors nondeterministically.
  */
 export function mergeTranscript<T extends MergeableMessage>(
   existing: T[],
@@ -62,69 +101,27 @@ export function mergeTranscript<T extends MergeableMessage>(
   options: MergeOptions = {},
 ): T[] {
   const preferIncoming = options.preferIncoming ?? true;
-  const keepExistingOnlyIf = options.keepExistingOnlyIf;
-
-  // A message that exists ONLY in `incoming` is always kept. An existing-only
-  // message is kept unless the caller's predicate rejects it (used to drop D1
-  // tool/synthetic rows that Think re-materializes inline).
-  const incomingIds = new Set(incoming.map((m) => keyOf(m)));
-
-  // First-seen order gives a stable tiebreaker for equal timestamps.
-  const order = new Map<string, number>();
-  let seq = 0;
+  const incomingById = lastMessageById(incoming);
+  const existingById = lastMessageById(existing);
   const chosen = new Map<string, T>();
 
-  const consider = (msg: T, incomingSide: boolean) => {
-    const k = keyOf(msg);
-    if (!order.has(k)) order.set(k, seq++);
-    const prior = chosen.get(k);
-    if (prior === undefined) {
-      chosen.set(k, msg);
-      return;
-    }
-    const preferred = incomingSide === preferIncoming ? msg : prior;
-    const fallback = incomingSide === preferIncoming ? prior : msg;
-    // Prefer a REAL (non-interpolated) timestamp from either side over an
-    // interpolated one — an interpolated ts must never win when a real anchor
-    // is available, else it can drag messages past real neighbors on sort.
-    const preferredReal = typeof preferred.timestamp === "number" && !preferred.timestampInterpolated;
-    const fallbackReal = typeof fallback.timestamp === "number" && !fallback.timestampInterpolated;
-    let merged: T = preferred;
-    if (!preferredReal && fallbackReal) {
-      merged = { ...preferred, timestamp: fallback.timestamp, timestampInterpolated: false } as T;
-    } else if (typeof preferred.timestamp !== "number" && typeof fallback.timestamp === "number") {
-      merged = { ...preferred, timestamp: fallback.timestamp, timestampInterpolated: fallback.timestampInterpolated } as T;
-    }
-    chosen.set(k, merged);
-  };
-
-  for (const m of existing) {
-    if (keepExistingOnlyIf && !incomingIds.has(keyOf(m)) && !keepExistingOnlyIf(m)) continue;
-    consider(m, false);
+  for (const [id, message] of existingById) {
+    if (!incomingById.has(id) && options.keepExistingOnlyIf && !options.keepExistingOnlyIf(message)) continue;
+    chosen.set(id, message);
   }
-  for (const m of incoming) consider(m, true);
 
-  const merged = [...chosen.values()];
-  merged.sort((a, b) => {
-    // PRIMARY: stable first-seen order. Interpolated timestamps can only break
-    // ties among neighbors that share a first-seen anchor; they never leapfrog
-    // a real anchor. Real timestamps still order across genuinely disjoint sets
-    // (they were inserted in that first-seen order to begin with).
-    const oa = order.get(keyOf(a)) ?? 0;
-    const ob = order.get(keyOf(b)) ?? 0;
-    // Only use timestamp when BOTH sides have a REAL (non-interpolated) ts —
-    // interpolated values are treated as absent for cross-anchor ordering.
-    const aReal = typeof a.timestamp === "number" && !a.timestampInterpolated;
-    const bReal = typeof b.timestamp === "number" && !b.timestampInterpolated;
-    if (aReal && bReal && a.timestamp !== b.timestamp) return (a.timestamp as number) - (b.timestamp as number);
-    if (oa !== ob) return oa - ob;
-    // Final tiebreaker: any timestamp (including interpolated) to keep local
-    // interleaving stable within a run of same-order-neighbors.
-    const ta = typeof a.timestamp === "number" ? a.timestamp : Number.POSITIVE_INFINITY;
-    const tb = typeof b.timestamp === "number" ? b.timestamp : Number.POSITIVE_INFINITY;
-    return ta - tb;
-  });
-  return merged;
+  for (const [id, incomingMessage] of incomingById) {
+    const existingMessage = chosen.get(id);
+    if (existingMessage === undefined) {
+      chosen.set(id, incomingMessage);
+      continue;
+    }
+    const preferred = preferIncoming ? incomingMessage : existingMessage;
+    const fallback = preferIncoming ? existingMessage : incomingMessage;
+    chosen.set(id, mergeVersions(preferred, fallback));
+  }
+
+  return [...chosen.entries()].sort(compareMessages).map(([, message]) => message);
 }
 
 export function fillChronologicalTimestampsWithFlags(values: Array<number | undefined>): {
