@@ -30,7 +30,7 @@ export const ASK_USER_TOOL: ToolDef = {
     if (!question) return JSON.stringify({ ok: false, error: "question is required" });
     if (options.length < 2) return JSON.stringify({ ok: false, error: "at least two options are required" });
     const decision = await createDecision(ctx.env, ctx.identity.email.toLowerCase(), ctx.sessionId, question, options);
-    await ctx.notifyOwner({ kind: "job.needs_input", title: "My AX needs your input", body: question.slice(0, 160), href: decision.href }).catch(() => undefined);
+    if (!decision.reused) await ctx.notifyOwner({ kind: "job.needs_input", title: "My AX needs your input", body: question.slice(0, 160), href: decision.href }).catch(() => undefined);
     return JSON.stringify({ ok: true, awaiting: true, decisionId: decision.id, href: decision.href, options, note: "Stop and wait. The owner's choice will arrive as a new user message." });
   },
 };
