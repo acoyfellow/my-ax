@@ -2,7 +2,7 @@
 description: Research current agent/runtime work, then run My AX improvements through production proof
 argument-hint: "[focus]"
 ---
-Read `LOOP.md` completely and execute it${1:+ with focus: $@}.
+Read `loops/SPEED.md` completely and execute it${1:+ with focus: $@}.
 
 For a normal `/loop`, keep going until there are two meaningful and exciting product features to share, each integrated, deployed, and production-proved. If the focus explicitly asks for one bug/security/reliability fix, execute one proved iteration only.
 
@@ -10,7 +10,7 @@ This is a mandatory speed-first Terraloop. Create a recurring `loops_task` drive
 
 When spawning Terrarium candidates, first run a tiny runner canary/dry-run to prove the selected command/model does not inherit stale defaults. Pin an explicit currently working runner/agent/model and include a task contract requiring `task_status` plus `harvest_receipt`; do not assume My AX app models are Terrarium runner models. Check for unrelated active writers before fanout.
 
-Before selecting work, perform the `LOOP.md` research phase: current external OSS/product scan, Cloudflare/internal/dependency context via `cfi` when relevant, and local My AX evidence. If no candidate has a concrete user benefit and production measure, return no-change.
+Before selecting work, perform the `loops/SPEED.md` research phase: current external OSS/product scan, Cloudflare/internal/dependency context via `cfi` when relevant, and local My AX evidence. If no candidate has a concrete user benefit and production measure, return no-change.
 
 You are the parent controller in this Pi conversation:
 - verify the clean checkout and starting revision;
@@ -22,4 +22,4 @@ You are the parent controller in this Pi conversation:
 - continue bounded repair or rollback until proof passes; do not stop at a transient `needs_operator` once the operator provides direction;
 - after each proved feature, decide whether the run has two shareable product features; continue if not;
 - before completion, require a fresh independent read-only Terrarium stop-gate audit to return PASS; then write the final receipt and delete the exact recurring `loops_task` immediately;
-- finish with research digest, harvest/reconciliation summary, exact run IDs, serialization reasons, and plain-language release summaries required by `LOOP.md`.
+- finish with research digest, harvest/reconciliation summary, exact run IDs, serialization reasons, and plain-language release summaries required by `loops/SPEED.md`.
