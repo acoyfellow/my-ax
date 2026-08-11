@@ -1,7 +1,7 @@
 import { getSandbox, type DirectoryBackup, type Sandbox } from "@cloudflare/sandbox";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
-import { publishWorkspaceSnapshot } from "./workspace-snapshot";
+import { publishWorkspaceSnapshot, verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
 export const WORKSPACE_HOME = "/home/user";
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -31,11 +31,11 @@ export function invalidateUserWorkspace(identity: AccessIdentity): void {
   preparing.delete(key(identity));
 }
 
-async function latestSnapshot(env: Env, identity: AccessIdentity): Promise<DirectoryBackup | null> {
+async function latestSnapshot(env: Env, identity: AccessIdentity): Promise<WorkspaceSnapshotManifest | null> {
   const row = await env.DB.prepare(
     "SELECT backup_id, backup_dir FROM workspace_snapshots WHERE owner_email = ?",
   ).bind(key(identity)).first<{ backup_id: string; backup_dir: string }>();
-  return row ? { id: row.backup_id, dir: row.backup_dir } : null;
+  return row ? { backupId: row.backup_id, backupDir: row.backup_dir } : null;
 }
 
 export async function getUserWorkspace(env: Env, identity: AccessIdentity, options?: { restoreLatest?: boolean }) {
@@ -55,14 +55,15 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     const snapshot = options?.restoreLatest === false || ready?.exitCode === 0 ? null : await latestSnapshot(env, identity);
     if (snapshot) {
       try {
-        await sandbox.restoreBackup(snapshot);
+        const receipt = verifyWorkspaceRestore(snapshot, await sandbox.restoreBackup({ id: snapshot.backupId, dir: snapshot.backupDir }));
+        console.info("workspace.restore_verified", receipt);
       } catch (err) {
-        console.error("workspace.restore_failed", { email: identity.email, backupId: snapshot.id, err: String(err) });
+        console.error("workspace.restore_failed", { email: identity.email, backupId: snapshot.backupId, err: String(err) });
         // Never bless an empty/partial workspace as ready after restore failed.
         // Leave the marker absent so the next acquisition retries restoration,
         // and prevent a subsequent turn from snapshotting empty state over the
         // latest durable pointer.
-        throw new Error(`Workspace restore failed for backup ${snapshot.id}`);
+        throw new Error(`Workspace restore failed for backup ${snapshot.backupId}`);
       }
     }
     const initialized = await sandbox.exec(`mkdir -p ${WORKSPACE_HOME}/.config ${WORKSPACE_HOME}/.my-ax/conversations && touch ${READY_MARKER}`, {
