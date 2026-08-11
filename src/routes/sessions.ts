@@ -5,12 +5,35 @@ import { getConnector, type ConnectorId } from "../connectors";
 import { makeOAuthClientStore } from "../oauth-store";
 import { mintBridgeTicket } from "../bridge";
 import { clampEntriesLimit, pageConversationEntries, pageConversationEntriesDesc, parseEntriesCursor, parseEntriesBeforeCursor, type ConversationEntryRow } from "../session-entries";
+import { checkSequenceIntegrity, isSequenceNumber } from "../sequence-integrity";
 import { getSessionAgent } from "../agent-stub";
 import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
+
+type SequencedConversationEntryRow = ConversationEntryRow & {
+  sequence_number: number | null;
+};
+
+function reportConversationSequenceIntegrity(
+  sessionId: string,
+  rows: readonly SequencedConversationEntryRow[],
+  expectedStart?: number,
+): void {
+  const sequenceRows = rows.map((row) => ({ sequence: row.sequence_number }));
+  const validSequences = sequenceRows
+    .map((row) => row.sequence)
+    .filter(isSequenceNumber);
+  const integrity = checkSequenceIntegrity(sequenceRows, expectedStart ?? (validSequences.length ? Math.min(...validSequences) : 1));
+  if (!integrity.ok) {
+    console.error("conversation_sequence_integrity_failed", {
+      sessionId,
+      ...integrity.violation,
+    });
+  }
+}
 
 export function registerSessionRoutes(app: Hono<AppEnv>) {
   // ─── Session lifecycle ─────────────────────────────────────────────────────
@@ -265,8 +288,8 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       await forkStub.seedForkHistory(identity, history);
       const cutoff = await c.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND json_extract(meta_json, '$.uiMessageId') = ? ORDER BY id DESC LIMIT 1").bind(sourceId, identity.email, atMessageId).first<{ id: number }>();
       if (cutoff) {
-        await c.env.DB.prepare(`INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json)
-          SELECT ?, owner_email, ts, role, tool, is_error, content, meta_json FROM conversation_entries
+        await c.env.DB.prepare(`INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
+          SELECT ?, owner_email, ts, role, tool, is_error, content, meta_json, ROW_NUMBER() OVER (ORDER BY id) FROM conversation_entries
           WHERE session_id = ? AND owner_email = ? AND id <= ? ORDER BY id ASC`).bind(forkId, sourceId, identity.email, cutoff.id).run();
       }
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { sessionId: forkId, sourceSessionId: sourceId, atMessageId, name: forkName, messageCount: history.length }, next_actions: [] }, 201);
@@ -336,9 +359,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
         return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CURSOR", message: "before must be a positive conversation entry id" }, next_actions: [] }, 400);
       }
       const descResult = await c.env.DB.prepare(
-        "SELECT id, ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id < ? ORDER BY id DESC LIMIT ?",
-      ).bind(id, email, before, limit + 1).all<ConversationEntryRow>();
-      const page = pageConversationEntriesDesc(descResult.results ?? [], limit);
+        "SELECT id, ts, role, tool, is_error, content, meta_json, sequence_number FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id < ? ORDER BY id DESC LIMIT ?",
+      ).bind(id, email, before, limit + 1).all<SequencedConversationEntryRow>();
+      const rows = descResult.results ?? [];
+      reportConversationSequenceIntegrity(id, rows);
+      const page = pageConversationEntriesDesc(rows, limit);
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { sessionId: id, ...page }, next_actions: [] });
     }
 
@@ -347,9 +372,10 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CURSOR", message: "after must be a non-negative conversation entry id" }, next_actions: [] }, 400);
     }
     const result = await c.env.DB.prepare(
-      "SELECT id, ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id > ? ORDER BY id ASC LIMIT ?",
-    ).bind(id, email, after, limit + 1).all<ConversationEntryRow>();
+      "SELECT id, ts, role, tool, is_error, content, meta_json, sequence_number FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id > ? ORDER BY id ASC LIMIT ?",
+    ).bind(id, email, after, limit + 1).all<SequencedConversationEntryRow>();
     const rows = result.results ?? [];
+    reportConversationSequenceIntegrity(id, rows, after === 0 ? 1 : undefined);
     const page = pageConversationEntries(rows, limit, after);
     return c.json<ApiResponse>({
       ok: true,
