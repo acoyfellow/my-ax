@@ -1,0 +1,19 @@
+package.json
+  s_58fd295f2ea96b::t_114676c5ce1d02 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f7c88cf3d57187fd07c42f99669cf5e1fb1cb977",
+  "prompts": {},
+  "sessions": {
+    "s_58fd295f2ea96b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e8e0e-e5c2-78a0-81ed-9f91469bc981",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
