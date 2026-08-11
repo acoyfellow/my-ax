@@ -13,6 +13,7 @@
 
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
+import { checkSequenceIntegrity, isSequenceNumber, type SequenceIntegrityRow } from "./sequence-integrity";
 import { getUserWorkspace } from "./workspace";
 
 const LOG_DIR = "/home/user/.my-ax/conversations";
@@ -52,8 +53,11 @@ export async function appendConversationLog(
     const toolCallId = typeof entry.meta?.toolCallId === "string" ? entry.meta.toolCallId : null;
     if (uiMessageId) {
       const write = await env.DB.prepare(
-        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?
+        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((
+           SELECT MAX(sequence_number) + 1 FROM conversation_entries
+           WHERE session_id = ? AND owner_email = ?
+         ), 1)
          WHERE NOT EXISTS (
            SELECT 1 FROM conversation_entries
            WHERE session_id = ? AND owner_email = ? AND role = ?
@@ -61,13 +65,17 @@ export async function appendConversationLog(
          )`,
       ).bind(
         sessionId, identity.email.toLowerCase(), entry.ts, entry.role, entry.tool ?? null, entry.isError ? 1 : 0, entry.content ?? null, metaJson,
+        sessionId, identity.email.toLowerCase(),
         sessionId, identity.email.toLowerCase(), entry.role, uiMessageId,
       ).run();
       inserted = (write.meta?.changes ?? 0) > 0;
     } else if (toolCallId) {
       const write = await env.DB.prepare(
-        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?
+        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((
+           SELECT MAX(sequence_number) + 1 FROM conversation_entries
+           WHERE session_id = ? AND owner_email = ?
+         ), 1)
          WHERE NOT EXISTS (
            SELECT 1 FROM conversation_entries
            WHERE session_id = ? AND owner_email = ? AND role = 'tool'
@@ -75,13 +83,17 @@ export async function appendConversationLog(
          )`,
       ).bind(
         sessionId, identity.email.toLowerCase(), entry.ts, entry.role, entry.tool ?? null, entry.isError ? 1 : 0, entry.content ?? null, metaJson,
+        sessionId, identity.email.toLowerCase(),
         sessionId, identity.email.toLowerCase(), toolCallId,
       ).run();
       inserted = (write.meta?.changes ?? 0) > 0;
     } else {
       const write = await env.DB.prepare(
-        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((
+           SELECT MAX(sequence_number) + 1 FROM conversation_entries
+           WHERE session_id = ? AND owner_email = ?
+         ), 1)`,
       ).bind(
         sessionId,
         identity.email.toLowerCase(),
@@ -91,6 +103,8 @@ export async function appendConversationLog(
         entry.isError ? 1 : 0,
         entry.content ?? null,
         metaJson,
+        sessionId,
+        identity.email.toLowerCase(),
       ).run();
       inserted = (write.meta?.changes ?? 0) > 0;
     }
@@ -103,6 +117,8 @@ export async function appendConversationLog(
   }
 
   if (!inserted) return;
+
+  await verifyRecentConversationSequence(env, identity, sessionId);
 
   try {
     const { sandbox } = await getUserWorkspace(env, identity);
@@ -124,6 +140,33 @@ export async function appendConversationLog(
     console.error("conversation_log_append_failed", {
       sessionId,
       role: entry.role,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function verifyRecentConversationSequence(
+  env: Env,
+  identity: AccessIdentity,
+  sessionId: string,
+): Promise<void> {
+  try {
+    const result = await env.DB.prepare(
+      "SELECT sequence_number AS sequence FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY sequence_number DESC LIMIT 2",
+    ).bind(sessionId, identity.email.toLowerCase()).all<SequenceIntegrityRow>();
+    const rows = result.results ?? [];
+    const validSequences = rows.map((row) => row.sequence).filter(isSequenceNumber);
+    const expectedStart = rows.length === 1 ? 1 : validSequences.length ? Math.min(...validSequences) : 1;
+    const integrity = checkSequenceIntegrity(rows, expectedStart);
+    if (!integrity.ok) {
+      console.error("conversation_sequence_integrity_failed", {
+        sessionId,
+        ...integrity.violation,
+      });
+    }
+  } catch (err) {
+    console.error("conversation_sequence_integrity_check_failed", {
+      sessionId,
       err: err instanceof Error ? err.message : String(err),
     });
   }
