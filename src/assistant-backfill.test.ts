@@ -58,3 +58,7 @@ test("invisible-only text (U+2063) is not visible content", () => {
 test("an invisible-only id is never backfilled (cannot be de-duplicated)", () => {
   assert.equal(shouldBackfillAssistant(mk({ id: "\u200B", text: "reply" })), false);
 });
+
+test("a compaction summary is never backfilled into the owner transcript", () => {
+  assert.equal(shouldBackfillAssistant(mk({ id: "compaction_123", text: "The conversation history before this point was compacted into the following summary." })), false);
+});

@@ -7,6 +7,8 @@
 // assistant messages carry content worth backfilling; the agent then inserts
 // any that are missing (uiMessageId dedup makes the insert idempotent).
 
+import { isCompactionSummaryId } from "./compaction-summary";
+
 export type AssistantLike = {
   id: string;
   role: string;
@@ -29,7 +31,7 @@ export function hasVisibleContent(s: string): boolean {
 /** An assistant message is worth persisting when it carries visible text or
  *  reasoning. Empty placeholders (streaming stubs, tool-only steps) are skipped. */
 export function shouldBackfillAssistant(message: AssistantLike): boolean {
-  if (message.role !== "assistant") return false;
+  if (message.role !== "assistant" || isCompactionSummaryId(message.id)) return false;
   // The id is the idempotency key (uiMessageId) for the D1 insert. A blank id
   // — including one made only of whitespace or invisible format characters —
   // cannot be de-duplicated, so never back-fill one.
