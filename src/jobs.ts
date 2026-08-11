@@ -40,7 +40,7 @@ export const MAX_PROMPT_CHARS = 4000;
 export const MAX_NAME_CHARS = 200;
 export const MAX_ACTIVE_JOBS_PER_OWNER = 10;
 
-export type JobStatus = "active" | "paused";
+export type JobStatus = "active" | "paused" | "exhausted";
 export type RecurringJobThreadMode = "same_session" | "new_session_per_run" | "specific_session";
 export const RECURRING_JOB_THREAD_MODES: readonly RecurringJobThreadMode[] = ["same_session", "new_session_per_run", "specific_session"];
 
@@ -52,6 +52,8 @@ export interface JobRow {
   name: string;
   prompt: string;
   cadence_secs: number;
+  max_runs: number | null;
+  run_count: number;
   status: JobStatus;
   next_run_at: string;
   last_run_at: string | null;
@@ -66,6 +68,7 @@ export interface JobInput {
   name: string;
   prompt: string;
   cadenceSecs: number;
+  maxRuns: number | null;
   threadMode: RecurringJobThreadMode;
 }
 
@@ -74,6 +77,25 @@ export type ValidationError = { tag: "InvalidInput"; field: string; message: str
 /** Pure: compute next UTC ISO run boundary from a base instant + cadence. */
 export function computeNextRun(base: Date, cadenceSecs: number): string {
   return new Date(base.getTime() + cadenceSecs * 1000).toISOString();
+}
+
+export function remainingRecurringJobRuns(row: Pick<JobRow, "max_runs" | "run_count">): number | null {
+  return row.max_runs === null ? null : Math.max(0, row.max_runs - row.run_count);
+}
+
+export async function claimRecurringJobRun(env: Env, jobId: string, ownerEmail: string): Promise<Pick<JobRow, "max_runs" | "run_count" | "status"> | null> {
+  return env.DB.prepare(`UPDATE jobs
+    SET run_count = run_count + 1,
+        status = CASE WHEN max_runs IS NOT NULL AND run_count + 1 >= max_runs THEN 'exhausted' ELSE 'active' END,
+        schedule_id = CASE WHEN max_runs IS NOT NULL AND run_count + 1 >= max_runs THEN NULL ELSE schedule_id END,
+        updated_at = datetime('now')
+    WHERE id = ?
+      AND owner_email = ?
+      AND status = 'active'
+      AND (max_runs IS NULL OR run_count < max_runs)
+    RETURNING max_runs, run_count, status`)
+    .bind(jobId, ownerEmail.toLowerCase())
+    .first<Pick<JobRow, "max_runs" | "run_count" | "status">>();
 }
 
 /** Validate + normalize JobInput. Returns a tagged error if invalid. */
@@ -94,13 +116,16 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
   if (cadenceSecs < MIN_CADENCE_SECS || cadenceSecs > MAX_CADENCE_SECS) {
     return { tag: "InvalidInput", field: "cadenceSecs", message: `must be in [${MIN_CADENCE_SECS}, ${MAX_CADENCE_SECS}]` };
   }
+  const rawMaxRuns = input.maxRuns;
+  const maxRuns = rawMaxRuns === undefined || rawMaxRuns === null ? null : Number(rawMaxRuns);
+  if (maxRuns !== null && (!Number.isInteger(maxRuns) || maxRuns < 1)) return { tag: "InvalidInput", field: "maxRuns", message: "must be a positive integer or null" };
   const rawThreadMode = typeof (input as Partial<JobInput>).threadMode === "string" ? (input as Partial<JobInput>).threadMode : "new_session_per_run";
   const threadMode = RECURRING_JOB_THREAD_MODES.includes(rawThreadMode as RecurringJobThreadMode) ? rawThreadMode as RecurringJobThreadMode : null;
   if (!threadMode) return { tag: "InvalidInput", field: "threadMode", message: "must be same_session, new_session_per_run, or specific_session" };
   // "Specific thread" requires the owner to name the target thread id (enforced
   // above, mode-aware). Existence + ownership are enforced downstream
   // (JobService create/update).
-  return { sessionId, name: name.slice(0, MAX_NAME_CHARS), prompt: prompt.slice(0, MAX_PROMPT_CHARS), cadenceSecs, threadMode };
+  return { sessionId, name: name.slice(0, MAX_NAME_CHARS), prompt: prompt.slice(0, MAX_PROMPT_CHARS), cadenceSecs, maxRuns, threadMode };
 }
 
 /**
@@ -115,24 +140,44 @@ export function scheduledJobRunPrompt(prompt: string): string {
   return `${SCHEDULED_JOB_RUN_PREFIX}\n\n${prompt}`;
 }
 
-export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): Promise<{ next_run_at: string; ok: boolean; error?: string; target_session_id: string; thread_mode: RecurringJobThreadMode }> {
+export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): Promise<{ next_run_at: string | null; ok: boolean; error?: string; target_session_id: string; thread_mode: RecurringJobThreadMode; max_runs: number | null; run_count: number; status: JobStatus; remaining_runs: number | null }> {
+  const claim = await claimRecurringJobRun(env, row.id, row.owner_email);
+  if (!claim) {
+    return {
+      next_run_at: null,
+      ok: false,
+      error: "job is not active or has exhausted its run limit",
+      target_session_id: row.session_id,
+      thread_mode: row.thread_mode,
+      max_runs: row.max_runs,
+      run_count: row.run_count,
+      status: row.status,
+      remaining_runs: remainingRecurringJobRuns(row),
+    };
+  }
+  if (claim.status === "exhausted") await cancelJobSchedule(env, row).catch(() => undefined);
   let ok = true;
   let error: string | undefined;
   const target = await resolveRecurringJobTargetSession(env, row, now);
   try {
     const stub = await sessionAgent(env, row.owner_email, target.targetSessionId);
-    // Scheduled work has no browser connection to seed Access identity.
     await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
-    await stub.injectUserMessage({ content: scheduledJobRunPrompt(row.prompt), clientMsgId: `job:${row.id}:${now.getTime()}` });
+    await stub.injectUserMessage({ content: scheduledJobRunPrompt(row.prompt), clientMsgId: `job:${row.id}:${now.getTime()}:${claim.run_count}` });
   } catch (e) {
     ok = false;
     error = e instanceof Error ? e.message : String(e);
   }
-  const nextRunAt = computeNextRun(now, row.cadence_secs);
+  const nextRunAt = claim.status === "active" ? computeNextRun(now, row.cadence_secs) : null;
   if (ok) {
-    await env.DB.prepare(
-      "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-    ).bind(nextRunAt, now.toISOString(), row.id, row.owner_email.toLowerCase()).run().catch(() => undefined);
+    if (nextRunAt) {
+      await env.DB.prepare(
+        "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
+      ).bind(nextRunAt, now.toISOString(), row.id, row.owner_email.toLowerCase()).run().catch(() => undefined);
+    } else {
+      await env.DB.prepare(
+        "UPDATE jobs SET last_run_at = ?, last_error = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
+      ).bind(now.toISOString(), row.id, row.owner_email.toLowerCase()).run().catch(() => undefined);
+    }
   } else {
     await completeRecurringJobRun(env, {
       jobId: row.id,
@@ -143,10 +188,22 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
       ranAt: now,
       nextRunAt,
       jobName: row.name,
+      runCount: claim.run_count,
+      maxRuns: claim.max_runs,
       error,
     });
   }
-  return { next_run_at: nextRunAt, ok, error, target_session_id: target.targetSessionId, thread_mode: target.threadMode };
+  return {
+    next_run_at: nextRunAt,
+    ok,
+    error,
+    target_session_id: target.targetSessionId,
+    thread_mode: target.threadMode,
+    max_runs: claim.max_runs,
+    run_count: claim.run_count,
+    status: claim.status,
+    remaining_runs: remainingRecurringJobRuns(claim),
+  };
 }
 
 /** Register a native agents scheduleEvery alarm on the target session DO. */

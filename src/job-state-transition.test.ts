@@ -5,7 +5,7 @@ import type { JobRow } from "./jobs";
 
 const pausedRow = (): JobRow => ({
   id: "job", owner_email: "owner@example.com", session_id: "session", thread_mode: "same_session", name: "job", prompt: "go",
-  cadence_secs: 60, status: "paused", next_run_at: "old", last_run_at: null, last_error: null,
+  cadence_secs: 60, max_runs: null, run_count: 0, status: "paused", next_run_at: "old", last_run_at: null, last_error: null,
   schedule_id: null, created_at: "now", updated_at: "now",
 });
 
