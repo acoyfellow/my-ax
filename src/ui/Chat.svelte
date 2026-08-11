@@ -17,6 +17,7 @@
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { d1EntryToTranscriptMessage } from "./d1-transcript";
   import { fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, mergeTranscript } from "./transcript-merge";
+  import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
   import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
@@ -1686,6 +1687,7 @@
     if (activeRequestId) return;
     const wasResuming = resumingExistingSession;
     thinkMessages = historyMessages || [];
+    const ownerHistory = ownerVisibleTranscript(thinkMessages);
     const existingTimestamps = new Map(messages.map((message) => [message.id, message.timestamp]));
     // Do NOT clear the transcript here. The D1 eager restore already rendered the
     // durable, complete history; Think's replay is authoritative for content but can
@@ -1697,7 +1699,7 @@
     const priorMessages = messages;
     const thinkViews: MessageView[] = [];
     const { values: thinkTimestamps, interpolated: thinkTimestampInterpolated } = fillChronologicalTimestampsWithFlags(
-      thinkMessages.map((message: any) => {
+      ownerHistory.map((message: any) => {
         const rawId = typeof message.id === "string" && message.id ? message.id : "";
         return toMillis(message.createdAt) ?? existingTimestamps.get(rawId);
       }),
@@ -1715,7 +1717,7 @@
     }
     resumingExistingSession = false;
     const seenViewIds = new Map<string, number>();
-    for (const [messageIndex, message] of thinkMessages.entries()) {
+    for (const [messageIndex, message] of ownerHistory.entries()) {
       const text = (message.parts || [])
         .filter((p: any) => p.type === "text")
         .map((p: any) => p.text || "")

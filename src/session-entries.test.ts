@@ -30,6 +30,13 @@ test("desc page caps at limit and flags older history via the extra row", () => 
   assert.equal(page.olderCursor, "48"); // page further back with before=48
 });
 
+test("compaction summary rows are excluded from owner-visible entries", () => {
+  const summary = { ...row(49, "assistant"), content: "The conversation history before this point was compacted into the following summary.", meta_json: JSON.stringify({ uiMessageId: "compaction_123" }) };
+  const page = pageConversationEntriesDesc([row(50, "assistant"), summary, row(48)], 10);
+  assert.deepEqual(page.entries.map((entry) => entry.id), ["48", "50"]);
+  assert.equal(page.olderCursor, "48");
+});
+
 test("empty session yields no entries, no older cursor", () => {
   const page = pageConversationEntriesDesc([], 50);
   assert.deepEqual(page.entries, []);

@@ -1,3 +1,5 @@
+import { isCompactionSummaryId } from "./compaction-summary";
+
 export type ConversationEntryRow = {
   id: number;
   ts: string;
@@ -20,16 +22,30 @@ export function parseEntriesCursor(raw: string | undefined): number | null {
   return Number.isSafeInteger(cursor) ? cursor : null;
 }
 
+function parseMeta(metaJson: string | null): unknown {
+  try { return metaJson ? JSON.parse(metaJson) : null; } catch { return metaJson; }
+}
+
+function messageIdFromMeta(meta: unknown): unknown {
+  return typeof meta === "object" && meta !== null && "uiMessageId" in meta
+    ? (meta as { uiMessageId?: unknown }).uiMessageId
+    : undefined;
+}
+
+function isOwnerVisible(row: ConversationEntryRow): boolean {
+  return !isCompactionSummaryId(messageIdFromMeta(parseMeta(row.meta_json)));
+}
+
 function mapRow(row: ConversationEntryRow) {
-  let meta: unknown = null;
-  try { meta = row.meta_json ? JSON.parse(row.meta_json) : null; } catch { meta = row.meta_json; }
+  const meta = parseMeta(row.meta_json);
   return { id: String(row.id), role: row.role, content: row.content ?? "", createdAt: row.ts, tool: row.tool, isError: row.is_error === 1, meta };
 }
 
 export function pageConversationEntries(rows: ConversationEntryRow[], limit: number, after: number) {
   const page = rows.slice(0, limit);
-  const entries = page.map(mapRow);
-  return { entries, nextCursor: entries.at(-1)?.id ?? String(after), hasMore: rows.length > limit };
+  const entries = page.filter(isOwnerVisible).map(mapRow);
+  const lastPageEntry = page.at(-1);
+  return { entries, nextCursor: lastPageEntry ? String(lastPageEntry.id) : String(after), hasMore: rows.length > limit };
 }
 
 export function parseEntriesBeforeCursor(raw: string | undefined): number | null {
@@ -53,7 +69,8 @@ export function pageConversationEntriesDesc(rows: ConversationEntryRow[], limit:
   const hasOlder = rows.length > limit;
   const page = rows.slice(0, limit);           // newest-first, capped
   const chronological = [...page].reverse();   // oldest-first for render
-  const entries = chronological.map(mapRow);
-  const olderCursor = entries.length ? entries[0].id : null; // smallest id shown
+  const entries = chronological.filter(isOwnerVisible).map(mapRow);
+  const oldestPageEntry = page.at(-1);
+  const olderCursor = oldestPageEntry ? String(oldestPageEntry.id) : null;
   return { entries, olderCursor, hasOlder };
 }
