@@ -1,0 +1,14 @@
+{
+  "name": "my-ax-mcp-native-proxy",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "./build.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^6.0.3"
+  }
+}
