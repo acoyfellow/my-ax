@@ -24,6 +24,7 @@
 export const CODEMODE_FUTURE_MIGRATION_TAG = "v12-codemode-runtime";
 
 import type { CodemodeRuntimeHandle, CodemodeConnector, Executor } from "@cloudflare/codemode";
+import { coerceToolArguments } from "./tool-arguments";
 
 export const CODE_MODE_EXECUTION_TIMEOUT_MS = 60_000;
 
@@ -171,7 +172,7 @@ export function createCodemodeWorkRuntime(
       name: recipe.name,
       description: recipe.description,
       inputSchema: recipe.inputSchema,
-      execute: async (input: unknown) => snippetHook.run({ name: recipe.name, input: input as Record<string, unknown> | undefined }),
+      execute: async (input: unknown) => snippetHook.run({ name: recipe.name, input: coerceToolArguments(input) }),
     }));
   }
 
@@ -208,17 +209,18 @@ export function createCodemodeWorkRuntime(
       return { connector: "snippet", tool: tool.name, description: tool.description, inputSchema: tool.inputSchema };
     },
     async run(name: string, input?: unknown) {
+      const argumentsObject = coerceToolArguments(input);
       const qualified = parseQualified(name);
       if (qualified) {
         const fn = dispatchers.get(fullToolName(qualified.connector, qualified.tool));
-        if (fn) return fn(input);
+        if (fn) return fn(argumentsObject);
         if (qualified.connector === "snippet" && snippetHook) {
-          return snippetHook.run({ name: qualified.tool, input: (input ?? {}) as Record<string, unknown> });
+          return snippetHook.run({ name: qualified.tool, input: argumentsObject });
         }
         throw new Error(`codemode.run: unknown tool ${name}`);
       }
       if (!snippetHook) throw new Error(`codemode.run: unknown tool ${name}`);
-      return snippetHook.run({ name, input: (input ?? {}) as Record<string, unknown> });
+      return snippetHook.run({ name, input: argumentsObject });
     },
   };
 
@@ -232,8 +234,8 @@ export function createCodemodeWorkRuntime(
   bridgeFns["codemode__search"] = async (input) => namespace.search(typeof input === "string" ? input : ((input as { query?: string } | undefined)?.query));
   bridgeFns["codemode__describe"] = async (input) => namespace.describe(typeof input === "string" ? input : String((input as { name?: string } | undefined)?.name ?? ""));
   bridgeFns["codemode__run"] = async (input) => {
-    const body = (input ?? {}) as { name?: string; input?: unknown };
-    return namespace.run(String(body.name ?? ""), body.input);
+    const body = coerceToolArguments(input);
+    return namespace.run(typeof body.name === "string" ? body.name : "", body.input);
   };
 
   const prelude = [
