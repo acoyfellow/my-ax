@@ -11,6 +11,7 @@ import type { RecurringJobThreadMode } from "./jobs";
 import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
+import { createCmuxObserveTool, type CmuxReader } from "./cmux-observer";
 
 export const ASK_USER_TOOL: ToolDef = {
   name: "ask_user",
@@ -36,6 +37,26 @@ export const ASK_USER_TOOL: ToolDef = {
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
+
+function createCmuxMachineReader(context: ToolContext): CmuxReader {
+  const provider = createMachineWorkProvider(context);
+  return async (request) => {
+    const machine = await provider;
+    if (!machine.connected) throw new Error("My Machine is not connected");
+    if (request.kind === "status") {
+      const status = machine.fns.cmux_workspace_list;
+      if (!status) throw new Error("My Machine does not publish the read-only cmux_workspace_list tool");
+      return status({});
+    }
+    const tail = machine.fns.cmux_pi_tail;
+    if (!tail) throw new Error("My Machine does not publish the read-only cmux_pi_tail tool");
+    return tail({
+      workspaceId: request.workspaceId,
+      surfaceId: request.surfaceId,
+      lines: Math.max(1, Math.ceil(request.maxBytes / 80)),
+    });
+  };
 }
 
 async function readMachineDiffFile(ctx: ToolContext, path: string): Promise<string> {
@@ -87,9 +108,12 @@ export const SHOW_DIFF_TOOL: ToolDef = {
   })),
 };
 
+export const CMUX_OBSERVE_TOOL = createCmuxObserveTool({ readerForContext: createCmuxMachineReader });
+
 export const TOOLS: ToolDef[] = [
   ASK_USER_TOOL,
   SHOW_DIFF_TOOL,
+  CMUX_OBSERVE_TOOL,
   PUBLIC_WEB_SEARCH_TOOL,
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
