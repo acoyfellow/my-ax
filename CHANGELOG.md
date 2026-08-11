@@ -4,6 +4,28 @@ Progress on My Agent Experience is recorded here in date order, newest first. Ea
 
 The version stays `0.0.1`. It does not increment. The number is a deliberate stance, not a status. The real identity of each change is its commit hash. Each dated entry names the deployed revision.
 
+## 2026-08-11
+
+Deployed to the employee target at revision `4debded` through the private deployment wrapper (`deploy-employee.sh`); the personal target is temporarily not deployed. Hostnames are deployment-specific and live in the private wrappers, not here. This entry lands a backlog of bounded, independently committed changes, each with its own tests.
+
+### Added
+
+- Added **bounded recurring jobs**: a recurring prompt job can now run once, a fixed number of times, or unlimited. A non-destructive migration adds persisted `max_runs`/`run_count`; each run is claimed atomically under a `run_count < max_runs` guard, the job auto-exhausts and cancels its own schedule on the final run, and receipts and the UI report consumed and remaining runs truthfully. `manage_jobs` accepts `maxRuns` (1 for once, null for unlimited).
+- Added a **native public `web_search` tool** built on the Cloudflare Web Search binding. It is discovery-only (titles, absolute citation URLs, and snippets; it never opens result pages, executes page content, submits forms, or changes state), bounded by result and output-size caps with a `truncated` flag, drops results without a valid http(s) URL, and never leaks upstream credentials. It is separated from internal capability search and degrades to `web_search_unavailable` until the platform binding is enabled on the account.
+- Added a **read-only `cmux_observe` machine observer**: it observes only (terminal tail plus already-approved JSON status) and never steers, restricted to allow-listed roots with tail-byte and surface caps (`truncated` when capped), secret redaction (`redacted` when masked), and a sha256 hash plus `observedAt` timestamp per observation for verifiable attribution.
+- Added a **conversation entry sequence integrity check**: a non-destructive migration adds an entry sequence and `checkSequenceIntegrity` validates it on the conversation log and session routes.
+- Added **workspace restore verification** (`verifyWorkspaceRestore`), which validates a restore against its backup id and directory and emits `workspace.restore_verified`.
+- Added a **compaction summary** guard that prevents prior-context content from leaking across a transcript compaction, wired into session entries, assistant backfill, and the Chat transcript render.
+
+### Fixed
+
+- Fixed tool-argument handling to **coerce arguments consistently** across every execution surface (canonical tools, work tools, MCP Code Mode, and the Code Mode runtime), so a tool sees the same normalized arguments regardless of caller.
+- Fixed transcript rendering to **dedup by stable identity** (`sourceId` then `id`, last-write-wins) with a deterministic order, removing duplicate and out-of-order messages.
+
+### Changed
+
+- Renamed `LOOP.md` to `loops/SPEED.md` to make room for additional named loop contracts; updated the docs index and the `/loop` prompt to match.
+
 ## 2026-07-23
 
 Deployed to both supported targets at revision `6c8f7f0` through the private deployment wrappers (`deploy-personal.sh` and `deploy-employee.sh`). Hostnames are deployment-specific and live in the private wrappers, not here.
