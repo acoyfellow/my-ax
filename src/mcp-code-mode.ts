@@ -9,6 +9,7 @@ import { DynamicWorkerExecutor, sanitizeToolName } from "@cloudflare/codemode";
 import { createCodeTool } from "@cloudflare/codemode/ai";
 import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import { CODE_MODE_EXECUTION_TIMEOUT_MS } from "./code-mode-runtime";
+import { coerceToolArguments } from "./tool-arguments";
 import type { Env } from "./types";
 import {
   parseMcpCodeModePolicy,
@@ -68,7 +69,7 @@ export function createOfficialMcpCodeModeTool(input: {
           const result = await input.mcp.callTool({
             serverId: catalogTool.serverId,
             name: catalogTool.name,
-            arguments: args ?? {},
+            arguments: coerceToolArguments(args),
           });
           if (result.isError) {
             const text = result.content?.find((item) => item.type === "text")?.text;

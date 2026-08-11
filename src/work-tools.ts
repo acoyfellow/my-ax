@@ -10,6 +10,7 @@ import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
 import { reusableToolApprovalMode as resolveReusableToolApprovalMode } from "./reusable-tool-preferences";
+import { coerceToolArguments } from "./tool-arguments";
 
 const WORKSPACE_METHODS = [
   { name: "read", description: "Read a persistent file in the My AX Workspace." },
@@ -104,8 +105,15 @@ function instrument(
   where: WorkCall["where"],
   fns: Record<string, (input: any) => Promise<unknown>>,
   calls: WorkCodeCallCollector<WorkCall["where"]>,
+  normalizeArguments = true,
 ) {
-  return instrumentWorkCodeFunctions(where, fns, calls, (method) => ({
+  const functions = normalizeArguments
+    ? Object.fromEntries(Object.entries(fns).map(([method, invoke]) => [
+        method,
+        (input: unknown) => invoke(coerceToolArguments(input)),
+      ]))
+    : fns;
+  return instrumentWorkCodeFunctions(where, functions, calls, (method) => ({
     sandboxMutation: isSandboxMutationWorkCodeCall({ where, method }),
     codemodeInvoked: where === "codemode",
   }));
@@ -162,7 +170,7 @@ function buildSnippetHook(ctx: ToolContext): CodemodeSnippetHook | undefined {
     run: (input) => ctx.runSavedRecipe!({
       id: typeof input?.id === "string" ? input.id : undefined,
       name: typeof input?.name === "string" ? input.name : undefined,
-      input: typeof input?.input === "object" && input.input ? input.input as Record<string, unknown> | undefined : {},
+      input: input.input ?? {},
       callerCapabilities: ctx.allowedWorkCapabilities,
       workCodeExecutionState: ctx.workCodeExecutionState,
     }),
@@ -229,7 +237,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     search: codemodeRuntime.bridgeFns["codemode__search"],
     describe: codemodeRuntime.bridgeFns["codemode__describe"],
     run: codemodeRuntime.bridgeFns["codemode__run"],
-  }, calls);
+  }, calls, false);
 
   const bridgeFns = {
     ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),

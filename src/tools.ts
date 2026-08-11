@@ -1,4 +1,5 @@
 import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
+import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
@@ -234,7 +235,7 @@ export function createThinkTools(context: () => ToolContext): ToolSet {
       description: definition.description,
       inputSchema: jsonSchema<Record<string, unknown>>(definition.parameters as Parameters<typeof jsonSchema>[0]),
       execute: async (input: Record<string, unknown>) =>
-        limitModelToolOutput(await definition.execute(input ?? {}, context())),
+        limitModelToolOutput(await definition.execute(coerceToolArguments(input), context())),
     });
   }
   return tools as ToolSet;
