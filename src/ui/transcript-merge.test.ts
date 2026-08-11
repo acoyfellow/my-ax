@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import nodeTest from "node:test";
 import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
+
+const test = (import.meta as ImportMeta & { vitest?: { test: typeof nodeTest } }).vitest?.test ?? nodeTest;
 
 const msg = (
   id: string,
@@ -20,6 +22,41 @@ test("merge of identically-keyed D1 + Think replay dedups (no duplication)", () 
   const merged = mergeTranscript(d1, think);
   assert.equal(merged.length, 3);
   assert.equal(new Set(merged.map((m) => m.id)).size, 3);
+});
+
+test("dedupes persisted and replayed copies by stable message id with last replay write winning", () => {
+  const persisted = [msg("ui-1", "assistant", 1, { content: "persisted" })];
+  const replay = [
+    msg("ui-1-replay-0", "assistant", 1, { sourceId: "ui-1", content: "partial" }),
+    msg("ui-1-replay-1", "assistant", 1, { sourceId: "ui-1", content: "complete" }),
+  ];
+  const merged = mergeTranscript(persisted, replay);
+  assert.deepEqual(merged.map((message) => message.id), ["ui-1-replay-1"]);
+  assert.equal(merged[0].content, "complete");
+});
+
+test("orders shuffled input by sequence or timestamp with stable id ties", () => {
+  const existing = [
+    msg("charlie", "assistant", 30),
+    msg("bravo", "user", 20, { sequence: 1 }),
+  ];
+  const incoming = [
+    msg("delta", "assistant", 10, { sequence: 2 }),
+    msg("alpha", "user", 10, { sequence: 1 }),
+  ];
+  const expected = ["alpha", "bravo", "delta", "charlie"];
+  assert.deepEqual(mergeTranscript(existing, incoming).map((message) => message.id), expected);
+  assert.deepEqual(mergeTranscript([...existing].reverse(), [...incoming].reverse()).map((message) => message.id), expected);
+});
+
+test("merge result is idempotent when replayed", () => {
+  const persisted = [msg("ui-1", "user", 1), msg("ui-2", "assistant", 2, { content: "persisted" })];
+  const replay = [
+    msg("ui-1", "user", 1),
+    msg("ui-2-replay", "assistant", undefined, { sourceId: "ui-2", content: "authoritative" }),
+  ];
+  const merged = mergeTranscript(persisted, replay);
+  assert.deepEqual(mergeTranscript(merged, replay), merged);
 });
 
 test("merge is idempotent under repeated Think replays", () => {
