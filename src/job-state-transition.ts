@@ -9,6 +9,7 @@ export interface JobStateTransitionDeps {
 
 /** Performs an idempotent pause/resume transition around the native schedule. */
 export async function transitionJobPaused(row: JobRow, paused: boolean, deps: JobStateTransitionDeps): Promise<JobRow> {
+  if (row.status === "exhausted") return row;
   if (paused && row.status === "paused") return row;
   if (!paused && row.status === "active") return row;
 

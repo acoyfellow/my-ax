@@ -13,6 +13,8 @@ const row: JobRow = {
   name: "Morning check",
   prompt: "Summarize what changed overnight.",
   cadence_secs: 3600,
+  max_runs: null,
+  run_count: 0,
   status: "active",
   next_run_at: "2026-01-01T01:00:00.000Z",
   last_run_at: null,
@@ -33,6 +35,7 @@ test("recurring job input requires a target conversation and defaults new jobs t
     name: "job",
     prompt: "run",
     cadenceSecs: 60,
+    maxRuns: null,
     threadMode: "new_session_per_run",
   });
 });
@@ -43,6 +46,7 @@ test("recurring job input accepts explicit same-session standing loops", () => {
     name: "job",
     prompt: "run",
     cadenceSecs: 60,
+    maxRuns: null,
     threadMode: "same_session",
   });
 });
@@ -68,7 +72,7 @@ test("specific_session is a valid third destination and requires a thread id (no
   });
   // Valid specific target normalizes and preserves the mode.
   assert.deepEqual(validateJobInput({ sessionId: " session-x ", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session" }), {
-    sessionId: "session-x", name: "job", prompt: "run", cadenceSecs: 60, threadMode: "specific_session",
+    sessionId: "session-x", name: "job", prompt: "run", cadenceSecs: 60, maxRuns: null, threadMode: "specific_session",
   });
 });
 

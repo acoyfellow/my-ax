@@ -4,9 +4,18 @@ import { recurringJobReceipt } from "./recurring-job-receipt";
 import { isTransientRateLimit } from "./upstream-rate-limit";
 import type { RecurringJobThreadMode } from "./jobs";
 
+export interface RecurringJobClientMessage {
+  jobId: string;
+  runCount: number | null;
+}
+
+export function recurringJobClientMessage(id: string | null | undefined): RecurringJobClientMessage | null {
+  const match = typeof id === "string" ? /^job:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):\d+(?::([1-9]\d*))?$/i.exec(id) : null;
+  return match ? { jobId: match[1], runCount: match[2] ? Number(match[2]) : null } : null;
+}
+
 export function recurringJobIdFromClientMessageId(id: string | null | undefined): string | null {
-  const match = typeof id === "string" ? /^job:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):\d+$/i.exec(id) : null;
-  return match?.[1] ?? null;
+  return recurringJobClientMessage(id)?.jobId ?? null;
 }
 
 export interface CompleteRecurringJobRunInput {
@@ -19,6 +28,8 @@ export interface CompleteRecurringJobRunInput {
   error?: string | null;
   nextRunAt?: string | null;
   jobName?: string | null;
+  runCount?: number | null;
+  maxRuns?: number | null;
 }
 
 /** Persist one terminal recurring-job run and emit the owner-visible receipt. */
@@ -68,6 +79,8 @@ export async function completeRecurringJobRun(env: Env, input: CompleteRecurring
     sourceSessionId: input.sourceSessionId ?? input.sessionId,
     threadMode: input.threadMode ?? "same_session",
     ranAt: input.ranAt,
+    runCount: input.runCount,
+    maxRuns: input.maxRuns,
     error,
   })).catch((notifyError) => console.error("recurring_job_receipt_failed", { jobId: input.jobId, err: String(notifyError) }));
 }

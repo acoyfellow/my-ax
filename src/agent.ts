@@ -16,8 +16,8 @@ import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
-import { completeRecurringJobRun, recurringJobIdFromClientMessageId } from "./recurring-job-run";
-import { computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
+import { completeRecurringJobRun, recurringJobClientMessage, recurringJobIdFromClientMessageId } from "./recurring-job-run";
+import { claimRecurringJobRun, computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
 import { deriveSessionTitle } from "./session-title";
 import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
@@ -403,14 +403,17 @@ export class MyAgent extends Think<Env> {
     this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), identity });
     const now = new Date();
     const ownerEmail = payload.ownerEmail.toLowerCase();
-    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
+    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, max_runs, run_count, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
       .bind(payload.jobId, ownerEmail).first<JobRow>().catch(() => null);
-    if (row?.status === "paused") return;
-    if (row?.thread_mode === "new_session_per_run") {
+    if (!row || row.status !== "active") return;
+    if (row.thread_mode === "new_session_per_run") {
       const result = await runJobNow(this.env, row, now);
-      if (!result.ok) throw new Error(result.error ?? "recurring job failed");
+      if (!result.ok && result.error !== "job is not active or has exhausted its run limit") throw new Error(result.error ?? "recurring job failed");
       return;
     }
+    const claim = await claimRecurringJobRun(this.env, row.id, ownerEmail);
+    if (!claim) return;
+    if (claim.status === "exhausted" && row.schedule_id) await this.cancelRecurringPrompt(row.schedule_id).catch(() => undefined);
     let error: string | null = null;
     try {
       await this.runTurn({
@@ -427,11 +430,13 @@ export class MyAgent extends Think<Env> {
       jobId: payload.jobId,
       ownerEmail: payload.ownerEmail,
       sessionId: this.name,
-      sourceSessionId: row?.session_id ?? this.name,
-      threadMode: row?.thread_mode ?? "same_session",
+      sourceSessionId: row.session_id,
+      threadMode: row.thread_mode,
       ranAt: now,
-      nextRunAt: row ? computeNextRun(now, row.cadence_secs) : null,
-      jobName: row?.name ?? null,
+      nextRunAt: claim.status === "active" ? computeNextRun(now, row.cadence_secs) : null,
+      jobName: row.name,
+      runCount: claim.run_count,
+      maxRuns: claim.max_runs,
       error,
     });
     if (error) throw new Error(error);
@@ -442,12 +447,12 @@ export class MyAgent extends Think<Env> {
     const identity = this.identity();
     if (!identity) return;
     const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
-    const jobId = recurringJobIdFromClientMessageId(lastUser?.id);
-    if (!jobId) return;
+    const message = recurringJobClientMessage(lastUser?.id);
+    if (!message || message.runCount === null) return;
     const ownerEmail = identity.email.toLowerCase();
-    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
-      .bind(jobId, ownerEmail).first<JobRow>().catch(() => null);
-    if (!row || row.thread_mode !== "new_session_per_run") return;
+    const row = await this.env.DB.prepare("SELECT id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, max_runs, run_count, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at FROM jobs WHERE id = ? AND owner_email = ?")
+      .bind(message.jobId, ownerEmail).first<JobRow>().catch(() => null);
+    if (!row) return;
     await completeRecurringJobRun(this.env, {
       jobId: row.id,
       ownerEmail,
@@ -457,6 +462,8 @@ export class MyAgent extends Think<Env> {
       ranAt: new Date(),
       nextRunAt: null,
       jobName: row.name,
+      runCount: message.runCount,
+      maxRuns: row.max_runs,
       error: result.status === "error" ? result.error : null,
     });
   }

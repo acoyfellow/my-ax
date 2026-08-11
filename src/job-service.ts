@@ -5,7 +5,7 @@
 import type { Env } from "./types";
 import { cancelJobSchedule, computeNextRun, MAX_ACTIVE_JOBS_PER_OWNER, runJobNow, scheduleJob, validateJobInput, type JobInput, type JobRow } from "./jobs";
 
-const COLS = "id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at";
+const COLS = "id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, max_runs, run_count, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at";
 export type JobAction = "create" | "update" | "pause" | "resume" | "run" | "delete";
 export class JobServiceError extends Error { constructor(public code: "InvalidInput" | "NotFound" | "QuotaExceeded" | "Conflict" | "DispatchFailed", message: string) { super(message); } }
 
@@ -53,8 +53,8 @@ export class JobService {
     if ((count?.count ?? 0) >= MAX_ACTIVE_JOBS_PER_OWNER) throw new JobServiceError("QuotaExceeded", `Maximum active jobs is ${MAX_ACTIVE_JOBS_PER_OWNER}`);
     const id = crypto.randomUUID();
     const next = computeNextRun(this.now(), parsed.cadenceSecs);
-    await this.env.DB.prepare("INSERT INTO jobs (id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, status, next_run_at, idempotency_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))")
-      .bind(id, this.owner, parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, next, idempotencyKey ?? null).run();
+    await this.env.DB.prepare("INSERT INTO jobs (id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, max_runs, run_count, status, next_run_at, idempotency_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, datetime('now'), datetime('now'))")
+      .bind(id, this.owner, parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, parsed.maxRuns, next, idempotencyKey ?? null).run();
     let scheduleId: string | null = null;
     try {
       scheduleId = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
@@ -75,16 +75,18 @@ export class JobService {
     // id keeps its existing target.
     const switchingToSpecific = patch.threadMode === "specific_session" && old.thread_mode !== "specific_session";
     const mergedSessionId = switchingToSpecific ? (patch.sessionId ?? "") : (patch.sessionId ?? old.session_id);
-    const parsed = validateJobInput({ sessionId: mergedSessionId, threadMode: patch.threadMode ?? old.thread_mode, name: patch.name ?? old.name, prompt: patch.prompt ?? old.prompt, cadenceSecs: patch.cadenceSecs ?? old.cadence_secs });
+    const parsed = validateJobInput({ sessionId: mergedSessionId, threadMode: patch.threadMode ?? old.thread_mode, name: patch.name ?? old.name, prompt: patch.prompt ?? old.prompt, cadenceSecs: patch.cadenceSecs ?? old.cadence_secs, maxRuns: patch.maxRuns === undefined ? old.max_runs : patch.maxRuns });
     if ("tag" in parsed) throw new JobServiceError("InvalidInput", `${parsed.field}: ${parsed.message}`);
     const session = await this.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(parsed.sessionId, this.owner).first();
     if (!session) throw new JobServiceError("NotFound", "session not found or not owned");
+    const exhausted = parsed.maxRuns !== null && old.run_count >= parsed.maxRuns;
+    const status = exhausted ? "exhausted" : old.status;
     let replacement: string | null = null;
-    if (old.status === "active") replacement = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
+    if (status === "active") replacement = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
     try {
-      const next = old.status === "active" ? computeNextRun(this.now(), parsed.cadenceSecs) : old.next_run_at;
-      await this.env.DB.prepare("UPDATE jobs SET session_id=?, thread_mode=?, name=?, prompt=?, cadence_secs=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=?")
-        .bind(parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, next, replacement, id, this.owner).run();
+      const next = status === "active" ? computeNextRun(this.now(), parsed.cadenceSecs) : old.next_run_at;
+      await this.env.DB.prepare("UPDATE jobs SET session_id=?, thread_mode=?, name=?, prompt=?, cadence_secs=?, max_runs=?, status=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=?")
+        .bind(parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, parsed.maxRuns, status, next, replacement, id, this.owner).run();
     } catch (error) {
       if (replacement) await this.runtime.cancel(this.env, { owner_email: this.owner, session_id: parsed.sessionId, schedule_id: replacement }).catch(() => undefined);
       throw error;
@@ -106,6 +108,10 @@ export class JobService {
   }
   async setPaused(id: string, paused: boolean) {
     const row = await this.owned(id);
+    if (row.status === "exhausted") {
+      if (!paused) throw new JobServiceError("Conflict", "exhausted jobs cannot resume");
+      return row;
+    }
     if ((paused && row.status === "paused") || (!paused && row.status === "active")) return row;
     if (!paused) {
       const count = await this.env.DB.prepare("SELECT count(*) count FROM jobs WHERE owner_email=? AND status='active'").bind(this.owner).first<{count:number}>();
