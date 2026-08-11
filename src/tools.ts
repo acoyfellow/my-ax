@@ -10,6 +10,7 @@ import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters";
+import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
 
 export const ASK_USER_TOOL: ToolDef = {
   name: "ask_user",
@@ -89,6 +90,7 @@ export const SHOW_DIFF_TOOL: ToolDef = {
 export const TOOLS: ToolDef[] = [
   ASK_USER_TOOL,
   SHOW_DIFF_TOOL,
+  PUBLIC_WEB_SEARCH_TOOL,
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
   {

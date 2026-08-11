@@ -50,6 +50,10 @@ declare global {
        */
       BROWSER_API_TOKEN?: string;
 
+      MY_AX_BROWSER_ENGINE?: string;
+      MY_AX_KITESURF_RECORDING?: string;
+      WEBSEARCH?: WebSearch;
+
       // Note: CLOUDFLARE_AI_GATEWAY_ID is declared in wrangler.jsonc vars
       // so it's already in the wrangler-generated worker-configuration.d.ts.
       // Don't re-declare it here.
