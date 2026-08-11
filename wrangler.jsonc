@@ -75,7 +75,6 @@
   // Workers AI binding. Account-level. The Worker's deployment identity
   // is the principal calling Workers AI — no per-user model key.
   "ai": { "binding": "AI" },
-  "unsafe": { "bindings": [{ "name": "WEBSEARCH", "type": "web_search" }] },
   // Browser Run: hosted headless Chrome sessions for visual tool calls.
   "browser": { "binding": "BROWSER" },
   // Dynamic Worker loader for native Think Agent Skills script execution.
@@ -216,8 +215,7 @@
         "BACKUP_BUCKET_NAME": "my-ax-homes"
       },
       "ai": { "binding": "AI" },
-      "unsafe": { "bindings": [{ "name": "WEBSEARCH", "type": "web_search" }] },
-      "browser": { "binding": "BROWSER" },
+          "browser": { "binding": "BROWSER" },
       "worker_loaders": [{ "binding": "LOADER" }],
       "assets": {
         "directory": "public",
