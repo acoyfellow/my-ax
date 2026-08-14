@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseVoiceThinkAgentName, resolveVoiceThinkConfig } from "./voice-think-config";
+import {
+  lockVoiceThinkConfig,
+  parseVoiceThinkAgentName,
+  resolveVoiceThinkConfig,
+  VOICE_CALL_GREETING,
+  VOICE_STT_KEYTERMS,
+} from "./voice-think-config";
 
 const seeded = { identity: { email: "seeded@example.com", sub: "seeded-sub" }, sessionId: "seeded-session" };
 
@@ -17,6 +23,27 @@ test("voice think config recovers owner/session from direct actor name", () => {
     identity: { email: "owner@example.com", sub: "owner@example.com" },
     sessionId: "session-1",
   });
+});
+
+test("voice think config exposes Cloudflare STT keyterms and a terse greeting", () => {
+  assert.equal(VOICE_CALL_GREETING, "Hi, I'm ready to help.");
+  const keyterms = new Set<string>(VOICE_STT_KEYTERMS);
+  for (const term of ["Workers", "Durable Objects", "R2", "KV", "D1", "Workers AI", "Access", "Zero Trust", "Pages", "Queues", "Vectorize", "AI Gateway"]) {
+    assert.equal(keyterms.has(term), true);
+  }
+});
+
+test("voice think config locks the linked identity and session", () => {
+  const linked = lockVoiceThinkConfig(undefined, seeded);
+  assert.deepEqual(lockVoiceThinkConfig(linked, seeded), linked);
+  assert.throws(
+    () => lockVoiceThinkConfig(linked, { ...seeded, sessionId: "other-session" }),
+    /Voice session identity cannot change once linked/,
+  );
+  assert.throws(
+    () => lockVoiceThinkConfig(linked, { ...seeded, identity: { ...seeded.identity, sub: "other-sub" } }),
+    /Voice session identity cannot change once linked/,
+  );
 });
 
 test("voice think config fails closed when neither state nor actor name link a session", () => {

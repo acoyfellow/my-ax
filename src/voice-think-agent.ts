@@ -1,9 +1,16 @@
-import { Agent, getAgentByName, getSubAgentByName } from "agents";
+import { Agent, getAgentByName, getSubAgentByName, type Connection } from "agents";
 import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type VoiceTurnContext } from "@cloudflare/voice";
 import { MyAgent } from "./agent";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
-import { resolveVoiceThinkConfig, type VoiceThinkConfig } from "./voice-think-config";
+import {
+  lockVoiceThinkConfig,
+  resolveVoiceThinkConfig,
+  VOICE_CALL_GREETING,
+  VOICE_STT_KEYTERMS,
+  type VoiceThinkConfig,
+} from "./voice-think-config";
+import { checkVoicePrompt } from "./voice-check-prompt";
 import { StillWorkingTimer, WORK_ACK } from "./voice-narration";
 
 // If the turn resolves within this window, stay terse (just the reply). Only
@@ -34,13 +41,22 @@ const VoiceAgent = withVoice(Agent);
  * stock string TTS path synthesizes and speaks it.
  */
 export class VoiceThinkAgent extends VoiceAgent<Env> {
-  transcriber = new WorkersAIFluxSTT(this.env.AI);
+  transcriber = new WorkersAIFluxSTT(this.env.AI, { keyterms: [...VOICE_STT_KEYTERMS] });
   tts = new WorkersAITTS(this.env.AI, { speaker: "asteria" });
 
   /** Seeded by the route before the socket opens: which owner + Think session
    *  this voice call delegates into. */
   async seedSession(identity: AccessIdentity, sessionId: string) {
-    this.setState({ ...(this.state as VoiceThinkConfig), identity, sessionId } as VoiceThinkConfig);
+    const linked = lockVoiceThinkConfig(this.state as VoiceThinkConfig | undefined, { identity, sessionId });
+    this.setState({ ...(this.state as VoiceThinkConfig), ...linked } as VoiceThinkConfig);
+  }
+
+  async onCallStart(connection: Connection): Promise<void> {
+    try {
+      await this.speak(connection, VOICE_CALL_GREETING);
+    } catch (error) {
+      console.error("voice_greeting_failed", { err: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   // Async generator: @cloudflare/voice's iterateText consumes an
@@ -62,6 +78,19 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
     const env = this.env;
     async function* stream(): AsyncGenerator<string> {
       if (!cfg.identity || !cfg.sessionId) { yield "Voice session is not linked to a conversation yet."; return; }
+
+      try {
+        const promptCheck = await checkVoicePrompt(env, transcript);
+        if (!promptCheck.safe) {
+          console.warn("voice_prompt_blocked", { categories: promptCheck.categories });
+          yield "I can't help with that.";
+          return;
+        }
+      } catch (error) {
+        console.error("voice_prompt_check_failed", { err: error instanceof Error ? error.message : String(error) });
+        yield "I can't help with that.";
+        return;
+      }
 
       let outcome: { reply: string } | { error: string } | null = null;
       const runReply = (async () => {

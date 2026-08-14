@@ -5,6 +5,8 @@
   import { onMount, tick } from "svelte";
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
+  import { TappedVoiceTransport } from "./tapped-voice-transport";
+  import { VOICE_CLIENT_OPTIONS } from "./voice-client-options";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
   import { VoiceActivationLifecycle, createAndPrepareVoiceSession } from "./voice-activation";
@@ -257,10 +259,12 @@
   let voiceStarting = $state(false);
   let voiceStatus = $state<VoiceStatus>("idle");
   let voiceInterim = $state<string | null>(null);
-  let voiceAudioLevel = $state(0);
+  let voiceOutputLevel = $state(0);
   let voiceError = $state<string | null>(null);
   let voiceReady = $state(false);
   let voiceClient: VoiceClient | null = null;
+  let voiceTransport: TappedVoiceTransport | null = null;
+  let voiceOutputAnimationFrame: number | null = null;
   const voiceActivation = new VoiceActivationLifecycle<VoiceClient>();
   let voiceLifecycleGeneration = 0;
   let voiceSessionPreparation: Promise<void> | null = null;
@@ -371,13 +375,33 @@
     return voiceReady ? "Audio ready · tap the microphone again" : "Connecting audio…";
   }
 
+  function stopVoiceOutputMeter() {
+    if (voiceOutputAnimationFrame !== null) cancelAnimationFrame(voiceOutputAnimationFrame);
+    voiceOutputAnimationFrame = null;
+  }
+
+  function startVoiceOutputMeter(client: VoiceClient, transport: TappedVoiceTransport) {
+    stopVoiceOutputMeter();
+    const update = () => {
+      if (voiceClient !== client || voiceTransport !== transport) {
+        voiceOutputAnimationFrame = null;
+        return;
+      }
+      voiceOutputLevel = transport.getOutputLevel();
+      voiceOutputAnimationFrame = requestAnimationFrame(update);
+    };
+    update();
+  }
+
   function resetVoiceState() {
+    stopVoiceOutputMeter();
     voiceStarting = false;
     voiceStatus = "idle";
     voiceInterim = null;
-    voiceAudioLevel = 0;
+    voiceOutputLevel = 0;
     voiceError = null;
     voiceReady = false;
+    voiceTransport = null;
     clearVoiceRearmTimer();
     voiceGate = initialVoiceGateState();
     voiceMicSuppressed = false;
@@ -406,7 +430,8 @@
     // docs/voice-mode-journey.md. The voice DO delegates each turn back into
     // the MyAgent facet by RPC, so the reply still lands in this session's
     // Think transcript and streams into the chat log via cf_agent_* frames.
-    const client = new VoiceClient({ agent: "voice-think-agent", name: sessionId, host: location.host });
+    const transport = new TappedVoiceTransport({ agent: "voice-think-agent", name: sessionId, host: location.host });
+    const client = new VoiceClient({ agent: "voice-think-agent", name: sessionId, host: location.host, transport, ...VOICE_CLIENT_OPTIONS });
     const eventIsCurrent = () => voiceActivation.acceptsEvent(sessionId, client, localStorage.getItem(SESSION_KEY));
     client.addEventListener("statuschange", (status) => {
       if (!eventIsCurrent()) return;
@@ -425,7 +450,7 @@
     // suppressed or in the re-arm tail — those are probable loudspeaker
     // self-echo of the agent's own TTS, not user speech.
     client.addEventListener("interimtranscript", (text) => { if (eventIsCurrent() && voiceTranscriptAllowed()) voiceInterim = text; });
-    client.addEventListener("audiolevelchange", (level) => { if (eventIsCurrent()) voiceAudioLevel = level; });
+
     client.addEventListener("error", (error) => {
       if (!eventIsCurrent()) return;
       voiceError = error;
@@ -437,6 +462,7 @@
       voiceReady = connected;
     });
     voiceClient = client;
+    voiceTransport = transport;
     return client;
   }
 
@@ -511,6 +537,7 @@
     }
     voiceEnabled = true;
     localStorage.setItem("my-ax-voice-mode", "1");
+    if (voiceTransport) startVoiceOutputMeter(attempt.client, voiceTransport);
     syncVoiceModelForSession(sessionId!);
     void attempt.completion.then(
       () => {
@@ -2698,7 +2725,7 @@
             class="voice-mode-button flex-none flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg-mut hover:text-fg hover:border-brand/60 data-[active='1']:border-brand/60 data-[active='1']:text-brand data-[active='1']:bg-brand/10"
             data-active={voiceEnabled || voiceStarting ? "1" : "0"}
             data-status={voiceStatus}
-            style={voiceEnabled ? `--voice-level: ${Math.max(0.16, Math.min(1, voiceAudioLevel * 8))}` : undefined}
+            style={voiceEnabled ? `--voice-level: ${Math.max(0.16, Math.min(1, voiceOutputLevel * 8))}` : undefined}
             aria-label={voiceEnabled ? "End voice conversation" : voiceReady ? "Start voice conversation, audio ready" : "Prepare voice conversation"}
             title={voiceEnabled ? `Voice mode · ${voiceStarting ? "starting" : voiceStatus}` : voiceStarting ? voicePreparationLabel() : "Voice mode"}
           >
