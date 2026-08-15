@@ -6,7 +6,7 @@ The version stays `0.0.1`. It does not increment. The number is a deliberate sta
 
 ## 2026-08-15
 
-Contract change only; no employee deploy required. Revision `pending` until this commit lands.
+Contract change only; no employee deploy required. Revision `2503239`.
 
 ### Changed
 
