@@ -1,214 +1,66 @@
-# My AX speed-first Terraloop
+# My AX improvement loop
 
-This is a mandatory Terraloop contract. It follows the operator's private
-Terraloop protocol notes, which live outside this public repository:
+A `/loop` campaign improves one owner-visible outcome, or returns no-change. It is a Terraloop: lock a contract, create a `loops_task` driver, use Terrarium only when a named lever applies. Do not restate the Terraloop protocol here.
 
-- a base Terraloop contract; and
-- a self-healing Terraloop protocol for question-first experiments, per-round reconciliation, parent verification, self-editing, and independent stop-gate review. A drift campaign's specific deliverables and drift score do not apply unless the current My AX finding is about that drift.
+## Stop
 
-Start this contract with **both** concrete control planes:
+Stop when any of these is true:
 
-1. `loops_task` (`/loop`) as the recurring parent driver; and
-2. Terrarium MCP as the mandatory child execution/fanout plane.
+1. One or two shareable features are integrated, deployed, and proved against the exact revision.
+2. Research shows there is no bounded candidate worth doing, and the report says why.
+3. 12 reconciled rounds or 24 hours have elapsed — emit no-change or a named blocker. Do not spin.
 
-A run that uses only one of them is invalid. Pi owns orchestration, verification, integration, deployment, and production proof. Terrarium children perform bounded parallel research, experiments, review, and isolated implementation. The Pi Terrarium extension resumes the parent on terminal callbacks. This repository does not run its own scheduler or workflow controller.
-
-## Goal
-
-Improve observable user outcomes, or return no-change. A normal `/loop` run aims to finish with **two meaningful and exciting product features to share**. A smaller single-fix run is allowed only when the focus asks for one bug/security/reliability repair.
-
-```text
-QUESTION → WIDE PARALLEL RESEARCH/EXPERIMENTS → RECONCILE → SELECT
-       → PARALLEL ISOLATED BUILDS/REVIEWS → INTEGRATE → DEPLOY → PROVE
-       → INDEPENDENT STOP AUDIT → REPEAT/COMPLETE
-```
-
-A changed iteration is complete only after the exact deployed revision proves the user outcome and records a plain-language release summary. If proof fails, continue bounded repair or roll back; do not start another finding. A no-change iteration is valid when no candidate passes the user-outcome gate.
-
-For normal `/loop`, stop only when either:
-
-1. two changed, deployed, production-proved product features are ready to share; or
-2. research and verification show there are not two bounded candidates worth doing, and the report explains why.
-
-“Product feature” can be a visible capability, a new owner-loop receipt/proof, or a reliability improvement that creates a clearly shareable user-facing promise. It must not be generic cleanup disguised as a feature.
-
-A shareable feature must name:
+A shareable feature is a visible capability, a new owner-loop receipt, or a reliability change with a user-facing promise. Cleanup is not a feature.
 
 ```yaml
 shareable_feature:
   one_sentence: what changed
   owner_visible_surface: check-in | attention | settings | chat | proof | other
-  production_proof: exact command or journey proving it
-  measured_owner_loop_improvement: concrete metric delta, new receipt/proof, or newly possible owner action
-  next_recipe: what this makes cheaper, safer, or possible next
+  production_proof: exact command or journey
+  owner_loop_delta: metric, new receipt, or newly possible action
 ```
 
-A failed or rejected idea is still useful when it leaves a `verified-disproved` receipt or reusable recipe. No token is wasted when the trace is harvested truthfully.
+A rejected idea leaves a `verified-disproved` receipt. That is a successful harvest.
 
-## Mandatory speed-first parallel operation
+## Select
 
-Optimize for wall-clock time and useful token throughput, not minimum child count. The model must not collapse independent work into a slow serial checklist.
+Work must support [`docs/loop/current-bet.yaml`](../docs/loop/current-bet.yaml), remove a demonstrated blocker to it, or fix an urgent production/security incident with a named journey.
 
-At the start of every round, explicitly list the atomic questions or work packages and their dependency edges. Everything without a real dependency launches in the same Terrarium batch. “I can do this myself,” convenience, token conservation, or a desire to read one result first are not dependencies.
-
-Default round shape:
-
-1. Run one tiny explicit runner canary if the current runner has not already succeeded in this campaign. A returned verified receipt is green. A timeout is red unless `terrarium_status` proves the exact canary worker is alive and producing output; otherwise retry once with the alternate explicit runner. Two equivalent zero-output stalls trigger the inline fallback and are recorded.
-2. Launch as many bounded read-only scouts/critics as there are truly independent external, internal, local, production-evidence, security, UX, historical, and testability atoms, up to a soft cap of 12. A broad discovery round normally exposes 6–12 real atoms, but never fabricate work to satisfy a lower bound.
-3. As soon as evidence freezes viable outcomes, launch **2–4 isolated prototype/build lanes in parallel** when candidates or implementations do not touch the same files/state. Each lane uses `isolation: "worktree"` or `"copy"`, a narrow ownership envelope, and a receipt contract.
-4. Launch independent test, adversarial review, public-leak review, and production-proof-plan lanes concurrently with builds whenever they do not depend on the final patch. Use `allSettled` for research, review, and disjoint builds; `race`/`any` is allowed only for explicitly competing disposable prototypes.
-5. Reconcile the whole returned set once per round. Parent-verifies-child is mandatory.
-6. Launch the next smallest parallel batch immediately from reconciled evidence. Sequential execution is allowed only for a named dependency, shared-file integration, irreversible production mutation, deployment ordering, or proof against the exact deployed revision. Every serialization receipt names the exact conflicting file path, revision, or DO/D1/external resource; category-only prose is invalid.
-
-Do not busy-poll or sleep. Background batches return through terminal callbacks and `/loop` ticks. Use `allSettled` for research/review so one flaky child does not discard the round. Bound every child with explicit paths, timeout, PASS criteria, prohibited mutations, and a machine-verifiable receipt.
-
-A round is not complete until its reconciliation is appended to `.context/loops/myax-speed-terraloop/STATE.md` with:
-
-```yaml
-round: stable label
-timestamp: ISO-8601
-runs: [exact Terrarium run IDs]
-proven: [parent-verified facts with receipt IDs]
-invalid_or_ignored: [run ID and reason]
-loop_change: exact edit or explicit decline with trigger that would require one
-next_parallel_set: [bounded experiments]
-serialization: [named true dependencies only]
-```
-
-Unreconciled child receipts cannot justify edits, deploys, or completion. If two equivalent child batches stall the same way, record the failure and perform that bounded atom inline rather than repeatedly respawning it.
-
-## Mandatory user-outcome gate
-
-Before launching a writer, freeze:
+Before a writer starts, freeze:
 
 ```yaml
 finding_id: stable-id
-user_outcome:
-  user: who benefits
-  journey: what they are trying to do
-  observed_problem: direct evidence of failure or friction
-  expected_change: what becomes possible, easier, safer, or more trustworthy
-  production_measure: how deployed behavior proves improvement
-  discovery: direct | whats-new | attention | no-ui-needed
+user: who benefits
+journey: what they are trying to do
+observed_problem: direct evidence
+expected_change: what becomes possible, easier, safer, or more trustworthy
+production_measure: how deployed behavior proves it
 ```
 
-Every track passes this gate. Reliability, security, simplification, tests, refactors, dependency updates, and process work qualify only when they protect a named user journey or remove measured friction. If the honest answer to “what changes for the user?” is weak, return no-change and route the idea to ordinary maintenance.
+If “what changes for the user?” is weak, return no-change.
 
-Work should support the current bet in [`docs/loop/current-bet.yaml`](docs/loop/current-bet.yaml), remove a demonstrated blocker to it, or address an urgent production/security incident with a named affected journey.
+Research only as many independent atoms as you can name. Default is 2–4 read-only scouts (local evidence, production receipts, one external/internal scan). Do not fabricate scouts to hit a quota. Parent does cheap work. Spawn only for parallel, isolate, bound, context, or proof.
 
-## Candidate batch mode
+## Run
 
-A normal `/loop` may fan out multiple isolated candidate agents before selecting work. This is the default way to use many headless Pis.
+- Ride Terrarium callbacks. Do not sleep or poll.
+- One writer per file set. Shared-file integration, push, deploy, and exact-revision proof are serial.
+- Twice-stalled the same way → cancel and do that atom inline. Do not respawn a wedged runner.
+- Parent verifies every child claim: re-read the file, re-run the cited test, grep the wiring. Exit 0 is not proof.
+- Children do not git commit, push, deploy, or print secrets. They record `HEAD`.
+- Reconcile each round in `.context/loops/myax-speed-terraloop/STATE.md` as: `round`, `runs`, `proven`, `next`. Unreconciled receipts cannot justify an edit or deploy.
 
-Candidate agents must be spawned with an explicit currently working **runner** agent/model, not a stale default. My AX app catalog models (`npm run prove:models`) prove the product, not Terrarium/OpenCode runner availability. Before fanout, run a tiny runner canary or Terrarium dry-run/status check that proves the chosen command does not inherit a stale model such as `kindle-alpha-api`. If using Terrarium, prefer an explicit Pi runner and explicit runner model known to the harness, or another runner/model proven in the current harness. Each Terrarium task prompt must include a verifiable task contract and require a terminal `task_status` receipt; process exit code is not semantic success.
+## Land
 
-Candidate agents may:
+Parent only, after a verified receipt:
 
-- research external/internal/local evidence;
-- prototype in an isolated workspace or worktree;
-- run local tests and produce a patch or artifact;
-- return a harvest receipt.
+1. `npm run verify:changed` (or the named narrow proof).
+2. Update `CHANGELOG.md`. Version stays `0.0.1`.
+3. Commit and push.
+4. Deploy employee prod through the private wrapper. Other installs use their owner wrapper.
+5. Prove the journey against that exact revision. A generic health check is not proof.
 
-Candidate agents must not:
-
-- start while another unrelated writer is active unless the parent explicitly accepts cross-repo concurrency;
-- push, deploy, rotate secrets, mutate production, post comments, or send notifications;
-- assume their branch will land;
-- spawn another writer unless the parent explicitly grants it.
-
-The parent clusters candidate receipts, runs adversarial review, and lands at most two selected features sequentially. Candidate branches are evidence, not merge targets; the parent may rewrite/cherry-pick into clean landing commits.
-
-```yaml
-task_status: success | verified-disproved | blocked
-harvest_receipt:
-  claim: falsifiable claim tested
-  inspiration:
-    external: []
-    internal: []
-    local: []
-  attempted: what changed or was tried
-  observed: what happened
-  result: proven | verified-disproved | projected | blocked
-  reusable_recipe: receipt/schema/proof/primitive others can cite
-  patch: path or summary
-  proof: commands and outcomes
-  risks: []
-```
-
-```yaml
-reconciliation:
-  clusters: []
-  selected_features: []
-  rejected_with_reason: []
-  conflicts: []
-  landing_order: []
-  adversarial_review:
-    builder: why this should land
-    skeptic: why this may be wrong or not worth it
-    historian: whether this duplicates old work or violates repo shape
-```
-
-## Child: RESEARCH → SELECT → CHANGE → VERIFY → REPORT
-
-### RESEARCH
-
-Before planning product work, gather current evidence from three directions:
-
-- **External OSS/product scan** — inspect what active agent/runtime/workflow/browser/MCP projects are releasing today or recently. Prefer concrete release notes, commits, issues, demos, or docs over vibes. Look especially for ideas My AX can absorb in one loop: clearer receipts, better check-in, safer delegation, browser proof, capability manifests, model/provider reliability, or durable job UX.
-- **Cloudflare/internal context** — use the `cfi` CLI for internal Cloudflare Wiki/Jira/Backstage/GitLab/dependency context when the topic touches Cloudflare company knowledge, Cloudflare packages, internal gateways, Access, Workers AI, Browser, Think, Agents, Voice, Code Mode, Sandbox, or deployment wrappers. Prefer `cfi` over direct cf-portal use. Do not persist credentials or write internally.
-- **Local product evidence** — inspect the current My AX repo, production proof history, active bugs, screenshots, and recently changed surfaces.
-
-Return a short research digest with sources, the absorbable idea or bug, and why it matters for the owner loop. If research finds a current external/internal bug relevant to My AX, try to reproduce or adapt the smallest safe version in this run.
-
-### SELECT
-
-- Confirm the checkout is clean and record the starting revision.
-- Choose the best bounded candidate from the research digest.
-- Inspect one narrow surface and reproduce one concrete problem or missing owner journey.
-- Do not duplicate a recently completed finding.
-- Freeze the user outcome, scope, acceptance criteria, smallest intervention, and production proof plan before editing.
-- Stop with no-change if evidence is insufficient.
-
-### CHANGE
-
-- Use isolated worktrees/copies with exactly one writer **per ownership envelope**. Multiple writers run concurrently only when their file/state scopes are disjoint; shared-file integration is serialized by the parent.
-- Make the smallest coherent fix in each selected lane.
-- Add an observable regression test where practical.
-- Remove only code/docs made obsolete by this change.
-- Preserve the invariants below.
-
-### VERIFY
-
-- Run the narrow proof, then `npm run verify:changed`.
-- Review the final diff once for behavior, scope, stale paths, and public/private leakage.
-- Report failures and flakes truthfully; never weaken a boundary to pass.
-
-### REPORT
-
-Return:
-
-- research digest with external/internal/local sources;
-- harvest receipt, including `verified-disproved` when applicable;
-- finding and user-outcome evidence;
-- files changed and patch digest;
-- exact commands/outcomes;
-- remaining risks;
-- recommended parent integration and production proof;
-- whether this counts as one of the two shareable product features.
-
-The child must not push, migrate, deploy, access production, rotate credentials, or mutate external services. An isolated implementation child may commit inside its disposable worktree when its task contract requires a patch receipt; that commit is evidence, not authorization to land.
-
-## Parent: REVIEW → INTEGRATE → DEPLOY → PROVE → REPEAT
-
-- Reconcile every parallel round in `.context/loops/myax-speed-terraloop/STATE.md`, then validate exact child receipts and patches; callbacks are wakeups, not authority.
-- Independently rerun narrow proofs and `npm run verify:release`.
-- Update `CHANGELOG.md` without changing version `0.0.1`.
-- Commit and push the accepted change.
-- Deploy employee production only through the private wrapper; deploy other installations through their owner wrapper.
-- Prove the changed journey against the exact revision/deployment. Prefer an authenticated real journey; use a truthful, self-cleaning operator probe when inducing the negative case would harm a real conversation.
-- If proof fails, continue this iteration through bounded repair or rollback. Do not stop merely because operator input was needed once that input is provided.
-
-Before completion record:
+If proof fails, repair or roll back this finding. Do not start the next one.
 
 ```yaml
 release_summary:
@@ -218,33 +70,16 @@ release_summary:
   visibility: whats-new | attention | direct | none
 ```
 
-Demo/video work is optional after production proof and does not block operational completion.
-
-For normal `/loop`, after each proved feature decide whether the run has two meaningful/exciting features to share. If not, repeat with a new wide parallel research/experiment batch. Maintain one parent-controlled landing/integration lane at a time, while disjoint isolated writers, research scouts, proof designers, and critics continue concurrently.
-
-Before declaring completion, spawn a fresh independent read-only Terrarium auditor that did not author a selected patch or the round reconciliation. It must inspect artifacts and return `PASS`, `FAIL`, or `INCONCLUSIVE` against the stop gate. `INCONCLUSIVE` is not completion. Retry an inconclusive auditor at most once; a second inconclusive result stops the driver with a named human-review blocker rather than auditor shopping. The parent may emit a completion candidate, but only an auditor `PASS` closes the campaign. Delete the `loops_task` driver immediately when the gate passes or a named human/unreachable dependency is the only remaining blocker.
-
-Deployment and production proof of feature two begin only after feature one's exact-revision production proof and release summary are recorded. This is an intentional exact-deployment dependency; research, disjoint builds, and proof-plan work for feature two continue in parallel.
+Before declaring the campaign done, one fresh read-only Terrarium auditor that did not author a landed patch returns `PASS`, `FAIL`, or `INCONCLUSIVE`. Retry an inconclusive auditor once. A second inconclusive result is a human blocker, not a third auditor. Then delete the `loops_task` driver.
 
 ## Invariants
 
 - Think's `MyAgent` is canonical for text and voice.
-- Production requires Cloudflare Access; only explicit dev mode may bypass it.
-- Public source contains no deployment identity, private hosts, account IDs, Access details, secrets, or private history.
-- `machinectl` remains outbound-only and explicitly user-controlled.
-- Generated Code Mode receives callable capabilities, never raw credentials or ambient authority.
-- D1 is the human/search/export projection; Think owns execution/model state.
-- Restore and ownership checks fail closed. Never print, persist, or commit credentials.
-- Preserve the seven-minute repository rules in [`docs/loop/repository-standard.md`](docs/loop/repository-standard.md).
-- Browser/PWA steering uses cmux or owner-authenticated My AX APIs/MCP. The repository's approved `cmux-browser` proof wrapper is allowed; standalone CDP, direct Chrome For Testing, or browser-specific bypass tools are not unless the user explicitly overrides this standing rule.
-
-## Terrarium + `/loop` driver behavior
-
-- At campaign start, create `.context/loops/myax-speed-terraloop/STATE.md`, then create a recurring `loops_task` driver with the goal, state path, active run/group IDs, reconciliation rule, stop gate, and instruction to delete itself on terminal PASS/blocker. Every campaign has a hard budget of at most 12 reconciled rounds or 24 hours, whichever comes first; at the boundary, emit verified-disproved/no-change or a named blocker and stop rather than spinning.
-- Terrarium is mandatory. Use `terrarium_spawn_batch` for independent atoms and `terrarium_spawn` only for a truly single bounded dependency or the independent final audit.
-- Prefer background fanout plus callback-driven continuation. The Pi `terrarium-autocontinue` extension tracks spawned run IDs and resumes the parent on terminal callback delivery.
-- Do not sleep or busy-poll after a background spawn. End the turn and handle terminal callbacks or the next `/loop` tick.
-- If callback delivery is unavailable, query the known run/group ID; never launch a duplicate merely because a callback was delayed.
-- The driver checks active runs, verifies completed receipts, records one reconciliation barrier per round, self-edits this contract/state when evidence requires it, and immediately schedules the next widest safe batch.
-- Record why any work was serialized. “Safer” is insufficient without naming the conflicting file, state, or exact-revision dependency.
-- On stop, cancel only campaign-owned stalled runs, write the final receipt, delete the exact `loops_task`, and report deployed revision plus production proof.
+- Production requires Cloudflare Access.
+- Public source has no deployment identity, private hosts, account IDs, secrets, or private history.
+- `machinectl` is outbound-only and user-controlled.
+- Code Mode receives callable capabilities, never raw credentials.
+- D1 is the human/search projection; Think owns execution state.
+- Restore and ownership checks fail closed.
+- Keep the seven-minute rules in [`docs/loop/repository-standard.md`](../docs/loop/repository-standard.md).
+- Browser proof uses cmux or owner-authenticated My AX APIs. Standalone CDP is off unless the owner overrides.
