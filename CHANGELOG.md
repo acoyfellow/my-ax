@@ -14,6 +14,7 @@ Employee target at the notify-dedupe revision after this entry. Personal target 
 
 ### Fixed
 
+- Voice mode: a same-session tap after disconnect now reconnects and starts the call instead of only preparing (the two-tap reconnect). Mid-turn spoken ack threshold is 800ms so work-in-progress audio starts sooner.
 - Identical owner `notify_owner` / MCP `job.complete` events no longer create a new Attention row and push each time. `notifyOwner` now defaults a content fingerprint (`kind+title+body`) when the caller omits `dedupeKey`, so a retried campaign completion is one receipt, not three.
 
 ### Changed

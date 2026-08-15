@@ -111,23 +111,18 @@ test("a no-session tap cannot start later after session preparation and connecti
   assert.equal(client.startCalls, 0);
 });
 
-test("a disconnected-client tap replaces and prepares without starting on connection", () => {
+test("a disconnected same-session tap reconnects and starts on the same client", async () => {
   const clients: FakeVoiceClient[] = [];
   const lifecycle = new VoiceActivationLifecycle<FakeVoiceClient>();
   const createClient = factory(clients);
   const disconnected = lifecycle.prepare("session-a", createClient);
 
   const attempt = lifecycle.activate("session-a", createClient);
-  assert.equal(attempt.kind, "preparing");
-  assert.equal(attempt.kind === "preparing" && attempt.reason, "disconnected-client");
-  assert.equal(disconnected.endCalls, 1);
-  assert.equal(disconnected.disconnectCalls, 1);
-  const replacement = clients[1];
-  replacement.connected = true;
-  lifecycle.acceptsEvent("session-a", replacement, "session-a");
-
-  assert.equal(disconnected.startCalls, 0);
-  assert.equal(replacement.startCalls, 0);
+  assert.equal(attempt.kind, "started");
+  assert.equal(clients.length, 1);
+  assert.equal(disconnected.connectCalls, 2);
+  assert.equal(disconnected.startCalls, 1);
+  if (attempt.kind === "started") await attempt.completion;
 });
 
 test("a wrong-session tap retires the old client and never starts the replacement later", () => {
