@@ -49,8 +49,8 @@ function createCmuxMachineReader(context: ToolContext): CmuxReader {
       if (!status) throw new Error("My Machine does not publish the read-only cmux_workspace_list tool");
       return status({});
     }
-    const tail = machine.fns.cmux_pi_tail;
-    if (!tail) throw new Error("My Machine does not publish the read-only cmux_pi_tail tool");
+    const tail = machine.fns.cmux_surface_tail ?? machine.fns.cmux_pi_tail;
+    if (!tail) throw new Error("My Machine does not publish the read-only cmux_surface_tail tool");
     return tail({
       workspaceId: request.workspaceId,
       surfaceId: request.surfaceId,
@@ -257,7 +257,7 @@ export const TOOLS: ToolDef[] = [
 export function createThinkTools(context: () => ToolContext): ToolSet {
   const tools: Record<string, Tool<Record<string, unknown>, string>> = {};
   for (const definition of TOOLS) {
-    tools[definition.name] = tool<Record<string, unknown>, string>({
+    tools[definition.name] = tool<Record<string, unknown>, string, {}>({
       description: definition.description,
       inputSchema: jsonSchema<Record<string, unknown>>(definition.parameters as Parameters<typeof jsonSchema>[0]),
       execute: async (input: Record<string, unknown>) =>

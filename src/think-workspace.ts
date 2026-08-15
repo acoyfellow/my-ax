@@ -2,8 +2,8 @@ import type { WorkspaceLike } from "@cloudflare/think/tools/workspace";
 import type { FileInfo } from "@cloudflare/shell";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
-import { WORKSPACE_HOME } from "./workspace";
 import { getUserWorkspace } from "./workspace";
+import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
 
 /**
  * Think workspace adapter for the my-ax cloud computer.
@@ -28,7 +28,9 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
 
   private path(path: string): string {
     if (!path || path === ".") return WORKSPACE_HOME;
-    return path.startsWith("/") ? path : `${WORKSPACE_HOME}/${path.replace(/^\.\//, "")}`;
+    const absolute = path.startsWith("/") ? path : `${WORKSPACE_HOME}/${path.replace(/^\.\//, "")}`;
+    assertSeedablePath(absolute);
+    return absolute;
   }
 
   private async sandbox() {
