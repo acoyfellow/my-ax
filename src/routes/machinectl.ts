@@ -8,6 +8,7 @@ import type { AppEnv } from "../app-env";
 import type { ToolDef } from "../types";
 import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { storeInlineMediaArtifact } from "../uploads";
+import { getUserWorkspace } from "../workspace";
 import { parseMachineShellContent } from "../machinectl-output";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
@@ -15,6 +16,17 @@ type MachineResult = { ok?: boolean; content?: string; error?: string };
 type ObserveSessionBody = { runId?: string; session?: { harness?: string; id?: string; label?: string; state?: string }; note?: string };
 const MACHINE_STATUS_CACHE_MS = 5_000;
 const machineStatusCache = new Map<string, { at: number; status: { connected: boolean; machineName?: string; tools?: PublishedTool[] } }>();
+
+async function persistScreenshotToWorkspace(env: AppEnv["Bindings"], identity: { email: string }, artifact: { workspacePath?: string }, dataUrl: string) {
+  const path = artifact.workspacePath;
+  if (!path) return;
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) return;
+  const bytes = Uint8Array.from(atob(dataUrl.slice(comma + 1).replace(/[\r\n]/g, "")), (char) => char.charCodeAt(0));
+  const { sandbox } = await getUserWorkspace(env, identity as never);
+  await sandbox.mkdir("/home/user/.my-ax/screenshots", { recursive: true }).catch(() => undefined);
+  await sandbox.writeFile(path, bytes);
+}
 
 function hostFor(c: Context<AppEnv>) {
   const email = c.get("identity").email.toLowerCase();
@@ -85,7 +97,10 @@ export function registerMachinectlRoutes(app: Hono<AppEnv>) {
     const result = await response.json<{ ok?: boolean; content?: string; error?: string }>();
     if (result.ok && typeof result.content === "string") {
       const artifact = await storeInlineMediaArtifact(c.env, c.get("identity"), result.content);
-      if (artifact) return c.json({ ...result, content: artifact });
+      if (artifact) {
+        await persistScreenshotToWorkspace(c.env, c.get("identity"), artifact, result.content).catch(() => undefined);
+        return c.json({ ...result, content: artifact });
+      }
     }
     return c.json(result);
   });
@@ -211,7 +226,10 @@ export const MACHINECTL_TOOL: ToolDef = {
     const result = await response.json<{ ok?: boolean; content?: string; error?: string }>();
     if ((tool === "screenshot" || tool === "screen_record") && result.ok && typeof result.content === "string") {
       const artifact = await storeInlineMediaArtifact(env, identity, result.content);
-      if (artifact) return JSON.stringify({ ...result, content: artifact });
+      if (artifact) {
+        await persistScreenshotToWorkspace(env, identity, artifact, result.content).catch(() => undefined);
+        return JSON.stringify({ ...result, content: artifact });
+      }
     }
     return JSON.stringify(result);
   },

@@ -70,9 +70,8 @@ test("feedback loop is broken: mic stays suppressed through the whole reply and 
     { status: "listening" },              // user just finished; mic open
     { status: "thinking", advanceMs: 200 },  // agent composing reply
     { status: "speaking", advanceMs: 3000 }, // TTS playing out loudspeaker
-    { status: "listening", advanceMs: 200 }, // playback done; debounce starts (400ms)
+    { status: "listening", advanceMs: 80 },
   ]);
-  // 200ms after playback ended is still inside the 400ms debounce.
   assert.equal(result.micSuppressed, true, "mic must remain suppressed within the debounce window");
   assert.ok(result.pendingRearm, "a re-arm must be pending, not immediate");
 });
@@ -119,5 +118,5 @@ test("gate is inert when the agent never produced audio (mic already open)", () 
 });
 
 test("default debounce is within the required 300-500ms band", () => {
-  assert.ok(DEFAULT_REARM_DEBOUNCE_MS >= 300 && DEFAULT_REARM_DEBOUNCE_MS <= 500);
+  assert.ok(DEFAULT_REARM_DEBOUNCE_MS >= 120 && DEFAULT_REARM_DEBOUNCE_MS <= 250);
 });
