@@ -1,0 +1,23 @@
+docs/feature-tour.md
+  s_612b5c736dcff0::t_e50adc6065c6e9 32,48-65
+src/terrarium-tools.test.ts
+  s_612b5c736dcff0::t_258b413545607f 50,83,95,100-135
+src/terrarium-tools.ts
+  s_612b5c736dcff0::t_5c127f880b794c 25-32,64,75,79-81,107,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cf6f9d4191041b57dc95d84e6428929eec1e1deb",
+  "prompts": {},
+  "sessions": {
+    "s_612b5c736dcff0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd694-c515-748e-ac57-3546b0458143",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
