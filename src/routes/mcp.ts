@@ -7,8 +7,10 @@ import { JobService } from "../job-service";
 import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
+import { getUserWorkspace } from "../workspace";
+import { listWorkspace, readWorkspace } from "../workspace-mcp";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -21,7 +23,7 @@ function isMcpNotificationKind(value: unknown): value is McpNotificationKind {
 const TOOLS = [
   {
     name: "my_ax_code",
-    description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations. Preferred for multi-step inspection and steering. Available typed methods: listSessions, getSession, entries, inject. No raw fetch or outbound network.",
+    description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations and workspace. Preferred for multi-step inspection and steering. Available typed methods include listSessions, workspaceList, workspaceRead, getSession, entries, inject. No raw fetch or outbound network.",
     inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function using codemode.<method>(args)." } }, required: ["code"] },
   },
   {
@@ -146,9 +148,45 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     await stub.seedIdentity(c.get("identity"));
     return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
   }
+  if (method === "workspace_list" || method === "workspace_read") {
+    try {
+      const { sandbox } = await getUserWorkspace(c.env, c.get("identity"));
+      if (method === "workspace_list") {
+        return await listWorkspace(sandbox, typeof args.path === "string" ? args.path : undefined, clamp(args.limit, 80, 200));
+      }
+      if (typeof args.path !== "string" || !args.path.trim()) throw new Error("path is required");
+      return await readWorkspace(sandbox, args.path, clamp(args.maxBytes, 8000, 32000));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { unavailable: true, error: message };
+    }
+  }
   if (method === "list_sessions") {
-    const rows = await c.env.DB.prepare("SELECT id, name, status, created_at, updated_at FROM sessions WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?").bind(email, clamp(args.limit, 20, 100)).all();
-    return { sessions: rows.results ?? [] };
+    const limit = clamp(args.limit, 20, 100);
+    const cursor = typeof args.cursor === "string" && args.cursor.trim() ? args.cursor.trim() : "";
+    const sql = cursor
+      ? "SELECT s.id, s.name, s.status, s.created_at, s.updated_at, (SELECT COUNT(*) FROM conversation_entries e WHERE e.session_id = s.id AND e.owner_email = s.owner_email) AS message_count, (SELECT substr(e.content, 1, 160) FROM conversation_entries e WHERE e.session_id = s.id AND e.owner_email = s.owner_email AND e.role = 'user' ORDER BY e.id ASC LIMIT 1) AS first_message FROM sessions s WHERE s.owner_email = ? AND s.updated_at < ? ORDER BY s.updated_at DESC LIMIT ?"
+      : "SELECT s.id, s.name, s.status, s.created_at, s.updated_at, (SELECT COUNT(*) FROM conversation_entries e WHERE e.session_id = s.id AND e.owner_email = s.owner_email) AS message_count, (SELECT substr(e.content, 1, 160) FROM conversation_entries e WHERE e.session_id = s.id AND e.owner_email = s.owner_email AND e.role = 'user' ORDER BY e.id ASC LIMIT 1) AS first_message FROM sessions s WHERE s.owner_email = ? ORDER BY s.updated_at DESC LIMIT ?";
+    const rows = cursor
+      ? await c.env.DB.prepare(sql).bind(email, cursor, limit + 1).all()
+      : await c.env.DB.prepare(sql).bind(email, limit + 1).all();
+    const results = (rows.results ?? []) as Array<Record<string, unknown>>;
+    const hasMore = results.length > limit;
+    const page = hasMore ? results.slice(0, limit) : results;
+    const last = page[page.length - 1];
+    return {
+      sessions: page.map((row) => ({
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        messageCount: Number(row.message_count) || 0,
+        firstMessage: typeof row.first_message === "string" ? row.first_message : null,
+      })),
+      hasMore,
+      cursor: hasMore && last && typeof last.updated_at === "string" ? last.updated_at : null,
+    };
   }
   const sessionId = typeof args.sessionId === "string" ? args.sessionId : "";
   const session = await ownedSession(c, sessionId);
@@ -213,6 +251,8 @@ const CODE_METHODS: Record<string, Method> = {
   jobsRun: "jobs_run",
   jobsDelete: "jobs_delete",
   jobsHistory: "jobs_history",
+  workspaceList: "workspace_list",
+  workspaceRead: "workspace_read",
 };
 
 function objectArgs(input: unknown): Record<string, unknown> {
@@ -241,6 +281,8 @@ const CODE_TYPES = `declare const codemode: {
   jobsPause(args: { id: string }): Promise<unknown>; jobsResume(args: { id: string }): Promise<unknown>;
   jobsRun(args: { id: string; idempotencyKey?: string }): Promise<unknown>; jobsDelete(args: { id: string }): Promise<unknown>;
   jobsHistory(args: { id: string }): Promise<unknown>;
+  workspaceList(args?: { path?: string; limit?: number }): Promise<unknown>;
+  workspaceRead(args: { path: string; maxBytes?: number }): Promise<unknown>;
 };`;
 
 /** Owner-scoped coordinator MCP. Cloudflare Access remains the only auth boundary. */
