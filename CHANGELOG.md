@@ -14,6 +14,10 @@ Employee target at the notify-dedupe revision after this entry. Personal target 
 
 ### Fixed
 
+- Workspace search skips `.my-ax/conversations` jsonl so grep no longer dumps entire tool-call transcripts.
+- `manage_jobs` list is capped at 20 rows so the tool result is not truncated mid-record.
+- Screenshots include a durable `workspacePath` under `/home/user/.my-ax/screenshots/` so the model can read the image file.
+- Voice half-duplex re-arm after TTS is 180ms so end-of-turn listening returns faster.
 - Workspace write rejects ephemeral paths such as `/bugs` and `/relay`. Only `/home/user/...` is durable; those writes now fail closed instead of returning a success receipt that is wiped on recycle.
 - `cmux_observe` tails via `cmux_surface_tail` (falls back to `cmux_pi_tail`) so observe matches the live machine catalog.
 - `page.*` fails immediately with `page_unavailable` when no live Chat tab is connected, instead of waiting 10s for a timeout.

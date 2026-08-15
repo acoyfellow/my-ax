@@ -35,7 +35,7 @@ export type VoiceGateAction =
 /** Default re-arm debounce after the agent stops speaking. Long enough to
  *  outlast loudspeaker decay + room reverb on a phone, short enough that a
  *  real user reply is not clipped. */
-export const DEFAULT_REARM_DEBOUNCE_MS = 400;
+export const DEFAULT_REARM_DEBOUNCE_MS = 180;
 
 export function initialVoiceGateState(): VoiceGateState {
   return { agentActive: false, micSuppressed: false, rearmTimer: null };

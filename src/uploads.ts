@@ -105,7 +105,13 @@ export async function storeInlineMediaArtifact(env: Env, identity: AccessIdentit
     httpMetadata: { contentType: mime },
     customMetadata: { owner: identity.email.toLowerCase(), kind: isVideo ? "tool-video" : "tool-screenshot" },
   });
-  return { kind: isVideo ? "video-artifact" as const : "raster-artifact" as const, src: `/api/artifacts/${id}`, mime, bytes: bytes.length };
+  return {
+    kind: isVideo ? "video-artifact" as const : "raster-artifact" as const,
+    src: `/api/artifacts/${id}`,
+    mime,
+    bytes: bytes.length,
+    workspacePath: `/home/user/.my-ax/screenshots/${id}.${extForType(mime)}`,
+  };
 }
 
 export async function getRasterArtifact(env: Env, identity: AccessIdentity, id: string): Promise<R2ObjectBody | null> {

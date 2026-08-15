@@ -132,7 +132,7 @@ export const TOOLS: ToolDef[] = [
       const explicitSessionId = typeof args.sessionId === "string" && args.sessionId.trim() ? args.sessionId : undefined;
       const sessionId = explicitSessionId ?? (action === "create" && threadMode !== "specific_session" ? ctx.sessionId : undefined);
       const input = { sessionId, threadMode, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined, maxRuns: args.maxRuns === null ? null : args.maxRuns as number | undefined };
-      const result = action === "list" ? await jobs.list()
+      const result = action === "list" ? (await jobs.list()).slice(0, 20)
         : action === "create" ? await jobs.create(input, args.idempotencyKey as string | undefined)
         : action === "update" ? await jobs.update(id, input)
         : action === "pause" ? await jobs.setPaused(id, true)
