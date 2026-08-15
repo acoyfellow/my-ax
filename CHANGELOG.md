@@ -8,6 +8,10 @@ The version stays `0.0.1`. It does not increment. The number is a deliberate sta
 
 Employee target at the notify-dedupe revision after this entry. Personal target is not deployed.
 
+### Added
+
+- Owner MCP now exposes `workspace_list` and `workspace_read` (also `codemode.workspaceList` / `workspaceRead`). Paths may use `/workspace/...` as an alias for `/home/user/...`. List and read are bounded; sandbox-down returns `{unavailable:true}` instead of throwing. Session `list_sessions` now includes `messageCount`, `created_at`, a truncated first user message, and honest `hasMore`/`cursor`.
+
 ### Fixed
 
 - Identical owner `notify_owner` / MCP `job.complete` events no longer create a new Attention row and push each time. `notifyOwner` now defaults a content fingerprint (`kind+title+body`) when the caller omits `dedupeKey`, so a retried campaign completion is one receipt, not three.
