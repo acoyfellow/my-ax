@@ -6,7 +6,11 @@ The version stays `0.0.1`. It does not increment. The number is a deliberate sta
 
 ## 2026-08-15
 
-Contract change only; no employee deploy required. Revision `2503239`.
+Employee target at the notify-dedupe revision after this entry. Personal target is not deployed.
+
+### Fixed
+
+- Identical owner `notify_owner` / MCP `job.complete` events no longer create a new Attention row and push each time. `notifyOwner` now defaults a content fingerprint (`kind+title+body`) when the caller omits `dedupeKey`, so a retried campaign completion is one receipt, not three.
 
 ### Changed
 
