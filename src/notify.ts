@@ -129,6 +129,13 @@ function safeHref(notification: OwnerNotification, baseUrl: string): string {
  *  still letting a genuinely new occurrence through. */
 export const DEDUPE_WINDOW_MS = 60 * 60 * 1000;
 
+export function defaultDedupeKey(notification: OwnerNotification): string {
+  const kind = notification.kind;
+  const title = notification.title.trim();
+  const body = notification.body.trim();
+  return `content:${kind}:${title}:${body}`;
+}
+
 /** A suppressed (deduped) delivery: no push was sent because the identical
  *  event was already delivered within the window. */
 export function dedupedReceipt(): NotificationReceipt {
@@ -142,7 +149,7 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   // that exact event for this owner within the window, do NOT send another
   // push. This is the fix for provider 429s: the key was accepted but ignored,
   // so repeated rechecks/ticks flooded the same subscription.
-  const dedupeKey = notification.dedupeKey?.trim() || null;
+  const dedupeKey = notification.dedupeKey?.trim() || defaultDedupeKey(notification);
   if (dedupeKey) {
     const cutoff = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
     const recent = await env.DB.prepare(

@@ -101,13 +101,15 @@ test("distinct dedupeKeys both deliver", async () => {
   } finally { h.restore(); }
 });
 
-test("no dedupeKey always delivers (turn-completion style events are never suppressed)", async () => {
+test("no dedupeKey still suppresses an identical kind+title+body within the window", async () => {
   const h = makeEnv();
   try {
     const first = await notifyOwner(h.env, OWNER, { ...base });
     const second = await notifyOwner(h.env, OWNER, { ...base });
     assert.equal(first.devices, 1);
-    assert.equal(second.devices, 1, "keyless notifications are independent and always attempt delivery");
+    assert.equal(second.devices, 0, "identical keyless job.complete must not land a second Attention row");
+    const third = await notifyOwner(h.env, OWNER, { ...base, body: "different occurrence" });
+    assert.equal(third.devices, 1, "a different body is a new event");
   } finally { h.restore(); }
 });
 
