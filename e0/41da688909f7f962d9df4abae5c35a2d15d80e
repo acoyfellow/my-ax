@@ -1,0 +1,31 @@
+package.json
+  s_e050e2bde8a246::t_a85df345bea05c 82,128-129
+src/routes/mcp.ts
+  s_e050e2bde8a246::t_38215c92bd39be 10-11,13,26,151-163,165-189,254-255,284-285
+src/workspace-mcp.ts
+  s_fbc698c57649da::t_e49c61e6d94d34 1-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e041da688909f7f962d9df4abae5c35a2d15d80e",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_fbc698c57649da": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ebbde-e57b-7697-94e8-b45a3f83ebdc",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
