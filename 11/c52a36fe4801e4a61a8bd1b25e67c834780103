@@ -1,0 +1,21 @@
+CHANGELOG.md
+  s_e050e2bde8a246::t_42e7607c9023ce 17-20
+src/ui/voice-half-duplex.test.ts
+  s_e050e2bde8a246::t_5bde195f71a5c8 73,121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "11c52a36fe4801e4a61a8bd1b25e67c834780103",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
