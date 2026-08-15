@@ -14,6 +14,7 @@ Employee target at the notify-dedupe revision after this entry. Personal target 
 
 ### Fixed
 
+- MCP portal hydration now reuses a stable server id (`ax-mcp`) so re-authorize does not mint a new Agents SDK client that re-runs upstream GitLab DCR.
 - Workspace search skips `.my-ax/conversations` jsonl so grep no longer dumps entire tool-call transcripts.
 - `manage_jobs` list is capped at 20 rows so the tool result is not truncated mid-record.
 - Screenshots include a durable `workspacePath` under `/home/user/.my-ax/screenshots/` so the model can read the image file.

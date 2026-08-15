@@ -520,6 +520,7 @@ export class MyAgent extends Think<Env> {
       // via the reauth banner instead.
       try {
         await this.addMcpServer(id, upstream, {
+          id,
           transport: { type: "streamable-http", headers: { Authorization: `Bearer ${token}` } },
         });
       } catch (err) {
