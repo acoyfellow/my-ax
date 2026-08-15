@@ -29,6 +29,7 @@ The agent chose `terrarium.spawn_background`, got a contract, then polled
 {
   "runId": "ter_mrvh0clm_f7e03656250d",
   "status": "done",
+  "outcome": "confirmed",
   "exitCode": 0,
   "taskContractStatus": "verified",
   "taskResultSummary": "stdout: 42",
@@ -43,6 +44,24 @@ The agent chose `terrarium.spawn_background`, got a contract, then polled
 The run happened on Terrarium's own container, not the laptop and not the worker.
 The `runId`, `taskFingerprint`, and `nonce` are what make the result auditable
 after the fact.
+
+### Confirmed Versus Uncertain
+
+Every `terrarium.spawn`, `terrarium.spawn_background`, and `terrarium.status`
+result includes a normalized `outcome`. A completed terminal receipt with
+`terminal.ok: true` is `confirmed`; a background launch, a running status, or a
+poll timeout is `uncertain`; failed, cancelled, and inconclusive terminal
+receipts are `not-confirmed`. The trusted outcome-record seam is
+`status.terminal`: the connector derives the normalized value from that
+Terrarium-owned record rather than treating a run id or a request success as
+proof.
+
+```json
+{ "outcome": "uncertain", "status": "running", "background": true }
+```
+
+Poll with `terrarium.status` and proceed as confirmed only after it returns the
+terminal receipt with `"outcome": "confirmed"`.
 
 ## Drive Your Own Live UI
 

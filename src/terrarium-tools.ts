@@ -22,6 +22,14 @@ const TERMINAL = new Set(["done", "failed", "cancelled", "inconclusive", "error"
 const POLL_MS = 4000;
 const MAX_POLLS = 60; // ~4 min ceiling; work_code itself is bounded upstream.
 
+type Outcome = "confirmed" | "uncertain" | "not-confirmed";
+
+function outcomeFor(status: string, terminal: Record<string, unknown> = {}): Outcome {
+  if (status === "done" && terminal.ok === true) return "confirmed";
+  if (status === "done" || !TERMINAL.has(status)) return "uncertain";
+  return "not-confirmed";
+}
+
 function configuration(ctx: Ctx) {
   const baseUrl = ctx.env.TERRARIUM_URL?.replace(/\/+$/, "");
   const token = ctx.env.TERRARIUM_CONTROL_TOKEN;
@@ -53,6 +61,7 @@ async function pollToTerminal(ctx: Ctx, runId: string): Promise<Record<string, u
       const terminal = (st.terminal ?? {}) as Record<string, unknown>;
       return {
         ok: status === "done" && terminal.ok !== false,
+        outcome: outcomeFor(status, terminal),
         runId,
         status,
         exitCode: terminal.exitCode ?? null,
@@ -63,13 +72,13 @@ async function pollToTerminal(ctx: Ctx, runId: string): Promise<Record<string, u
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
-  return { ok: false, runId, status: "poll-timeout", error: "run did not reach terminal within the poll window (still running; check with terrarium.status)" };
+  return { ok: false, outcome: "uncertain", runId, status: "poll-timeout", error: "run did not reach terminal within the poll window (still running; check with terrarium.status)" };
 }
 
 export const TERRARIUM_WORK_METHODS = [
-  { name: "spawn", description: "Spawn one bounded cloud agent run on Terrarium and wait for its verified receipt. Input: {task, timeoutMs?, model?}. Returns {ok, runId, status, taskContractStatus, taskResultSummary}." },
-  { name: "status", description: "Get the current status/receipt of a Terrarium run by id. Input: {runId}." },
-  { name: "spawn_background", description: "Spawn a bounded cloud agent run and return its runId immediately WITHOUT waiting. Input: {task, timeoutMs?, model?}. Poll with terrarium.status." },
+  { name: "spawn", description: "Spawn one bounded cloud agent run on Terrarium and wait for its verified receipt. Input: {task, timeoutMs?, model?}. Returns {ok, outcome, runId, status, taskContractStatus, taskResultSummary}." },
+  { name: "status", description: "Get the current status/receipt of a Terrarium run by id. Input: {runId}. Returns outcome: confirmed, uncertain, or not-confirmed." },
+  { name: "spawn_background", description: "Spawn a bounded cloud agent run and return its runId immediately WITHOUT waiting. Input: {task, timeoutMs?, model?}. Returns outcome: uncertain until terrarium.status reads a terminal receipt." },
 ] as const;
 
 export function createTerrariumWorkProvider(ctx: Ctx) {
@@ -95,7 +104,7 @@ export function createTerrariumWorkProvider(ctx: Ctx) {
       },
       spawn_background: async (input: any) => {
         const { runId, contract } = await submit(input);
-        return { ok: true, runId, status: "running", background: true, contract };
+        return { ok: true, outcome: "uncertain", runId, status: "running", background: true, contract };
       },
       status: async (input: any) => {
         const runId = String(input?.runId ?? "").trim();
@@ -106,6 +115,7 @@ export function createTerrariumWorkProvider(ctx: Ctx) {
         return {
           runId,
           status: st?.status ?? "unknown",
+          outcome: outcomeFor(String(st?.status ?? "unknown"), terminal),
           ok: st?.status === "done" && terminal.ok !== false,
           taskContractStatus: terminal.taskContractStatus ?? null,
           taskResultSummary: terminal.taskResultSummary ?? null,
