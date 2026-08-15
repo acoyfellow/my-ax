@@ -47,6 +47,7 @@ test("spawn posts task with Bearer + Idempotency-Key and polls to a verified rec
   const res = (await provider.fns.spawn({ task: "compute 17*23", timeoutMs: 60000, model: "gpt-5.6-sol" })) as any;
 
   assert.equal(res.ok, true);
+  assert.equal(res.outcome, "confirmed");
   assert.equal(res.runId, "ter_abc_deadbeef01");
   assert.equal(res.status, "done");
   assert.equal(res.taskContractStatus, "verified");
@@ -79,6 +80,7 @@ test("spawn_background returns the runId immediately without polling", async () 
   const provider = createTerrariumWorkProvider(ctxWith(fetchImpl));
   const res = (await provider.fns.spawn_background({ task: "long job" })) as any;
   assert.equal(res.ok, true);
+  assert.equal(res.outcome, "uncertain");
   assert.equal(res.runId, "ter_bg_00112233aa");
   assert.equal(res.status, "running");
   assert.equal(res.background, true);
@@ -90,8 +92,45 @@ test("status maps a terminal receipt", async () => {
   const provider = createTerrariumWorkProvider(ctxWith(fetchImpl));
   const res = (await provider.fns.status({ runId: "ter_x_1122334455" })) as any;
   assert.equal(res.ok, true);
+  assert.equal(res.outcome, "confirmed");
   assert.equal(res.status, "done");
   assert.equal(res.taskContractStatus, "verified");
+});
+
+test("status marks a running receipt uncertain", async () => {
+  const fetchImpl = (async () => jsonResponse(200, { status: { status: "running" } })) as any;
+  const provider = createTerrariumWorkProvider(ctxWith(fetchImpl));
+  const res = (await provider.fns.status({ runId: "ter_running" })) as any;
+  assert.equal(res.outcome, "uncertain");
+});
+
+test("status marks failed, cancelled, and inconclusive terminal receipts not-confirmed", async () => {
+  for (const status of ["failed", "cancelled", "inconclusive"]) {
+    const fetchImpl = (async () => jsonResponse(200, { status: { status, terminal: { ok: false } } })) as any;
+    const provider = createTerrariumWorkProvider(ctxWith(fetchImpl));
+    const res = (await provider.fns.status({ runId: `ter_${status}` })) as any;
+    assert.equal(res.outcome, "not-confirmed");
+  }
+});
+
+test("spawn returns uncertain when its poll window expires", async () => {
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((callback: (...args: any[]) => void) => {
+    callback();
+    return 0;
+  }) as any;
+  try {
+    const fetchImpl = (async (url: string) => {
+      if (String(url).endsWith("/api/runs")) return jsonResponse(202, { runId: "ter_timeout" });
+      return jsonResponse(200, { status: { status: "running" } });
+    }) as any;
+    const provider = createTerrariumWorkProvider(ctxWith(fetchImpl));
+    const res = (await provider.fns.spawn({ task: "wait" })) as any;
+    assert.equal(res.status, "poll-timeout");
+    assert.equal(res.outcome, "uncertain");
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
 });
 
 test("status requires a runId", async () => {
