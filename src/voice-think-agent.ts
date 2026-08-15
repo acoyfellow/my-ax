@@ -16,7 +16,7 @@ import { StillWorkingTimer, WORK_ACK } from "./voice-narration";
 // If the turn resolves within this window, stay terse (just the reply). Only
 // past it do we speak the up-front ack and periodic "still working" check-ins,
 // so a quick "hi" is not prefaced with "I'll talk you through it."
-const VOICE_ACK_THRESHOLD_MS = 3500;
+const VOICE_ACK_THRESHOLD_MS = 800;
 // How often we poll for the reply while emitting check-ins.
 const VOICE_CHECKIN_POLL_MS = 1000;
 // Idle gap between spoken "still working" check-ins during a long turn.

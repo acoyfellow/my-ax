@@ -50,7 +50,8 @@ export class VoiceActivationLifecycle<Client extends VoiceActivationClient> {
     }
 
     const prepared = this.prepared;
-    if (prepared?.sessionId === sessionId && prepared.client.connected) {
+    if (prepared?.sessionId === sessionId) {
+      if (!prepared.client.connected) prepared.client.connect();
       let completion: Promise<void>;
       try {
         completion = prepared.client.startCall();
