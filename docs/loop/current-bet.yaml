@@ -1,26 +1,25 @@
-id: walk-away-completion-2026-w26
-user: single operator who leaves My AX while delegated, scheduled, or recovery work continues
-problem: terminal or blocked work can be missed, falsely acknowledged, or require transcript inspection to understand what happened
-outcome: every relevant run or human decision ends in one authoritative owner-visible receipt with a truthful terminal state and next action
+id: walk-away-loop-2026-w33
+user: single operator who leaves My AX while delegated, scheduled, or looped work continues
+problem: terminal or blocked work can be missed, and long-running improvement loops spend tokens on ceremony instead of a proved owner-visible change
+outcome: each campaign lands one or two production-proved owner-visible improvements, or a verified no-change, with a truthful receipt the owner can act on without reading a transcript
 metric:
-  numerator: terminal sampled runs and decisions with a correct actionable owner-visible receipt
-  denominator: all terminal sampled delegated runs, recurring-job runs, recovery attempts, and human decisions
-  baseline: measure from production receipts during the first daily evidence review
-  target: ">= 95% for three consecutive daily samples"
+  numerator: campaigns that end in a proved shareable feature, a verified-disproved receipt, or a named blocker
+  denominator: campaigns started
+  baseline: SPEED.md campaigns before 2026-08-15 often ran 8-wide discovery against an expired bet
+  target: "every /loop campaign hits the SPEED.md stop gate without a 12-round spin"
 sources:
   - owner Attention receipts
   - run and job event receipts
   - decision delivery outcomes
-  - stalled-turn recovery and exhaustion events
   - direct authenticated dogfood journeys
 exclusions:
   - federation or A2A
   - broad dashboard redesign
   - generic workflow DSL
   - new execution surfaces
-expires_at: 2026-06-30
+  - backlog items 10 and 13 (owner-approval trust boundaries)
+expires_at: 2026-08-29
 stop_conditions:
-  - target sustained through a production release soak
+  - two consecutive /loop campaigns hit the stop gate with a proved feature or honest no-change
   - evidence disproves the user problem
-  - two interventions fail to improve the metric
   - a higher-priority production or security incident replaces the bet

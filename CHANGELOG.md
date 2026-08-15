@@ -4,6 +4,14 @@ Progress on My Agent Experience is recorded here in date order, newest first. Ea
 
 The version stays `0.0.1`. It does not increment. The number is a deliberate stance, not a status. The real identity of each change is its commit hash. Each dated entry names the deployed revision.
 
+## 2026-08-15
+
+Contract change only; no employee deploy required. Revision `pending` until this commit lands.
+
+### Changed
+
+- Slimmed `loops/SPEED.md` and the `/loop` prompt: one or two shareable features, 2–4 named scouts instead of a mandatory 6–12 swarm, Terrarium as a lever not the workplace. Refreshed `docs/loop/current-bet.yaml` (expired 2026-06-30) to walk-away-loop-2026-w33. Direction, release, and repository-standard docs stay as the deep references.
+
 ## 2026-08-11
 
 Deployed to the employee target at revision `4debded` through the private deployment wrapper (`deploy-employee.sh`); the personal target is temporarily not deployed. Hostnames are deployment-specific and live in the private wrappers, not here. This entry lands a backlog of bounded, independently committed changes, each with its own tests. That crush is closed: items 02–09, 11, and 12 shipped here. Items 10 (secure third-party authorization) and 13 (Pi customization/import seam) stay deferred — both are owner-approval trust boundaries, not leftover chores.
