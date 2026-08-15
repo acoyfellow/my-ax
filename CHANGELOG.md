@@ -14,6 +14,9 @@ Employee target at the notify-dedupe revision after this entry. Personal target 
 
 ### Fixed
 
+- Workspace write rejects ephemeral paths such as `/bugs` and `/relay`. Only `/home/user/...` is durable; those writes now fail closed instead of returning a success receipt that is wiped on recycle.
+- `cmux_observe` tails via `cmux_surface_tail` (falls back to `cmux_pi_tail`) so observe matches the live machine catalog.
+- `page.*` fails immediately with `page_unavailable` when no live Chat tab is connected, instead of waiting 10s for a timeout.
 - Voice mode: a same-session tap after disconnect now reconnects and starts the call instead of only preparing (the two-tap reconnect). Mid-turn spoken ack threshold is 800ms so work-in-progress audio starts sooner.
 - Identical owner `notify_owner` / MCP `job.complete` events no longer create a new Attention row and push each time. `notifyOwner` now defaults a content fingerprint (`kind+title+body`) when the caller omits `dedupeKey`, so a retried campaign completion is one receipt, not three.
 

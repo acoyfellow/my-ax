@@ -35,7 +35,7 @@ import { makeOAuthClientStore } from "./oauth-store";
 import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
-import { selectPageConnection, type PageConnectionState } from "./page-connection";
+import { selectLivePageConnection, type PageConnectionState } from "./page-connection";
 import { delegateCompletionNotification } from "./delegate-receipt";
 import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
@@ -1015,8 +1015,8 @@ export class MyAgent extends Think<Env> {
 
   private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
     const connections = [...this.getConnections<PageConnectionState>()];
-    const target = selectPageConnection(connections);
-    if (!target) return Promise.reject(new Error("page_unavailable: no live browser client connected to this session"));
+    const target = selectLivePageConnection(connections);
+    if (!target) return Promise.reject(new Error("page_unavailable: no live Chat tab connected to this session"));
     const requestId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const timeoutMs = Math.min(Math.max(opts?.timeoutMs ?? 10_000, 1000), 30_000);
     return new Promise<unknown>((resolve, reject) => {

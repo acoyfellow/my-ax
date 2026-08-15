@@ -3,7 +3,8 @@ import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
 import { publishWorkspaceSnapshot, verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
-export const WORKSPACE_HOME = "/home/user";
+import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
+export { WORKSPACE_HOME, assertSeedablePath };
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const READY_MARKER = "/tmp/my-ax-workspace-ready";
 
@@ -95,23 +96,6 @@ export async function snapshotUserWorkspace(env: Env, identity: AccessIdentity, 
   });
   await publishWorkspaceSnapshot(env.DB, key(identity), backup);
   return backup;
-}
-
-/** Reject anything that isn't strictly inside /home/user. We keep this very
- *  conservative on purpose: the seed endpoint is owner-scoped but still talks
- *  to a shared overlay primitive, so traversal/symlink-style escapes have to
- *  fail closed at the API edge. */
-export function assertSeedablePath(path: string): asserts path is string {
-  if (typeof path !== "string" || path.length === 0) {
-    throw new Error("path must be a non-empty string");
-  }
-  if (!path.startsWith(`${WORKSPACE_HOME}/`)) {
-    throw new Error(`path must be inside ${WORKSPACE_HOME}/`);
-  }
-  // Disallow .. segments and NUL — block traversal even if the prefix matches.
-  if (path.includes("/../") || path.endsWith("/..") || path.includes("\0")) {
-    throw new Error("path must not contain traversal segments");
-  }
 }
 
 export interface SeedFileInput {
