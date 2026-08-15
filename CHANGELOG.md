@@ -6,7 +6,7 @@ The version stays `0.0.1`. It does not increment. The number is a deliberate sta
 
 ## 2026-08-11
 
-Deployed to the employee target at revision `4debded` through the private deployment wrapper (`deploy-employee.sh`); the personal target is temporarily not deployed. Hostnames are deployment-specific and live in the private wrappers, not here. This entry lands a backlog of bounded, independently committed changes, each with its own tests.
+Deployed to the employee target at revision `4debded` through the private deployment wrapper (`deploy-employee.sh`); the personal target is temporarily not deployed. Hostnames are deployment-specific and live in the private wrappers, not here. This entry lands a backlog of bounded, independently committed changes, each with its own tests. That crush is closed: items 02–09, 11, and 12 shipped here. Items 10 (secure third-party authorization) and 13 (Pi customization/import seam) stay deferred — both are owner-approval trust boundaries, not leftover chores.
 
 ### Added
 
