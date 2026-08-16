@@ -99,7 +99,7 @@
     "test:recurring-job-run": "tsx --test src/recurring-job-run.test.ts src/recurring-job-semantics.test.ts",
     "test:upstream-rate-limit": "tsx --test src/upstream-rate-limit.test.ts",
     "test:gateway-retry-fetch": "tsx --test src/gateway-retry-fetch.test.ts",
-    "test:voice-narration": "tsx --test src/voice-narration.test.ts src/voice-channel.test.ts",
+    "test:voice-narration": "tsx --test src/voice-narration.test.ts src/voice-channel.test.ts src/client-snapshot.test.ts",
     "test:session-pinning": "tsx --test src/fractional-index.test.ts src/session-pinning.test.ts",
     "test:job-health": "tsx --test src/ui/job-health.test.ts",
     "test:assistant-backfill": "tsx --test src/assistant-backfill.test.ts",

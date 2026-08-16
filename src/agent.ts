@@ -48,6 +48,7 @@ import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe 
 import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
 import { voiceChannelPrompt } from "./voice-channel";
+import { requireInputChannel } from "./client-snapshot";
 import { recipeApprovalDecision, shouldPersistSuggestedRecipe } from "./recipe-approval-policy";
 import { shouldSnapshotSandboxForToolCall } from "./workspace-snapshot-classification";
 
@@ -787,6 +788,7 @@ export class MyAgent extends Think<Env> {
     if (cfg.model && !findModel(cfg.model)) {
       this.configure<MyAgentConfig>({ ...cfg, model: defaultModelId(this.env) });
     }
+    requireInputChannel(voiceChannelPrompt(transcript));
     const spoken = voiceChannelPrompt(transcript);
     let full = "";
     let failure: string | null = null;
