@@ -117,6 +117,7 @@ test("gate is inert when the agent never produced audio (mic already open)", () 
   assert.ok(timeline.every((t) => t.micSuppressed === false));
 });
 
-test("default debounce is within the required 300-500ms band", () => {
+test("default debounce is 180ms so listening returns after TTS without a second tap", () => {
+  assert.equal(DEFAULT_REARM_DEBOUNCE_MS, 180);
   assert.ok(DEFAULT_REARM_DEBOUNCE_MS >= 120 && DEFAULT_REARM_DEBOUNCE_MS <= 250);
 });

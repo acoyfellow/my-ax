@@ -5,7 +5,13 @@ import {
   NarrationThrottle,
   StillWorkingTimer,
   WORK_ACK,
+  VOICE_ACK_THRESHOLD_MS,
 } from "./voice-narration";
+
+test("work-ack threshold is 800ms so mid-turn audio starts before a long tool stall", () => {
+  assert.equal(VOICE_ACK_THRESHOLD_MS, 800);
+  assert.ok(VOICE_ACK_THRESHOLD_MS >= 500 && VOICE_ACK_THRESHOLD_MS <= 1200);
+});
 
 test("toolNarrationPhrase maps known tools to code-free spoken phrases", () => {
   assert.equal(toolNarrationPhrase("work_code"), "writing and running some code");

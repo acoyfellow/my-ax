@@ -531,10 +531,6 @@
     }
     voiceClient = attempt.client;
     voiceReady = attempt.client.connected;
-    if (attempt.kind === "preparing") {
-      localStorage.setItem("my-ax-voice-mode", "0");
-      return;
-    }
     voiceEnabled = true;
     localStorage.setItem("my-ax-voice-mode", "1");
     if (voiceTransport) startVoiceOutputMeter(attempt.client, voiceTransport);
