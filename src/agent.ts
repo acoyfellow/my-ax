@@ -28,7 +28,7 @@ import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { readUploadBytes } from "./uploads";
-import { createSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
+import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
 import type { Attachment } from "./types";
 import { makeOAuthClientStore } from "./oauth-store";
@@ -75,6 +75,7 @@ Other product tools:
 - show_diff renders a read-only code review from two owner-authorized real-file reads. Call it with old and new source/path descriptors using workspace or machine; it reads both values server-side through the My AX Workspace or connected My Machine. Do not pass file text or source claims. path and title are safe display-only labels. Never use show_diff to write, apply, edit, open a URL, or access browser filesystem APIs.
 - browser_open opens a public web page in a real headless browser session with replay recording. Use it for public websites and rendered UI checks; do not claim authenticated browser access.
 - search_artifacts searches the owner’s reusable artifact library. Before creating an artifact, search for the intended purpose and reuse a strong match instead of generating another variant.
+- get_artifact reads the stored Svelte source for one owned artifact by id. Use it to inspect or revise a widget you already created.
 - create_svelte_artifact creates or reuses a durable interactive Svelte 5 artifact attached to this conversation when the user asks for a widget, visualization, dashboard, calculator, or interactive UI. Provide complete self-contained Svelte source with no external imports. Exact-source duplicates are automatically reused.
 - search_conversations searches earlier conversation memory indexed in D1 full-text search. When the user asks about previous discussions, use this — don't grep workspace files for chat memory.
 - ask_user asks the owner one multiple-choice question and pauses for their answer. Use it when you genuinely need a human decision (approval, a choice between options, missing direction) before continuing — especially when the user may be away. It pushes a notification; after calling it, stop and wait. The choice returns as a new user message.
@@ -245,6 +246,26 @@ export class MyAgent extends Think<Env> {
         },
       ],
     });
+  }
+
+  async sessionTurnState(): Promise<{ sessionStatus: string; requestId: string | null }> {
+    const identity = this.identity();
+    if (!identity) throw new Error("session identity not seeded");
+    const row = await this.env.DB.prepare("SELECT status FROM sessions WHERE id = ? AND owner_email = ?")
+      .bind(this.name, identity.email)
+      .first<{ status: string }>();
+    const sessionStatus = row?.status ?? "active";
+    return { sessionStatus, requestId: sessionStatus === "running" ? this.name : null };
+  }
+
+  async abortActiveTurn(): Promise<{ aborted: boolean; sessionId: string }> {
+    const identity = this.identity();
+    if (!identity) throw new Error("session identity not seeded");
+    this.cancelAllChats();
+    await this.env.DB.prepare("UPDATE sessions SET status = 'active', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
+      .bind(this.name, identity.email)
+      .run();
+    return { aborted: true, sessionId: this.name };
   }
 
   async notifyDelegateManyComplete(results: DelegateResult[]) {
@@ -933,6 +954,11 @@ export class MyAgent extends Think<Env> {
         return result.results ?? [];
       },
       searchArtifacts: (query, limit = 10) => searchOwnedArtifacts(env, identity, query, limit),
+      getArtifact: async (id) => {
+        const manifest = await readOwnedSvelteArtifact(env, identity, id);
+        if (!manifest) return null;
+        return { id: manifest.id, title: manifest.title, source: manifest.source, sourceHash: manifest.sourceHash, createdAt: manifest.createdAt };
+      },
       createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
       sendVoiceMessage: async (input) => {
         const clip = await createAudioMessage(env, identity, sessionId, input);

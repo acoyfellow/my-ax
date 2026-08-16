@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { publicWorkspacePath, resolveWorkspacePath, listWorkspace, readWorkspace } from "./workspace-mcp";
+import { publicWorkspacePath, resolveWorkspacePath, listWorkspace, readWorkspace, writeWorkspace } from "./workspace-mcp";
 
 test("resolveWorkspacePath aliases /workspace to /home/user", () => {
   assert.equal(resolveWorkspacePath("/workspace"), "/home/user");
@@ -41,4 +41,22 @@ test("readWorkspace truncates and maps the public path", async () => {
   assert.equal(read.path, "/workspace/feature-requests/a.md");
   assert.equal(read.content, "hello");
   assert.equal(read.truncated, true);
+});
+
+test("writeWorkspace rejects escape and writes under /home/user", async () => {
+  const calls: string[] = [];
+  const sandbox = {
+    exec: async (command: string) => {
+      calls.push(command);
+      return { exitCode: 0, stdout: "" };
+    },
+    writeFile: async (path: string, content: string) => {
+      calls.push(`write:${path}:${content}`);
+    },
+  };
+  await assert.rejects(() => writeWorkspace(sandbox, "/bugs/nope.md", "x"), /must be inside/);
+  const written = await writeWorkspace(sandbox, "/workspace/bugs/note.md", "hello");
+  assert.equal(written.path, "/workspace/bugs/note.md");
+  assert.equal(written.bytesWritten, 5);
+  assert.ok(calls.some((call) => call.startsWith("write:/home/user/bugs/note.md:hello")));
 });
