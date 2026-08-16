@@ -111,7 +111,7 @@ test("a no-session tap cannot start later after session preparation and connecti
   assert.equal(client.startCalls, 0);
 });
 
-test("a disconnected same-session tap reconnects and starts on the same client", async () => {
+test("a disconnected same-session tap is one tap: connect then startCall, not prepare-only", async () => {
   const clients: FakeVoiceClient[] = [];
   const lifecycle = new VoiceActivationLifecycle<FakeVoiceClient>();
   const createClient = factory(clients);
@@ -125,7 +125,7 @@ test("a disconnected same-session tap reconnects and starts on the same client",
   if (attempt.kind === "started") await attempt.completion;
 });
 
-test("a wrong-session tap retires the old client and never starts the replacement later", () => {
+test("a wrong-session tap retires the old client and starts the replacement on the same tap", async () => {
   const clients: FakeVoiceClient[] = [];
   const lifecycle = new VoiceActivationLifecycle<FakeVoiceClient>();
   const createClient = factory(clients);
@@ -133,14 +133,12 @@ test("a wrong-session tap retires the old client and never starts the replacemen
   oldClient.connected = true;
 
   const attempt = lifecycle.activate("session-b", createClient);
-  assert.equal(attempt.kind, "preparing");
-  assert.equal(attempt.kind === "preparing" && attempt.reason, "wrong-session");
+  assert.equal(attempt.kind, "started");
+  assert.equal(attempt.kind === "started" && attempt.reason, "wrong-session");
   const replacement = clients[1];
-  replacement.connected = true;
-  lifecycle.acceptsEvent("session-b", replacement, "session-b");
-
   assert.equal(oldClient.startCalls, 0);
-  assert.equal(replacement.startCalls, 0);
+  assert.equal(replacement.startCalls, 1);
+  if (attempt.kind === "started") await attempt.completion;
 });
 
 test("events from retired clients and changed sessions are suppressed", () => {

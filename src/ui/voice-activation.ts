@@ -10,8 +10,7 @@ export type VoicePreparationReason = "missing-client" | "wrong-session" | "disco
 
 export type VoiceActivationAttempt<Client extends VoiceActivationClient> =
   | { kind: "needs-session" }
-  | { kind: "preparing"; reason: VoicePreparationReason; client: Client }
-  | { kind: "started"; client: Client; completion: Promise<void> };
+  | { kind: "started"; client: Client; completion: Promise<void>; reason?: VoicePreparationReason };
 
 type PreparedVoiceClient<Client extends VoiceActivationClient> = {
   sessionId: string;
@@ -68,7 +67,14 @@ export class VoiceActivationLifecycle<Client extends VoiceActivationClient> {
         : "disconnected-client";
     this.clear();
     const client = this.prepare(sessionId, createClient);
-    return { kind: "preparing", reason, client };
+    if (!client.connected) client.connect();
+    let completion: Promise<void>;
+    try {
+      completion = client.startCall();
+    } catch (error) {
+      completion = Promise.reject(error);
+    }
+    return { kind: "started", client, completion, reason };
   }
 
   acceptsEvent(sessionId: string, client: Client, currentSessionId: string | null): boolean {

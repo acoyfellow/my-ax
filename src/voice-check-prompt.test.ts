@@ -37,6 +37,13 @@ test("voice prompt guard accepts safe output through an injected AI runner", asy
   ]);
 });
 
+test("voice prompt guard fails closed when LlamaGuard throws or times out", async () => {
+  const throwing: VoicePromptAIRunner = {
+    async run() { throw new Error("LlamaGuard timeout"); },
+  };
+  await assert.rejects(() => checkVoicePrompt(testEnv(throwing), "hi", throwing), /timeout|LlamaGuard/);
+});
+
 test("voice prompt guard reports only recognized unsafe categories", async () => {
   const mocked = runner("unsafe\nS1, S11, S99");
   const result = await checkVoicePrompt(testEnv(mocked.runner), "unsafe request", mocked.runner);

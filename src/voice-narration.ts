@@ -96,3 +96,4 @@ export class StillWorkingTimer {
 
 /** Up-front acknowledgement spoken when a turn is likely to take real work. */
 export const WORK_ACK = "On it — I'll talk you through it.";
+export const VOICE_ACK_THRESHOLD_MS = 800;

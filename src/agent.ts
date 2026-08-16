@@ -47,6 +47,7 @@ import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
+import { voiceChannelPrompt } from "./voice-channel";
 import { recipeApprovalDecision, shouldPersistSuggestedRecipe } from "./recipe-approval-policy";
 import { shouldSnapshotSandboxForToolCall } from "./workspace-snapshot-classification";
 
@@ -786,12 +787,13 @@ export class MyAgent extends Think<Env> {
     if (cfg.model && !findModel(cfg.model)) {
       this.configure<MyAgentConfig>({ ...cfg, model: defaultModelId(this.env) });
     }
+    const spoken = voiceChannelPrompt(transcript);
     let full = "";
     let failure: string | null = null;
     await new Promise<void>((resolve) => {
       let settled = false;
       const done = () => { if (!settled) { settled = true; resolve(); } };
-      void (Think.prototype.chat.call(this, transcript, {
+      void (Think.prototype.chat.call(this, spoken, {
         onStart: async () => {},
         onEvent: async (json: string) => {
           try {
