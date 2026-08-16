@@ -1,0 +1,41 @@
+package.json
+  s_8394b2006eeacb::t_85b078742d211e 102
+src/agent.ts
+  s_952b167abec97a::t_4b6a9f4a0bd3be 50,790,796
+src/ui/voice-activation.ts
+  s_8394b2006eeacb::t_8c752265816e8a 13,70-77
+src/ui/voice-half-duplex.test.ts
+  s_8394b2006eeacb::t_6865eb836ff2aa 120-121
+src/voice-channel.test.ts
+  s_952b167abec97a::t_e73658c572256f 1-14
+src/voice-channel.ts
+  s_952b167abec97a::t_16e7aa551ec630 1-9
+src/voice-check-prompt.test.ts
+  s_8394b2006eeacb::t_c80fb33a7d888f 40-46
+src/voice-narration.test.ts
+  s_8394b2006eeacb::t_3b3dd69a92335d 8,11-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b15e872de41afc4c1996f16a4b438b583667ce64",
+  "prompts": {},
+  "sessions": {
+    "s_8394b2006eeacb": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00028-e2ba-773f-9232-bbffad6fd5bf",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
