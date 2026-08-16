@@ -70,6 +70,14 @@ export class ReadOnlyDelegateAgent extends Think<Env> {
   // Explicit capability profile: no application/MCP/browser/machine tools. Think's
   // retained transcript and read-only workspace inspection remain official evidence.
   getTools(): ToolSet { return {}; }
+  override beforeTurn() {
+    const resolved = resolveMyAxModel(this.env);
+    return {
+      ...(resolved.meta.route === "gateway-openai"
+        ? { providerOptions: { openai: { store: false } } }
+        : {}),
+    };
+  }
   protected override getAgentToolOutput(runId: string) {
     const message = [...this.messages].reverse().find((entry) => entry.role === "assistant");
     const summary = message?.parts.filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
