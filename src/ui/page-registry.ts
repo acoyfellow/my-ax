@@ -86,11 +86,33 @@ export const PAGE_VERBS: PageVerb[] = [
   },
   {
     name: "readHealth",
-    description: "Read workspace container health: {diskPct,files,version,region,...}.",
+    description: "Read workspace container health: {diskPct,files,version,region,...}. Prefer readVersion for deploy freshness; this path waits on the sandbox.",
     resolution: "receipt",
     run: async () => {
       const data = (await getJSON(`/api/system`)) as { result?: unknown };
       return { result: data?.result ?? data };
+    },
+  },
+  {
+    name: "readVersion",
+    description: "Read the live client build vs the Worker deploy: {clientId,clientTimestamp,deployedId,deployedTimestamp,fresh,stale}. Uses /api/version (no sandbox).",
+    resolution: "receipt",
+    run: async () => {
+      const client = (window as any).__MY_AX_DEPLOY__ ?? { id: null, timestamp: null };
+      const res = await fetch("/api/version", { cache: "no-store", credentials: "same-origin" });
+      const deployedId = res.headers.get("X-My-Ax-Version");
+      const deployedTimestamp = res.headers.get("X-My-Ax-Version-Timestamp");
+      const clientId = typeof client.id === "string" && client.id ? client.id : null;
+      const fresh = Boolean(clientId && deployedId && clientId === deployedId);
+      return { result: {
+        clientId,
+        clientTimestamp: typeof client.timestamp === "string" ? client.timestamp : null,
+        deployedId,
+        deployedTimestamp,
+        fresh,
+        stale: Boolean(clientId && deployedId && clientId !== deployedId),
+        httpStatus: res.status,
+      } };
     },
   },
   {
@@ -237,6 +259,17 @@ export const PAGE_VERBS: PageVerb[] = [
       const kind = args.kind === "error" ? "error" : "system";
       window.dispatchEvent(new CustomEvent("my-ax:toast", { detail: { text, kind } }));
       return { result: { ok: true } };
+    },
+  },
+  {
+    name: "reload",
+    description: "Hard-reload the owner's live UI (installed iOS PWA included): skipWaiting + cache-bust replace. Resolves after the reload event is dispatched.",
+    resolution: "ack",
+    run: async () => {
+      return {
+        result: { ok: true, reloading: true },
+        after: () => { window.dispatchEvent(new Event("my-ax:reload")); },
+      };
     },
   },
   {

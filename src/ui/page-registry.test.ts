@@ -6,6 +6,7 @@ import { handlePageCall, PAGE_VERBS, pageVerbCatalog } from "./page-registry";
 // node without a browser. Each test installs exactly what its verb touches.
 function installGlobals(opts: {
   fetchJson?: (url: string) => unknown;
+  fetchResponse?: { status?: number; headers?: Record<string, string>; json?: unknown };
   events?: string[];
   msgNodes?: Array<{ user: boolean; text: string; ts?: string }>;
   viewport?: { innerWidth: number; innerHeight: number; visualHeight: number; dvh: number; appViewportBottom: number | null; safeAreaBottom?: number };
@@ -48,11 +49,22 @@ function installGlobals(opts: {
       getAttribute: () => n.ts ?? null,
     })),
   };
-  (globalThis as any).fetch = async (url: string) => ({
-    ok: true,
-    status: 200,
-    json: async () => (opts.fetchJson ? opts.fetchJson(url) : {}),
-  });
+  (globalThis as any).fetch = async (url: string) => {
+    if (opts.fetchResponse) {
+      const headers = opts.fetchResponse.headers ?? {};
+      return {
+        ok: (opts.fetchResponse.status ?? 200) < 400,
+        status: opts.fetchResponse.status ?? 200,
+        headers: { get: (name: string) => headers[name] ?? headers[name.toLowerCase()] ?? null },
+        json: async () => opts.fetchResponse?.json ?? {},
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => (opts.fetchJson ? opts.fetchJson(url) : {}),
+    };
+  };
   return events;
 }
 
@@ -66,7 +78,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readViewport", "setViewportDebug", "switchSession"]);
+  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "setViewportDebug", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -82,6 +94,28 @@ test("listSessions unwraps the REST { result: { sessions } } envelope", async ()
     { id: "s1", title: "One", status: "active", updatedAt: "t1" },
     { id: "s2", title: null, status: "idle", updatedAt: "t2" },
   ]);
+});
+
+test("readVersion compares client boot id to /api/version without hitting /api/system", async () => {
+  installGlobals({ fetchResponse: { status: 200, headers: { "X-My-Ax-Version": "new", "X-My-Ax-Version-Timestamp": "t1" } } });
+  (globalThis as any).window.__MY_AX_DEPLOY__ = { id: "old", timestamp: "t0" };
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "rv", verb: "readVersion" });
+  assert.equal(frame.ok, true);
+  const r = frame.result as Record<string, unknown>;
+  assert.equal(r.clientId, "old");
+  assert.equal(r.deployedId, "new");
+  assert.equal(r.fresh, false);
+  assert.equal(r.stale, true);
+});
+
+test("reload dispatches my-ax:reload after the result", async () => {
+  const events: string[] = [];
+  installGlobals({ events });
+  const { frame, after } = await handlePageCall({ type: "page_call", requestId: "rl", verb: "reload" });
+  assert.equal(frame.ok, true);
+  assert.deepEqual(events, []);
+  after?.();
+  assert.ok(events.includes("my-ax:reload"));
 });
 
 test("readHealth unwraps the REST { result } envelope", async () => {

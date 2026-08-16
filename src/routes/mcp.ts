@@ -12,7 +12,7 @@ import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -167,6 +167,11 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
       return { unavailable: true, error: message };
     }
   }
+  if (method === "deployment") {
+    const versionId = (c.env as { CF_VERSION_METADATA?: { id?: string; timestamp?: string } }).CF_VERSION_METADATA?.id ?? null;
+    const versionTimestamp = (c.env as { CF_VERSION_METADATA?: { id?: string; timestamp?: string } }).CF_VERSION_METADATA?.timestamp ?? null;
+    return { versionId, versionTimestamp, environment: (c.env as { ENVIRONMENT?: string }).ENVIRONMENT ?? null };
+  }
   if (method === "artifact_list") {
     const artifacts = await listOwnedArtifacts(c.env, c.get("identity"), clamp(args.limit, 20, 100));
     return { artifacts };
@@ -298,6 +303,7 @@ const CODE_METHODS: Record<string, Method> = {
   abort: "abort",
   artifactList: "artifact_list",
   artifactGet: "artifact_get",
+  deployment: "deployment",
 };
 
 function objectArgs(input: unknown): Record<string, unknown> {
@@ -333,6 +339,7 @@ const CODE_TYPES = `declare const codemode: {
   abort(args: { sessionId: string }): Promise<unknown>;
   artifactList(args?: { limit?: number }): Promise<unknown>;
   artifactGet(args: { id: string }): Promise<unknown>;
+  deployment(): Promise<unknown>;
 };`;
 
 /** Owner-scoped coordinator MCP. Cloudflare Access remains the only auth boundary. */
