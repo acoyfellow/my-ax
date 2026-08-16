@@ -146,6 +146,18 @@ export function normalizeAttentionSeenIds(ids: unknown): string[] {
   return [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
 }
 
+export function normalizeAttentionDismissalTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0 && tag.length <= 256))].slice(0, 50);
+}
+
+async function queueAttentionDismissals(c: { env: AppEnv["Bindings"] }, email: string, tags: string[]): Promise<void> {
+  if (!tags.length) return;
+  const values = tags.map(() => "(?, ?, datetime('now'))").join(",");
+  await c.env.DB.prepare(`INSERT OR IGNORE INTO push_dismissals(owner_email, tag, created_at) VALUES ${values}`)
+    .bind(...tags.flatMap((tag) => [email, tag])).run();
+}
+
 export function registerAttentionRoutes(app: Hono<AppEnv>) {
   app.post("/attention/seen", async (c) => {
     const origin = c.req.header("origin");
@@ -165,7 +177,10 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
       return c.redirect(`/attention?sessionId=${encodeURIComponent(query.invalidSessionId)}`, 303);
     }
     const { filterSql, bindValues } = buildAttentionListFilter(email, query);
+    const pending = await c.env.DB.prepare(`SELECT COALESCE(notification_tag, id) AS tag FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`)
+      .bind(...bindValues).all<{ tag: string }>();
     await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).run();
+    await queueAttentionDismissals(c, email, normalizeAttentionDismissalTags((pending.results ?? []).map((row) => row.tag)));
     const redirectTo = formatRenderedAttentionReturnHref(query);
     return c.redirect(redirectTo, 303);
   });
