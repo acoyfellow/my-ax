@@ -1,0 +1,19 @@
+src/views/Layout.tsx
+  s_e050e2bde8a246::t_0513afa31b98b6 126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e3941246794ae224ba22a1e0b438cc9ba65213ab",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
