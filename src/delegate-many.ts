@@ -5,6 +5,7 @@ import { z } from "zod";
 import { resolveMyAxModel } from "./llm";
 import {
   DELEGATE_MANY_LIMIT,
+  stripOpenAiStoredItemRefs,
   delegateResultSchema,
   delegateRunId,
   runDelegatesSerially,
@@ -64,6 +65,12 @@ export class ReadOnlyDelegateAgent extends Think<Env> {
   // Undefined -> resolveMyAxModel heals to defaultModelId(env): the resilient
   // gateway model on gateway installs, the Workers-AI fallback otherwise.
   getModel() { return resolveMyAxModel(this.env).model; }
+  async beforeTurn(ctx: { messages: unknown[] }) {
+    return {
+      messages: stripOpenAiStoredItemRefs(ctx.messages),
+      providerOptions: { openai: { store: false } },
+    };
+  }
   getSystemPrompt() {
     return "Complete only the bounded analysis task. Treat all available capabilities as read-only. Return evidence and a concise conclusion; do not mutate state or delegate.";
   }

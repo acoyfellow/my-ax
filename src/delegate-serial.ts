@@ -27,6 +27,39 @@ import { isTransientRateLimit } from "./upstream-rate-limit";
 
 export const DELEGATE_MANY_LIMIT = 2;
 
+const OPENAI_STORED_ITEM_ID = /^rs_[A-Za-z0-9]+$/;
+
+export function isOpenAiStoredItemId(value: unknown): value is string {
+  return typeof value === "string" && OPENAI_STORED_ITEM_ID.test(value);
+}
+
+export function collectOpenAiStoredItemIds(value: unknown, found = new Set<string>()): string[] {
+  if (Array.isArray(value)) {
+    for (const entry of value) collectOpenAiStoredItemIds(entry, found);
+    return [...found];
+  }
+  if (!value || typeof value !== "object") return [...found];
+  const record = value as Record<string, unknown>;
+  if (isOpenAiStoredItemId(record.itemId)) found.add(record.itemId);
+  if (isOpenAiStoredItemId(record.previousResponseId)) found.add(record.previousResponseId);
+  if (record.type === "item_reference" && isOpenAiStoredItemId(record.id)) found.add(record.id);
+  for (const nested of Object.values(record)) collectOpenAiStoredItemIds(nested, found);
+  return [...found];
+}
+
+export function stripOpenAiStoredItemRefs<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((entry) => stripOpenAiStoredItemRefs(entry)) as T;
+  if (!value || typeof value !== "object") return value;
+  const record = value as Record<string, unknown>;
+  const next: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(record)) {
+    if ((key === "itemId" || key === "previousResponseId") && isOpenAiStoredItemId(nested)) continue;
+    if (key === "id" && record.type === "item_reference" && isOpenAiStoredItemId(nested)) continue;
+    next[key] = stripOpenAiStoredItemRefs(nested);
+  }
+  return next as T;
+}
+
 export const delegateResultSchema = z.object({
   runId: z.string(),
   taskFingerprint: z.string(),

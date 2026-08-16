@@ -9,6 +9,8 @@ import {
   shouldRetryDelegate,
   shouldRetryDelegateAttempt,
   taskFingerprint,
+  collectOpenAiStoredItemIds,
+  stripOpenAiStoredItemRefs,
   type DelegateTaskOutcome,
 } from "./delegate-serial";
 
@@ -33,6 +35,22 @@ function launcher(script: (index: number, launchNo: number) => DelegateTaskOutco
   const runTask = async (index: number) => { launches.push(index); return script(index, launches.length); };
   return { runTask, launches };
 }
+
+test("child input must not carry prior OpenAI stored item ids under ZDR", () => {
+  const leaked = {
+    role: "assistant",
+    content: [{
+      type: "text",
+      text: "prior child",
+      providerOptions: { openai: { itemId: "rs_abc123" } },
+      providerMetadata: { openai: { itemId: "rs_abc123" } },
+    }],
+  };
+  assert.deepEqual(collectOpenAiStoredItemIds(leaked), ["rs_abc123"]);
+  const selfContained = stripOpenAiStoredItemRefs(leaked);
+  assert.deepEqual(collectOpenAiStoredItemIds(selfContained), []);
+  assert.equal((selfContained as typeof leaked).content[0].text, "prior child");
+});
 
 test("fingerprint and run id are stable under insignificant whitespace", () => {
   assert.equal(taskFingerprint(" inspect   evidence "), taskFingerprint("inspect evidence"));
