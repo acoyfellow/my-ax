@@ -8,9 +8,11 @@ import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
 import { getUserWorkspace } from "../workspace";
-import { listWorkspace, readWorkspace } from "../workspace-mcp";
+import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
+import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
+import { buildSessionTurnState } from "../session-turn";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -148,18 +150,42 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     await stub.seedIdentity(c.get("identity"));
     return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
   }
-  if (method === "workspace_list" || method === "workspace_read") {
+  if (method === "workspace_list" || method === "workspace_read" || method === "workspace_write") {
     try {
       const { sandbox } = await getUserWorkspace(c.env, c.get("identity"));
       if (method === "workspace_list") {
         return await listWorkspace(sandbox, typeof args.path === "string" ? args.path : undefined, clamp(args.limit, 80, 200));
       }
       if (typeof args.path !== "string" || !args.path.trim()) throw new Error("path is required");
+      if (method === "workspace_write") {
+        if (typeof args.content !== "string") throw new Error("content is required");
+        return await writeWorkspace(sandbox, args.path, args.content);
+      }
       return await readWorkspace(sandbox, args.path, clamp(args.maxBytes, 8000, 32000));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { unavailable: true, error: message };
     }
+  }
+  if (method === "artifact_list") {
+    const artifacts = await listOwnedArtifacts(c.env, c.get("identity"), clamp(args.limit, 20, 100));
+    return { artifacts };
+  }
+  if (method === "artifact_get") {
+    const id = typeof args.id === "string" ? args.id.trim() : "";
+    if (!id) throw new Error("id is required");
+    const row = await getOwnedArtifactRow(c.env, c.get("identity"), id);
+    if (!row) throw new Error("artifact not found or not owned");
+    const manifest = await readOwnedSvelteArtifact(c.env, c.get("identity"), id);
+    if (!manifest) throw new Error("artifact source not readable");
+    return {
+      id: manifest.id,
+      title: manifest.title,
+      sessionId: row.session_id,
+      source: manifest.source,
+      sourceHash: manifest.sourceHash,
+      createdAt: manifest.createdAt,
+    };
   }
   if (method === "list_sessions") {
     const limit = clamp(args.limit, 20, 100);
@@ -191,6 +217,20 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   const sessionId = typeof args.sessionId === "string" ? args.sessionId : "";
   const session = await ownedSession(c, sessionId);
   if (method === "get_session") return { session };
+  if (method === "session_state" || method === "abort") {
+    const stub = await getSessionAgent(c.env, email, sessionId);
+    await stub.seedIdentity(c.get("identity"));
+    if (method === "session_state") {
+      const live = await stub.sessionTurnState();
+      return buildSessionTurnState({
+        sessionId,
+        sessionStatus: typeof live.sessionStatus === "string" ? live.sessionStatus : String(session.status ?? "active"),
+        requestId: live.requestId,
+        updatedAt: typeof session.updated_at === "string" ? session.updated_at : null,
+      });
+    }
+    return stub.abortActiveTurn();
+  }
   if (method === "entries") {
     const after = Math.max(0, Number(args.after) || 0);
     const limit = clamp(args.limit, 20, 100);
@@ -253,6 +293,11 @@ const CODE_METHODS: Record<string, Method> = {
   jobsHistory: "jobs_history",
   workspaceList: "workspace_list",
   workspaceRead: "workspace_read",
+  workspaceWrite: "workspace_write",
+  sessionState: "session_state",
+  abort: "abort",
+  artifactList: "artifact_list",
+  artifactGet: "artifact_get",
 };
 
 function objectArgs(input: unknown): Record<string, unknown> {
@@ -283,6 +328,11 @@ const CODE_TYPES = `declare const codemode: {
   jobsHistory(args: { id: string }): Promise<unknown>;
   workspaceList(args?: { path?: string; limit?: number }): Promise<unknown>;
   workspaceRead(args: { path: string; maxBytes?: number }): Promise<unknown>;
+  workspaceWrite(args: { path: string; content: string }): Promise<unknown>;
+  sessionState(args: { sessionId: string }): Promise<unknown>;
+  abort(args: { sessionId: string }): Promise<unknown>;
+  artifactList(args?: { limit?: number }): Promise<unknown>;
+  artifactGet(args: { id: string }): Promise<unknown>;
 };`;
 
 /** Owner-scoped coordinator MCP. Cloudflare Access remains the only auth boundary. */

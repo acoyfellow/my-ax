@@ -4,6 +4,12 @@ Progress on My Agent Experience is recorded here in date order, newest first. Ea
 
 The version stays `0.0.1`. It does not increment. The number is a deliberate stance, not a status. The real identity of each change is its commit hash. Each dated entry names the deployed revision.
 
+## 2026-08-16
+
+### Added
+
+- Owner MCP control plane: `session_state`, `abort`, `workspace_write`, `artifact_list`, and `artifact_get` so a supervisor can inspect and steer without injecting a user turn. Chat agents can `get_artifact` to read stored Svelte source.
+
 ## 2026-08-15
 
 Employee target at the notify-dedupe revision after this entry. Personal target is not deployed.

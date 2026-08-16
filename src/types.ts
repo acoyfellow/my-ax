@@ -148,6 +148,7 @@ export interface ToolContext {
   searchConversations: (query: string, limit?: number) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
   /** Search the owner-scoped artifact library by reusable intent/title. */
   searchArtifacts: (query: string, limit?: number) => Promise<Array<{ id: string; sessionId: string; kind: string; title: string; sourceHash: string; createdAt: string; updatedAt: string; score: number }>>;
+  getArtifact: (id: string) => Promise<{ id: string; title: string; source: string; sourceHash: string; createdAt: string } | null>;
   /** Compile and persist one owner-scoped Svelte artifact attached to this conversation. Exact source duplicates are reused. */
   createSvelteArtifact: (input: { title: string; source: string }) => Promise<{ kind: "svelte-artifact"; artifactId: string; title: string; src: string; sourceHash: string; reused?: boolean }>;
   /** Generate a short TTS clip, store it (7-day TTL), and deliver a push notification. */

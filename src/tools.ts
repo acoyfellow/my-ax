@@ -201,6 +201,22 @@ export const TOOLS: ToolDef[] = [
     execute: async (args, ctx) => JSON.stringify({ ok: true, artifacts: await ctx.searchArtifacts(String(args.query ?? ""), args.limit as number | undefined) }),
   },
   {
+    name: "get_artifact",
+    description: "Read the stored Svelte source for one owner-owned artifact by id. Use after search_artifacts or create_svelte_artifact when you need to inspect or revise a widget you already generated.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Artifact id returned by search_artifacts or create_svelte_artifact" },
+      },
+      required: ["id"],
+    },
+    execute: async (args, ctx) => {
+      const artifact = await ctx.getArtifact(String(args.id ?? ""));
+      if (!artifact) return JSON.stringify({ ok: false, error: "artifact not found or not readable" });
+      return JSON.stringify({ ok: true, artifact });
+    },
+  },
+  {
     name: "create_svelte_artifact",
     description: "Create one durable interactive Svelte 5 artifact attached to this conversation and rendered inline in chat. Use when the user asks for a widget, visualization, dashboard, interactive explainer, calculator, form, or other useful UI artifact. Search with search_artifacts first and reuse a strong existing match. If creation is still needed, exact-source duplicates are automatically reused rather than stored again. Do not treat repeated snapshots as separate reusable artifacts. Source must be a complete self-contained .svelte component using Svelte 5 runes and no external imports. The artifact runs in a sandboxed iframe with no owner credentials; only the Svelte runtime module CDN required to mount it is permitted. TO SEND A RESULT BACK TO THE CHAT (e.g. a submitted form answer), call `window.parent.postMessage({ type: 'my-ax:artifact-submit', value: '<text to place in the composer>', send: false }, '*')`. The value lands in the message composer for the user to review and send; pass `send: true` only to submit it immediately on the user's behalf. TO MAKE THE ARTIFACT AGENT-DRIVABLE (a live instrument you can steer later), self-register tools on mount: `window.parent.postMessage({ type: 'my-ax:artifact-register', tools: [{ name: 'setFilter', description: '...', inputSchema: { status: 'string' } }] }, '*')` (inputSchema values are one of 'string'|'number'|'boolean' with optional '?' suffix; max 8 tools). Then handle invocations: on `message` where `event.data.type === 'my-ax:artifact-invoke'`, do the work and reply `window.parent.postMessage({ type: 'my-ax:artifact-invoke-result', callId: event.data.callId, ok: true, result }, '*')`. The agent discovers these via page.listArtifactTools() and calls page.invokeArtifactTool({artifactId,name,args}). NOTE: a freshly-created artifact's self-registered tools only become discoverable on the NEXT turn (the iframe must mount and post its registration first) — do NOT call page.listArtifactTools() in the same turn you create the artifact; it will return the not-yet-registered set. Use this for dashboards/cockpits the user wants to keep steering. These postMessages are the only channel out of the sandbox.",
     parameters: {
