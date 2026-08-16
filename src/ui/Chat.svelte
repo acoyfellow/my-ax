@@ -531,16 +531,22 @@
     }
     voiceClient = attempt.client;
     voiceReady = attempt.client.connected;
-    voiceEnabled = true;
     localStorage.setItem("my-ax-voice-mode", "1");
     if (voiceTransport) startVoiceOutputMeter(attempt.client, voiceTransport);
     syncVoiceModelForSession(sessionId!);
+    void navigator.mediaDevices?.getUserMedia?.({ audio: true }).then((stream) => {
+      for (const track of stream.getTracks()) track.stop();
+    }).catch(() => {});
     void attempt.completion.then(
       () => {
-        if (voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) voiceStarting = false;
+        if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) return;
+        voiceEnabled = true;
+        voiceStarting = false;
+        voiceError = null;
       },
       (error) => {
         if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) return;
+        voiceStarting = false;
         void stopVoiceMode();
         pushError(`Microphone access is required for voice mode: ${error instanceof Error ? error.message : String(error)}`);
       },

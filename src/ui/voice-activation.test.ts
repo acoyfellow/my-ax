@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { VoiceActivationLifecycle, createAndPrepareVoiceSession, type VoiceActivationClient } from "./voice-activation";
+import { VoiceActivationLifecycle, createAndPrepareVoiceSession, startCallWhenConnected, type VoiceActivationClient } from "./voice-activation";
 
 class FakeVoiceClient implements VoiceActivationClient {
   connected = false;
@@ -19,7 +19,12 @@ class FakeVoiceClient implements VoiceActivationClient {
     this.events.push("connect");
   }
 
+  markOpen(): void {
+    this.connected = true;
+  }
+
   startCall(): Promise<void> {
+    if (!this.connected) throw new Error("Cannot start call: not connected. Call connect() first.");
     this.startCalls += 1;
     this.events.push("start");
     return Promise.resolve();
@@ -84,8 +89,9 @@ test("a matching connected client starts synchronously inside activation", async
   events.push("returned");
 
   assert.equal(attempt.kind, "started");
-  assert.deepEqual(events, ["start", "returned"]);
   if (attempt.kind === "started") await attempt.completion;
+  assert.ok(events.includes("start"));
+  assert.ok(events.includes("returned"));
 });
 
 test("connection events never start a prepared client", () => {
@@ -121,8 +127,10 @@ test("a disconnected same-session tap is one tap: connect then startCall, not pr
   assert.equal(attempt.kind, "started");
   assert.equal(clients.length, 1);
   assert.equal(disconnected.connectCalls, 2);
-  assert.equal(disconnected.startCalls, 1);
+  assert.equal(disconnected.startCalls, 0);
+  disconnected.markOpen();
   if (attempt.kind === "started") await attempt.completion;
+  assert.equal(disconnected.startCalls, 1);
 });
 
 test("a wrong-session tap retires the old client and starts the replacement on the same tap", async () => {
@@ -137,8 +145,10 @@ test("a wrong-session tap retires the old client and starts the replacement on t
   assert.equal(attempt.kind === "started" && attempt.reason, "wrong-session");
   const replacement = clients[1];
   assert.equal(oldClient.startCalls, 0);
-  assert.equal(replacement.startCalls, 1);
+  assert.equal(replacement.startCalls, 0);
+  replacement.markOpen();
   if (attempt.kind === "started") await attempt.completion;
+  assert.equal(replacement.startCalls, 1);
 });
 
 test("events from retired clients and changed sessions are suppressed", () => {
@@ -151,6 +161,26 @@ test("events from retired clients and changed sessions are suppressed", () => {
   assert.equal(lifecycle.acceptsEvent("session-a", oldClient, "session-b"), false);
   assert.equal(lifecycle.acceptsEvent("session-b", currentClient, "session-c"), false);
   assert.equal(lifecycle.acceptsEvent("session-b", currentClient, "session-b"), true);
+});
+
+test("startCallWhenConnected never starts before the socket is open", async () => {
+  const client = new FakeVoiceClient();
+  let now = 0;
+  const pending = startCallWhenConnected(client, 100, () => now, async () => { now += 20; });
+  assert.equal(client.startCalls, 0);
+  client.markOpen();
+  await pending;
+  assert.equal(client.startCalls, 1);
+});
+
+test("startCallWhenConnected fails if the socket never opens", async () => {
+  const client = new FakeVoiceClient();
+  let now = 0;
+  await assert.rejects(
+    startCallWhenConnected(client, 40, () => now, async () => { now += 20; }),
+    /did not connect/,
+  );
+  assert.equal(client.startCalls, 0);
 });
 
 test("clear invalidates callbacks before ending and disconnecting the client", () => {

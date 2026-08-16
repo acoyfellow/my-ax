@@ -17,6 +17,23 @@ type PreparedVoiceClient<Client extends VoiceActivationClient> = {
   client: Client;
 };
 
+export const VOICE_CONNECT_WAIT_MS = 8_000;
+
+export async function startCallWhenConnected(
+  client: VoiceActivationClient,
+  waitMs = VOICE_CONNECT_WAIT_MS,
+  now: () => number = Date.now,
+  pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<void> {
+  if (!client.connected) client.connect();
+  const deadline = now() + waitMs;
+  while (!client.connected && now() < deadline) {
+    await pause(20);
+  }
+  if (!client.connected) throw new Error("Voice socket did not connect");
+  return client.startCall();
+}
+
 export async function createAndPrepareVoiceSession(
   createSession: () => Promise<string>,
   sessionIsCurrent: (sessionId: string) => boolean,
@@ -50,14 +67,7 @@ export class VoiceActivationLifecycle<Client extends VoiceActivationClient> {
 
     const prepared = this.prepared;
     if (prepared?.sessionId === sessionId) {
-      if (!prepared.client.connected) prepared.client.connect();
-      let completion: Promise<void>;
-      try {
-        completion = prepared.client.startCall();
-      } catch (error) {
-        completion = Promise.reject(error);
-      }
-      return { kind: "started", client: prepared.client, completion };
+      return { kind: "started", client: prepared.client, completion: startCallWhenConnected(prepared.client) };
     }
 
     const reason: VoicePreparationReason = !prepared
@@ -67,14 +77,7 @@ export class VoiceActivationLifecycle<Client extends VoiceActivationClient> {
         : "disconnected-client";
     this.clear();
     const client = this.prepare(sessionId, createClient);
-    if (!client.connected) client.connect();
-    let completion: Promise<void>;
-    try {
-      completion = client.startCall();
-    } catch (error) {
-      completion = Promise.reject(error);
-    }
-    return { kind: "started", client, completion, reason };
+    return { kind: "started", client, completion: startCallWhenConnected(client), reason };
   }
 
   acceptsEvent(sessionId: string, client: Client, currentSessionId: string | null): boolean {
