@@ -31,7 +31,8 @@ const WORKSPACE_METHODS = [
 // PAGE_VERBS. Each verb marshals over the chat WS to the live browser client.
 const PAGE_WORK_METHODS = [
   { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
-  { name: "readHealth", description: "Read workspace container health for the live session: {diskPct,files,version,region,...}." },
+  { name: "readHealth", description: "Read workspace container health for the live session: {diskPct,files,version,region,...}. Prefer page.readVersion for deploy freshness." },
+  { name: "readVersion", description: "Read live client vs Worker deploy: {clientId,deployedId,fresh,stale}. Fast; no sandbox." },
   { name: "readTranscriptTail", description: "Read the last N entries of the active conversation as rendered: [{role,text,ts}]. Optional {n}." },
   { name: "readViewport", description: "Read the live top-document viewport + .app-viewport frame gap: {innerWidth,innerHeight,visualHeight,visualScale,dvh,safeAreaTop,safeAreaBottom,appViewportRect,gapBelow,devicePixelRatio,userAgent,platform,uaMobile,maxTouchPoints,standalone}. Read-only." },
   { name: "setViewportDebug", description: "Toggle the on-screen viewport debug overlay in the owner's live UI (works in the installed iOS PWA where a URL query cannot). Input: {on}. Returns current viewport metrics {innerHeight,visualHeight,dvh,safeAreaBottom,appViewportBottom,gapBelow,standalone}." },
@@ -40,6 +41,7 @@ const PAGE_WORK_METHODS = [
   { name: "openAttention", description: "Open the notifications/attention panel in the owner's UI." },
   { name: "openSessions", description: "Open the conversations sidebar in the owner's UI." },
   { name: "notify", description: "Show a transient in-app toast to the owner in the live UI. Input: {text, kind?}." },
+  { name: "reload", description: "Hard-reload the owner's live UI including iOS PWA (skipWaiting + cache-bust)." },
   { name: "navigate", description: "Navigate the owner's UI to an in-app deep link (/?session=<id>, /?action=attention|settings, /runs/<id>). Input: {target}." },
   { name: "listArtifactTools", description: "List tools that live artifact widgets have self-registered: [{artifactId,name,description}]. Discover them here, then call invokeArtifactTool." },
   { name: "invokeArtifactTool", description: "Invoke a tool a live artifact widget self-registered (agent-drivable UI). Input: {artifactId, name, args?}. Parent-mediated + arg-validated." },
