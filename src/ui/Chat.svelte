@@ -9,7 +9,8 @@
   import { VOICE_CLIENT_OPTIONS } from "./voice-client-options";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
-  import { VoiceActivationLifecycle, createAndPrepareVoiceSession } from "./voice-activation";
+  import { VoiceActivationLifecycle, createAndPrepareVoiceSession, startCallWhenConnected } from "./voice-activation";
+  import { shouldResumeVoiceCall } from "./voice-continue";
   import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import ImageLightbox from "./ImageLightbox.svelte";
@@ -437,13 +438,11 @@
       if (!eventIsCurrent()) return;
       voiceStatus = status;
       voiceStarting = false;
-      // Half-duplex: suppress the mic while the agent produces audio, re-arm
-      // after a debounce once it returns to listening. Stops the loudspeaker
-      // self-feedback loop on mobile PWAs.
       applyVoiceGate(status);
-      // Turn-boundary chime: "stop talking" when the agent starts, "your turn"
-      // when the mic returns. Fires on the edge only.
       maybeChime(status);
+      if (shouldResumeVoiceCall({ enabled: voiceEnabled, status, connected: client.connected })) {
+        void startCallWhenConnected(client).catch(() => {});
+      }
     });
     client.addEventListener("transcriptchange", () => {});
     // Fail-closed: ignore interim transcripts observed while the gate is
