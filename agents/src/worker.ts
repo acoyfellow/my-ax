@@ -26,7 +26,7 @@ export default {
     if (request.method === "POST" && url.pathname === "/webhooks/github") {
       const raw = await request.text();
       const sig = request.headers.get("x-hub-signature-256") || "";
-      if (!verifyGithubSignature(env.GITHUB_WEBHOOK_SECRET || "", raw, sig)) {
+      if (!await verifyGithubSignature(env.GITHUB_WEBHOOK_SECRET || "", raw, sig)) {
         return new Response("unauthorized", { status: 401 });
       }
       const event = request.headers.get("x-github-event") || "";
