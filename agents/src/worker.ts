@@ -37,7 +37,7 @@ export default {
         const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string } };
         try {
           const created = await env.TRIAGE.create({
-            id: `issue:${issue.number}:${deliveryId}`,
+            id: deliveryId,
             params: {
               number: issue.number,
               title: String(issue.title || ""),
