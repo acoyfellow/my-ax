@@ -1,0 +1,21 @@
+agents/src/ports.ts
+  s_2a77a1542d3982::t_1257ff58a14ed5 42
+src/desk-board.test.ts
+  s_2a77a1542d3982::t_7e4734d3cc9b07 38-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "06159291c1465c9d4df92a4e963bdeb0878e179b",
+  "prompts": {},
+  "sessions": {
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
