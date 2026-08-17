@@ -17,6 +17,7 @@ export type AttentionItem = {
   title?: string | null;
   body?: string | null;
   href?: string | null;
+  decisionHref?: string | null;
   created_at?: string | null;
   seen_at?: string | null;
 };
@@ -37,8 +38,9 @@ export type Notification = {
   tone: NotificationTone;
   title: string;
   body: string;
-  href: string | null;       // primary action -> open the conversation
-  widgetHref: string | null; // secondary action -> open the widget/artifact (e.g. /runs/<id>)
+  href: string | null;
+  widgetHref: string | null;
+  decisionHref: string | null;
   ts: number;            // epoch ms for sorting
   unread: boolean;
 };
@@ -107,6 +109,7 @@ export function attentionToNotification(item: AttentionItem): Notification {
     body: (item.body ?? "").trim(),
     href,
     widgetHref,
+    decisionHref: typeof item.href === "string" && item.href.startsWith("/api/decisions/") ? item.href : null,
     ts: toEpoch(item.created_at),
     unread: !item.seen_at,
   };
@@ -123,6 +126,7 @@ export function runToNotification(run: FailedRun): Notification {
     body: (run.task_summary ?? "").trim(),
     href: `/?run=${encodeURIComponent(run.id)}`,
     widgetHref: `/runs/${encodeURIComponent(run.id)}`,
+    decisionHref: null,
     ts: toEpoch(run.updated_at),
     unread: true,
   };

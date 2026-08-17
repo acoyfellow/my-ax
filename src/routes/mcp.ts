@@ -7,6 +7,7 @@ import { JobService } from "../job-service";
 import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
+import { createDecision } from "./decisions";
 import { getUserWorkspace } from "../workspace";
 import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
@@ -50,6 +51,21 @@ const TOOLS = [
         href: { type: "string", description: "Optional same-origin My AX deep link." },
       },
       required: ["kind", "title", "body"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "ask_owner",
+    description: "Create a durable owner decision (Approve/Reject or custom options), push it with lock-screen actions, and inject the answer back into sessionId. Use this instead of flattening a cockpit into notify_owner body text.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string" },
+        question: { type: "string" },
+        options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 6 },
+        title: { type: "string" },
+      },
+      required: ["sessionId", "question", "options"],
       additionalProperties: false,
     },
   },
@@ -251,6 +267,28 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   return { sessionId, injected: true };
 }
 
+async function askOwner(c: CoordinatorContext, args: Record<string, unknown>) {
+  const sessionId = typeof args.sessionId === "string" ? args.sessionId.trim() : "";
+  const question = typeof args.question === "string" ? args.question.trim() : "";
+  const title = typeof args.title === "string" && args.title.trim() ? args.title.trim() : "Needs your decision";
+  const options = Array.isArray(args.options) ? args.options.map((option) => String(option).trim()).filter(Boolean).slice(0, 6) : [];
+  if (!sessionId) throw new Error("sessionId is required");
+  if (!question) throw new Error("question is required");
+  if (options.length < 2) throw new Error("at least two options are required");
+  await ownedSession(c, sessionId);
+  const email = c.get("identity").email.toLowerCase();
+  const decision = await createDecision(c.env, email, sessionId, question, options);
+  const receipt = await notifyOwner(c.env, email, {
+    kind: "job.needs_input",
+    title,
+    body: question.slice(0, 300),
+    href: decision.href,
+    sessionId,
+    decision: { id: decision.id, options },
+  });
+  return { ok: true, awaiting: true, decisionId: decision.id, href: decision.href, options, reused: decision.reused, receipt };
+}
+
 async function observeConnectedSession(c: CoordinatorContext, args: Record<string, unknown>) {
   const runId = typeof args.runId === "string" ? args.runId.trim() : "";
   const harness = typeof args.harness === "string" ? args.harness.trim().toLowerCase() : "";
@@ -379,6 +417,9 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
         });
         const delivered = receipt.delivered > 0 && receipt.failed === 0;
         return c.json(rpc(req.id, { ...text({ ok: delivered, ...receipt }), ...(delivered ? {} : { isError: true }) }));
+      }
+      if (name === "ask_owner") {
+        return c.json(rpc(req.id, text(await askOwner(c, args))));
       }
       if (name === "my_ax_observe_connected_session") {
         try {
