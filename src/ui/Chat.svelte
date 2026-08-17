@@ -2303,6 +2303,7 @@
         return;
       }
       if (intent.kind === "settings") { window.dispatchEvent(new Event("my-ax:settings-open")); return; }
+      if (intent.kind === "desk") { window.dispatchEvent(new Event("my-ax:desk-open")); return; }
       if (intent.kind === "run-receipt") { window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: intent.runId } })); return; }
       location.assign(intent.href);
     };
@@ -2355,16 +2356,28 @@
         try { win.postMessage(frame, "*"); return true; } catch { return false; }
       },
     });
+    const hydrateDesk = async (artifactId?: string) => {
+      try {
+        const response = await fetch("/api/desk", { credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const state = body?.result ?? { cards: [] };
+        const ids = artifactId ? [artifactId] : artifactRegistry.listTools().filter((tool) => tool.name === "setBoard").map((tool) => tool.artifactId);
+        for (const id of [...new Set(ids)]) artifactRegistry.pushState(id, state);
+      } catch {}
+    };
     setArtifactBridge({
       listTools: () => artifactRegistry.listTools(),
       invokeTool: (artifactId, name, args) => artifactRegistry.invoke(artifactId, name, args),
+      pushState: (artifactId, state) => artifactRegistry.pushState(artifactId, state),
     });
     const onArtifactMessage = (event: MessageEvent) => {
       const data = event.data;
       // page connector v2 handshake frames (register / invoke-result).
       if (data && data.type === "my-ax:artifact-register") {
         if (!artifactWindows().has(event.source as Window)) return;
-        artifactRegistry.register(event.source, data.tools);
+        const registered = artifactRegistry.register(event.source, data.tools);
+        if (registered.ok && registered.registered?.includes("setBoard") && registered.artifactId) void hydrateDesk(registered.artifactId);
         return;
       }
       if (data && data.type === "my-ax:artifact-invoke-result") {

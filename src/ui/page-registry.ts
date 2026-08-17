@@ -59,6 +59,7 @@ export interface PageVerb {
 export interface ArtifactBridge {
   listTools: () => Array<{ artifactId: string; name: string; description: string }>;
   invokeTool: (artifactId: string, name: string, args: Record<string, unknown>) => Promise<unknown>;
+  pushState?: (artifactId: string, state: unknown) => boolean;
 }
 let artifactBridge: ArtifactBridge | null = null;
 export function setArtifactBridge(bridge: ArtifactBridge | null): void { artifactBridge = bridge; }
@@ -274,7 +275,7 @@ export const PAGE_VERBS: PageVerb[] = [
   },
   {
     name: "navigate",
-    description: "Navigate the owner's UI to an in-app deep link (e.g. /?session=<id>, /?action=attention, /?action=settings, /runs/<id>). Input: {target}. Resolves on the client's navigate ack.",
+    description: "Navigate the owner's UI to an in-app deep link (e.g. /?session=<id>, /?action=attention, /?action=settings, /?action=desk, /runs/<id>). Input: {target}. Resolves on the client's navigate ack.",
     resolution: "ack",
     run: async (args) => {
       const target = String(args.target ?? "").trim();
@@ -307,6 +308,15 @@ export const PAGE_VERBS: PageVerb[] = [
       const toolArgs = (args.args && typeof args.args === "object") ? args.args as Record<string, unknown> : {};
       const result = await artifactBridge.invokeTool(artifactId, name, toolArgs);
       return { result };
+    },
+  },
+  {
+    name: "openDesk",
+    description: "Open the owner's durable desk board (/?action=desk).",
+    resolution: "receipt",
+    run: async () => {
+      window.dispatchEvent(new Event("my-ax:desk-open"));
+      return { result: { ok: true } };
     },
   },
 ];

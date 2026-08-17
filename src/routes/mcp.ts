@@ -8,12 +8,13 @@ import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
 import { createDecision } from "./decisions";
+import { ownerDeskGet, ownerDeskUpsert } from "./desk";
 import { getUserWorkspace } from "../workspace";
 import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -53,6 +54,28 @@ const TOOLS = [
       required: ["kind", "title", "body"],
       additionalProperties: false,
     },
+  },
+  {
+    name: "desk_upsert",
+    description: "Upsert one card on the owner's durable desk board at /?action=desk. Always write here instead of flattening Approve/Reject into notify_owner body text. Wake with notify_owner href /?action=desk. If the PWA tab is open and page.listArtifactTools has setBoard, also invoke that tool.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        body: { type: "string" },
+        href: { type: "string", description: "https GitLab or GitHub source URL, or a same-origin path." },
+        decisionHref: { type: "string" },
+        status: { type: "string", enum: ["pending", "approved", "rejected"] },
+      },
+      required: ["id", "title"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "desk_get",
+    description: "Read the owner's durable desk board.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "ask_owner",
@@ -182,6 +205,12 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
       const message = err instanceof Error ? err.message : String(err);
       return { unavailable: true, error: message };
     }
+  }
+  if (method === "desk_get") {
+    return ownerDeskGet(c.env, email);
+  }
+  if (method === "desk_upsert") {
+    return ownerDeskUpsert(c.env, email, args.card ?? args);
   }
   if (method === "deployment") {
     const versionId = (c.env as { CF_VERSION_METADATA?: { id?: string; timestamp?: string } }).CF_VERSION_METADATA?.id ?? null;
@@ -341,6 +370,8 @@ const CODE_METHODS: Record<string, Method> = {
   abort: "abort",
   artifactList: "artifact_list",
   artifactGet: "artifact_get",
+  deskGet: "desk_get",
+  deskUpsert: "desk_upsert",
   deployment: "deployment",
 };
 
@@ -377,6 +408,8 @@ const CODE_TYPES = `declare const codemode: {
   abort(args: { sessionId: string }): Promise<unknown>;
   artifactList(args?: { limit?: number }): Promise<unknown>;
   artifactGet(args: { id: string }): Promise<unknown>;
+  deskGet(): Promise<unknown>;
+  deskUpsert(args: { id: string; title?: string; body?: string; href?: string; decisionHref?: string; status?: string }): Promise<unknown>;
   deployment(): Promise<unknown>;
 };`;
 
@@ -417,6 +450,12 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
         });
         const delivered = receipt.delivered > 0 && receipt.failed === 0;
         return c.json(rpc(req.id, { ...text({ ok: delivered, ...receipt }), ...(delivered ? {} : { isError: true }) }));
+      }
+      if (name === "desk_get") {
+        return c.json(rpc(req.id, text(await ownerDeskGet(c.env, c.get("identity").email))));
+      }
+      if (name === "desk_upsert") {
+        return c.json(rpc(req.id, text(await ownerDeskUpsert(c.env, c.get("identity").email, args))));
       }
       if (name === "ask_owner") {
         return c.json(rpc(req.id, text(await askOwner(c, args))));

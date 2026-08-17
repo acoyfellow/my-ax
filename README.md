@@ -47,6 +47,7 @@ You do not watch the agent work. You return to it.
 
 - **Check-in** is the front door. `GET /api/check-in` and MCP `my_ax_check_in` build one response from Attention, jobs, and run receipts. The response shows what needs you, what runs now, what finished or failed, and a next step. The authenticated shell shows these as owner pages at `/attention`, `/runs`, and `/jobs`. Each rendered page keeps the raw API receipt href for proof: `/attention` exposes `data-attention-api-receipt-href`, `/runs` exposes `data-runs-api-receipt-href`, and `/jobs` exposes `data-jobs-api-receipt-href`. The `/attention` page also has a same-origin `data-attention-seen-form` you use to mark the current filtered view seen.
 - **Attention** holds owner-scoped items with unread state. A finished job, an ended recovery attempt, or a question from the agent lands here. Web Push sends it when you are away. The item stays if push fails.
+- **Desk** is the durable board at `/?action=desk`. Agents upsert cards with `desk_upsert` instead of starting a new conversation or flattening Approve/Reject into a push body. Open source stays a real GitLab or GitHub URL. Decide stays a same-origin decision link. A push that only wakes you should use href `/?action=desk`.
 - **Run receipts** record events the agent adds. A recurring job run, a saved-recipe run, and a delegated batch each write a start event and a terminal event you can open.
 
 ## What The Agent Can Do
@@ -55,6 +56,7 @@ You do not watch the agent work. You return to it.
 - **Delegate bounded analysis.** A parent runs at most 2 read-only child agents. It runs them one after the other, not at the same time, because they share one inference rate limit. Each child runs at depth 1 for 120 seconds. Children get no application, MCP, browser, machine, or delegation tools. The parent keeps their results and writes the summary.
 - **Reuse a proven procedure.** You approve a successful `work_code` run as a named reusable tool. Reuse runs the exact saved code. The code does not change between runs. Each run records a receipt and shows in Check-in.
 - **Ask you a question.** `ask_user` writes an owner-scoped decision and an Attention item. It waits. It then puts your approved answer back into the source conversation.
+- **Put work on the desk.** `desk_upsert` writes a card the owner can open later at `/?action=desk`. Pair it with `ask_user` or MCP `ask_owner` when a decision is required. Do not flatten the choice into `notify_owner` text.
 - **Build a UI.** `create_svelte_artifact` compiles a self-contained Svelte 5 component. It stores the component. It shows the component in a sandboxed iframe. The artifact can register its own tools. The agent calls those tools to direct the artifact on a later turn.
 
 ## Important Limits

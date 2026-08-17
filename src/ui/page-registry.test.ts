@@ -78,7 +78,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "setViewportDebug", "switchSession"]);
+  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "setViewportDebug", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -194,12 +194,13 @@ test("switchSession without id is a typed error, not a throw", async () => {
   assert.match(String(frame.error), /requires \{id\}/);
 });
 
-test("openSettings / openAttention / openSessions dispatch their window events synchronously", async () => {
+test("openSettings / openAttention / openSessions / openDesk dispatch their window events synchronously", async () => {
   const events = installGlobals({});
   await handlePageCall({ type: "page_call", requestId: "r6", verb: "openSettings", args: { section: "connections" } });
   await handlePageCall({ type: "page_call", requestId: "r7", verb: "openAttention" });
   await handlePageCall({ type: "page_call", requestId: "r8", verb: "openSessions" });
-  assert.deepEqual(events, ["my-ax:settings-open", "my-ax:attention-open", "my-ax:sessions-open"]);
+  await handlePageCall({ type: "page_call", requestId: "r9", verb: "openDesk" });
+  assert.deepEqual(events, ["my-ax:settings-open", "my-ax:attention-open", "my-ax:sessions-open", "my-ax:desk-open"]);
 });
 
 test("notify dispatches my-ax:toast with text+kind and requires text", async () => {

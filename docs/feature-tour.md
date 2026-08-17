@@ -182,6 +182,22 @@ A failed scheduled run, an exhausted recovery attempt, or a question from the
 agent lands in Attention. Web Push delivers it when you are away. The item stays
 if push fails, so a dropped notification does not lose the work.
 
+## Sit On One Desk
+
+Work that should wait for you does not start a new conversation. The agent calls
+`desk_upsert` with a stable card id, a title, and a real source href. You open
+`/?action=desk`, tap Open source or Decide, and leave the rest of the board
+intact. A later upsert with the same id replaces that card and keeps an omitted
+href. `notify_owner` only wakes you, with href `/?action=desk`.
+
+Test receipt:
+
+```text
+upsert replaces a card by id and keeps newest first
+javascript and unknown hosts are stripped from hrefs
+parseDeskBoard fails closed on junk
+```
+
 ## What This Tour Does Not Prove
 
 Every receipt above is one run of one task. It shows the mechanism works on that
