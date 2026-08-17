@@ -38,6 +38,17 @@ test("AGENTS_MODEL defaults to grok-4.6 and is overridable", () => {
   assert.equal(resolveAgentsModel({ AGENTS_MODEL: "kimi-k2.7" }), "kimi-k2.7");
 });
 
+test("triage:draft still opens a draft when the bug mentions PWA", () => {
+  const classified = classifyIssue({
+    title: "bug: second device can send while a turn is running",
+    body: "triage:draft\nDesktop PWA locks the composer. Phone still allows Send.",
+    author: "owner",
+  });
+  assert.equal(classified.visual, "owner-device");
+  assert.equal(classified.draft, true);
+  assert.equal(shouldOpenDraft(classified), true);
+});
+
 test("spray never drafts", async () => {
   const github = memoryGithub();
   const steps = await runTriage(
