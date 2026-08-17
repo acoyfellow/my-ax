@@ -10,7 +10,7 @@ import {
   shouldSpawnDig,
   verifyTerrariumReceipt,
 } from "./policy";
-import { runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { PROOF_COMMAND, formatReadyPrBody, formatReadyPrTitle, runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
 import { executeTriageWorkflow } from "./workflows";
 
 function memoryGithub(): GithubPort & { actions: string[] } {
@@ -19,7 +19,7 @@ function memoryGithub(): GithubPort & { actions: string[] } {
     actions,
     async labelIssue(_n, labels) { actions.push(`label:${labels.join(",")}`); },
     async comment() { actions.push("comment"); },
-    async openDraftPr() { actions.push("draft"); return { number: 7 }; },
+    async openDraftPr(input) { actions.push(`draft:${input.title}`); actions.push(`body:${input.body}`); return { number: 7 }; },
     async mergePr() { actions.push("merge"); },
     async approvePr() { actions.push("approve"); },
   };
@@ -36,6 +36,22 @@ test("AGENTS_MODEL defaults to grok-4.6 and is overridable", () => {
   assert.equal(DEFAULT_AGENTS_MODEL, "grok-4.6");
   assert.equal(resolveAgentsModel({}), "grok-4.6");
   assert.equal(resolveAgentsModel({ AGENTS_MODEL: "kimi-k2.7" }), "kimi-k2.7");
+});
+
+test("ready PR body names the issue, proof command, and never-merge rule", () => {
+  const input = {
+    number: 40,
+    title: "bug: desk href allowlist untested for // and overlong github URLs",
+    body: "triage:draft\nmutant survivors on desk-board",
+    author: "owner",
+  };
+  const classification = classifyIssue(input);
+  const body = formatReadyPrBody(input, classification);
+  assert.equal(formatReadyPrTitle(input), "fix: desk href allowlist untested for // and overlong github URLs");
+  assert.match(body, /issues\/40/);
+  assert.match(body, new RegExp(PROOF_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(body, /never merges/i);
+  assert.doesNotMatch(body, /Machine draft\. Not reviewed/);
 });
 
 test("triage:draft still opens a draft when the bug mentions PWA", () => {
