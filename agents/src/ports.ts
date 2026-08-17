@@ -35,8 +35,8 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       assertNoMergeAction("comment");
       await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
     },
-    async openDraftPr(input) {
-      assertNoMergeAction("openDraft");
+    async openReadyPr(input) {
+      assertNoMergeAction("openReadyPr");
       const json = await gh("/pulls", {
         method: "POST",
         body: JSON.stringify({ title: input.title, body: input.body, head: input.head, base: "main", draft: false }),

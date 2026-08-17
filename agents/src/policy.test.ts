@@ -19,7 +19,7 @@ function memoryGithub(): GithubPort & { actions: string[] } {
     actions,
     async labelIssue(_n, labels) { actions.push(`label:${labels.join(",")}`); },
     async comment() { actions.push("comment"); },
-    async openDraftPr(input) { actions.push(`draft:${input.title}`); actions.push(`body:${input.body}`); return { number: 7 }; },
+    async openReadyPr(input) { actions.push(`pr:${input.title}`); actions.push(`head:${input.head}`); actions.push(`body:${input.body}`); return { number: 7 }; },
     async mergePr() { actions.push("merge"); },
     async approvePr() { actions.push("approve"); },
   };
@@ -48,10 +48,14 @@ test("ready PR body names the issue, proof command, and never-merge rule", () =>
   const classification = classifyIssue(input);
   const body = formatReadyPrBody(input, classification);
   assert.equal(formatReadyPrTitle(input), "fix: desk href allowlist untested for // and overlong github URLs");
+  assert.match(body, /Closes #40/);
   assert.match(body, /issues\/40/);
   assert.match(body, new RegExp(PROOF_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(body, /never merges/i);
+  assert.match(body, /does not invent a file list/);
+  assert.doesNotMatch(body, /src\/desk-board\.ts/);
   assert.doesNotMatch(body, /Machine draft\. Not reviewed/);
+  assert.throws(() => formatReadyPrBody({ title: "x", body: "triage:draft", author: "o" }, classification));
 });
 
 test("triage:draft still opens a draft when the bug mentions PWA", () => {
@@ -73,7 +77,7 @@ test("spray never drafts", async () => {
   );
   assert.equal(steps[0]?.step === "classify" && steps[0].classification.spray, true);
   assert.equal(shouldOpenDraft(steps[0].step === "classify" ? steps[0].classification : classifyIssue({ title: "", body: "", author: "x" })), false);
-  assert.ok(!github.actions.includes("draft"));
+  assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
   assert.ok(github.actions.includes("comment"));
 });
 
