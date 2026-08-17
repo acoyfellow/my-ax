@@ -5,6 +5,10 @@ export function sessionRowToTurnStatus(status: string | null | undefined): Sessi
   return "idle";
 }
 
+export function sessionTurnLocksComposer(state: Pick<SessionTurnState, "status"> | null | undefined): boolean {
+  return state?.status === "thinking";
+}
+
 export type SessionTurnState = {
   sessionId: string;
   status: SessionTurnStatus;
