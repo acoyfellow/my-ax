@@ -2,6 +2,7 @@ import { verifyGithubSignature } from "./github-hmac";
 
 export interface HookEnv {
   GITHUB_WEBHOOK_SECRET?: string;
+  HOOK_FORWARD_SECRET?: string;
   AGENTS: Fetcher;
 }
 
@@ -18,6 +19,7 @@ export default {
     }
     const headers = new Headers(request.headers);
     headers.set("content-type", "application/json");
+    headers.set("x-ax-hook-forward", env.HOOK_FORWARD_SECRET || "");
     return env.AGENTS.fetch(new Request("https://agents.internal/webhooks/github", {
       method: "POST",
       headers,
