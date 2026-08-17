@@ -28,3 +28,9 @@ test("control-plane methods are exposed on my_ax_code", () => {
 test("chat agent can read artifact source", () => {
   assert.match(toolsSource, /name: "get_artifact"/);
 });
+
+test("MCP exposes ask_owner as a durable decision cockpit", () => {
+  assert.match(source, /name: "ask_owner"/);
+  assert.match(source, /createDecision/);
+  assert.match(source, /decision: \{ id: decision.id, options \}/);
+});
