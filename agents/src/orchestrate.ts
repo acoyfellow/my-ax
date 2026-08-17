@@ -43,10 +43,14 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   const classification = ports.model.classify ? await ports.model.classify(input) : classifyIssue(input);
   const steps: TriageStep[] = [{ step: "classify", classification }];
   const issueNumber = input.number ?? 0;
-  await ports.github.labelIssue(issueNumber, classification.labels);
-  steps.push({ step: "label", labels: classification.labels });
   await ports.github.comment(issueNumber, `${classification.summary}\nmodel=${ports.model.modelId}`);
   steps.push({ step: "comment" });
+  try {
+    await ports.github.labelIssue(issueNumber, classification.labels);
+    steps.push({ step: "label", labels: classification.labels });
+  } catch {
+    steps.push({ step: "stop", reason: "label failed; comment posted" });
+  }
   if (shouldSpawnDig(classification)) {
     const contract = await ports.terrarium.spawn(`Hard issue: ${input.title}\n${input.body}`);
     const receipt = await ports.terrarium.wait(contract.runId);
