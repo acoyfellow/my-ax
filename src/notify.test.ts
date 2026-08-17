@@ -77,7 +77,9 @@ test("push clicks target the exact durable notification before its source", () =
   assert.match(worker, /event\.notification\.data\?\.href \|\| "\/\?action=attention"/);
   assert.match(panel, /data-notification-detail=\{selected\.id\}/);
   assert.match(panel, /if \(attentionId\) replaceAttentionUrl\(attentionId, true\)/);
-  assert.match(panel, /Open conversation/);
+  assert.match(panel, /attentionSourceLabel/);
+  assert.match(panel, /isExternalSourceHref/);
+  assert.match(panel, /window\.open\(href, "_blank", "noopener,noreferrer"\)/);
 });
 
 test("same dedupeKey within the window suppresses the resend (no second push)", async () => {
@@ -130,6 +132,14 @@ test("safeHref rejects a scheme-relative (//host) href that would re-navigate cr
     await notifyOwner(h.env, OWNER, { ...base, href: "https://my.ax.example//evil.example/open" });
     assert.equal(h.attention[0]?.href, "/");
     assert.equal(new URL(h.attention[0]!.href!, "https://my.ax.example").origin, "https://my.ax.example");
+  } finally { h.restore(); }
+});
+
+test("safeHref keeps https gitlab source urls", async () => {
+  const h = makeEnv();
+  try {
+    await notifyOwner(h.env, OWNER, { ...base, href: "https://gitlab.cfdata.org/cloudflare/fe/stratus/-/merge_requests/571#note_13087255" });
+    assert.equal(h.attention[0]?.href, "https://gitlab.cfdata.org/cloudflare/fe/stratus/-/merge_requests/571#note_13087255");
   } finally { h.restore(); }
 });
 

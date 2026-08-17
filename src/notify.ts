@@ -223,12 +223,12 @@ function safeHref(notification: OwnerNotification, baseUrl: string): string {
   const fallback = fallbackCandidate.length <= MAX_HREF_LENGTH ? fallbackCandidate : "/";
   if (!notification.href) return fallback;
   try {
+    if (/^https:\/\/(gitlab\.cfdata\.org|github\.com|www\.github\.com)\//i.test(notification.href) && notification.href.length <= MAX_HREF_LENGTH) {
+      return notification.href;
+    }
     const base = new URL(baseUrl);
     const url = new URL(notification.href, base.origin);
     const href = `${url.pathname}${url.search}${url.hash}`;
-    // Reject cross-origin AND scheme-relative (//host) values: the latter parses
-    // same-origin here but re-navigates cross-origin when reparsed. Also bound
-    // the length so an oversized href can't blow the push payload budget.
     if (url.origin !== base.origin || href.startsWith("//") || href.length > MAX_HREF_LENGTH) return fallback;
     return href;
   } catch {
