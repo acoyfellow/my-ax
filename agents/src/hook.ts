@@ -1,0 +1,27 @@
+import { verifyGithubSignature } from "./github-hmac";
+
+export interface HookEnv {
+  GITHUB_WEBHOOK_SECRET?: string;
+  AGENTS: Fetcher;
+}
+
+export default {
+  async fetch(request: Request, env: HookEnv): Promise<Response> {
+    const url = new URL(request.url);
+    if (request.method !== "POST" || url.pathname !== "/webhooks/github") {
+      return new Response("not found", { status: 404 });
+    }
+    const raw = await request.text();
+    const sig = request.headers.get("x-hub-signature-256") || "";
+    if (!await verifyGithubSignature(env.GITHUB_WEBHOOK_SECRET || "", raw, sig)) {
+      return new Response("unauthorized", { status: 401 });
+    }
+    const headers = new Headers(request.headers);
+    headers.set("content-type", "application/json");
+    return env.AGENTS.fetch(new Request("https://agents.internal/webhooks/github", {
+      method: "POST",
+      headers,
+      body: raw,
+    }));
+  },
+};
