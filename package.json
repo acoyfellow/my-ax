@@ -65,6 +65,7 @@
     "test:dead-session-scan": "tsx --test src/dead-session-scan.test.ts",
     "test:memory-block": "tsx --test src/memory-block.test.ts",
     "test:notify": "tsx --test src/notify.test.ts",
+    "test:lifecycle-agents": "tsx --test agents/src/policy.test.ts agents/src/harness.test.ts",
     "test:push-decision-actions": "tsx --test src/push-decision-actions.test.ts",
     "test:sw-decision-click": "tsx --test src/sw-decision-click.test.ts",
     "test:push-progress-tag": "tsx --test src/push-progress-tag.test.ts",
