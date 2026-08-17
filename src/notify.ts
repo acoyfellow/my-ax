@@ -41,6 +41,9 @@ export interface OwnerNotification {
   body: string;
   href?: string;
   dedupeKey?: string;
+  decision?: { id: string; options: string[] };
+  progressTag?: string;
+  progressTerminal?: boolean;
 }
 
 export interface NotificationFailureDetail {
@@ -83,6 +86,28 @@ const MAX_HREF_LENGTH = 2048;
 // Web Push record budget (mirrors push.ts:87 — a 4080-byte record incl. the
 // 1-byte padding delimiter, so JSON payload must be <= 4079 bytes).
 export const MAX_PUSH_PAYLOAD_BYTES = 4_079;
+export const PROGRESS_PUSH_MIN_INTERVAL_SECONDS = 60;
+
+export interface PushAction {
+  action: string;
+  title: string;
+}
+
+export interface PushPayload extends Record<string, unknown> {
+  title: string;
+  body: string;
+  href: string;
+  destinationHref: string;
+  kind: NotificationKind;
+  attentionId?: string;
+  unread: number;
+  actions: PushAction[];
+  decision?: { id: string; options: string[] };
+  progressTag?: string;
+  progressTerminal?: boolean;
+  dismissTags?: string[];
+  sessionId?: string;
+}
 
 export function attentionDeepLink(attentionId: string): string {
   return `/?action=attention&attentionId=${encodeURIComponent(attentionId)}`;
@@ -99,6 +124,95 @@ export function boundedPushPayload<T extends Record<string, unknown>>(
   const withSession = { ...base, sessionId };
   const bytes = new TextEncoder().encode(JSON.stringify(withSession)).length;
   return bytes <= MAX_PUSH_PAYLOAD_BYTES ? withSession : base;
+}
+
+function payloadFits(payload: unknown): boolean {
+  return new TextEncoder().encode(JSON.stringify(payload)).length <= MAX_PUSH_PAYLOAD_BYTES;
+}
+
+function defaultPushActions(destinationHref: string): PushAction[] {
+  return destinationHref === "/"
+    ? [{ action: "open", title: "Open notification" }, { action: "attention", title: "All notifications" }]
+    : [{ action: "open", title: "Open notification" }, { action: "destination", title: "Open source" }];
+}
+
+function decisionPushData(notification: OwnerNotification): { id: string; options: string[] } | undefined {
+  const decision = notification.decision;
+  if (!decision || typeof decision.id !== "string" || decision.id.length === 0 || !Array.isArray(decision.options)) return undefined;
+  const options = decision.options.slice(0, 2);
+  if (!options.length || !options.every((option) => typeof option === "string" && cleanText(option, 1).length > 0)) return undefined;
+  return { id: decision.id, options };
+}
+
+function normalizeDismissalTags(tags: string[] | undefined): string[] {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags.filter((tag) => typeof tag === "string" && tag.length > 0 && tag.length <= 256))].slice(0, 50);
+}
+
+export function buildOwnerPushPayload(
+  notification: OwnerNotification,
+  input: { destinationHref: string; attentionId?: string; unread: number; progressTag?: string; progressTerminal: boolean; dismissalTags?: string[] },
+): { payload: PushPayload; dismissalTags: string[] } {
+  const attentionHref = input.attentionId ? attentionDeepLink(input.attentionId) : input.destinationHref;
+  let payload: PushPayload = {
+    title: cleanText(notification.title, 80) || "my · ax",
+    body: cleanText(notification.body, 300),
+    href: input.attentionId ? attentionHref : input.destinationHref,
+    destinationHref: input.destinationHref,
+    kind: notification.kind,
+    attentionId: input.attentionId,
+    unread: input.unread,
+    actions: defaultPushActions(input.destinationHref),
+    progressTag: input.progressTag,
+    progressTerminal: input.progressTag ? input.progressTerminal : undefined,
+  };
+  const decision = decisionPushData(notification);
+  if (decision) {
+    const candidate: PushPayload = {
+      ...payload,
+      actions: decision.options.map((option, index) => ({ action: `decision:${index}`, title: cleanText(option, 48) })),
+      decision,
+    };
+    if (payloadFits(candidate)) payload = candidate;
+  }
+  const dismissalTags = normalizeDismissalTags(input.dismissalTags);
+  if (dismissalTags.length) {
+    const candidate: PushPayload = { ...payload, dismissTags: dismissalTags };
+    if (payloadFits(candidate)) payload = candidate;
+  }
+  return {
+    payload: boundedPushPayload(payload, notification.sessionId) as PushPayload,
+    dismissalTags: payload.dismissTags ?? [],
+  };
+}
+
+function progressTag(value: string | undefined): string | undefined {
+  return typeof value === "string" && value.length > 0 && value.length <= 256 ? value : undefined;
+}
+
+async function reserveProgressPush(env: Env, ownerEmail: string, tag: string): Promise<boolean> {
+  const result = await env.DB.prepare(`INSERT INTO push_progress_updates(owner_email, tag, last_sent_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(owner_email, tag) DO UPDATE SET last_sent_at = excluded.last_sent_at
+    WHERE push_progress_updates.last_sent_at <= datetime('now', ?)`)
+    .bind(ownerEmail, tag, `-${PROGRESS_PUSH_MIN_INTERVAL_SECONDS} seconds`).run();
+  return Number(result.meta?.changes ?? 0) === 1;
+}
+
+async function clearProgressPush(env: Env, ownerEmail: string, tag: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM push_progress_updates WHERE owner_email = ? AND tag = ?").bind(ownerEmail, tag).run();
+}
+
+async function pendingDismissalTags(env: Env, ownerEmail: string): Promise<string[]> {
+  const result = await env.DB.prepare("SELECT tag FROM push_dismissals WHERE owner_email = ? AND created_at >= datetime('now', '-1 day') ORDER BY created_at ASC LIMIT 50")
+    .bind(ownerEmail).all<{ tag: string }>();
+  return normalizeDismissalTags((result.results ?? []).map((row) => row.tag));
+}
+
+async function clearDeliveredDismissalTags(env: Env, ownerEmail: string, tags: string[]): Promise<void> {
+  if (!tags.length) return;
+  const placeholders = tags.map(() => "?").join(",");
+  await env.DB.prepare(`DELETE FROM push_dismissals WHERE owner_email = ? AND tag IN (${placeholders})`).bind(ownerEmail, ...tags).run();
 }
 
 function safeHref(notification: OwnerNotification, baseUrl: string): string {
@@ -145,57 +259,48 @@ export function dedupedReceipt(): NotificationReceipt {
 /** Deliver a same-owner agent notification to every subscribed installed app. */
 export async function notifyOwner(env: Env, ownerEmail: string, notification: OwnerNotification): Promise<NotificationReceipt> {
   const email = ownerEmail.toLowerCase();
-  // De-duplicate: if the caller supplied a dedupeKey and we already recorded
-  // that exact event for this owner within the window, do NOT send another
-  // push. This is the fix for provider 429s: the key was accepted but ignored,
-  // so repeated rechecks/ticks flooded the same subscription.
-  const dedupeKey = notification.dedupeKey?.trim() || defaultDedupeKey(notification);
-  if (dedupeKey) {
+  const taggedProgress = progressTag(notification.progressTag);
+  const terminalProgress = taggedProgress !== undefined && notification.progressTerminal === true;
+  const intermediateProgress = taggedProgress !== undefined && !terminalProgress;
+  if (intermediateProgress && !await reserveProgressPush(env, email, taggedProgress)) return dedupedReceipt();
+  const dedupeKey = notification.dedupeKey?.trim() || (terminalProgress
+    ? `progress-terminal:${taggedProgress}`
+    : defaultDedupeKey(notification));
+  if (!intermediateProgress && dedupeKey) {
     const cutoff = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
     const recent = await env.DB.prepare(
       "SELECT id FROM attention_items WHERE owner_email = ? AND dedupe_key = ? AND created_at >= ? LIMIT 1",
     ).bind(email, dedupeKey, cutoff).first<{ id: string }>().catch(() => null);
     if (recent) return dedupedReceipt();
   }
+  if (terminalProgress) await clearProgressPush(env, email, taggedProgress);
   const result = await env.DB.prepare(
     "SELECT endpoint, subscription_json FROM push_subscriptions WHERE owner_email = ? ORDER BY updated_at DESC",
   ).bind(email).all<{ endpoint: string; subscription_json: string }>();
   const rows = result.results ?? [];
   const receipt: NotificationReceipt = { delivered: 0, expired: 0, failed: 0, devices: rows.length };
   const destinationHref = safeHref(notification, env.BRIDGE_BASE_URL);
-  const attentionId = crypto.randomUUID();
-  const attentionHref = attentionDeepLink(attentionId);
-  await env.DB.prepare(`INSERT INTO attention_items(id, owner_email, session_id, kind, title, body, href, created_at, dedupe_key)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
+  const attentionId = intermediateProgress ? undefined : crypto.randomUUID();
+  const notificationTag = taggedProgress ?? attentionId;
+  if (attentionId) {
+    await env.DB.prepare(`INSERT INTO attention_items(id, owner_email, session_id, kind, title, body, href, created_at, dedupe_key, notification_tag)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).bind(
       attentionId, email, notification.sessionId ?? null, notification.kind,
-      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), destinationHref, dedupeKey,
+      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), destinationHref, dedupeKey, notificationTag,
     ).run();
-  // Keep the tiny recent-attention surface bounded. Push is a wake-up hint,
-  // not an unbounded activity-log product.
-  await env.DB.prepare(`DELETE FROM attention_items WHERE owner_email = ? AND id NOT IN (
-    SELECT id FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 200
-  )`).bind(email, email).run();
+    await env.DB.prepare(`DELETE FROM attention_items WHERE owner_email = ? AND id NOT IN (
+      SELECT id FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 200
+    )`).bind(email, email).run();
+  }
   const unreadRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>();
-  const actions = destinationHref === "/"
-    ? [{ action: "open", title: "Open notification" }, { action: "attention", title: "All notifications" }]
-    : [{ action: "open", title: "Open notification" }, { action: "destination", title: "Open source" }];
-  const basePayload = {
-    title: cleanText(notification.title, 80) || "my · ax",
-    body: cleanText(notification.body, 300),
-    href: attentionHref,
+  const { payload, dismissalTags } = buildOwnerPushPayload(notification, {
     destinationHref,
-    kind: notification.kind,
     attentionId,
-    unread: Number(unreadRow?.count ?? 1),
-    actions,
-  };
-  // sessionId is optional client metadata and is caller-supplied (unbounded).
-  // Include it ONLY when the full serialized payload stays within the Web Push
-  // record budget; otherwise omit it so an oversized id cannot make EVERY
-  // device's delivery throw "Push payload is too large". Never truncate it into
-  // a different (wrong) session id. The bytes budget mirrors push.ts:87
-  // (4080-byte record incl. the 1-byte padding delimiter).
-  const payload = boundedPushPayload(basePayload, notification.sessionId);
+    unread: Number(unreadRow?.count ?? 0),
+    progressTag: taggedProgress,
+    progressTerminal: terminalProgress,
+    dismissalTags: await pendingDismissalTags(env, email),
+  });
   // Deliver to every device concurrently. Each send has a timeout and retries
   // only on transient network errors; provider HTTP rejections are classified,
   // not retried. Replaces a sequential try/catch loop with no timeout/retry.
@@ -240,5 +345,6 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
     else if (outcome.kind === "expired") { receipt.expired += 1; if (outcome.failure) addFailure(receipt, outcome.failure); }
     else { receipt.failed += 1; addFailure(receipt, outcome.failure); }
   }
+  if (dismissalTags.length && receipt.delivered > 0 && receipt.failed === 0) await clearDeliveredDismissalTags(env, email, dismissalTags);
   return receipt;
 }
