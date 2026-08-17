@@ -3,8 +3,9 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-04-21",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  "workers_dev": false,
   "preview_urls": false,
+  "routes": [{ "pattern": "agents.ax.cloudflare.dev", "custom_domain": true }],
   "vars": {
     "AGENTS_MODEL": "grok-4.6",
     "LLM_GATEWAY_URL": "",
