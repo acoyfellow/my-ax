@@ -42,9 +42,10 @@ export type TriageStep =
 export async function runTriage(input: IssueInput, ports: { github: GithubPort; terrarium: TerrariumPort; model: ModelPort }): Promise<TriageStep[]> {
   const classification = ports.model.classify ? await ports.model.classify(input) : classifyIssue(input);
   const steps: TriageStep[] = [{ step: "classify", classification }];
-  await ports.github.labelIssue(0, classification.labels);
+  const issueNumber = input.number ?? 0;
+  await ports.github.labelIssue(issueNumber, classification.labels);
   steps.push({ step: "label", labels: classification.labels });
-  await ports.github.comment(0, `${classification.summary}\nmodel=${ports.model.modelId}`);
+  await ports.github.comment(issueNumber, `${classification.summary}\nmodel=${ports.model.modelId}`);
   steps.push({ step: "comment" });
   if (shouldSpawnDig(classification)) {
     const contract = await ports.terrarium.spawn(`Hard issue: ${input.title}\n${input.body}`);
@@ -78,7 +79,7 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
 
 export async function runAudit(input: PullInput, ports: { github: GithubPort; promptDigest: string }): Promise<AuditReceipt> {
   const receipt = auditPull(input, ports.promptDigest);
-  await ports.github.comment(0, formatAuditComment(receipt));
+  await ports.github.comment(input.number ?? 0, formatAuditComment(receipt));
   return receipt;
 }
 

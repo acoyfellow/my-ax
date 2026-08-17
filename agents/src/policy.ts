@@ -36,6 +36,7 @@ export interface VisualProof {
 }
 
 export interface IssueInput {
+  number?: number;
   title: string;
   body: string;
   author: string;
@@ -44,6 +45,7 @@ export interface IssueInput {
 }
 
 export interface PullInput {
+  number?: number;
   title: string;
   body: string;
   author: string;

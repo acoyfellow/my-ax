@@ -33,14 +33,37 @@ export default {
       const payload = JSON.parse(raw) as Record<string, unknown>;
       const action = String(payload.action || "");
       if (event === "issues" && action === "opened") {
-        const issue = payload.issue as { number: number };
-        await env.TRIAGE.create({ id: `issue:${issue.number}`, params: payload });
-        return Response.json({ queued: "triage", issue: issue.number });
+        const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string } };
+        const created = await env.TRIAGE.create({
+          id: `issue:${issue.number}`,
+          params: {
+            number: issue.number,
+            title: String(issue.title || ""),
+            body: String(issue.body || ""),
+            author: String(issue.user?.login || "unknown"),
+          },
+        });
+        return Response.json({ queued: "triage", issue: issue.number, instance: created.id });
       }
       if (event === "pull_request" && (action === "opened" || action === "synchronize")) {
-        const pr = payload.pull_request as { number: number };
-        await env.AUDIT.create({ id: `pr:${pr.number}`, params: payload });
-        return Response.json({ queued: "audit", pr: pr.number });
+        const pr = payload.pull_request as {
+          number: number; title?: string; body?: string; draft?: boolean; user?: { login?: string };
+          head?: { sha?: string };
+        };
+        const created = await env.AUDIT.create({
+          id: `pr:${pr.number}`,
+          params: {
+            number: pr.number,
+            title: String(pr.title || ""),
+            body: String(pr.body || ""),
+            author: String(pr.user?.login || "unknown"),
+            draft: Boolean(pr.draft),
+            headSha: String(pr.head?.sha || ""),
+            files: [],
+            behindMain: 0,
+          },
+        });
+        return Response.json({ queued: "audit", pr: pr.number, instance: created.id });
       }
       return Response.json({ queued: "ignored", event, action });
     }
