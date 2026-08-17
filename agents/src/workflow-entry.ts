@@ -1,27 +1,26 @@
+import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { executeAuditWorkflow, executeDigWorkflow, executeTriageWorkflow, type AgentsEnv } from "./workflows";
 import type { IssueInput, PullInput } from "./policy";
 import type { GithubPort, TerrariumPort } from "./orchestrate";
 
-type Step = { do<T>(name: string, fn: () => Promise<T> | T): Promise<T> };
-
-export class TriageWorkflow {
-  async run(event: { payload: IssueInput }, step: Step, env: AgentsEnv) {
+export class TriageWorkflow extends WorkflowEntrypoint<AgentsEnv, IssueInput> {
+  async run(event: WorkflowEvent<IssueInput>, step: WorkflowStep) {
     const ports = stubPorts();
-    return step.do("triage", () => executeTriageWorkflow(env, event.payload, ports));
+    return step.do("triage", () => executeTriageWorkflow(this.env, event.payload, ports));
   }
 }
 
-export class AuditWorkflow {
-  async run(event: { payload: PullInput }, step: Step, env: AgentsEnv) {
+export class AuditWorkflow extends WorkflowEntrypoint<AgentsEnv, PullInput> {
+  async run(event: WorkflowEvent<PullInput>, step: WorkflowStep) {
     const ports = stubPorts();
-    return step.do("audit", () => executeAuditWorkflow(env, event.payload, { github: ports.github, promptDigest: "agents/audit@local" }));
+    return step.do("audit", () => executeAuditWorkflow(this.env, event.payload, { github: ports.github, promptDigest: "agents/audit@local" }));
   }
 }
 
-export class DigWorkflow {
-  async run(event: { payload: IssueInput }, step: Step, env: AgentsEnv) {
+export class DigWorkflow extends WorkflowEntrypoint<AgentsEnv, IssueInput> {
+  async run(event: WorkflowEvent<IssueInput>, step: WorkflowStep) {
     const ports = stubPorts();
-    return step.do("dig", () => executeDigWorkflow(env, event.payload, ports));
+    return step.do("dig", () => executeDigWorkflow(this.env, event.payload, ports));
   }
 }
 
