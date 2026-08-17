@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { parseMyAxDeepLink } from "./deep-links";
+  import { attentionSourceLabel, isExternalSourceHref } from "../source-href";
   import { reconcileSeen } from "./attention-state";
   import {
     buildNotificationStream,
@@ -195,13 +196,7 @@
     replaceAttentionUrl(null, true);
   }
   function sourceLabel(href: string | null) {
-    if (!href) return null;
-    const target = parseMyAxDeepLink(href, location.href);
-    if (!target) return null;
-    if (target.sessionId) return "Open conversation";
-    if (/^\/runs\//.test(target.href)) return "Open run";
-    if (target.action === "settings") return "Open settings";
-    return "Open source";
+    return attentionSourceLabel(href, location.href);
   }
   function runReceiptId(href: string): string | null {
     try {
@@ -227,15 +222,18 @@
   // Primary action: go to the conversation (or the deep-link target).
   function follow(event: MouseEvent, href: string | null) {
     if (!href) return;
+    event.preventDefault();
+    if (isExternalSourceHref(href)) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
     const receipt = runReceiptId(href);
     if (receipt) {
-      event.preventDefault();
       window.dispatchEvent(new CustomEvent("my-ax:run-receipt-open", { detail: { runId: receipt } }));
       return;
     }
     const target = parseMyAxDeepLink(href, location.href);
     if (!target) return;
-    event.preventDefault();
     closePanel();
     window.dispatchEvent(new CustomEvent("my-ax:navigate", { detail: target }));
   }

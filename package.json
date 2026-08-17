@@ -70,7 +70,7 @@
     "test:sw-decision-click": "tsx --test src/sw-decision-click.test.ts",
     "test:push-progress-tag": "tsx --test src/push-progress-tag.test.ts",
     "test:sw-dismissal-sweep": "tsx --test src/sw-dismissal-sweep.test.ts",
-    "test:deep-links": "tsx --test src/ui/deep-links.test.ts",
+    "test:deep-links": "tsx --test src/ui/deep-links.test.ts src/source-href.test.ts",
     "test:attention-state": "tsx --test src/ui/attention-state.test.ts",
     "test:session-generation": "tsx --test src/ui/session-generation.test.ts",
     "test:reconnecting-socket": "tsx --test src/ui/reconnecting-socket.test.ts",
