@@ -3,7 +3,7 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-04-21",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
+  "workers_dev": true,
   "preview_urls": false,
   "vars": {
     "AGENTS_MODEL": "grok-4.6",
