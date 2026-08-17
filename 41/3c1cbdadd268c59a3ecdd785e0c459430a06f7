@@ -1,0 +1,41 @@
+docs/feature-matrix.md
+  s_5fe3591d60297c::t_fd0ec492eeb9ad 18,52,60
+migrations/0027_push_notification_state.sql
+  s_5fe3591d60297c::t_1b064f399facc8 1-18
+package.json
+  s_5fe3591d60297c::t_c4fa85221b66d8 68-71,86
+public/sw.js
+  s_5fe3591d60297c::t_b4775521f810b1 1,35-58,63,70-71,73-74,80-81,85-167,169-172,179
+src/notify.ts
+  s_5fe3591d60297c::t_b458953aee783f 44-46,89-110,129-217,262-269,276,283-287,289,291-294,296,299-303,348
+src/push-decision-actions.test.ts
+  s_5fe3591d60297c::t_14e49fba0f1193 1-55
+src/push-progress-tag.test.ts
+  s_5fe3591d60297c::t_7107cf954286a6 1-78
+src/routes/attention.ts
+  s_5fe3591d60297c::t_8ffffef5f8dd0d 149-160,180-181,183
+src/sw-decision-click.test.ts
+  s_5fe3591d60297c::t_a60981cb6e7388 1-132
+src/sw-dismissal-sweep.test.ts
+  s_5fe3591d60297c::t_3cb0882e780c50 1-62
+src/tools.ts
+  s_5fe3591d60297c::t_81990ccec18428 33
+src/types.ts
+  s_5fe3591d60297c::t_3b483292bbe4af 135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "413c1cbdadd268c59a3ecdd785e0c459430a06f7",
+  "prompts": {},
+  "sessions": {
+    "s_5fe3591d60297c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd866-e69a-76ed-8232-4f273583c9fe",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
