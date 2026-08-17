@@ -35,3 +35,12 @@ test("parseDeskBoard fails closed on junk", () => {
   assert.deepEqual(parseDeskBoard(null).cards, []);
   assert.equal(parseDeskBoard({ cards: [{ id: "ok", title: "Keep" }] }).cards[0]?.id, "ok");
 });
+
+test("scheme-relative and overlong hrefs are rejected; github.com is kept", () => {
+  const scheme = upsertDeskCard(emptyDeskBoard(), { id: "sr", title: "sr", decisionHref: "//evil.example/x" });
+  assert.equal(scheme.cards[0]?.decisionHref, null);
+  const overlong = upsertDeskCard(emptyDeskBoard(), { id: "long", title: "long", href: `https://github.com/${"a".repeat(2048)}` });
+  assert.equal(overlong.cards[0]?.href, null);
+  const github = upsertDeskCard(emptyDeskBoard(), { id: "gh", title: "gh", href: "https://github.com/acoyfellow/my-ax/issues/1" });
+  assert.equal(github.cards[0]?.href, "https://github.com/acoyfellow/my-ax/issues/1");
+});
