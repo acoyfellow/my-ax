@@ -58,7 +58,7 @@ export default {
           head?: { sha?: string };
         };
         const created = await env.AUDIT.create({
-          id: `pr:${pr.number}`,
+          id: deliveryId,
           params: {
             number: pr.number,
             title: String(pr.title || ""),
