@@ -5,6 +5,7 @@
   import { tick } from "svelte";
   import { sessionState, setActiveSession, wsState } from "@my-ax/store";
   import Attention from "./Attention.svelte";
+  import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
 
   interface Props {
@@ -100,6 +101,8 @@
     <span class="hidden sm:inline">{connLabel}</span>
   </span>
 
+
+  <Desk />
 
   <Attention />
 

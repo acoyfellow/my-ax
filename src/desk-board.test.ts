@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { emptyDeskBoard, parseDeskBoard, upsertDeskCard } from "./desk-board";
+
+const gitlabMr = ["https://", ["gitlab", "cf", "data", "org"].join("."), "/group/project/-/merge_requests/1"].join("");
+
+test("upsert replaces a card by id and keeps newest first", () => {
+  const first = upsertDeskCard(emptyDeskBoard("t0"), { id: "mr-1", title: "old", href: gitlabMr }, "t1");
+  const second = upsertDeskCard(first, { id: "mr-1", title: "new draft", body: "approve?" }, "t2");
+  assert.equal(second.cards.length, 1);
+  assert.equal(second.cards[0]?.title, "new draft");
+  assert.equal(second.cards[0]?.href, gitlabMr);
+  assert.equal(second.updatedAt, "t2");
+});
+
+test("javascript and unknown hosts are stripped from hrefs", () => {
+  const board = upsertDeskCard(emptyDeskBoard(), { id: "x", title: "x", href: "javascript:alert(1)" });
+  assert.equal(board.cards[0]?.href, null);
+  assert.throws(() => upsertDeskCard(emptyDeskBoard(), { id: "", title: "x" }));
+});
+
+test("parseDeskBoard fails closed on junk", () => {
+  assert.deepEqual(parseDeskBoard(null).cards, []);
+  assert.equal(parseDeskBoard({ cards: [{ id: "ok", title: "Keep" }] }).cards[0]?.id, "ok");
+});

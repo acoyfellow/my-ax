@@ -130,6 +130,17 @@ test("happy path: register -> invoke -> iframe replies -> result resolves", asyn
   assert.deepEqual(await p, { shown: 3 });
 });
 
+test("spike B: pushState hydrates a registered artifact and refuses unknown ids", () => {
+  const h = makeHost(); const reg = new ArtifactToolRegistry(h.host);
+  const winA = {}; bind(h, winA, "art-A");
+  reg.register(winA, [{ name: "setBoard", description: "hydrate", inputSchema: { json: "string" } }]);
+  assert.equal(reg.pushState("art-A", { cards: [{ id: "mr-571" }] }), true);
+  const frame = h.posts.at(-1)!.frame;
+  assert.equal(frame.type, "my-ax:artifact-state");
+  assert.deepEqual(frame.state, { cards: [{ id: "mr-571" }] });
+  assert.equal(reg.pushState("missing", { cards: [] }), false);
+});
+
 test("validateArgs: fail-closed when no schema but args provided", () => {
   assert.equal(validateArgs({ x: 1 }, undefined).ok, false);
   assert.equal(validateArgs({}, undefined).ok, true);

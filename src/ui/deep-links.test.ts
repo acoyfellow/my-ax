@@ -30,11 +30,13 @@ test("deep-link intents distinguish session, attention, receipt, and ordinary na
   const attention = parseMyAxDeepLink("/?action=attention&attentionId=note-123", current);
   const receipt = parseMyAxDeepLink("/runs/run-123", current);
   const ordinary = parseMyAxDeepLink("/decisions/abc", current);
-  assert.ok(session && attention && receipt && ordinary);
+  const desk = parseMyAxDeepLink("/?action=desk", current);
+  assert.ok(session && attention && receipt && ordinary && desk);
   assert.deepEqual(myAxDeepLinkIntent(session), { kind: "session", sessionId: "target" });
   assert.deepEqual(myAxDeepLinkIntent(attention), { kind: "attention", attentionId: "note-123" });
   assert.deepEqual(myAxDeepLinkIntent(receipt), { kind: "run-receipt", runId: "run-123" });
   assert.deepEqual(myAxDeepLinkIntent(ordinary), { kind: "navigate", href: "/decisions/abc" });
+  assert.deepEqual(myAxDeepLinkIntent(desk), { kind: "desk" });
 });
 
 test("rejects external notification destinations", () => {

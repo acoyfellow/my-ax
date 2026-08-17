@@ -2,6 +2,7 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
+import { ownerDeskGet, ownerDeskUpsert } from "./routes/desk";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { CODE_DIFF_MAX_TEXT_BYTES } from "./code-diff";
 import { createVerifiedCodeDiffReceipt } from "./code-diff-read";
@@ -12,6 +13,31 @@ import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
 import { createCmuxObserveTool, type CmuxReader } from "./cmux-observer";
+
+export const DESK_UPSERT_TOOL: ToolDef = {
+  name: "desk_upsert",
+  description: "Upsert one card on the owner's durable desk board at /?action=desk. Use this instead of flattening Approve/Reject into notify_owner body text. Pair with notify_owner href /?action=desk to wake the owner. If the PWA tab is open and page.listArtifactTools has setBoard, also invoke that tool.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "Stable card id, reused on later updates." },
+      title: { type: "string", description: "Short card title." },
+      body: { type: "string", description: "Optional short body. No secrets." },
+      href: { type: "string", description: "https GitLab or GitHub source URL, or a same-origin path." },
+      decisionHref: { type: "string", description: "Optional same-origin Decide link." },
+      status: { type: "string", enum: ["pending", "approved", "rejected"] },
+    },
+    required: ["id", "title"],
+  },
+  execute: async (args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskUpsert(ctx.env, ctx.identity.email, args) }),
+};
+
+export const DESK_GET_TOOL: ToolDef = {
+  name: "desk_get",
+  description: "Read the owner's durable desk board.",
+  parameters: { type: "object", properties: {} },
+  execute: async (_args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskGet(ctx.env, ctx.identity.email) }),
+};
 
 export const ASK_USER_TOOL: ToolDef = {
   name: "ask_user",
@@ -111,6 +137,8 @@ export const SHOW_DIFF_TOOL: ToolDef = {
 export const CMUX_OBSERVE_TOOL = createCmuxObserveTool({ readerForContext: createCmuxMachineReader });
 
 export const TOOLS: ToolDef[] = [
+  DESK_UPSERT_TOOL,
+  DESK_GET_TOOL,
   ASK_USER_TOOL,
   SHOW_DIFF_TOOL,
   CMUX_OBSERVE_TOOL,

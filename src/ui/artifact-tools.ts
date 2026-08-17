@@ -112,6 +112,12 @@ export class ArtifactToolRegistry {
     }
   }
 
+  pushState(artifactId: string, state: unknown): boolean {
+    if (this.navFrozen) return false;
+    if (!this.artifacts.has(artifactId)) return false;
+    return this.host.postToArtifact(artifactId, { type: "my-ax:artifact-state", state });
+  }
+
   /** The agent-discoverable catalog (NOT in default work_search — G4). */
   listTools(): Array<{ artifactId: string; name: string; description: string }> {
     const out: Array<{ artifactId: string; name: string; description: string }> = [];
