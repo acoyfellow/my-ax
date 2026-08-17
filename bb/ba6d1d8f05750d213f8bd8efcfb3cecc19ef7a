@@ -1,0 +1,31 @@
+package.json
+  s_e050e2bde8a246::t_5464d755ae97ed 73
+src/notify.test.ts
+  s_e050e2bde8a246::t_962cd974245550 80-82,138-145
+src/ui/Attention.svelte
+  s_952b167abec97a::t_7b686092c7c1a9 4,199,225-229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bbba6d1d8f05750d213f8bd8efcfb3cecc19ef7a",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
