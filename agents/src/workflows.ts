@@ -16,6 +16,13 @@ export interface AgentsEnv {
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_TOKEN?: string;
   GITHUB_REPO?: string;
+  HOOK_FORWARD_SECRET?: string;
+}
+
+export function forwardedFromHook(request: Request, env: { HOOK_FORWARD_SECRET?: string }): boolean {
+  const expected = env.HOOK_FORWARD_SECRET?.trim();
+  const got = request.headers.get("x-ax-hook-forward") || "";
+  return Boolean(expected) && expected === got;
 }
 
 export const WORKFLOW_NAMES = ["TriageWorkflow", "AuditWorkflow", "DigWorkflow"] as const;

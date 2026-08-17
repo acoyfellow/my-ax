@@ -1,4 +1,4 @@
-import { workflowBindings, type AgentsEnv } from "./workflows";
+import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
 
 export { AuditWorkflow, DigWorkflow, TriageWorkflow } from "./workflow-entry";
@@ -17,6 +17,7 @@ export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
+      if (!forwardedFromHook(request, env)) return new Response("not found", { status: 404 });
       return Response.json({
         ok: true,
         workflows: workflowBindings(),
@@ -24,6 +25,7 @@ export default {
       });
     }
     if (request.method === "POST" && url.pathname === "/webhooks/github") {
+      if (!forwardedFromHook(request, env)) return new Response("unauthorized", { status: 401 });
       const raw = await request.text();
       const sig = request.headers.get("x-hub-signature-256") || "";
       if (!await verifyGithubSignature(env.GITHUB_WEBHOOK_SECRET || "", raw, sig)) {
