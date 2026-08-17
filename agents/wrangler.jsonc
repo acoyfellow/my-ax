@@ -1,0 +1,19 @@
+{
+  "name": "my-ax-agents",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-04-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "AGENTS_MODEL": "grok-4.6",
+    "LLM_GATEWAY_URL": "",
+    "LLM_GATEWAY_AUTH_HEADER": "cf-access-token"
+  },
+  "worker_loaders": [{ "binding": "LOADER" }],
+  "workflows": [
+    { "name": "my-ax-triage", "binding": "TRIAGE", "class_name": "TriageWorkflow" },
+    { "name": "my-ax-audit", "binding": "AUDIT", "class_name": "AuditWorkflow" },
+    { "name": "my-ax-dig", "binding": "DIG", "class_name": "DigWorkflow" }
+  ]
+}
