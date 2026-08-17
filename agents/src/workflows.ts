@@ -14,6 +14,8 @@ export interface AgentsEnv {
   TERRARIUM_URL?: string;
   TERRARIUM_CONTROL_TOKEN?: string;
   GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_TOKEN?: string;
+  GITHUB_REPO?: string;
 }
 
 export const WORKFLOW_NAMES = ["TriageWorkflow", "AuditWorkflow", "DigWorkflow"] as const;
