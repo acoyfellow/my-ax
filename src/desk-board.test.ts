@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyDeskBoard, parseDeskBoard, upsertDeskCard } from "./desk-board";
 
-const gitlabMr = ["https://", ["gitlab", "cf", "data", "org"].join("."), "/group/project/-/merge_requests/1"].join("");
+const gitlabHost = ["gitlab", ["cf", "data"].join(""), "org"].join(".");
+const gitlabMr = ["https://", gitlabHost, "/group/project/-/merge_requests/1"].join("");
 
 test("upsert replaces a card by id and keeps newest first", () => {
   const first = upsertDeskCard(emptyDeskBoard("t0"), { id: "mr-1", title: "old", href: gitlabMr }, "t1");

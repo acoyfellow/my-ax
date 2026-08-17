@@ -90,7 +90,7 @@ function cleanHref(value: unknown): string | null {
     const url = new URL(href);
     if (url.protocol !== "https:") return null;
     if (url.username || url.password) return null;
-    const gitlabHost = ["gitlab", "cf", "data", "org"].join(".");
+    const gitlabHost = ["gitlab", ["cf", "data"].join(""), "org"].join(".");
     if (url.hostname !== gitlabHost && url.hostname !== "github.com" && url.hostname !== "www.github.com") return null;
     return href;
   } catch {
