@@ -1,13 +1,9 @@
-const CACHE = "my-ax-static-v13";
+const CACHE = "my-ax-static-v14";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
-// The page (pwaBootScript) posts this when it detects a freshly-installed
-// waiting SW, so a new deploy takes over an already-open PWA immediately
-// instead of waiting for every tab to close (iOS never closes them). Pairs
-// with the client's controllerchange -> reload.
 self.addEventListener("message", (event) => {
   if (event.data?.type === "my-ax:skip-waiting") self.skipWaiting();
 });
@@ -36,62 +32,149 @@ function notificationActions(payload) {
   return [{ action: "open", title: "Open notification" }, { action: "attention", title: "All notifications" }];
 }
 
+function normalizedDismissalTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags.filter((tag) => typeof tag === "string" && tag.length > 0 && tag.length <= 256))];
+}
+
+async function closeDismissedNotifications(tags) {
+  const tagSet = new Set(normalizedDismissalTags(tags));
+  if (!tagSet.size) return false;
+  const notifications = await self.registration.getNotifications();
+  for (const notification of notifications) {
+    if (tagSet.has(notification.tag)) notification.close();
+  }
+  return true;
+}
+
+async function updateBadgeFromNotifications(fallback) {
+  try {
+    const notifications = await self.registration.getNotifications();
+    await setAttentionBadge(notifications.length);
+  } catch {
+    await setAttentionBadge(fallback);
+  }
+}
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try { payload = event.data?.json() ?? {}; } catch { payload = {}; }
   event.waitUntil((async () => {
+    const dismissed = await closeDismissedNotifications(payload.dismissTags);
     await self.registration.showNotification(payload.title || "my · ax", {
       body: payload.body || "You have a new my · ax notification.",
       data: {
         href: payload.href || "/?action=attention",
         attentionHref: "/?action=attention",
         destinationHref: payload.destinationHref || "/",
+        decision: payload.decision,
+        unread: Number(payload.unread || 0),
       },
-      tag: payload.attentionId || undefined,
-      renotify: !!payload.attentionId,
+      tag: payload.progressTag || payload.attentionId || undefined,
+      renotify: payload.progressTag ? payload.progressTerminal === true : !!payload.attentionId,
       requireInteraction: payload.kind === "deploy.gate" || payload.kind === "job.needs_input",
       icon: "/static/brand/icon-192.png",
       badge: "/static/brand/icon-maskable-192.png",
       actions: notificationActions(payload),
     });
-    await setAttentionBadge(Number(payload.unread || 1));
+    if (dismissed) await updateBadgeFromNotifications(Number(payload.unread || 0));
+    else await setAttentionBadge(Number(payload.unread || 1));
     for (const client of await clients.matchAll({ type: "window", includeUncontrolled: true })) client.postMessage({ type: "my-ax:attention" });
   })());
 });
+
+function isDecisionAction(action) {
+  return typeof action === "string" && /^decision:\d+$/.test(action);
+}
+
+function notificationDecision(data, action) {
+  const index = Number(action.slice("decision:".length));
+  const id = data?.decision?.id;
+  const options = data?.decision?.options;
+  if (!Number.isInteger(index) || typeof id !== "string" || id.length === 0 || !Array.isArray(options) || typeof options[index] !== "string") return null;
+  return { id, choice: options[index] };
+}
+
+function decisionPageHref(data) {
+  const id = data?.decision?.id;
+  if (typeof id === "string" && id.length > 0) return `/api/decisions/${encodeURIComponent(id)}`;
+  return data?.href || "/?action=attention";
+}
+
+async function showDecisionFailure(data, status) {
+  const alreadyAnswered = status === 409;
+  const href = decisionPageHref(data);
+  await self.registration.showNotification(alreadyAnswered ? "Decision already answered" : "Decision not recorded", {
+    body: alreadyAnswered
+      ? "This decision was already answered. Open it to review."
+      : "Your choice was not recorded. Open the decision to sign in and try again.",
+    data: { href, attentionHref: href, destinationHref: href },
+    icon: "/static/brand/icon-192.png",
+    badge: "/static/brand/icon-maskable-192.png",
+    actions: [{ action: "open", title: "Open decision" }],
+  });
+}
+
+async function submitDecision(notification, action) {
+  const data = notification.data;
+  const decision = notificationDecision(data, action);
+  if (!decision) {
+    await showDecisionFailure(data, 0);
+    return;
+  }
+  try {
+    const response = await fetch(`/api/decisions/${encodeURIComponent(decision.id)}/respond`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ choice: decision.choice }),
+    });
+    if (!response.ok) {
+      await showDecisionFailure(data, response.status);
+      return;
+    }
+    notification.close();
+    await setAttentionBadge(Math.max(0, Number(data?.unread ?? 1) - 1));
+  } catch {
+    await showDecisionFailure(data, 0);
+  }
+}
+
+async function navigateNotification(href) {
+  const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+  const sameOrigin = windows.filter((client) => new URL(client.url).origin === self.location.origin);
+  const existing = sameOrigin.find((client) => client.focused) || sameOrigin.find((client) => client.visibilityState === "visible") || sameOrigin[0];
+  const target = new URL(href, self.location.origin);
+  const absolute = target.href;
+  if (existing) {
+    if (target.pathname === "/" && !target.search && !target.hash) return existing.focus();
+    const acked = await new Promise((resolve) => {
+      const onAck = (ev) => {
+        if (ev.data?.type === "my-ax:navigate-ack" && ev.data?.href === absolute) {
+          self.removeEventListener("message", onAck);
+          resolve(true);
+        }
+      };
+      self.addEventListener("message", onAck);
+      existing.postMessage({ type: "my-ax:navigate", href: absolute });
+      setTimeout(() => { self.removeEventListener("message", onAck); resolve(false); }, 400);
+    });
+    if (!acked) await existing.navigate(absolute);
+    return existing.focus();
+  }
+  return clients.openWindow(absolute);
+}
+
 self.addEventListener("notificationclick", (event) => {
+  if (isDecisionAction(event.action)) {
+    event.waitUntil(submitDecision(event.notification, event.action));
+    return;
+  }
   event.notification.close();
   const href = event.action === "attention"
     ? (event.notification.data?.attentionHref || "/?action=attention")
     : event.action === "destination"
       ? (event.notification.data?.destinationHref || "/")
       : (event.notification.data?.href || "/?action=attention");
-  event.waitUntil((async () => {
-    const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    const sameOrigin = windows.filter((client) => new URL(client.url).origin === self.location.origin);
-    const existing = sameOrigin.find((client) => client.focused) || sameOrigin.find((client) => client.visibilityState === "visible") || sameOrigin[0];
-    const target = new URL(href, self.location.origin);
-    const absolute = target.href;
-    if (existing) {
-      if (target.pathname === "/" && !target.search && !target.hash) return existing.focus();
-      // Navigating an already-open standalone PWA can restore its cached
-      // conversation before the query-string target reaches Chat bootstrap.
-      // Prefer the live in-page switch: post the target and wait briefly for
-      // the app to ack. Only fall back to a hard .navigate() when the app is
-      // not listening (e.g. mid-load), so we never double-navigate.
-      const acked = await new Promise((resolve) => {
-        const onAck = (ev) => {
-          if (ev.data?.type === "my-ax:navigate-ack" && ev.data?.href === absolute) {
-            self.removeEventListener("message", onAck);
-            resolve(true);
-          }
-        };
-        self.addEventListener("message", onAck);
-        existing.postMessage({ type: "my-ax:navigate", href: absolute });
-        setTimeout(() => { self.removeEventListener("message", onAck); resolve(false); }, 400);
-      });
-      if (!acked) await existing.navigate(absolute);
-      return existing.focus();
-    }
-    return clients.openWindow(absolute);
-  })());
+  event.waitUntil(navigateNotification(href));
 });
