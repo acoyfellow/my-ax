@@ -32,18 +32,23 @@ export default {
       const event = request.headers.get("x-github-event") || "";
       const payload = JSON.parse(raw) as Record<string, unknown>;
       const action = String(payload.action || "");
+      const deliveryId = request.headers.get("x-github-delivery") || crypto.randomUUID();
       if (event === "issues" && action === "opened") {
         const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string } };
-        const created = await env.TRIAGE.create({
-          id: `issue:${issue.number}`,
-          params: {
-            number: issue.number,
-            title: String(issue.title || ""),
-            body: String(issue.body || ""),
-            author: String(issue.user?.login || "unknown"),
-          },
-        });
-        return Response.json({ queued: "triage", issue: issue.number, instance: created.id });
+        try {
+          const created = await env.TRIAGE.create({
+            id: `issue:${issue.number}:${deliveryId}`,
+            params: {
+              number: issue.number,
+              title: String(issue.title || ""),
+              body: String(issue.body || ""),
+              author: String(issue.user?.login || "unknown"),
+            },
+          });
+          return Response.json({ queued: "triage", issue: issue.number, instance: created.id, deliveryId });
+        } catch (error) {
+          return Response.json({ queued: "triage", issue: issue.number, deliveryId, error: String(error) }, { status: 502 });
+        }
       }
       if (event === "pull_request" && (action === "opened" || action === "synchronize")) {
         const pr = payload.pull_request as {
