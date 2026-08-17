@@ -12,7 +12,7 @@ function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; label
     github: {
       async labelIssue(_n, next) { labels.push(...next); },
       async comment() {},
-      async openDraftPr() { return { number: 1 }; },
+      async openReadyPr() { return { number: 1 }; },
       async mergePr() { throw new Error("forbidden GitHub action: merge"); },
       async approvePr() { throw new Error("forbidden GitHub action: approve"); },
     },

@@ -17,7 +17,7 @@ export const PROOF_COMMAND = "npx tsx --test src/desk-board.test.ts agents/src/p
 export interface GithubPort {
   labelIssue(number: number, labels: string[]): Promise<void>;
   comment(number: number, body: string): Promise<void>;
-  openDraftPr(input: { title: string; body: string; head: string }): Promise<{ number: number }>;
+  openReadyPr(input: { title: string; body: string; head: string }): Promise<{ number: number }>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
 }
@@ -36,7 +36,7 @@ export type TriageStep =
   | { step: "classify"; classification: Classification }
   | { step: "label"; labels: string[] }
   | { step: "comment" }
-  | { step: "draft"; number: number }
+  | { step: "pr"; number: number }
   | { step: "dig"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
@@ -71,12 +71,16 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
     return steps;
   }
   if (shouldOpenDraft(classification)) {
-    const pr = await ports.github.openDraftPr({
+    if (!input.number) {
+      steps.push({ step: "stop", reason: "issue number required before opening a PR" });
+      return steps;
+    }
+    const pr = await ports.github.openReadyPr({
       title: formatReadyPrTitle(input),
       body: formatReadyPrBody(input, classification),
-      head: "bot/issue-draft",
+      head: `bot/issue-${input.number}`,
     });
-    steps.push({ step: "draft", number: pr.number });
+    steps.push({ step: "pr", number: pr.number });
     return steps;
   }
   steps.push({ step: "stop", reason: classification.spray ? "spray" : "no-draft" });
@@ -94,24 +98,22 @@ export function formatReadyPrTitle(input: IssueInput): string {
 }
 
 export function formatReadyPrBody(input: IssueInput, classification: Classification): string {
-  const issueUrl = input.number ? `https://github.com/acoyfellow/my-ax/issues/${input.number}` : "(issue number missing)";
+  if (!input.number) throw new Error("issue number required before opening a PR");
   return [
-    `Closes ${issueUrl}`,
+    `Closes #${input.number}`,
     "",
     "## Why",
     classification.summary,
     "",
     "## Receipt",
+    `- issue: https://github.com/acoyfellow/my-ax/issues/${input.number}`,
     `- kind: ${classification.kind}`,
     `- severity: ${classification.severity}`,
     `- labels: ${classification.labels.join(", ") || "none"}`,
     `- visual: ${classification.visual}`,
     "",
     "## Files",
-    "- `src/desk-board.ts`",
-    "- `src/desk-board.test.ts`",
-    "- `agents/src/orchestrate.ts`",
-    "- `agents/src/ports.ts`",
+    "See the Files changed tab on this PR. This body does not invent a file list.",
     "",
     "## Proof",
     "```sh",
