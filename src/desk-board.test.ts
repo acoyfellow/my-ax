@@ -20,6 +20,17 @@ test("javascript and unknown hosts are stripped from hrefs", () => {
   assert.throws(() => upsertDeskCard(emptyDeskBoard(), { id: "", title: "x" }));
 });
 
+test("Open source rejects same-origin paths; Decide keeps them", () => {
+  const board = upsertDeskCard(emptyDeskBoard(), {
+    id: "desk-href-proof",
+    title: "proof",
+    href: "/?action=desk",
+    decisionHref: "/api/decisions/run-decision-test",
+  });
+  assert.equal(board.cards[0]?.href, null);
+  assert.equal(board.cards[0]?.decisionHref, "/api/decisions/run-decision-test");
+});
+
 test("parseDeskBoard fails closed on junk", () => {
   assert.deepEqual(parseDeskBoard(null).cards, []);
   assert.equal(parseDeskBoard({ cards: [{ id: "ok", title: "Keep" }] }).cards[0]?.id, "ok");

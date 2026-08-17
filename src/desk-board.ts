@@ -48,8 +48,8 @@ export function parseDeskCard(raw: unknown): DeskCard | null {
   if (!ID_RE.test(id) || !title) return null;
   const statusRaw = typeof (raw as { status?: unknown }).status === "string" ? (raw as { status: string }).status : "pending";
   const status = STATUSES.has(statusRaw as DeskCardStatus) ? statusRaw as DeskCardStatus : "pending";
-  const href = cleanHref((raw as { href?: unknown }).href);
-  const decisionHref = cleanHref((raw as { decisionHref?: unknown }).decisionHref);
+  const href = cleanSourceHref((raw as { href?: unknown }).href);
+  const decisionHref = cleanDecisionHref((raw as { decisionHref?: unknown }).decisionHref);
   return {
     id,
     title: title.slice(0, 160),
@@ -81,11 +81,15 @@ export function upsertDeskCard(board: DeskBoard, incoming: unknown, now = new Da
   return { cards: next, updatedAt: now };
 }
 
-function cleanHref(value: unknown): string | null {
+function sameOriginPath(href: string): string | null {
+  if (href.startsWith("/") && href[1] !== "/" && href[1] !== "\\") return href;
+  return null;
+}
+
+function cleanRemoteHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const href = value.trim();
   if (!href || href.length > 2048) return null;
-  if (href.startsWith("/") && href[1] !== "/" && href[1] !== "\\") return href;
   try {
     const url = new URL(href);
     if (url.protocol !== "https:") return null;
@@ -96,4 +100,15 @@ function cleanHref(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function cleanSourceHref(value: unknown): string | null {
+  return cleanRemoteHref(value);
+}
+
+function cleanDecisionHref(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const href = value.trim();
+  if (!href || href.length > 2048) return null;
+  return sameOriginPath(href) ?? cleanRemoteHref(href);
 }
