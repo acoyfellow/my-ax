@@ -12,6 +12,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       headers: {
         authorization: `Bearer ${token}`,
         accept: "application/vnd.github+json",
+        "user-agent": "my-ax-agents",
         "x-github-api-version": "2022-11-28",
         "content-type": "application/json",
         ...(init?.headers ?? {}),
