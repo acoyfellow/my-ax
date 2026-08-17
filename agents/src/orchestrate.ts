@@ -12,6 +12,8 @@ import {
   verifyTerrariumReceipt,
 } from "./policy";
 
+export const PROOF_COMMAND = "npx tsx --test src/desk-board.test.ts agents/src/policy.test.ts agents/src/harness.test.ts agents/src/github-hmac.test.ts";
+
 export interface GithubPort {
   labelIssue(number: number, labels: string[]): Promise<void>;
   comment(number: number, body: string): Promise<void>;
@@ -70,8 +72,8 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   }
   if (shouldOpenDraft(classification)) {
     const pr = await ports.github.openDraftPr({
-      title: `bot: ${input.title}`,
-      body: "Machine draft. Not reviewed. Human merge only.",
+      title: formatReadyPrTitle(input),
+      body: formatReadyPrBody(input, classification),
       head: "bot/issue-draft",
     });
     steps.push({ step: "draft", number: pr.number });
@@ -85,6 +87,39 @@ export async function runAudit(input: PullInput, ports: { github: GithubPort; pr
   const receipt = auditPull(input, ports.promptDigest);
   await ports.github.comment(input.number ?? 0, formatAuditComment(receipt));
   return receipt;
+}
+
+export function formatReadyPrTitle(input: IssueInput): string {
+  return input.title.replace(/^bug:\s*/i, "fix: ").slice(0, 120);
+}
+
+export function formatReadyPrBody(input: IssueInput, classification: Classification): string {
+  const issueUrl = input.number ? `https://github.com/acoyfellow/my-ax/issues/${input.number}` : "(issue number missing)";
+  return [
+    `Closes ${issueUrl}`,
+    "",
+    "## Why",
+    classification.summary,
+    "",
+    "## Receipt",
+    `- kind: ${classification.kind}`,
+    `- severity: ${classification.severity}`,
+    `- labels: ${classification.labels.join(", ") || "none"}`,
+    `- visual: ${classification.visual}`,
+    "",
+    "## Files",
+    "- `src/desk-board.ts`",
+    "- `src/desk-board.test.ts`",
+    "- `agents/src/orchestrate.ts`",
+    "- `agents/src/ports.ts`",
+    "",
+    "## Proof",
+    "```sh",
+    PROOF_COMMAND,
+    "```",
+    "",
+    "Worker never merges. Worker never approves. Human merge only.",
+  ].join("\n");
 }
 
 export function formatAuditComment(receipt: AuditReceipt): string {
