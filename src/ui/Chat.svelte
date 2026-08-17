@@ -27,6 +27,7 @@
   import { ArtifactToolRegistry } from "./artifact-tools";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
+  import { sessionTurnLocksComposer, type SessionTurnState } from "../session-turn";
   import { decideComposerKey, isMobileComposer } from "./composer-keys";
   import {
     agentStatusFor,
@@ -612,9 +613,23 @@
   }
 
   // ── Composer derived ───────────────────────────────────────────────
+  let remoteTurn = $state<SessionTurnState | null>(null);
   const composerLocked = $derived(
-    isComposerLocked(turnState) || (wsState.status !== "idle" && wsState.status !== "done"),
+    isComposerLocked(turnState)
+      || sessionTurnLocksComposer(remoteTurn)
+      || (wsState.status !== "idle" && wsState.status !== "done"),
   );
+
+  async function refreshRemoteTurn(sessionId = currentSessionId()) {
+    if (!sessionId || sessionId === "unknown") return;
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, { credentials: "include" });
+      if (!response.ok) return;
+      const body = await response.json();
+      const result = body?.result;
+      if (result && typeof result === "object") remoteTurn = result as SessionTurnState;
+    } catch {}
+  }
   const wsDown = $derived(wsState.conn !== "live");
   const sendStatus = $derived.by(() => {
     if (wsDown && !composerLocked) return "offline";
@@ -1207,6 +1222,7 @@
     prepareVoiceClientForSession(id);
     void refreshPendingDecision(id);
     void refreshActiveSessionTitle(id);
+    void refreshRemoteTurn(id);
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     setConn("reconnecting");
     ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${id}`);
@@ -1347,6 +1363,7 @@
   function onOpen() {
     setConn("live");
     restoreActiveTurn();
+    void refreshRemoteTurn();
     sendVisibility();
     // If a connection was suspended/replaced during a live turn, Think can
     // replay both active and already-completed streams by request id.

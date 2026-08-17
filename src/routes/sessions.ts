@@ -12,6 +12,7 @@ import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
+import { buildSessionTurnState } from "../session-turn";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
   sequence_number: number | null;
@@ -191,6 +192,36 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!result) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "pinned session not found or not owned" }, next_actions: [] }, 404);
       return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
     } catch (err) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
+    }
+  });
+
+  app.get("/api/sessions/:id/turn", async (c) => {
+    const command = c.req.path;
+    const id = c.req.param("id");
+    const email = c.get("identity").email;
+    try {
+      const owned = await requireOwnedSession(c.env, id, email);
+      if (!owned) {
+        return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
+      }
+      const session = await c.env.DB.prepare("SELECT id, status, updated_at FROM sessions WHERE id = ? AND owner_email = ?")
+        .bind(id, email).first<{ id: string; status: string; updated_at: string }>();
+      if (!session) {
+        return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
+      }
+      const live = await getSessionAgent(c.env, email, id).then((stub) => stub.sessionTurnState()).catch(() => null);
+      const result = buildSessionTurnState({
+        sessionId: id,
+        sessionStatus: live?.sessionStatus ?? session.status,
+        requestId: live?.requestId ?? null,
+        updatedAt: session.updated_at ?? null,
+      });
+      return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
+    } catch (err) {
+      if (err instanceof SessionOwnershipCheckError) {
+        return c.json<ApiResponse>({ ok: false, command, error: { code: "OwnershipCheckFailed", message: err.message }, next_actions: [] }, 503);
+      }
       return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
     }
   });
