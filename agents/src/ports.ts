@@ -39,7 +39,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       assertNoMergeAction("openDraft");
       const json = await gh("/pulls", {
         method: "POST",
-        body: JSON.stringify({ title: input.title, body: input.body, head: input.head, base: "main", draft: true }),
+        body: JSON.stringify({ title: input.title, body: input.body, head: input.head, base: "main", draft: false }),
       });
       return { number: Number((json as { number?: number }).number) };
     },
