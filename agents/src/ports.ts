@@ -5,7 +5,7 @@ import type { AgentsEnv } from "./workflows";
 export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_REPO?: string }): GithubPort {
   const token = env.GITHUB_TOKEN?.trim();
   const repo = env.GITHUB_REPO?.trim() || "acoyfellow/my-ax";
-  async function gh(path: string, init?: RequestInit): Promise<Record<string, unknown>> {
+  async function gh(path: string, init?: RequestInit): Promise<unknown> {
     if (!token) throw new Error("GITHUB_TOKEN is required for live GitHub ports");
     const res = await fetch(`https://api.github.com/repos/${repo}${path}`, {
       ...init,
@@ -19,12 +19,16 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`github ${path} ${res.status}`);
-    return json as Record<string, unknown>;
+    return json;
   }
   return {
     async labelIssue(number, labels) {
       assertNoMergeAction("label");
-      await gh(`/issues/${number}/labels`, { method: "POST", body: JSON.stringify({ labels }) });
+      const listed = await gh("/labels?per_page=100");
+      const known = new Set((Array.isArray(listed) ? listed : []).map((row) => String((row as { name?: string }).name || "")));
+      const usable = labels.filter((label) => known.has(label));
+      if (!usable.length) return;
+      await gh(`/issues/${number}/labels`, { method: "POST", body: JSON.stringify({ labels: usable }) });
     },
     async comment(number, body) {
       assertNoMergeAction("comment");
@@ -36,7 +40,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         method: "POST",
         body: JSON.stringify({ title: input.title, body: input.body, head: input.head, base: "main", draft: true }),
       });
-      return { number: Number(json.number) };
+      return { number: Number((json as { number?: number }).number) };
     },
     async mergePr() {
       assertNoMergeAction("merge");
