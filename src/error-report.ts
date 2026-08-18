@@ -80,26 +80,18 @@ export function formatAutoIssueTitle(input: Pick<ErrorReportInput, "message">): 
 }
 
 export function formatAutoIssueBody(input: ErrorReportInput, fingerprint: string): string {
-  const lines = [
+  const site = stackFingerprintSite(input.stack ?? "");
+  return [
     "## Auto error report",
     "",
     `fingerprint: \`${fingerprint}\``,
     `origin: ${input.origin}`,
     `message: ${normalizeErrorMessage(input.message)}`,
-  ];
-  if (input.versionId) lines.push(`version: ${input.versionId}`);
-  if (input.sessionId) lines.push(`session: ${input.sessionId}`);
-  if (input.href) lines.push(`href: ${input.href}`);
-  if (input.cause) lines.push(`cause: ${input.cause}`);
-  if (input.stack) {
-    lines.push("", "```", input.stack.slice(0, MAX_STACK), "```");
-  }
-  lines.push(
+    ...(site !== "unknown" ? [`site: ${site}`] : []),
     "",
     "This issue was opened by My AX from a live error. One fingerprint is one issue.",
     "This report does not opt in a ready PR. A human adds that after a head branch exists.",
-  );
-  return lines.join("\n");
+  ].join("\n");
 }
 
 export function isErrorFingerprint(value: string): boolean {
