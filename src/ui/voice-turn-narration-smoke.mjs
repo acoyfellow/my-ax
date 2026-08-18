@@ -11,7 +11,7 @@ function has(needle, label) {
   if (!agent.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
 }
 
-has("import { StillWorkingTimer, WORK_ACK } from \"./voice-narration\"", "voice turn imports the check-in policy");
+has("import { StillWorkingTimer, WORK_ACK, VOICE_ACK_THRESHOLD_MS } from \"./voice-narration\"", "voice turn imports the check-in policy");
 has("Promise<AsyncGenerator<string>>", "onTurn returns a streaming AsyncGenerator (multi-utterance TTS)");
 has("VOICE_ACK_THRESHOLD_MS", "fast turns stay terse; ack only past a threshold");
 has("yield WORK_ACK;", "slow turns speak an up-front acknowledgement");
