@@ -17,6 +17,8 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 
 `triage:draft` is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`. The body uses `Closes #<n>` and does not invent a file list.
 
+Every triage comment is a **loop board**: `stage` is `labeled`, `blocked-missing-branch`, `pr-opened`, or `pr-failed`. If the head branch is missing, the board says so. Worker never merges.
+
 Hunt ticks that only file issues: [HUNT.md](./HUNT.md).
 
 Model: `AGENTS_MODEL` (default `grok-4.6`). Inference only through employee-injected `LLM_GATEWAY_URL` + `LLM_GATEWAY_TOKEN`.
