@@ -1,7 +1,7 @@
 import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
 
-export { AuditWorkflow, DigWorkflow, TriageWorkflow } from "./workflow-entry";
+export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
 interface WorkflowBinding {
   create(opts: { id: string; params: Record<string, unknown> }): Promise<{ id: string }>;
@@ -11,6 +11,7 @@ export interface WorkerEnv extends AgentsEnv {
   TRIAGE: WorkflowBinding;
   AUDIT: WorkflowBinding;
   DIG: WorkflowBinding;
+  REVIEW: WorkflowBinding;
 }
 
 async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string } }) {
@@ -73,8 +74,20 @@ export default {
       if (event === "pull_request" && (action === "opened" || action === "synchronize")) {
         const pr = payload.pull_request as {
           number: number; title?: string; body?: string; draft?: boolean; user?: { login?: string };
-          head?: { sha?: string };
+          head?: { sha?: string; ref?: string };
         };
+        await env.REVIEW.create({
+          id: `${deliveryId}-review`,
+          params: {
+            number: pr.number,
+            title: String(pr.title || ""),
+            body: String(pr.body || ""),
+            author: String(pr.user?.login || "unknown"),
+            draft: Boolean(pr.draft),
+            headSha: String(pr.head?.sha || ""),
+            head: String(pr.head?.ref || ""),
+          },
+        }).catch(() => undefined);
         const created = await env.AUDIT.create({
           id: deliveryId,
           params: {

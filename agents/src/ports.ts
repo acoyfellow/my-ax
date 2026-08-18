@@ -72,6 +72,17 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
     async approvePr() {
       assertNoMergeAction("approve");
     },
+    async closePr(number) {
+      assertNoMergeAction("closePr");
+      await gh(`/pulls/${number}`, { method: "PATCH", body: JSON.stringify({ state: "closed" }) });
+    },
+    async requestChanges(number, body) {
+      assertNoMergeAction("requestChanges");
+      await gh(`/pulls/${number}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({ body, event: "REQUEST_CHANGES" }),
+      });
+    },
   };
 }
 

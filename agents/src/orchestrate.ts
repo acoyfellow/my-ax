@@ -24,6 +24,8 @@ export interface GithubPort {
   hasBranch?(name: string): Promise<boolean>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
+  closePr?(number: number): Promise<void>;
+  requestChanges?(number: number, body: string): Promise<void>;
 }
 
 export interface TerrariumPort {
