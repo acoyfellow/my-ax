@@ -157,7 +157,7 @@ test("no duplicate ids in output when both sides share ids", () => {
 
 test("fills missing assistant timestamps from chronological neighbors", () => {
   assert.deepEqual(fillChronologicalTimestamps([100, undefined, undefined, 400]), [100, 200, 300, 400]);
-  assert.deepEqual(fillChronologicalTimestamps([undefined, 200, undefined]), [200, 200, 200]);
+  assert.deepEqual(fillChronologicalTimestamps([undefined, 200, undefined]), [undefined, 200, 200]);
   assert.deepEqual(fillChronologicalTimestamps([undefined, undefined]), [undefined, undefined]);
 });
 

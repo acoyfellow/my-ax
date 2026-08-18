@@ -155,8 +155,6 @@ export function fillChronologicalTimestamps(values: Array<number | undefined>): 
         filled[start + offset] = previous + ((next - previous) * (offset + 1)) / (count + 1);
       } else if (typeof previous === "number") {
         filled[start + offset] = previous;
-      } else if (typeof next === "number") {
-        filled[start + offset] = next;
       }
     }
   }
