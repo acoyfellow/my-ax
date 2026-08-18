@@ -1,0 +1,19 @@
+src/ui/attention-modal-smoke.mjs
+  s_99b55ecf7d26fa::t_5983f1c1f87fca 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6dc871df15dc3f8086d293502200a3473a40d9c4",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
