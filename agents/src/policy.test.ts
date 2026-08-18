@@ -12,7 +12,7 @@ import {
   usableIssueLabels,
   verifyTerrariumReceipt,
 } from "./policy";
-import { PROOF_COMMAND, formatReadyPrBody, formatReadyPrTitle, runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
 import { executeTriageWorkflow } from "./workflows";
 
 function memoryGithub(): GithubPort & { actions: string[] } {
@@ -22,6 +22,7 @@ function memoryGithub(): GithubPort & { actions: string[] } {
     async labelIssue(_n, labels) { actions.push(`label:${labels.join(",")}`); },
     async comment() { actions.push("comment"); },
     async openReadyPr(input) { actions.push(`pr:${input.title}`); actions.push(`head:${input.head}`); actions.push(`body:${input.body}`); return { number: 7 }; },
+    async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
     async mergePr() { actions.push("merge"); },
     async approvePr() { actions.push("approve"); },
   };
@@ -38,6 +39,14 @@ test("AGENTS_MODEL defaults to grok-4.6 and is overridable", () => {
   assert.equal(DEFAULT_AGENTS_MODEL, "grok-4.6");
   assert.equal(resolveAgentsModel({}), "grok-4.6");
   assert.equal(resolveAgentsModel({ AGENTS_MODEL: "kimi-k2.7" }), "kimi-k2.7");
+});
+
+test("loop board names stage and next action", () => {
+  const classification = classifyIssue({ title: "bug: x", body: "repro", author: "o" });
+  const text = formatLoopBoard({ issueNumber: 52, classification, modelId: "grok-4.6", stage: "labeled" });
+  assert.match(text, /stage: labeled/);
+  assert.match(text, /issues\/52/);
+  assert.match(text, /triage:draft/);
 });
 
 test("ready PR body names the issue, proof command, and never-merge rule", () => {
