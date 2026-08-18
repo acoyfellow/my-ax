@@ -1,3 +1,5 @@
+import { clarifyOwnerError } from "./owner-error";
+
 // Shared Svelte 5 store for my-ax.
 //
 // .svelte.ts modules can use $state/$derived runes at module scope. Every
@@ -177,9 +179,11 @@ export function pushSystem(text: string) {
   ];
 }
 export function pushError(text: string) {
+  const next = clarifyOwnerError(text);
+  if (toastBus.pending.some((toast) => toast.kind === "error" && toast.text === next)) return;
   toastBus.pending = [
     ...toastBus.pending,
-    { id: `toast-${++toastCounter}`, kind: "error", text },
+    { id: `toast-${++toastCounter}`, kind: "error", text: next },
   ];
 }
 export function clearToast(id: string) {
