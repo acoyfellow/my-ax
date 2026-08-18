@@ -197,8 +197,6 @@ function reportClientError(message: string) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       message,
-      sessionId,
-      href: typeof location === "undefined" ? "" : location.href,
     }),
   }).catch(() => undefined);
 }

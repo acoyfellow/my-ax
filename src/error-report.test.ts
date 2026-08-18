@@ -53,7 +53,9 @@ test("issue body names the fingerprint and forbids auto draft", () => {
   assert.equal(formatAutoIssueTitle(input), "bug: Invalid URL string.");
   const body = formatAutoIssueBody(input, "deadbeefdeadbeef");
   assert.match(body, /fingerprint: `deadbeefdeadbeef`/);
-  assert.match(body, /session: e4834b21/);
+  assert.doesNotMatch(body, /session:/);
+  assert.doesNotMatch(body, /version:/);
+  assert.doesNotMatch(body, /href:/);
   assert.doesNotMatch(body, /opted-in draft PR/);
   assert.match(body, /does not opt in a ready PR/);
   assert.equal(normalizeErrorMessage("  invalid url string  "), "Invalid URL string.");
