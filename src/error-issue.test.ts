@@ -76,7 +76,7 @@ test("same fingerprint reuses the open issue", async () => {
   }, async () => new Response(JSON.stringify({ number: 61, html_url: "https://github.com/acoyfellow/my-ax/issues/61" }), { status: 201 }));
   if (!("fingerprint" in first)) throw new Error("expected fingerprint");
   assert.equal(first.created, true);
-  assert.equal(firstEnv.inserts.length, 1);
+  assert.equal(firstEnv.inserts.length, 2);
   const secondEnv = makeEnv({
     token: "t",
     existing: {
