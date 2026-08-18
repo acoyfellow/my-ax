@@ -319,6 +319,15 @@ export const PAGE_VERBS: PageVerb[] = [
       return { result: { ok: true } };
     },
   },
+  {
+    name: "applyDeskBoard",
+    description: "Replace the live desk panel with one owner board payload.",
+    resolution: "receipt",
+    run: async (args) => {
+      window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: args.board ?? args }));
+      return { result: { ok: true } };
+    },
+  },
 ];
 
 export function pageVerbCatalog() {
