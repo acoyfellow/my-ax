@@ -54,4 +54,6 @@ test("scheme-relative and overlong hrefs are rejected; github.com is kept", () =
   assert.equal(overlong.cards[0]?.href, null);
   const github = upsertDeskCard(emptyDeskBoard(), { id: "gh", title: "gh", href: "https://github.com/acoyfellow/my-ax/issues/1" });
   assert.equal(github.cards[0]?.href, "https://github.com/acoyfellow/my-ax/issues/1");
+  const www = upsertDeskCard(emptyDeskBoard(), { id: "www", title: "www", href: "https://www.github.com/acoyfellow/my-ax/issues/1" });
+  assert.equal(www.cards[0]?.href, "https://www.github.com/acoyfellow/my-ax/issues/1");
 });
