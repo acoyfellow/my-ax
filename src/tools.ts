@@ -2,7 +2,7 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
-import { ownerDeskGet, ownerDeskUpsert } from "./routes/desk";
+import { ownerDeskClear, ownerDeskGet, ownerDeskUpsert } from "./routes/desk";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { CODE_DIFF_MAX_TEXT_BYTES } from "./code-diff";
 import { createVerifiedCodeDiffReceipt } from "./code-diff-read";
@@ -37,6 +37,13 @@ export const DESK_GET_TOOL: ToolDef = {
   description: "Read the owner's durable desk board.",
   parameters: { type: "object", properties: {} },
   execute: async (_args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskGet(ctx.env, ctx.identity.email) }),
+};
+
+export const DESK_CLEAR_TOOL: ToolDef = {
+  name: "desk_clear",
+  description: "Replace the owner's durable desk board with an empty artifact. Use when the owner asks to clear the desk.",
+  parameters: { type: "object", properties: {} },
+  execute: async (_args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskClear(ctx.env, ctx.identity.email) }),
 };
 
 export const ASK_USER_TOOL: ToolDef = {
@@ -139,6 +146,7 @@ export const CMUX_OBSERVE_TOOL = createCmuxObserveTool({ readerForContext: creat
 export const TOOLS: ToolDef[] = [
   DESK_UPSERT_TOOL,
   DESK_GET_TOOL,
+  DESK_CLEAR_TOOL,
   ASK_USER_TOOL,
   SHOW_DIFF_TOOL,
   CMUX_OBSERVE_TOOL,

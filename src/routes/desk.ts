@@ -29,6 +29,12 @@ export async function ownerDeskUpsert(env: AppEnv["Bindings"], email: string, ca
   return next;
 }
 
+export async function ownerDeskClear(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
+  const next = emptyDeskBoard();
+  await writeBoard(env, email.toLowerCase(), next);
+  return next;
+}
+
 export function registerDeskRoutes(app: Hono<AppEnv>) {
   app.get("/api/desk", async (c) => {
     const board = await ownerDeskGet(c.env, c.get("identity").email);
@@ -42,5 +48,9 @@ export function registerDeskRoutes(app: Hono<AppEnv>) {
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CARD", message: error instanceof Error ? error.message : "invalid desk card" }, next_actions: [] }, 400);
     }
+  });
+  app.delete("/api/desk", async (c) => {
+    const board = await ownerDeskClear(c.env, c.get("identity").email);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: board, next_actions: [] });
   });
 }
