@@ -14,13 +14,13 @@ function methodList(text: string): string[] {
 
 test("coordinator catalog includes the control-plane methods", () => {
   const methods = methodList(source);
-  for (const method of ["session_state", "abort", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert"]) {
+  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert"]) {
     assert.ok(methods.includes(method), `missing ${method}`);
   }
 });
 
 test("control-plane methods are exposed on my_ax_code", () => {
-  for (const name of ["workspaceWrite", "sessionState", "abort", "artifactList", "artifactGet", "deskGet", "deskUpsert"]) {
+  for (const name of ["workspaceWrite", "sessionState", "abort", "heal", "artifactList", "artifactGet", "deskGet", "deskUpsert"]) {
     assert.match(source, new RegExp(`${name}:`));
   }
 });

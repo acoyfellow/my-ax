@@ -38,7 +38,7 @@ test("a junk url string does not throw Invalid URL string", () => {
       role: "user",
       content: [{ type: "file", url: "not a url", mediaType: "image/png" }],
     },
-  ] as ModelMessage[];
+  ] as unknown as ModelMessage[];
   assert.doesNotThrow(() => sanitizeModelMessageUrls(messages));
   assert.deepEqual(sanitizeModelMessageUrls(messages)[0]?.content, []);
 });

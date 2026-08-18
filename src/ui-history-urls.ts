@@ -1,18 +1,7 @@
-export interface UiHistoryPart {
-  type?: string;
-  url?: unknown;
-  [key: string]: unknown;
-}
-
-export interface UiHistoryMessage {
-  parts?: UiHistoryPart[];
-  [key: string]: unknown;
-}
-
-function absolutePublicUrl(raw: string, origin: string): string | null {
+export function rewriteFileUrl(raw: string, origin: string): string | null {
   if (raw.startsWith("data:")) return raw;
   try {
-    const url = new URL(raw, origin);
+    const url = new URL(raw, origin.replace(/\/+$/, ""));
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     return url.toString();
   } catch {
@@ -20,25 +9,29 @@ function absolutePublicUrl(raw: string, origin: string): string | null {
   }
 }
 
-export function rewriteUiHistoryFileUrls<T extends UiHistoryMessage>(messages: T[], origin: string): T[] {
+export function healUiHistoryFileUrls(messages: Array<{ parts?: Array<Record<string, unknown>> }>, origin: string): number {
   const base = origin.replace(/\/+$/, "");
-  if (!base) return messages;
-  return messages.map((message) => {
-    if (!Array.isArray(message.parts)) return message;
+  if (!base) return 0;
+  let rewritten = 0;
+  for (const message of messages) {
+    if (!Array.isArray(message.parts)) continue;
     let changed = false;
-    const parts = message.parts.flatMap((part) => {
+    const next = message.parts.flatMap((part) => {
       if (!part || typeof part !== "object") return [part];
       if (part.type !== "file" && part.type !== "image" && part.type !== "source") return [part];
       if (typeof part.url !== "string") return [part];
-      const next = absolutePublicUrl(part.url, base);
-      if (!next) {
+      const url = rewriteFileUrl(part.url, base);
+      if (!url) {
         changed = true;
         return [];
       }
-      if (next === part.url) return [part];
+      if (url === part.url) return [part];
       changed = true;
-      return [{ ...part, url: next }];
+      return [{ ...part, url }];
     });
-    return changed ? { ...message, parts } : message;
-  });
+    if (!changed) continue;
+    message.parts = next;
+    rewritten += 1;
+  }
+  return rewritten;
 }

@@ -28,7 +28,7 @@ import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { sanitizeModelMessageUrls } from "./model-message-urls";
-import { rewriteUiHistoryFileUrls } from "./ui-history-urls";
+import { healUiHistoryFileUrls } from "./ui-history-urls";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
@@ -221,6 +221,15 @@ export class MyAgent extends Think<Env> {
     const hasPendingTool = history.some((message) => message.parts.some((part) => part.type.startsWith("tool-") && !["output-available", "output-error", "output-denied"].includes((part as { state?: string }).state ?? "")));
     if (hasPendingTool) throw new Error("Fork from the previous completed message instead; this path contains an unresolved tool call.");
     return history;
+  }
+
+  async healStoredHistory(): Promise<{ rewritten: number; messages: number }> {
+    const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
+    if (!origin) return { rewritten: 0, messages: this.messages.length };
+    const rewritten = healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin);
+    if (!rewritten) return { rewritten: 0, messages: this.messages.length };
+    for (const message of this.messages) await this.session.updateMessage(message);
+    return { rewritten, messages: this.messages.length };
   }
 
   async seedForkHistory(identity: AccessIdentity, messages: UIMessage[]): Promise<void> {
@@ -1096,7 +1105,7 @@ export class MyAgent extends Think<Env> {
 
   private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
     const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
-    if (origin) this.messages = rewriteUiHistoryFileUrls(this.messages, origin);
+    if (origin) healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin);
     await this.ensureNativeMcp();
     // Persist the inbound user message before the model call so stalled turns
     // remain available when the client resyncs. logAcceptedUsers is idempotent.
