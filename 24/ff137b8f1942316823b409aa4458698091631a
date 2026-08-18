@@ -1,0 +1,23 @@
+src/ui/owner-error.test.ts
+  s_5fe3591d60297c::t_1528dcbd16e403 1-14
+src/ui/owner-error.ts
+  s_5fe3591d60297c::t_bfe552deebca92 1-6
+src/ui/store.svelte.ts
+  s_5fe3591d60297c::t_8f8af4def30f00 1-2,182-183,186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "24ff137b8f1942316823b409aa4458698091631a",
+  "prompts": {},
+  "sessions": {
+    "s_5fe3591d60297c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd866-e69a-76ed-8232-4f273583c9fe",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
