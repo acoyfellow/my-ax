@@ -20,6 +20,7 @@ export interface GithubPort {
   openReadyPr(input: { title: string; body: string; head: string }): Promise<{ number: number }>;
   listPullFiles?(number: number): Promise<string[]>;
   commitsBehindMain?(headSha: string): Promise<number>;
+  hasBranch?(name: string): Promise<boolean>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
 }
@@ -43,17 +44,49 @@ export type TriageStep =
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
 
+export function formatLoopBoard(input: {
+  issueNumber: number;
+  classification: Classification;
+  modelId: string;
+  stage: "labeled" | "blocked-missing-branch" | "pr-opened" | "pr-failed";
+  prNumber?: number;
+  error?: string;
+}): string {
+  const issue = `https://github.com/acoyfellow/my-ax/issues/${input.issueNumber}`;
+  const head = `bot/issue-${input.issueNumber}`;
+  const lines = [
+    "## loop board",
+    `issue: ${issue}`,
+    `stage: ${input.stage}`,
+    `kind: ${input.classification.kind}`,
+    `labels: ${input.classification.labels.join(", ") || "none"}`,
+    `head: ${head}`,
+    `model: ${input.modelId}`,
+  ];
+  if (input.prNumber) lines.push(`pr: https://github.com/acoyfellow/my-ax/pull/${input.prNumber}`);
+  if (input.stage === "blocked-missing-branch") {
+    lines.push(`blocked: push ${head} then comment triage:draft again, or add triage:draft before opening.`);
+  }
+  if (input.stage === "labeled" && !input.classification.draft) {
+    lines.push("next: add triage:draft and a matching head branch if you want a ready PR. Worker never merges.");
+  }
+  if (input.error) lines.push(`error: ${input.error}`);
+  return lines.join("\n");
+}
+
 export async function runTriage(input: IssueInput, ports: { github: GithubPort; terrarium: TerrariumPort; model: ModelPort }): Promise<TriageStep[]> {
   const classification = ports.model.classify ? await ports.model.classify(input) : classifyIssue(input);
   const steps: TriageStep[] = [{ step: "classify", classification }];
   const issueNumber = input.number ?? 0;
-  await ports.github.comment(issueNumber, `${classification.summary}\nmodel=${ports.model.modelId}`);
-  steps.push({ step: "comment" });
+  let stage: "labeled" | "blocked-missing-branch" | "pr-opened" | "pr-failed" = "labeled";
+  let prNumber: number | undefined;
+  let error: string | undefined;
   try {
     await ports.github.labelIssue(issueNumber, classification.labels);
     steps.push({ step: "label", labels: classification.labels });
   } catch {
-    steps.push({ step: "stop", reason: "label failed; comment posted" });
+    steps.push({ step: "stop", reason: "label failed" });
+    error = "label failed";
   }
   if (shouldSpawnDig(classification)) {
     const contract = await ports.terrarium.spawn(`Hard issue: ${input.title}\n${input.body}`);
@@ -62,30 +95,51 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
     steps.push({ step: "dig", runId: contract.runId, verified });
     if (!verified) {
       steps.push({ step: "stop", reason: "terrarium receipt unproven" });
+      await ports.github.comment(issueNumber, formatLoopBoard({
+        issueNumber, classification, modelId: ports.model.modelId, stage: "labeled", error: "terrarium receipt unproven",
+      }));
+      steps.push({ step: "comment" });
       return steps;
     }
     const visualOk = acceptVisualProof(classification.visual, receipt.visual);
     steps.push({ step: "visual", accepted: visualOk });
     if (!visualOk) {
       steps.push({ step: "stop", reason: "visual proof missing" });
+      await ports.github.comment(issueNumber, formatLoopBoard({
+        issueNumber, classification, modelId: ports.model.modelId, stage: "labeled", error: "visual proof missing",
+      }));
+      steps.push({ step: "comment" });
       return steps;
     }
-    return steps;
-  }
-  if (shouldOpenDraft(classification)) {
-    if (!input.number) {
-      steps.push({ step: "stop", reason: "issue number required before opening a PR" });
-      return steps;
+  } else if (shouldOpenDraft(classification) && issueNumber) {
+    const head = `bot/issue-${issueNumber}`;
+    const exists = ports.github.hasBranch ? await ports.github.hasBranch(head) : true;
+    if (!exists) {
+      stage = "blocked-missing-branch";
+      steps.push({ step: "stop", reason: `missing ${head}` });
+    } else {
+      try {
+        const pr = await ports.github.openReadyPr({
+          title: formatReadyPrTitle(input),
+          body: formatReadyPrBody(input, classification),
+          head,
+        });
+        prNumber = pr.number;
+        stage = "pr-opened";
+        steps.push({ step: "pr", number: pr.number });
+      } catch (err) {
+        stage = "pr-failed";
+        error = err instanceof Error ? err.message : String(err);
+        steps.push({ step: "stop", reason: error });
+      }
     }
-    const pr = await ports.github.openReadyPr({
-      title: formatReadyPrTitle(input),
-      body: formatReadyPrBody(input, classification),
-      head: `bot/issue-${input.number}`,
-    });
-    steps.push({ step: "pr", number: pr.number });
-    return steps;
+  } else {
+    steps.push({ step: "stop", reason: classification.spray ? "spray" : "no-draft" });
   }
-  steps.push({ step: "stop", reason: classification.spray ? "spray" : "no-draft" });
+  await ports.github.comment(issueNumber, formatLoopBoard({
+    issueNumber, classification, modelId: ports.model.modelId, stage, prNumber, error,
+  }));
+  steps.push({ step: "comment" });
   return steps;
 }
 

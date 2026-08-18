@@ -33,6 +33,15 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       assertNoMergeAction("comment");
       await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
     },
+    async hasBranch(name) {
+      assertNoMergeAction("hasBranch");
+      try {
+        await gh(`/git/ref/heads/${encodeURIComponent(name)}`);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     async listPullFiles(number) {
       assertNoMergeAction("listPullFiles");
       const json = await gh(`/pulls/${number}/files?per_page=100`);
