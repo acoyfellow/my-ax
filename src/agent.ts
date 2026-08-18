@@ -173,6 +173,10 @@ export class MyAgent extends Think<Env> {
   // TurnConfig.chatStreamStallTimeoutMs for turns with known-slow tools.
   override chatStreamStallTimeoutMs = 300_000;
 
+  sendDeskBoard(frame: string): void {
+    this.broadcast(frame);
+  }
+
   /** Per-turn flag: set when a successful tool call may have written under
    *  /home/user. Drives a single snapshotUserWorkspace() in onChatResponse.
    *  Reset at the start of every turn via onChatResponse itself (after we
