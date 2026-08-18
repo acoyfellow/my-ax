@@ -16,7 +16,7 @@ export class UserAgent extends Agent<Env> {
     for (const sessionId of sessionIds) {
       if (!sessionId) continue;
       const facet = await getSubAgentByName(this, MyAgent, sessionId);
-      facet.broadcast(frame);
+      await facet.sendDeskBoard(frame);
     }
   }
 }

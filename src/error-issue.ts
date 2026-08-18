@@ -7,8 +7,6 @@ import {
   type ErrorReportInput,
   type FiledErrorIssue,
 } from "./error-report";
-import { ownerDeskUpsert } from "./routes/desk";
-
 const ISSUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 interface GithubIssueResult {
@@ -37,13 +35,13 @@ export async function fileOwnerErrorIssue(
   }
   const created = await createGithubIssue(token, repo, input, fingerprint, post);
   await rememberFingerprint(env, ownerEmail, fingerprint, created).catch(() => undefined);
-  await ownerDeskUpsert(env, ownerEmail, {
+  await import("./routes/desk").then((mod) => mod.ownerDeskUpsert(env, ownerEmail, {
     id: `error-${fingerprint}`,
     title: formatAutoIssueTitle(input),
     body: `${input.origin} ${input.message}`.slice(0, 800),
     href: created.html_url,
     status: "pending",
-  }).catch(() => undefined);
+  })).catch(() => undefined);
   return { number: created.number, url: created.html_url, fingerprint, created: true };
 }
 
