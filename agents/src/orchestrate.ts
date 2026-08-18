@@ -18,6 +18,8 @@ export interface GithubPort {
   labelIssue(number: number, labels: string[]): Promise<void>;
   comment(number: number, body: string): Promise<void>;
   openReadyPr(input: { title: string; body: string; head: string }): Promise<{ number: number }>;
+  listPullFiles?(number: number): Promise<string[]>;
+  commitsBehindMain?(headSha: string): Promise<number>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
 }
