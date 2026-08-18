@@ -36,6 +36,17 @@ test("parseDeskBoard fails closed on junk", () => {
   assert.equal(parseDeskBoard({ cards: [{ id: "ok", title: "Keep" }] }).cards[0]?.id, "ok");
 });
 
+test("desk status keeps known values and falls back to pending", () => {
+  const approved = upsertDeskCard(emptyDeskBoard(), { id: "a", title: "a", status: "approved" });
+  const rejected = upsertDeskCard(emptyDeskBoard(), { id: "r", title: "r", status: "rejected" });
+  const unknown = upsertDeskCard(emptyDeskBoard(), { id: "u", title: "u", status: "ship-it" });
+  const nonString = upsertDeskCard(emptyDeskBoard(), { id: "n", title: "n", status: 1 });
+  assert.equal(approved.cards[0]?.status, "approved");
+  assert.equal(rejected.cards[0]?.status, "rejected");
+  assert.equal(unknown.cards[0]?.status, "pending");
+  assert.equal(nonString.cards[0]?.status, "pending");
+});
+
 test("scheme-relative and overlong hrefs are rejected; github.com is kept", () => {
   const scheme = upsertDeskCard(emptyDeskBoard(), { id: "sr", title: "sr", decisionHref: "//evil.example/x" });
   assert.equal(scheme.cards[0]?.decisionHref, null);

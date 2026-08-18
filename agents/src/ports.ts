@@ -1,4 +1,4 @@
-import { assertNoMergeAction, type TerrariumReceipt } from "./policy";
+import { assertNoMergeAction, usableIssueLabels, type TerrariumReceipt } from "./policy";
 import type { GithubPort, TerrariumPort } from "./orchestrate";
 import type { AgentsEnv } from "./workflows";
 
@@ -25,15 +25,24 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
   return {
     async labelIssue(number, labels) {
       assertNoMergeAction("label");
-      const listed = await gh("/labels?per_page=100");
-      const known = new Set((Array.isArray(listed) ? listed : []).map((row) => String((row as { name?: string }).name || "")));
-      const usable = labels.filter((label) => known.has(label));
+      const usable = usableIssueLabels(labels);
       if (!usable.length) return;
       await gh(`/issues/${number}/labels`, { method: "POST", body: JSON.stringify({ labels: usable }) });
     },
     async comment(number, body) {
       assertNoMergeAction("comment");
       await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+    },
+    async listPullFiles(number) {
+      assertNoMergeAction("listPullFiles");
+      const json = await gh(`/pulls/${number}/files?per_page=100`);
+      return (Array.isArray(json) ? json : []).map((row) => String((row as { filename?: string }).filename || "")).filter(Boolean);
+    },
+    async commitsBehindMain(headSha) {
+      assertNoMergeAction("commitsBehindMain");
+      const json = await gh(`/compare/main...${encodeURIComponent(headSha)}`);
+      const behind = Number((json as { behind_by?: number }).behind_by);
+      return Number.isFinite(behind) && behind >= 0 ? behind : -1;
     },
     async openReadyPr(input) {
       assertNoMergeAction("openReadyPr");
