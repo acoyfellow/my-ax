@@ -172,10 +172,8 @@
     { "tag": "v8-remove-voice-ladder", "deleted_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
     { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
     { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] },
-    { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] }
-    // v12-codemode-runtime intentionally NOT declared yet. It will be
-    // added alongside the CODEMODE_RUNTIME binding above when the first
-    // real call site lands.
+    { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
+    { "tag": "v12-desk-hub" }
   ],
 
   // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
