@@ -17,6 +17,7 @@ export const PROOF_COMMAND = "npx tsx --test src/desk-board.test.ts agents/src/p
 export interface GithubPort {
   labelIssue(number: number, labels: string[]): Promise<void>;
   comment(number: number, body: string): Promise<void>;
+  listComments?(number: number): Promise<string[]>;
   openReadyPr(input: { title: string; body: string; head: string }): Promise<{ number: number }>;
   listPullFiles?(number: number): Promise<string[]>;
   commitsBehindMain?(headSha: string): Promise<number>;
@@ -136,11 +137,22 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   } else {
     steps.push({ step: "stop", reason: classification.spray ? "spray" : "no-draft" });
   }
-  await ports.github.comment(issueNumber, formatLoopBoard({
+  const board = formatLoopBoard({
     issueNumber, classification, modelId: ports.model.modelId, stage, prNumber, error,
-  }));
+  });
+  if (await alreadyPostedBoard(ports.github, issueNumber, board)) {
+    steps.push({ step: "stop", reason: "board already posted" });
+    return steps;
+  }
+  await ports.github.comment(issueNumber, board);
   steps.push({ step: "comment" });
   return steps;
+}
+
+async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board: string): Promise<boolean> {
+  if (!github.listComments) return false;
+  const comments = await github.listComments(issueNumber);
+  return comments.some((body) => body.trim() === board.trim());
 }
 
 export async function runAudit(input: PullInput, ports: { github: GithubPort; promptDigest: string }): Promise<AuditReceipt> {

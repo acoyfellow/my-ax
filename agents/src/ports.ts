@@ -33,6 +33,11 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       assertNoMergeAction("comment");
       await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
     },
+    async listComments(number) {
+      assertNoMergeAction("listComments");
+      const json = await gh(`/issues/${number}/comments?per_page=100`);
+      return (Array.isArray(json) ? json : []).map((row) => String((row as { body?: string }).body || ""));
+    },
     async hasBranch(name) {
       assertNoMergeAction("hasBranch");
       try {
