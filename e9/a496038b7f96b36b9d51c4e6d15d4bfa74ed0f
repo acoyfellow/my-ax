@@ -1,0 +1,31 @@
+src/error-report.test.ts
+  s_99b55ecf7d26fa::t_f1e1210e176017 1-60
+src/routes/errors.ts
+  s_def07e2abdf2a1::t_51a34816920e17 1-28
+src/types.ts
+  s_99b55ecf7d26fa::t_b04d5f13db68b0 98-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e9a496038b7f96b36b9d51c4e6d15d4bfa74ed0f",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_def07e2abdf2a1": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01434-c885-7dca-b1ae-026f2bcfc47b",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
