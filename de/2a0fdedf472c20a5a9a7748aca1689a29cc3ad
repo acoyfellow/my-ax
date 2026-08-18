@@ -1,0 +1,33 @@
+agents/src/orchestrate.ts
+  s_2a77a1542d3982::t_5d75270e4be173 68,71
+agents/src/policy.test.ts
+  s_99b55ecf7d26fa::t_c015dfff4f2f1b 49-50
+agents/src/worker-comment.test.ts
+  s_2a77a1542d3982::t_4179ae6e78ad59 1-15
+agents/src/worker.ts
+  s_2a77a1542d3982::t_9fca8e47751588 63-65,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "de2a0fdedf472c20a5a9a7748aca1689a29cc3ad",
+  "prompts": {},
+  "sessions": {
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
