@@ -14,13 +14,13 @@ function methodList(text: string): string[] {
 
 test("coordinator catalog includes the control-plane methods", () => {
   const methods = methodList(source);
-  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert"]) {
+  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_clear"]) {
     assert.ok(methods.includes(method), `missing ${method}`);
   }
 });
 
 test("control-plane methods are exposed on my_ax_code", () => {
-  for (const name of ["workspaceWrite", "sessionState", "abort", "heal", "artifactList", "artifactGet", "deskGet", "deskUpsert"]) {
+  for (const name of ["workspaceWrite", "sessionState", "abort", "heal", "artifactList", "artifactGet", "deskGet", "deskUpsert", "deskClear"]) {
     assert.match(source, new RegExp(`${name}:`));
   }
 });
@@ -35,7 +35,8 @@ test("MCP exposes ask_owner as a durable decision cockpit", () => {
   assert.match(source, /decision: \{ id: decision.id, options \}/);
 });
 
-test("MCP exposes desk_get and desk_upsert as first-class tools", () => {
+test("MCP exposes desk_get, desk_upsert, and desk_clear as first-class tools", () => {
   assert.match(source, /name: "desk_get"/);
   assert.match(source, /name: "desk_upsert"/);
+  assert.match(source, /name: "desk_clear"/);
 });

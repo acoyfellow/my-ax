@@ -20,6 +20,21 @@
     }
   }
 
+  async function clearDesk() {
+    try {
+      const response = await fetch("/api/desk", { method: "DELETE", credentials: "include" });
+      if (!response.ok) throw new Error("clear failed");
+      const body = await response.json();
+      board = body?.result ?? { cards: [], updatedAt: "" };
+      error = null;
+      window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: board }));
+    } catch (err) {
+      error = err instanceof Error ? err.message : "clear failed";
+    }
+  }
+
+  const liveCards = $derived(board.cards.filter((card) => card.status === "pending"));
+
   function closePanel() {
     open = false;
     const url = new URL(location.href);
@@ -52,16 +67,21 @@
 <dialog bind:this={dialogEl} class="notif-panel z-50 overflow-hidden border border-line bg-bg-alt p-0 text-fg" onclose={() => { if (open) closePanel(); }} data-desk-panel>
   <div class="notif-header safe-area-appbar">
     <h2 class="truncate text-sm font-semibold text-fg">Desk</h2>
-    <button type="button" onclick={closePanel} class="notif-close" aria-label="Close desk">×</button>
+    <div class="flex items-center gap-2">
+      {#if board.cards.length > 0}
+        <button type="button" class="desk-clear" onclick={() => void clearDesk()}>Clear</button>
+      {/if}
+      <button type="button" onclick={closePanel} class="notif-close" aria-label="Close desk">×</button>
+    </div>
   </div>
   <div class="notif-body">
     {#if error}
       <p class="notif-empty text-bad">{error}</p>
-    {:else if board.cards.length === 0}
+    {:else if liveCards.length === 0}
       <p class="notif-empty">Nothing on the desk. Agents write here with desk_upsert instead of a new conversation.</p>
     {:else}
       <ul class="notif-list">
-        {#each board.cards as card (card.id)}
+        {#each liveCards as card (card.id)}
           <li class="notif-item">
             <div class="notif-item-main">
               <div class="notif-pill" data-tone={card.status === "rejected" ? "bad" : card.status === "approved" ? "ok" : "attention"}>{card.status}</div>
@@ -118,6 +138,17 @@
     line-height: 1;
   }
   .notif-close:hover { color: var(--fg); background: var(--surface-2); }
+  .desk-clear {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--fg-mut);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .desk-clear:hover { color: var(--fg); background: var(--surface-2); }
   .notif-body {
     flex: 1;
     min-height: 0;
