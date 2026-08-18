@@ -8,3 +8,5 @@ import { Agent } from "agents";
 import type { Env } from "./types";
 
 export class UserAgent extends Agent<Env> {}
+
+export class DeskHub extends Agent<Env> {}
