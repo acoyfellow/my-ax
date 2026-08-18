@@ -60,12 +60,13 @@ export default {
         const comment = payload.comment as { body?: string; user?: { login?: string } };
         const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string }; pull_request?: unknown };
         if (issue.pull_request) return Response.json({ queued: "ignored", event, action });
-        const text = `${issue.body || ""}\n${comment.body || ""}`;
-        if (!/\btriage:draft\b/i.test(text)) return Response.json({ queued: "ignored", event, action });
+        const commentBody = String(comment.body || "");
+        if (/^## loop board\b/m.test(commentBody)) return Response.json({ queued: "ignored", event, action, reason: "loop-board" });
+        if (!/\btriage:draft\b/i.test(commentBody)) return Response.json({ queued: "ignored", event, action });
         return queueTriage(env, deliveryId, {
           number: issue.number,
           title: String(issue.title || ""),
-          body: text,
+          body: `${issue.body || ""}\n${commentBody}`,
           user: comment.user || issue.user,
         });
       }
