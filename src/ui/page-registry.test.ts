@@ -11,7 +11,7 @@ function installGlobals(opts: {
   msgNodes?: Array<{ user: boolean; text: string; ts?: string }>;
   viewport?: { innerWidth: number; innerHeight: number; visualHeight: number; dvh: number; appViewportBottom: number | null; safeAreaBottom?: number };
 }) {
-  const events = opts.events ?? [];
+  const events: string[] = opts.events ?? [];
   const vp = opts.viewport;
   (globalThis as any).window = {
     dispatchEvent: (e: any) => { events.push(e.type); return true; },
@@ -115,7 +115,7 @@ test("reload dispatches my-ax:reload after the result", async () => {
   assert.equal(frame.ok, true);
   assert.deepEqual(events, []);
   after?.();
-  assert.ok(events.includes("my-ax:reload"));
+  assert.equal(events.at(-1), "my-ax:reload");
 });
 
 test("readHealth unwraps the REST { result } envelope", async () => {

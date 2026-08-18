@@ -34,7 +34,7 @@ export interface BrowserRunResult {
  */
 export function createMyAxBrowserTools(env: Env, identity?: () => AccessIdentity | undefined, ownerSessionId?: () => string): ToolSet {
   return {
-    browser_open: tool<Record<string, unknown>, BrowserRunResult>({
+    browser_open: tool({
       description: "Open a public web page in Cloudflare Browser Run, capture a rendered text preview, and create an inline visual replay with a short observation window so playback is inspectable. Use for public web browsing and visible UI checks; do not claim authenticated access.",
       inputSchema: jsonSchema<Record<string, unknown>>({
         type: "object",
