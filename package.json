@@ -91,7 +91,7 @@
     "verify:public:staged": "node scripts/verify-public-clean.mjs --staged",
     "verify:legacy-surface": "node scripts/verify-legacy-surface.mjs",
     "build:vendor": "node scripts/build-vendor.mjs",
-    "test:error-report": "tsx --test src/error-report.test.ts src/error-issue.test.ts",
+    "test:error-report": "tsx --test src/error-report.test.ts src/error-issue.test.ts src/model-message-urls.test.ts",
     "test:job-state": "tsx --test src/job-state-transition.test.ts src/job-service.test.ts",
     "test:voice-session-ownership": "tsx --test src/voice-session-ownership.test.ts",
     "test:voice-think-agent": "tsx --test src/voice-think-agent.test.ts",

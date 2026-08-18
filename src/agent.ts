@@ -27,6 +27,7 @@ import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
+import { sanitizeModelMessageUrls } from "./model-message-urls";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
@@ -1159,9 +1160,9 @@ export class MyAgent extends Think<Env> {
     // Heal tool-call ids that an earlier provider may have stored in a shape a
     // strict provider (Anthropic) rejects, so resuming or forking a session never
     // fails with a tool_use.id pattern error. Idempotent for already-valid ids.
-    const safeMessages = sanitizeToolCallIds(messages, (idBefore, idAfter) =>
+    const safeMessages = sanitizeModelMessageUrls(sanitizeToolCallIds(messages, (idBefore, idAfter) =>
       console.warn("tool_call_id_sanitized", { sessionId: this.name, before: idBefore, after: idAfter }),
-    );
+    ));
     const dogfoodNoToolTurn = safeMessages.some((message) => message.role === "user" && typeof message.content === "string" && message.content.includes("MY_AX_RECIPE_CURVE_NO_TOOLS"));
     return {
       model: resolved.model,
