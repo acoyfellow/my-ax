@@ -195,8 +195,19 @@ Test receipt:
 ```text
 upsert replaces a card by id and keeps newest first
 javascript and unknown hosts are stripped from hrefs
+Open source rejects same-origin paths; Decide keeps them
 parseDeskBoard fails closed on junk
+desk status keeps known values and falls back to pending
+scheme-relative and overlong hrefs are rejected; github.com is kept
 ```
+
+## File An Issue, Then A Ready PR
+
+A checkable GitHub issue is the start of engine work. Put one receipt in the
+body. If you want a Worker-opened pull request, add `triage:draft` and push
+`bot/issue-<n>` first. The Worker comments, labels, and may open a ready PR.
+It never merges. Hunt-only ticks file one issue and stop. See
+[agents/HUNT.md](../agents/HUNT.md).
 
 ## What This Tour Does Not Prove
 

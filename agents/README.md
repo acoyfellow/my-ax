@@ -11,9 +11,13 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 
 | Workflow | Trigger | Does | Never |
 |---|---|---|---|
-| `TriageWorkflow` | `issues.opened` | classify, label, comment; draft only with `triage:draft` | merge |
+| `TriageWorkflow` | `issues.opened` | classify, label, comment; open a ready PR only when the issue contains `triage:draft` and `bot/issue-<n>` exists | merge |
 | `DigWorkflow` | hard bug | spawn Terrarium, wait, proceed only on a verified receipt | trust a callback alone |
-| `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment | approve or merge |
+| `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
+
+`triage:draft` is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`. The body uses `Closes #<n>` and does not invent a file list.
+
+Hunt ticks that only file issues: [HUNT.md](./HUNT.md).
 
 Model: `AGENTS_MODEL` (default `grok-4.6`). Inference only through employee-injected `LLM_GATEWAY_URL` + `LLM_GATEWAY_TOKEN`.
 

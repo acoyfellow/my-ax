@@ -12,4 +12,5 @@
   - [Disagreement review](./loop/disagreement-review.md) — builder/skeptic/historian evidence review without voting.
 - [Deployment Proof](../proof/README.md) — exact checks performed against a deployed Worker.
 - [Security Policy](../SECURITY.md) — reporting and deployment-owner responsibilities.
-- [Contributing](../CONTRIBUTING.md) — local checks and repository invariants.
+- [Contributing](../CONTRIBUTING.md) — local checks, issue-then-PR flow, and repository invariants.
+- [Lifecycle agents](../agents/README.md) — GitHub issue classify, ready PR, audit. Hunt ticks: [HUNT.md](../agents/HUNT.md).
