@@ -15,12 +15,15 @@ import {
 import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
 import { executeTriageWorkflow } from "./workflows";
 
-function memoryGithub(): GithubPort & { actions: string[] } {
+function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } {
   const actions: string[] = [];
+  const comments: string[] = [];
   return {
     actions,
+    comments,
     async labelIssue(_n, labels) { actions.push(`label:${labels.join(",")}`); },
-    async comment() { actions.push("comment"); },
+    async comment(_n, body) { actions.push("comment"); comments.push(body); },
+    async listComments() { return comments; },
     async openReadyPr(input) { actions.push(`pr:${input.title}`); actions.push(`head:${input.head}`); actions.push(`body:${input.body}`); return { number: 7 }; },
     async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
     async mergePr() { actions.push("merge"); },
@@ -46,7 +49,8 @@ test("loop board names stage and next action", () => {
   const text = formatLoopBoard({ issueNumber: 52, classification, modelId: "grok-4.6", stage: "labeled" });
   assert.match(text, /stage: labeled/);
   assert.match(text, /issues\/52/);
-  assert.match(text, /triage:draft/);
+  assert.match(text, /opt-in token/);
+  assert.doesNotMatch(text, /triage:draft/);
 });
 
 test("ready PR body names the issue, proof command, and never-merge rule", () => {
@@ -182,6 +186,17 @@ test("a PNG URL is not visual proof without a vitest-visual-diff cascade", () =>
     tiers: { A: true, B: true, C: true },
     url: "https://example.test/diff.png",
   }), true);
+});
+
+test("a second identical loop board is not posted", async () => {
+  const github = memoryGithub();
+  const input = { number: 64, title: "bug: Invalid URL string.", body: "triage:draft", author: "owner" };
+  const ports = { github, terrarium: memoryTerrarium(), model: { modelId: "grok-4.6" } };
+  const first = await runTriage(input, ports);
+  const second = await runTriage(input, ports);
+  assert.ok(first.some((s) => s.step === "comment"));
+  assert.ok(second.some((s) => s.step === "stop" && s.reason === "board already posted"));
+  assert.equal(github.comments.length, 1);
 });
 
 test("receipt correlation is fail-closed", () => {

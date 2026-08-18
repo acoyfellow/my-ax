@@ -1,5 +1,5 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
-import { executeAuditWorkflow, executeDigWorkflow, executeTriageWorkflow, type AgentsEnv } from "./workflows";
+import { executeAuditWorkflow, executeDigWorkflow, executeReviewWorkflow, executeTriageWorkflow, type AgentsEnv } from "./workflows";
 import type { IssueInput, PullInput } from "./policy";
 import { liveGithubPort, liveTerrariumPort } from "./ports";
 
@@ -24,6 +24,13 @@ export class AuditWorkflow extends WorkflowEntrypoint<AgentsEnv, PullInput> {
       github,
       promptDigest: "agents/audit@live",
     }));
+  }
+}
+
+export class ReviewWorkflow extends WorkflowEntrypoint<AgentsEnv, PullInput & { head?: string }> {
+  async run(event: WorkflowEvent<PullInput & { head?: string }>, step: WorkflowStep) {
+    const github = liveGithubPort(this.env);
+    return step.do("review", () => executeReviewWorkflow(this.env, event.payload, { github }));
   }
 }
 

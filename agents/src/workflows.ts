@@ -6,6 +6,7 @@ import {
   resolveAgentsModel,
 } from "./policy";
 import { runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { runReview } from "./review";
 
 export interface AgentsEnv {
   AGENTS_MODEL?: string;
@@ -25,7 +26,7 @@ export function forwardedFromHook(request: Request, env: { HOOK_FORWARD_SECRET?:
   return Boolean(expected) && expected === got;
 }
 
-export const WORKFLOW_NAMES = ["TriageWorkflow", "AuditWorkflow", "DigWorkflow"] as const;
+export const WORKFLOW_NAMES = ["TriageWorkflow", "AuditWorkflow", "DigWorkflow", "ReviewWorkflow"] as const;
 
 export function workflowBindings(): typeof WORKFLOW_NAMES {
   return WORKFLOW_NAMES;
@@ -49,6 +50,15 @@ export async function executeAuditWorkflow(
   requireGateway(env);
   resolveAgentsModel(env);
   return runAudit(input, ports);
+}
+
+export async function executeReviewWorkflow(
+  env: AgentsEnv,
+  input: PullInput & { head?: string; proofExit?: number; proofLog?: string },
+  ports: { github: GithubPort },
+) {
+  requireGateway(env);
+  return runReview(input, ports);
 }
 
 export async function executeDigWorkflow(

@@ -27,6 +27,8 @@ import { limitToolSetOutput } from "./tool-output-limit";
 import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage } from "./conversation-log";
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
+import { sanitizeModelMessageUrls } from "./model-message-urls";
+import { healUiHistoryFileUrls } from "./ui-history-urls";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
@@ -42,6 +44,7 @@ import { executeWorkCode } from "./work-tools";
 import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
 import { RecipeUsageCollector } from "./recipe-usage-collector";
 import { resolveBridgeOrigin } from "./bridge-origin";
+import { safePublicHttpUrl } from "./public-url";
 import { reusableToolApprovalMode } from "./reusable-tool-preferences";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
@@ -218,6 +221,15 @@ export class MyAgent extends Think<Env> {
     const hasPendingTool = history.some((message) => message.parts.some((part) => part.type.startsWith("tool-") && !["output-available", "output-error", "output-denied"].includes((part as { state?: string }).state ?? "")));
     if (hasPendingTool) throw new Error("Fork from the previous completed message instead; this path contains an unresolved tool call.");
     return history;
+  }
+
+  async healStoredHistory(): Promise<{ rewritten: number; messages: number }> {
+    const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
+    if (!origin) return { rewritten: 0, messages: this.messages.length };
+    const rewritten = healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin);
+    if (!rewritten) return { rewritten: 0, messages: this.messages.length };
+    for (const message of this.messages) await this.session.updateMessage(message);
+    return { rewritten, messages: this.messages.length };
   }
 
   async seedForkHistory(identity: AccessIdentity, messages: UIMessage[]): Promise<void> {
@@ -515,6 +527,14 @@ export class MyAgent extends Think<Env> {
   private async ensureNativeMcp(): Promise<void> {
     const identity = this.identity();
     if (!identity) return;
+    try {
+      await this.hydrateNativeMcp(identity);
+    } catch (err) {
+      console.error("native_mcp_hydration_failed", { err: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  private async hydrateNativeMcp(identity: AccessIdentity): Promise<void> {
     const workerOrigin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
     if (!workerOrigin) {
       console.error("native_mcp_hydration_skipped_invalid_bridge_base_url", { bridgeBaseUrl: this.env.BRIDGE_BASE_URL ? "set" : "empty" });
@@ -542,6 +562,10 @@ export class MyAgent extends Think<Env> {
       // MCP hydration is best-effort: one server's initialize/tools-list
       // failure must not block chat or the LLM call. A stale connector surfaces
       // via the reauth banner instead.
+      if (!safePublicHttpUrl(upstream, { httpsOnly: true })) {
+        console.error("mcp_hydrate_skipped_invalid_upstream", { server: id });
+        return;
+      }
       try {
         await this.addMcpServer(id, upstream, {
           id,
@@ -877,6 +901,9 @@ export class MyAgent extends Think<Env> {
         content: surfacedError instanceof Error ? surfacedError.message : String(surfacedError),
         meta: errorConversationMeta(surfacedError),
       }).catch(() => {});
+      void import("./error-issue").then(({ reportServerChatError }) =>
+        reportServerChatError(this.env, identity.email, this.name, surfacedError),
+      );
     }
     return surfacedError;
   }
@@ -1068,10 +1095,17 @@ export class MyAgent extends Think<Env> {
   }
 
   async beforeTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
-    // Agent.mcp is the native protocol/OAuth/tool-discovery implementation.
-    // Register shared-user bearer connections lazily, then merge the freshly
-    // discovered native tools into this first turn too (Think assembled its
-    // base tool set immediately before calling beforeTurn).
+    try {
+      return await this.prepareTurn(ctx);
+    } catch (error) {
+      console.error("before_turn_failed", { err: error instanceof Error ? error.message : String(error) });
+      return {};
+    }
+  }
+
+  private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
+    const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
+    if (origin) healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin);
     await this.ensureNativeMcp();
     // Persist the inbound user message before the model call so stalled turns
     // remain available when the client resyncs. logAcceptedUsers is idempotent.
@@ -1138,9 +1172,9 @@ export class MyAgent extends Think<Env> {
     // Heal tool-call ids that an earlier provider may have stored in a shape a
     // strict provider (Anthropic) rejects, so resuming or forking a session never
     // fails with a tool_use.id pattern error. Idempotent for already-valid ids.
-    const safeMessages = sanitizeToolCallIds(messages, (idBefore, idAfter) =>
+    const safeMessages = sanitizeModelMessageUrls(sanitizeToolCallIds(messages, (idBefore, idAfter) =>
       console.warn("tool_call_id_sanitized", { sessionId: this.name, before: idBefore, after: idAfter }),
-    );
+    ));
     const dogfoodNoToolTurn = safeMessages.some((message) => message.role === "user" && typeof message.content === "string" && message.content.includes("MY_AX_RECIPE_CURVE_NO_TOOLS"));
     return {
       model: resolved.model,
