@@ -95,6 +95,9 @@ declare global {
       LLM_GATEWAY_SERVICE_TOKEN_ID?: string;
       LLM_GATEWAY_SERVICE_TOKEN_SECRET?: string;
 
+      GITHUB_TOKEN?: string;
+      GITHUB_REPO?: string;
+
       /** Explicit opt-in: saved recipe promotions skip pending gate and become enabled. */
       MY_AX_RECIPE_AUTOTRUST?: string;
       RECIPE_AUTOTRUST?: string;

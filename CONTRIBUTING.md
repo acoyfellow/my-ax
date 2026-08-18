@@ -40,6 +40,8 @@ docker build -t my-ax-check .
 
 File one issue first. Title it `bug:`, `perf:`, or `test:`. The body needs a receipt: a command and its output, a file and line, or a live URL. Do not file a second finding in the same issue.
 
+A live client or server error may open that issue through `POST /api/errors`. One fingerprint is one issue for 24 hours. The body has no `triage:draft`. A human adds that after a head branch exists.
+
 A GitHub webhook classifies `issues.opened`. The Worker comments and labels. It does not merge.
 
 If the issue body contains `triage:draft` and a branch `bot/issue-<number>` already exists, the Worker may open a **ready** pull request (`draft: false`). The PR body must include `Closes #<n>` and a proof command. It must not invent a Files list. Audit comments `neverMerge: true`. A human merges.

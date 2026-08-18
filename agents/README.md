@@ -14,6 +14,7 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 | `TriageWorkflow` | `issues.opened` | classify, label, comment; open a ready PR only when the issue contains `triage:draft` and `bot/issue-<n>` exists | merge |
 | `DigWorkflow` | hard bug | spawn Terrarium, wait, proceed only on a verified receipt | trust a callback alone |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
+| `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: proof comment, request changes, or close flood | approve, merge, or touch foreign PRs |
 
 `triage:draft` is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`. The body uses `Closes #<n>` and does not invent a file list.
 

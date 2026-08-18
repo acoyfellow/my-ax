@@ -14,6 +14,7 @@
   "workflows": [
     { "name": "my-ax-triage", "binding": "TRIAGE", "class_name": "TriageWorkflow" },
     { "name": "my-ax-audit", "binding": "AUDIT", "class_name": "AuditWorkflow" },
-    { "name": "my-ax-dig", "binding": "DIG", "class_name": "DigWorkflow" }
+    { "name": "my-ax-dig", "binding": "DIG", "class_name": "DigWorkflow" },
+    { "name": "my-ax-review", "binding": "REVIEW", "class_name": "ReviewWorkflow" }
   ]
 }

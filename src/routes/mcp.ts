@@ -14,7 +14,7 @@ import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -281,6 +281,11 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     }
     return stub.abortActiveTurn();
   }
+  if (method === "heal") {
+    const stub = await getSessionAgent(c.env, email, sessionId);
+    await stub.seedIdentity(c.get("identity"));
+    return stub.healStoredHistory();
+  }
   if (method === "entries") {
     const after = Math.max(0, Number(args.after) || 0);
     const limit = clamp(args.limit, 20, 100);
@@ -368,6 +373,7 @@ const CODE_METHODS: Record<string, Method> = {
   workspaceWrite: "workspace_write",
   sessionState: "session_state",
   abort: "abort",
+  heal: "heal",
   artifactList: "artifact_list",
   artifactGet: "artifact_get",
   deskGet: "desk_get",
@@ -406,6 +412,7 @@ const CODE_TYPES = `declare const codemode: {
   workspaceWrite(args: { path: string; content: string }): Promise<unknown>;
   sessionState(args: { sessionId: string }): Promise<unknown>;
   abort(args: { sessionId: string }): Promise<unknown>;
+  heal(args: { sessionId: string }): Promise<unknown>;
   artifactList(args?: { limit?: number }): Promise<unknown>;
   artifactGet(args: { id: string }): Promise<unknown>;
   deskGet(): Promise<unknown>;

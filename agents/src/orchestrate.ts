@@ -1,3 +1,4 @@
+import { assertPublicText } from "./public-text";
 import {
   type AuditReceipt,
   type Classification,
@@ -17,12 +18,15 @@ export const PROOF_COMMAND = "npx tsx --test src/desk-board.test.ts agents/src/p
 export interface GithubPort {
   labelIssue(number: number, labels: string[]): Promise<void>;
   comment(number: number, body: string): Promise<void>;
+  listComments?(number: number): Promise<string[]>;
   openReadyPr(input: { title: string; body: string; head: string }): Promise<{ number: number }>;
   listPullFiles?(number: number): Promise<string[]>;
   commitsBehindMain?(headSha: string): Promise<number>;
   hasBranch?(name: string): Promise<boolean>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
+  closePr?(number: number): Promise<void>;
+  requestChanges?(number: number, body: string): Promise<void>;
 }
 
 export interface TerrariumPort {
@@ -65,10 +69,10 @@ export function formatLoopBoard(input: {
   ];
   if (input.prNumber) lines.push(`pr: https://github.com/acoyfellow/my-ax/pull/${input.prNumber}`);
   if (input.stage === "blocked-missing-branch") {
-    lines.push(`blocked: push ${head} then comment triage:draft again, or add triage:draft before opening.`);
+    lines.push(`blocked: push ${head} then write the opt-in token on a new human comment.`);
   }
   if (input.stage === "labeled" && !input.classification.draft) {
-    lines.push("next: add triage:draft and a matching head branch if you want a ready PR. Worker never merges.");
+    lines.push("next: write the opt-in token on a new human comment after the head branch exists. Worker never merges.");
   }
   if (input.error) lines.push(`error: ${input.error}`);
   return lines.join("\n");
@@ -136,11 +140,22 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   } else {
     steps.push({ step: "stop", reason: classification.spray ? "spray" : "no-draft" });
   }
-  await ports.github.comment(issueNumber, formatLoopBoard({
+  const board = formatLoopBoard({
     issueNumber, classification, modelId: ports.model.modelId, stage, prNumber, error,
-  }));
+  });
+  if (await alreadyPostedBoard(ports.github, issueNumber, board)) {
+    steps.push({ step: "stop", reason: "board already posted" });
+    return steps;
+  }
+  await ports.github.comment(issueNumber, board);
   steps.push({ step: "comment" });
   return steps;
+}
+
+async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board: string): Promise<boolean> {
+  if (!github.listComments) return false;
+  const comments = await github.listComments(issueNumber);
+  return comments.some((body) => body.trim() === board.trim());
 }
 
 export async function runAudit(input: PullInput, ports: { github: GithubPort; promptDigest: string }): Promise<AuditReceipt> {
@@ -155,7 +170,7 @@ export function formatReadyPrTitle(input: IssueInput): string {
 
 export function formatReadyPrBody(input: IssueInput, classification: Classification): string {
   if (!input.number) throw new Error("issue number required before opening a PR");
-  return [
+  return assertPublicText([
     `Closes #${input.number}`,
     "",
     "## Why",
@@ -177,11 +192,11 @@ export function formatReadyPrBody(input: IssueInput, classification: Classificat
     "```",
     "",
     "Worker never merges. Worker never approves. Human merge only.",
-  ].join("\n");
+  ].join("\n"));
 }
 
 export function formatAuditComment(receipt: AuditReceipt): string {
-  return [
+  return assertPublicText([
     `## audit receipt`,
     `head: \`${receipt.headSha}\``,
     `prompt: \`${receipt.promptDigest}\``,
@@ -189,5 +204,5 @@ export function formatAuditComment(receipt: AuditReceipt): string {
     `neverApprove: true`,
     `neverMerge: true`,
     ...receipt.findings.map((f) => `- ${f}`),
-  ].join("\n");
+  ].join("\n"));
 }

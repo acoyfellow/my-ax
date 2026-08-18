@@ -41,6 +41,7 @@ import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerDecisionRoutes } from "./routes/decisions";
 import { registerDeskRoutes } from "./routes/desk";
+import { registerErrorRoutes } from "./routes/errors";
 import { registerCapabilityRoutes } from "./routes/capabilities";
 import { registerRecipeRoutes } from "./routes/recipes";
 import { registerCostSeriesRoutes } from "./routes/cost-series";
@@ -292,6 +293,7 @@ registerCostSeriesRoutes(app);
 registerArtifactRoutes(app);
 registerDecisionRoutes(app);
 registerDeskRoutes(app);
+registerErrorRoutes(app);
 registerCapabilityRoutes(app);
 registerSvelteServe(app);
 

@@ -281,6 +281,22 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
 
   // Persist the UI-selected model onto the session DO so voice turns (which
   // don't send a request body) use the same model as typed chat.
+  app.post("/api/sessions/:id/heal", async (c) => {
+    const id = c.req.param("id");
+    const identity = c.get("identity");
+    try {
+      if (!(await requireOwnedSession(c.env, id, identity.email))) {
+        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+      }
+      const stub = await getSessionAgent(c.env, identity.email, id);
+      await stub.seedIdentity(identity);
+      const result = await stub.healStoredHistory();
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result, next_actions: [] });
+    } catch (err) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "HEAL_FAILED", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
+    }
+  });
+
   app.post("/api/sessions/:id/model", async (c) => {
     const id = c.req.param("id");
     const identity = c.get("identity");
