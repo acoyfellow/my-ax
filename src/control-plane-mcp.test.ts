@@ -14,7 +14,7 @@ function methodList(text: string): string[] {
 
 test("coordinator catalog includes the control-plane methods", () => {
   const methods = methodList(source);
-  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert"]) {
+  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_clear"]) {
     assert.ok(methods.includes(method), `missing ${method}`);
   }
 });
@@ -38,4 +38,5 @@ test("MCP exposes ask_owner as a durable decision cockpit", () => {
 test("MCP exposes desk_get and desk_upsert as first-class tools", () => {
   assert.match(source, /name: "desk_get"/);
   assert.match(source, /name: "desk_upsert"/);
+  assert.match(source, /name: "desk_clear"/);
 });

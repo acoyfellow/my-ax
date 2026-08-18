@@ -31,6 +31,12 @@ test("Open source rejects same-origin paths; Decide keeps them", () => {
   assert.equal(board.cards[0]?.decisionHref, "/api/decisions/run-decision-test");
 });
 
+test("emptyDeskBoard is a clearable single artifact", () => {
+  const cleared = emptyDeskBoard("t-clear");
+  assert.deepEqual(cleared.cards, []);
+  assert.equal(cleared.updatedAt, "t-clear");
+});
+
 test("parseDeskBoard fails closed on junk", () => {
   assert.deepEqual(parseDeskBoard(null).cards, []);
   assert.equal(parseDeskBoard({ cards: [{ id: "ok", title: "Keep" }] }).cards[0]?.id, "ok");
