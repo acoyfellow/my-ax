@@ -42,6 +42,7 @@ import { executeWorkCode } from "./work-tools";
 import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
 import { RecipeUsageCollector } from "./recipe-usage-collector";
 import { resolveBridgeOrigin } from "./bridge-origin";
+import { safePublicHttpUrl } from "./public-url";
 import { reusableToolApprovalMode } from "./reusable-tool-preferences";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
@@ -515,6 +516,14 @@ export class MyAgent extends Think<Env> {
   private async ensureNativeMcp(): Promise<void> {
     const identity = this.identity();
     if (!identity) return;
+    try {
+      await this.hydrateNativeMcp(identity);
+    } catch (err) {
+      console.error("native_mcp_hydration_failed", { err: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  private async hydrateNativeMcp(identity: AccessIdentity): Promise<void> {
     const workerOrigin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
     if (!workerOrigin) {
       console.error("native_mcp_hydration_skipped_invalid_bridge_base_url", { bridgeBaseUrl: this.env.BRIDGE_BASE_URL ? "set" : "empty" });
@@ -542,6 +551,10 @@ export class MyAgent extends Think<Env> {
       // MCP hydration is best-effort: one server's initialize/tools-list
       // failure must not block chat or the LLM call. A stale connector surfaces
       // via the reauth banner instead.
+      if (!safePublicHttpUrl(upstream, { httpsOnly: true })) {
+        console.error("mcp_hydrate_skipped_invalid_upstream", { server: id });
+        return;
+      }
       try {
         await this.addMcpServer(id, upstream, {
           id,
@@ -1071,10 +1084,15 @@ export class MyAgent extends Think<Env> {
   }
 
   async beforeTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
-    // Agent.mcp is the native protocol/OAuth/tool-discovery implementation.
-    // Register shared-user bearer connections lazily, then merge the freshly
-    // discovered native tools into this first turn too (Think assembled its
-    // base tool set immediately before calling beforeTurn).
+    try {
+      return await this.prepareTurn(ctx);
+    } catch (error) {
+      console.error("before_turn_failed", { err: error instanceof Error ? error.message : String(error) });
+      return {};
+    }
+  }
+
+  private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
     await this.ensureNativeMcp();
     // Persist the inbound user message before the model call so stalled turns
     // remain available when the client resyncs. logAcceptedUsers is idempotent.

@@ -2,11 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createCapabilityBundle, parseResourceUrl, runCapabilityReviewDemo } from "./capability-review";
 
+test("a junk string does not throw Invalid URL string", () => {
+  try {
+    parseResourceUrl("not a url");
+    throw new Error("expected parseResourceUrl to reject junk");
+  } catch (error) {
+    assert.notEqual(error instanceof Error ? error.message : String(error), "Invalid URL string.");
+  }
+});
+
 test("parses pasted internal URLs into narrow read capabilities", () => {
   assert.equal(parseResourceUrl("https://jira.cfdata.org/browse/DEVTOOLS-123").kind, "jira.issue.read");
   assert.equal(parseResourceUrl("https://wiki.cfdata.org/spaces/TEAM/pages/123456/Foo+Spec").id, "123456");
   assert.equal(parseResourceUrl("https://gitlab.cfdata.org/group/project/-/merge_requests/42").id, "group/project!42");
   assert.throws(() => parseResourceUrl("https://dash.cloudflare.com/"), /unsupported host|missing account/);
+  assert.throws(() => parseResourceUrl("not a url"), /unsupported resource URL/);
 });
 
 test("bundle grants only pasted resources with no search adjacent or write", () => {

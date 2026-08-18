@@ -49,7 +49,12 @@ export function stableHash(value: unknown): string {
 }
 
 export function parseResourceUrl(raw: string): ParsedResource {
-  const url = new URL(raw.trim());
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error("unsupported resource URL");
+  }
   if (url.hostname === "wiki.cfdata.org") {
     const match = url.pathname.match(/\/pages\/(\d+)(?:\/|$)/);
     if (!match) throw new Error("unsupported wiki URL: missing page id");
