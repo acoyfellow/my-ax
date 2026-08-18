@@ -12,8 +12,16 @@ export class TriageWorkflow extends WorkflowEntrypoint<AgentsEnv, IssueInput> {
 
 export class AuditWorkflow extends WorkflowEntrypoint<AgentsEnv, PullInput> {
   async run(event: WorkflowEvent<PullInput>, step: WorkflowStep) {
-    return step.do("audit", () => executeAuditWorkflow(this.env, event.payload, {
-      github: liveGithubPort(this.env),
+    const github = liveGithubPort(this.env);
+    const payload = event.payload;
+    const files = payload.number && github.listPullFiles
+      ? await step.do("files", () => github.listPullFiles!(payload.number!))
+      : [];
+    const behindMain = payload.headSha && github.commitsBehindMain
+      ? await step.do("behind", () => github.commitsBehindMain!(payload.headSha))
+      : -1;
+    return step.do("audit", () => executeAuditWorkflow(this.env, { ...payload, files, behindMain }, {
+      github,
       promptDigest: "agents/audit@live",
     }));
   }
