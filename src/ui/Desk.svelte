@@ -21,7 +21,6 @@
   }
 
   async function clearDesk() {
-    if (!confirm("Clear the desk? This replaces the board with an empty artifact.")) return;
     try {
       const response = await fetch("/api/desk", { method: "DELETE", credentials: "include" });
       if (!response.ok) throw new Error("clear failed");
