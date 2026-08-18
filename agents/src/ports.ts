@@ -1,4 +1,5 @@
 import { assertNoMergeAction, usableIssueLabels, type TerrariumReceipt } from "./policy";
+import { assertPublicText } from "./public-text";
 import type { GithubPort, TerrariumPort } from "./orchestrate";
 import type { AgentsEnv } from "./workflows";
 
@@ -31,7 +32,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
     },
     async comment(number, body) {
       assertNoMergeAction("comment");
-      await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+      await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body: assertPublicText(body) }) });
     },
     async listComments(number) {
       assertNoMergeAction("listComments");
@@ -62,7 +63,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       assertNoMergeAction("openReadyPr");
       const json = await gh("/pulls", {
         method: "POST",
-        body: JSON.stringify({ title: input.title, body: input.body, head: input.head, base: "main", draft: false }),
+        body: JSON.stringify({ title: assertPublicText(input.title), body: assertPublicText(input.body), head: input.head, base: "main", draft: false }),
       });
       return { number: Number((json as { number?: number }).number) };
     },
@@ -80,7 +81,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       assertNoMergeAction("requestChanges");
       await gh(`/pulls/${number}/reviews`, {
         method: "POST",
-        body: JSON.stringify({ body, event: "REQUEST_CHANGES" }),
+        body: JSON.stringify({ body: assertPublicText(body), event: "REQUEST_CHANGES" }),
       });
     },
   };

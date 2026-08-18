@@ -1,4 +1,5 @@
 import { assertNoMergeAction, type PullInput } from "./policy";
+import { assertPublicText } from "./public-text";
 import type { GithubPort } from "./orchestrate";
 
 export const OWNER_LOGINS = ["acoyfellow"] as const;
@@ -46,13 +47,13 @@ export function reviewPull(input: PullInput & { head?: string; proofExit?: numbe
 }
 
 export function formatReviewComment(receipt: ReviewReceipt): string {
-  return [
+  return assertPublicText([
     "## review receipt",
     `decision: ${receipt.decision}`,
     "neverApprove: true",
     "neverMerge: true",
     ...receipt.findings.filter(Boolean).map((line) => `- ${line}`),
-  ].join("\n");
+  ].join("\n"));
 }
 
 export async function runReview(

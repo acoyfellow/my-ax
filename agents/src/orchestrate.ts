@@ -1,3 +1,4 @@
+import { assertPublicText } from "./public-text";
 import {
   type AuditReceipt,
   type Classification,
@@ -169,7 +170,7 @@ export function formatReadyPrTitle(input: IssueInput): string {
 
 export function formatReadyPrBody(input: IssueInput, classification: Classification): string {
   if (!input.number) throw new Error("issue number required before opening a PR");
-  return [
+  return assertPublicText([
     `Closes #${input.number}`,
     "",
     "## Why",
@@ -191,11 +192,11 @@ export function formatReadyPrBody(input: IssueInput, classification: Classificat
     "```",
     "",
     "Worker never merges. Worker never approves. Human merge only.",
-  ].join("\n");
+  ].join("\n"));
 }
 
 export function formatAuditComment(receipt: AuditReceipt): string {
-  return [
+  return assertPublicText([
     `## audit receipt`,
     `head: \`${receipt.headSha}\``,
     `prompt: \`${receipt.promptDigest}\``,
@@ -203,5 +204,5 @@ export function formatAuditComment(receipt: AuditReceipt): string {
     `neverApprove: true`,
     `neverMerge: true`,
     ...receipt.findings.map((f) => `- ${f}`),
-  ].join("\n");
+  ].join("\n"));
 }

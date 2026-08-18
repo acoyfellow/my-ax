@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { assertNoMergeAction } from "./policy";
 import { formatReviewComment, isOwnerPr, reviewPull, runReview } from "./review";
+import { assertPublicText } from "./public-text";
 import type { GithubPort } from "./orchestrate";
 
 function github(): GithubPort & { actions: string[] } {
@@ -72,4 +73,5 @@ test("passing owner proof is ready for owner, not approved", async () => {
   assert.equal(receipt.decision, "ready-for-owner");
   assert.equal(receipt.neverApprove, true);
   assert.equal(receipt.neverMerge, true);
+  assert.equal(assertPublicText(formatReviewComment(receipt)), formatReviewComment(receipt));
 });
