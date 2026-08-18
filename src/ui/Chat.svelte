@@ -1450,6 +1450,9 @@
     }
     if (m.type === "my_ax_pong") {
       return;
+    } else if (m.type === "desk.board") {
+      window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: m.board }));
+      return;
     } else if (m.type === "page_call") {
       // The page.* codemode connector: the server-side agent drives the live UI
       // over this same socket. Execute the curated verb and reply with a

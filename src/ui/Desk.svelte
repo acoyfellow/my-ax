@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import type { DeskBoard } from "../desk-board";
+  import { parseDeskBoard, type DeskBoard } from "../desk-board";
 
   let open = $state(false);
   let board = $state<DeskBoard>({ cards: [], updatedAt: "" });
@@ -54,9 +54,18 @@
 
   onMount(() => {
     const onOpen = () => { void openPanel(); };
+    const onBoard = (event: Event) => {
+      const next = parseDeskBoard((event as CustomEvent).detail);
+      board = next;
+      error = null;
+    };
     window.addEventListener("my-ax:desk-open", onOpen);
+    window.addEventListener("my-ax:desk-board", onBoard);
     if (new URL(location.href).searchParams.get("action") === "desk") void openPanel();
-    return () => window.removeEventListener("my-ax:desk-open", onOpen);
+    return () => {
+      window.removeEventListener("my-ax:desk-open", onOpen);
+      window.removeEventListener("my-ax:desk-board", onBoard);
+    };
   });
 </script>
 

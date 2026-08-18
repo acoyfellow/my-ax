@@ -78,7 +78,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "setViewportDebug", "switchSession"]);
+  assert.deepEqual(names, ["applyDeskBoard", "invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "setViewportDebug", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -201,6 +201,18 @@ test("openSettings / openAttention / openSessions / openDesk dispatch their wind
   await handlePageCall({ type: "page_call", requestId: "r8", verb: "openSessions" });
   await handlePageCall({ type: "page_call", requestId: "r9", verb: "openDesk" });
   assert.deepEqual(events, ["my-ax:settings-open", "my-ax:attention-open", "my-ax:sessions-open", "my-ax:desk-open"]);
+});
+
+test("applyDeskBoard dispatches my-ax:desk-board", async () => {
+  const events = installGlobals({});
+  const { frame } = await handlePageCall({
+    type: "page_call",
+    requestId: "rdb",
+    verb: "applyDeskBoard",
+    args: { board: { cards: [], updatedAt: "t-live" } },
+  });
+  assert.equal(frame.ok, true);
+  assert.deepEqual(events, ["my-ax:desk-board"]);
 });
 
 test("notify dispatches my-ax:toast with text+kind and requires text", async () => {

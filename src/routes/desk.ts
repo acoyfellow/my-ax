@@ -1,3 +1,4 @@
+import { getAgentByName } from "agents";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
@@ -16,6 +17,12 @@ async function writeBoard(env: AppEnv["Bindings"], email: string, board: DeskBoa
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`)
     .bind(email, DESK_PREFERENCE_KEY, JSON.stringify(board), now, now).run();
+  const owner = email.toLowerCase();
+  const rows = await env.DB.prepare(
+    "SELECT id FROM sessions WHERE owner_email = ? AND status != 'archived' ORDER BY updated_at DESC LIMIT 40",
+  ).bind(owner).all<{ id: string }>();
+  const parent = await getAgentByName(env.USER_AGENT, owner);
+  await parent.broadcastDeskBoard((rows.results ?? []).map((row) => row.id), board);
 }
 
 export async function ownerDeskGet(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
