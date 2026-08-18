@@ -1,0 +1,21 @@
+src/capability-review.test.ts
+  s_9ea43334029fe9::t_14d65c0faeb611 5-13,19
+src/capability-review.ts
+  s_9ea43334029fe9::t_4e688b1dfd58a4 52-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7d480ab6f2abb3f7514a3a9ea2ba62a9e60425fb",
+  "prompts": {},
+  "sessions": {
+    "s_9ea43334029fe9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00c04-39b0-7c41-8f8c-319dfb49fbd0",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
