@@ -36,6 +36,18 @@ docker build -t my-ax-check .
 - Public URLs, redirects, and connector endpoints must pass the repository's SSRF and destination policies.
 - Consequential actions need explicit server-side authorization; Code Mode isolation does not reduce the authority of an injected capability.
 
+## Issues, then pull requests
+
+File one issue first. Title it `bug:`, `perf:`, or `test:`. The body needs a receipt: a command and its output, a file and line, or a live URL. Do not file a second finding in the same issue.
+
+A GitHub webhook classifies `issues.opened`. The Worker comments and labels. It does not merge.
+
+If the issue body contains `triage:draft` and a branch `bot/issue-<number>` already exists, the Worker may open a **ready** pull request (`draft: false`). The PR body must include `Closes #<n>` and a proof command. It must not invent a Files list. Audit comments `neverMerge: true`. A human merges.
+
+Hunt-only work follows [agents/HUNT.md](./agents/HUNT.md): find one new issue, file it, stop. Do not open a PR from a hunt tick.
+
+Push the branch **before** you file a `triage:draft` issue. If the head is missing, triage comments and no PR appears.
+
 ## Pull Requests
 
 Keep pull requests focused. Include:

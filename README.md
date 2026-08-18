@@ -184,7 +184,9 @@ npm run dev
 - [Contributing](./CONTRIBUTING.md)
 - [Changelog](./CHANGELOG.md)
 
-Report bugs and feature requests in [GitHub Issues](https://github.com/acoyfellow/my-ax/issues). Report vulnerabilities through the [Security Policy](./SECURITY.md), not a public issue.
+Report bugs and feature requests in [GitHub Issues](https://github.com/acoyfellow/my-ax/issues). Put one checkable receipt in the issue (command output, file:line, or URL). A hook classifies new issues. Put `triage:draft` in the body only if you want the Worker to open a ready pull request from `bot/issue-<n>`. The Worker comments and never merges. You merge after you read the receipt. Hunt-only ticks follow [agents/HUNT.md](./agents/HUNT.md): one new issue, then stop. Report vulnerabilities through the [Security Policy](./SECURITY.md), not a public issue.
+
+See [Contributing](./CONTRIBUTING.md) and [lifecycle agents](./agents/README.md).
 
 ## License
 

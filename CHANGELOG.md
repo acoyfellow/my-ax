@@ -4,6 +4,21 @@ Progress on My Agent Experience is recorded here in date order, newest first. Ea
 
 The version stays `0.0.1`. It does not increment. The number is a deliberate stance, not a status. The real identity of each change is its commit hash. Each dated entry names the deployed revision.
 
+## 2026-08-17
+
+Public engine at `1582a2a`. Employee app deploy is separate (`deploy-employee.sh`). Lifecycle agents deploy is separate (`deploy-agents.sh`).
+
+### Added
+
+- Durable owner desk at `/?action=desk`. HTTP `GET/PUT /api/desk`, chat and MCP `desk_get` / `desk_upsert`, and `page.openDesk`. Cards store newest first. Omitted fields survive upsert. Open source keeps only `https` GitLab or GitHub hrefs. Decide may keep a same-origin path. Same-origin Open source hrefs store `null`.
+- Lifecycle issue-to-PR path: HMAC hook, `TriageWorkflow` (comment, label, ready PR when `triage:draft` and `bot/issue-<n>` exist), `AuditWorkflow` (never merge). Hunt-only ticks: `agents/HUNT.md`.
+
+### Fixed
+
+- Desk Open source no longer stores `/?action=desk`. `www.github.com` hrefs are tested. Desk `status` approved/rejected/unknown is tested.
+- Worker PR bodies use `Closes #<n>` and do not invent a Files list. Shared `bot/issue-draft` head is gone.
+- Audit empty `files` / unknown `behindMain` is a finding, not a clean receipt. `labelIssue` posts once against a static allowlist.
+
 ## 2026-08-16
 
 ### Added
