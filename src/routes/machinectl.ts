@@ -25,7 +25,7 @@ async function persistScreenshotToWorkspace(env: AppEnv["Bindings"], identity: {
   const bytes = Uint8Array.from(atob(dataUrl.slice(comma + 1).replace(/[\r\n]/g, "")), (char) => char.charCodeAt(0));
   const { sandbox } = await getUserWorkspace(env, identity as never);
   await sandbox.mkdir("/home/user/.my-ax/screenshots", { recursive: true }).catch(() => undefined);
-  await sandbox.writeFile(path, bytes);
+  await sandbox.writeFile(path, new Blob([bytes]).stream());
 }
 
 function hostFor(c: Context<AppEnv>) {

@@ -36,7 +36,7 @@ assertIncludes(attention, "Clear all", "a single clear-all lives in the header")
 
 assertIncludes(attention, "function showDetail(", "primary action opens the durable notification detail");
 assertIncludes(attention, "data-notification-detail", "selected notification content has a stable detail marker");
-assertIncludes(attention, "Open conversation", "conversation navigation is a secondary source action");
+assertIncludes(attention, "attentionSourceLabel", "conversation navigation is a secondary source action");
 assertIncludes(attention, "my-ax:run-receipt-open", "run receipts remain available as a nested modal");
 
 // Mobile geometry: single scroll region, bottom sheet, no two-column nav.
