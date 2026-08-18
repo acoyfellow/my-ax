@@ -25,7 +25,23 @@ function makeEnv(opts: { token?: string; existing?: { fingerprint: string; numbe
         },
         async run() {
           if (/UPDATE error_issue_fingerprints/.test(q)) updates.push(bound);
-          if (/INSERT INTO error_issue_fingerprints/.test(q)) inserts.push(bound);
+          if (/INSERT OR IGNORE INTO error_issue_fingerprints/.test(q)) {
+            const fingerprint = String(bound[1] || "");
+            const hit = rows.find((row) => row.fingerprint === fingerprint);
+            if (hit) return { meta: { changes: 0 } };
+            rows.push({ fingerprint, number: 0, url: "", lastSeen: "2099-01-01 00:00:00" });
+            inserts.push(bound);
+            return { meta: { changes: 1 } };
+          }
+          if (/INSERT INTO error_issue_fingerprints/.test(q)) {
+            inserts.push(bound);
+            const fingerprint = String(bound[1] || "");
+            const hit = rows.find((row) => row.fingerprint === fingerprint);
+            if (hit) {
+              hit.number = Number(bound[2]);
+              hit.url = String(bound[3]);
+            }
+          }
           if (/INSERT INTO owner_preferences/.test(q)) desk.push(bound);
           return { meta: { changes: 1 } };
         },
@@ -60,7 +76,7 @@ test("same fingerprint reuses the open issue", async () => {
   }, async () => new Response(JSON.stringify({ number: 61, html_url: "https://github.com/acoyfellow/my-ax/issues/61" }), { status: 201 }));
   if (!("fingerprint" in first)) throw new Error("expected fingerprint");
   assert.equal(first.created, true);
-  assert.equal(firstEnv.inserts.length, 1);
+  assert.equal(firstEnv.inserts.length, 2);
   const secondEnv = makeEnv({
     token: "t",
     existing: {
@@ -88,6 +104,25 @@ test("same fingerprint reuses the open issue", async () => {
   });
   assert.equal(secondEnv.inserts.length, 0);
   assert.equal(secondEnv.updates.length, 1);
+});
+
+test("a second racer does not create after the first claim", async () => {
+  const { env } = makeEnv({ token: "t" });
+  const first = await fileOwnerErrorIssue(env, "owner@example.com", {
+    origin: "client",
+    message: "The image data you provided does not represent a valid image.",
+  }, async () => new Response(JSON.stringify({ number: 69, html_url: "https://github.com/acoyfellow/my-ax/issues/69" }), { status: 201 }));
+  if (!("fingerprint" in first)) throw new Error("expected fingerprint");
+  let posts = 0;
+  const second = await fileOwnerErrorIssue(env, "owner@example.com", {
+    origin: "client",
+    message: "The image data you provided does not represent a valid image.",
+  }, async () => {
+    posts += 1;
+    return new Response(JSON.stringify({ number: 70, html_url: "https://github.com/acoyfellow/my-ax/issues/70" }), { status: 201 });
+  });
+  assert.equal(posts, 0);
+  assert.equal("created" in second && second.created, false);
 });
 
 test("invalid body is rejected", async () => {

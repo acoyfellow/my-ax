@@ -26,15 +26,13 @@ export async function fileOwnerErrorIssue(
   const repo = env.GITHUB_REPO?.trim() || "acoyfellow/my-ax";
   if (!token) return { skipped: "not-configured" };
   const fingerprint = await errorFingerprint(input);
-  const existing = await env.DB.prepare(
-    "SELECT issue_number, issue_url FROM error_issue_fingerprints WHERE owner_email = ? AND fingerprint = ? AND last_seen_at >= ?",
-  ).bind(ownerEmail.toLowerCase(), fingerprint, cutoffSql()).first<{ issue_number: number; issue_url: string }>().catch(() => null);
-  if (existing?.issue_number && existing.issue_url) {
+  const claimed = await claimFingerprint(env, ownerEmail, fingerprint);
+  if (!claimed.created && claimed.issue_number && claimed.issue_url) {
     await touchFingerprint(env, ownerEmail, fingerprint).catch(() => undefined);
-    return { number: existing.issue_number, url: existing.issue_url, fingerprint, created: false };
+    return { number: claimed.issue_number, url: claimed.issue_url, fingerprint, created: false };
   }
   const created = await createGithubIssue(token, repo, input, fingerprint, post);
-  await rememberFingerprint(env, ownerEmail, fingerprint, created).catch(() => undefined);
+  await rememberFingerprint(env, ownerEmail, fingerprint, created);
   await import("./routes/desk").then((mod) => mod.ownerDeskUpsert(env, ownerEmail, {
     id: `error-${fingerprint}`,
     title: formatAutoIssueTitle(input),
@@ -67,6 +65,27 @@ export async function reportServerChatError(
 
 function cutoffSql(now = Date.now()): string {
   return new Date(now - ISSUE_WINDOW_MS).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+}
+
+async function claimFingerprint(
+  env: Env,
+  ownerEmail: string,
+  fingerprint: string,
+): Promise<{ created: boolean; issue_number?: number; issue_url?: string }> {
+  const owner = ownerEmail.toLowerCase();
+  const insert = await env.DB.prepare(
+    `INSERT OR IGNORE INTO error_issue_fingerprints(owner_email, fingerprint, issue_number, issue_url, first_seen_at, last_seen_at)
+     VALUES (?, ?, 0, '', datetime('now'), datetime('now'))`,
+  ).bind(owner, fingerprint).run();
+  if ((insert.meta?.changes ?? 0) > 0) return { created: true };
+  const existing = await env.DB.prepare(
+    "SELECT issue_number, issue_url FROM error_issue_fingerprints WHERE owner_email = ? AND fingerprint = ? AND last_seen_at >= ?",
+  ).bind(owner, fingerprint, cutoffSql()).first<{ issue_number: number; issue_url: string }>();
+  return {
+    created: false,
+    issue_number: existing?.issue_number,
+    issue_url: existing?.issue_url,
+  };
 }
 
 async function touchFingerprint(env: Env, ownerEmail: string, fingerprint: string): Promise<void> {
