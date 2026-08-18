@@ -11,6 +11,7 @@
     "LLM_GATEWAY_AUTH_HEADER": "cf-access-token"
   },
   "worker_loaders": [{ "binding": "LOADER" }],
+  "triggers": { "crons": ["*/15 * * * *"] },
   "workflows": [
     { "name": "my-ax-triage", "binding": "TRIAGE", "class_name": "TriageWorkflow" },
     { "name": "my-ax-audit", "binding": "AUDIT", "class_name": "AuditWorkflow" },

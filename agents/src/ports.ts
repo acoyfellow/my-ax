@@ -84,6 +84,25 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         body: JSON.stringify({ body: assertPublicText(body), event: "REQUEST_CHANGES" }),
       });
     },
+    async listOpenIssues() {
+      assertNoMergeAction("listOpenIssues");
+      const json = await gh("/issues?state=open&per_page=40");
+      return (Array.isArray(json) ? json : [])
+        .filter((row) => !(row as { pull_request?: unknown }).pull_request)
+        .map((row) => ({
+          number: Number((row as { number?: number }).number),
+          title: String((row as { title?: string }).title || ""),
+          body: String((row as { body?: string }).body || ""),
+          author: String((row as { user?: { login?: string } }).user?.login || "unknown"),
+        }));
+    },
+    async closeIssue(number, body) {
+      assertNoMergeAction("closeIssue");
+      if (body) {
+        await gh(`/issues/${number}/comments`, { method: "POST", body: JSON.stringify({ body: assertPublicText(body) }) });
+      }
+      await gh(`/issues/${number}`, { method: "PATCH", body: JSON.stringify({ state: "closed" }) });
+    },
   };
 }
 

@@ -13,3 +13,8 @@ test("issue_comment requires the opt-in token on the new comment, not the issue 
   assert.match(source, /test\(commentBody\)/);
   assert.doesNotMatch(source, /const text = `\$\{issue\.body/);
 });
+
+test("worker has a scheduled sweep entry", () => {
+  assert.match(source, /async scheduled/);
+  assert.match(source, /runIssueSweep/);
+});
