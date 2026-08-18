@@ -66,6 +66,7 @@ export { MachineHost } from "./machinectl-host";
 export { Sandbox } from "@cloudflare/sandbox";
 export const CODEMODE_RUNTIME_HOLD = "HELD: ./code-mode-runtime.worker remains unbound until the first runNativeCodemode call site ships with the v12-codemode-runtime migration and regenerated Wrangler types.";
 export { ComputerWorkspace } from "./computer-workspace";
+export { DeskHub } from "./desk-hub";
 const app = new Hono<AppEnv>();
 
 // Fail loud on missing CORE secrets only. The two below are required for the

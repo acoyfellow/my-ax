@@ -25,12 +25,13 @@ interface __BaseEnv_Env {
 	SANDBOX: DurableObjectNamespace<import("./src/index").Sandbox>;
 	COMPUTER: DurableObjectNamespace<import("./src/index").ComputerWorkspace>;
 	VoiceThinkAgent: DurableObjectNamespace<import("./src/index").VoiceThinkAgent>;
+	DESK_HUB: DurableObjectNamespace<import("./src/index").DeskHub>;
 	CF_VERSION_METADATA?: WorkerVersionMetadata;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
 		mainModule: typeof import("./src/index");
-		durableNamespaces: "MyAgent" | "OAuthClientDO" | "Sandbox" | "MachineHost" | "UserAgent" | "VoiceThinkAgent" | "ComputerWorkspace";
+		durableNamespaces: "MyAgent" | "OAuthClientDO" | "Sandbox" | "MachineHost" | "UserAgent" | "VoiceThinkAgent" | "ComputerWorkspace" | "DeskHub";
 	}
 	interface DevEnv {
 		AUDIT_KV: KVNamespace;
@@ -56,6 +57,7 @@ declare namespace Cloudflare {
 		SANDBOX: DurableObjectNamespace<import("./src/index").Sandbox>;
 		COMPUTER: DurableObjectNamespace<import("./src/index").ComputerWorkspace>;
 		VoiceThinkAgent: DurableObjectNamespace<import("./src/index").VoiceThinkAgent>;
+		DESK_HUB: DurableObjectNamespace<import("./src/index").DeskHub>;
 	}
 	interface Env extends __BaseEnv_Env {}
 }
