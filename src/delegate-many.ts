@@ -67,7 +67,7 @@ export class ReadOnlyDelegateAgent extends Think<Env> {
   getModel() { return resolveMyAxModel(this.env).model; }
   async beforeTurn(ctx: { messages: unknown[] }) {
     return {
-      messages: stripOpenAiStoredItemRefs(ctx.messages),
+      messages: stripOpenAiStoredItemRefs(ctx.messages) as never,
       providerOptions: { openai: { store: false } },
     };
   }

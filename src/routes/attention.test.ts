@@ -318,10 +318,11 @@ test("authenticated same-origin POST /attention/seen still mutates and redirects
   // Exactly one UPDATE, bound to the lowercased identity email and the kind
   // filter. This proves owner() ran, the CSRF origin check passed, and the
   // filter is scoped to the caller instead of the full owner_email space.
-  assert.equal(db.calls.length, 1);
-  const [call] = db.calls;
-  assert.match(call.sql, /^UPDATE attention_items SET seen_at = datetime\('now'\) WHERE owner_email = \? AND seen_at IS NULL AND kind = \?$/);
-  assert.deepEqual(call.binds, ["owner@example.com", "run.failed"]);
+  assert.equal(db.calls.length, 2);
+  assert.match(db.calls[0]!.sql, /SELECT COALESCE\(notification_tag, id\) AS tag FROM attention_items WHERE owner_email = \? AND seen_at IS NULL AND kind = \?$/);
+  assert.match(db.calls[1]!.sql, /^UPDATE attention_items SET seen_at = datetime\('now'\) WHERE owner_email = \? AND seen_at IS NULL AND kind = \?$/);
+  assert.deepEqual(db.calls[0]!.binds, ["owner@example.com", "run.failed"]);
+  assert.deepEqual(db.calls[1]!.binds, ["owner@example.com", "run.failed"]);
 });
 
 test("authenticated cross-origin POST /attention/seen still fails CSRF origin check", async () => {
