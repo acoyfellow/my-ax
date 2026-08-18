@@ -1,5 +1,7 @@
 import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
+import { liveGithubPort } from "./ports";
+import { formatDuplicateClose, planSweep, type SweepIssue } from "./sweep";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -105,4 +107,39 @@ export default {
     }
     return new Response("not found", { status: 404 });
   },
+  async scheduled(_event: unknown, env: WorkerEnv): Promise<void> {
+    await runIssueSweep(env);
+  },
 };
+
+export async function runIssueSweep(env: WorkerEnv): Promise<{ closed: number; queued: number }> {
+  const github = liveGithubPort(env);
+  if (!github.listOpenIssues || !github.listComments) return { closed: 0, queued: 0 };
+  const open = await github.listOpenIssues();
+  const issues: SweepIssue[] = [];
+  for (const issue of open) {
+    const comments = await github.listComments(issue.number);
+    issues.push({ ...issue, state: "open", comments });
+  }
+  const actions = planSweep(issues);
+  let closed = 0;
+  let queued = 0;
+  for (const action of actions) {
+    if (action.action === "close-duplicate" && github.closeIssue) {
+      await github.closeIssue(action.number, formatDuplicateClose(action.keep, action.fingerprint));
+      closed += 1;
+    }
+    if (action.action === "queue") {
+      const issue = issues.find((row) => row.number === action.number);
+      if (!issue) continue;
+      await queueTriage(env, `sweep-${action.number}`, {
+        number: issue.number,
+        title: issue.title,
+        body: issue.body,
+        user: { login: issue.author },
+      });
+      queued += 1;
+    }
+  }
+  return { closed, queued };
+}

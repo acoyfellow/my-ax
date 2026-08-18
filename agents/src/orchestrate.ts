@@ -27,6 +27,8 @@ export interface GithubPort {
   approvePr(number: number): Promise<void>;
   closePr?(number: number): Promise<void>;
   requestChanges?(number: number, body: string): Promise<void>;
+  listOpenIssues?(): Promise<Array<{ number: number; title: string; body: string; author: string }>>;
+  closeIssue?(number: number, body?: string): Promise<void>;
 }
 
 export interface TerrariumPort {
