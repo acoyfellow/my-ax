@@ -57,7 +57,24 @@
     const onOpen = () => { void openPanel(); };
     window.addEventListener("my-ax:desk-open", onOpen);
     if (new URL(location.href).searchParams.get("action") === "desk") void openPanel();
-    return () => window.removeEventListener("my-ax:desk-open", onOpen);
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const live = new WebSocket(`${proto}://${location.host}/api/desk/live`);
+    live.addEventListener("message", (event) => {
+      try {
+        const frame = JSON.parse(String(event.data));
+        if (frame?.type === "desk.board" && frame.board) {
+          board = frame.board;
+          error = null;
+          window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: board }));
+        }
+      } catch {
+        return;
+      }
+    });
+    return () => {
+      window.removeEventListener("my-ax:desk-open", onOpen);
+      live.close();
+    };
   });
 </script>
 

@@ -16,6 +16,12 @@ async function writeBoard(env: AppEnv["Bindings"], email: string, board: DeskBoa
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`)
     .bind(email, DESK_PREFERENCE_KEY, JSON.stringify(board), now, now).run();
+  const id = env.DESK_HUB.idFromName(email);
+  await env.DESK_HUB.get(id).fetch(new Request("https://desk-hub/broadcast", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(board),
+  }));
 }
 
 export async function ownerDeskGet(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
@@ -52,5 +58,12 @@ export function registerDeskRoutes(app: Hono<AppEnv>) {
   app.delete("/api/desk", async (c) => {
     const board = await ownerDeskClear(c.env, c.get("identity").email);
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: board, next_actions: [] });
+  });
+  app.get("/api/desk/live", async (c) => {
+    if (c.req.header("Upgrade") !== "websocket") {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "UPGRADE_REQUIRED", message: "websocket required" }, next_actions: [] }, 426);
+    }
+    const id = c.env.DESK_HUB.idFromName(c.get("identity").email.toLowerCase());
+    return c.env.DESK_HUB.get(id).fetch(c.req.raw);
   });
 }
