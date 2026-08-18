@@ -28,6 +28,7 @@ import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { sanitizeModelMessageUrls } from "./model-message-urls";
+import { rewriteUiHistoryFileUrls } from "./ui-history-urls";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
@@ -1094,6 +1095,8 @@ export class MyAgent extends Think<Env> {
   }
 
   private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
+    const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
+    if (origin) this.messages = rewriteUiHistoryFileUrls(this.messages, origin);
     await this.ensureNativeMcp();
     // Persist the inbound user message before the model call so stalled turns
     // remain available when the client resyncs. logAcceptedUsers is idempotent.
