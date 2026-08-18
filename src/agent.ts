@@ -877,6 +877,9 @@ export class MyAgent extends Think<Env> {
         content: surfacedError instanceof Error ? surfacedError.message : String(surfacedError),
         meta: errorConversationMeta(surfacedError),
       }).catch(() => {});
+      void import("./error-issue").then(({ reportServerChatError }) =>
+        reportServerChatError(this.env, identity.email, this.name, surfacedError),
+      );
     }
     return surfacedError;
   }

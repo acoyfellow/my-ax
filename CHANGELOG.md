@@ -4,6 +4,12 @@ Progress on My Agent Experience is recorded here in date order, newest first. Ea
 
 The version stays `0.0.1`. It does not increment. The number is a deliberate stance, not a status. The real identity of each change is its commit hash. Each dated entry names the deployed revision.
 
+## 2026-08-18
+
+### Added
+
+- Live client and server errors file one GitHub issue per fingerprint through `POST /api/errors`. Same fingerprint in 24h reuses the issue. Desk gets a card. No `triage:draft`.
+
 ## 2026-08-17
 
 Public engine at `1582a2a`. Employee app deploy is separate (`deploy-employee.sh`). Lifecycle agents deploy is separate (`deploy-agents.sh`).

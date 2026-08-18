@@ -9,6 +9,7 @@
 //   - R2_ACCESS_KEY_ID      # R2 S3 creds for sandbox workspace snapshots
 //   - R2_SECRET_ACCESS_KEY  # R2 S3 creds for sandbox workspace snapshots
 //   - VAPID_SUBJECT / VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY  # web push
+//   - GITHUB_TOKEN          # optional; files one issue per live error fingerprint
 // Optional model-gateway secrets:
 //   - LLM_GATEWAY_TOKEN    # bearer authentication for curated gateway-backed models
 //   - LLM_GATEWAY_SERVICE_TOKEN_ID / LLM_GATEWAY_SERVICE_TOKEN_SECRET  # durable Access service authentication

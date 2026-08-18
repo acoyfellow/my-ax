@@ -185,6 +185,22 @@ export function pushError(text: string) {
     ...toastBus.pending,
     { id: `toast-${++toastCounter}`, kind: "error", text: next },
   ];
+  void reportClientError(text);
+}
+
+function reportClientError(message: string) {
+  if (typeof fetch !== "function") return;
+  const sessionId = typeof localStorage === "undefined" ? "" : localStorage.getItem(SESSION_KEY) || "";
+  return fetch("/api/errors", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      message,
+      sessionId,
+      href: typeof location === "undefined" ? "" : location.href,
+    }),
+  }).catch(() => undefined);
 }
 export function clearToast(id: string) {
   toastBus.pending = toastBus.pending.filter((t) => t.id !== id);
