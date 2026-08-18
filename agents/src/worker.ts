@@ -13,6 +13,23 @@ export interface WorkerEnv extends AgentsEnv {
   DIG: WorkflowBinding;
 }
 
+async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string } }) {
+  try {
+    const created = await env.TRIAGE.create({
+      id: deliveryId,
+      params: {
+        number: issue.number,
+        title: String(issue.title || ""),
+        body: String(issue.body || ""),
+        author: String(issue.user?.login || "unknown"),
+      },
+    });
+    return Response.json({ queued: "triage", issue: issue.number, instance: created.id, deliveryId });
+  } catch (error) {
+    return Response.json({ queued: "triage", issue: issue.number, deliveryId, error: String(error) }, { status: 502 });
+  }
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
@@ -37,20 +54,20 @@ export default {
       const deliveryId = request.headers.get("x-github-delivery") || crypto.randomUUID();
       if (event === "issues" && action === "opened") {
         const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string } };
-        try {
-          const created = await env.TRIAGE.create({
-            id: deliveryId,
-            params: {
-              number: issue.number,
-              title: String(issue.title || ""),
-              body: String(issue.body || ""),
-              author: String(issue.user?.login || "unknown"),
-            },
-          });
-          return Response.json({ queued: "triage", issue: issue.number, instance: created.id, deliveryId });
-        } catch (error) {
-          return Response.json({ queued: "triage", issue: issue.number, deliveryId, error: String(error) }, { status: 502 });
-        }
+        return queueTriage(env, deliveryId, issue);
+      }
+      if (event === "issue_comment" && action === "created") {
+        const comment = payload.comment as { body?: string; user?: { login?: string } };
+        const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string }; pull_request?: unknown };
+        if (issue.pull_request) return Response.json({ queued: "ignored", event, action });
+        const text = `${issue.body || ""}\n${comment.body || ""}`;
+        if (!/\btriage:draft\b/i.test(text)) return Response.json({ queued: "ignored", event, action });
+        return queueTriage(env, deliveryId, {
+          number: issue.number,
+          title: String(issue.title || ""),
+          body: text,
+          user: comment.user || issue.user,
+        });
       }
       if (event === "pull_request" && (action === "opened" || action === "synchronize")) {
         const pr = payload.pull_request as {
