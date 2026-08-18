@@ -60,7 +60,7 @@ import { scanDeadSessions } from "./dead-session";
 export { MyAgent } from "./agent";
 export { ReadOnlyDelegateAgent } from "./delegate-many";
 export { VoiceThinkAgent } from "./voice-think-agent";
-export { UserAgent } from "./user-agent";
+export { UserAgent, DeskHub } from "./user-agent";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
 export { Sandbox } from "@cloudflare/sandbox";
