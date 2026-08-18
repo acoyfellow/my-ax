@@ -4,10 +4,12 @@ import {
   DEFAULT_AGENTS_MODEL,
   acceptVisualProof,
   assertNoMergeAction,
+  auditPull,
   classifyIssue,
   resolveAgentsModel,
   shouldOpenDraft,
   shouldSpawnDig,
+  usableIssueLabels,
   verifyTerrariumReceipt,
 } from "./policy";
 import { PROOF_COMMAND, formatReadyPrBody, formatReadyPrTitle, runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
@@ -112,6 +114,23 @@ test("unproven Terrarium receipt stops the graph", async () => {
     { github: memoryGithub(), terrarium: memoryTerrarium(false), model: { modelId: "grok-4.6" } },
   );
   assert.ok(steps.some((s) => s.step === "stop" && s.reason.includes("unproven")));
+});
+
+test("usableIssueLabels drops unknown names without a repo list", () => {
+  assert.deepEqual(usableIssueLabels(["bug", "triage:draft", "not-a-label"]), ["bug", "triage:draft"]);
+});
+
+test("auditPull treats empty files and unknown behindMain as unknown, not clean", () => {
+  const empty = auditPull(
+    { title: "feat", body: "ok", author: "m", draft: false, headSha: "abc", files: [], behindMain: 0 },
+    "d",
+  );
+  assert.ok(empty.findings.some((finding) => finding.includes("files empty")));
+  const unknownBehind = auditPull(
+    { title: "feat", body: "ok", author: "m", draft: false, headSha: "abc", files: ["src/a.ts"], behindMain: -1 },
+    "d",
+  );
+  assert.ok(unknownBehind.findings.some((finding) => finding.includes("behindMain unknown")));
 });
 
 test("audit never approves or merges", async () => {

@@ -66,8 +66,6 @@ export default {
             author: String(pr.user?.login || "unknown"),
             draft: Boolean(pr.draft),
             headSha: String(pr.head?.sha || ""),
-            files: [],
-            behindMain: 0,
           },
         });
         return Response.json({ queued: "audit", pr: pr.number, instance: created.id });

@@ -197,9 +197,25 @@ export function verifyTerrariumReceipt(expected: { runId: string; taskFingerprin
     && got.taskContractStatus !== "unproven";
 }
 
+export const KNOWN_ISSUE_LABELS = ["bug", "docs", "triage:draft", "triage:dig", "triage:spray", "triage:needs-human", "needs-owner-video"] as const;
+
+export function usableIssueLabels(labels: string[]): string[] {
+  const known = new Set<string>(KNOWN_ISSUE_LABELS);
+  return labels.filter((label) => known.has(label));
+}
+
 export function auditPull(input: PullInput, promptDigest: string): AuditReceipt {
   const findings: string[] = [];
-  if (input.behindMain > 0) findings.push(`behind main by ${input.behindMain} commits; rebase before land`);
+  if (!Number.isFinite(input.behindMain) || input.behindMain < 0) {
+    findings.push("behindMain unknown; do not treat this receipt as a rebase check");
+  } else if (input.behindMain > 0) {
+    findings.push(`behind main by ${input.behindMain} commits; rebase before land`);
+  }
+  if (!Array.isArray(input.files)) {
+    findings.push("files unknown; do not treat this receipt as a file-scope check");
+  } else if (input.files.length === 0) {
+    findings.push("files empty or unknown; do not treat this receipt as a file-scope check");
+  }
   if (isSpray({ title: input.title, body: input.body, author: input.author })) {
     return {
       headSha: input.headSha,
