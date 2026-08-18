@@ -1,0 +1,21 @@
+src/model-message-urls.test.ts
+  s_99b55ecf7d26fa::t_799dbd4c2750a2 41
+src/routes/mcp.ts
+  s_99b55ecf7d26fa::t_f5f075e71b08e3 17,284-288,376,415
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8052894e17e7219ee4d6470373b18be1bae334d0",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
