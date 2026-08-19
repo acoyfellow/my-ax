@@ -16,7 +16,7 @@ export interface WorkerEnv extends AgentsEnv {
   REVIEW: WorkflowBinding;
 }
 
-async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string } }) {
+async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string }; comments?: number }) {
   try {
     const created = await env.TRIAGE.create({
       id: deliveryId,
@@ -25,6 +25,7 @@ async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: 
         title: String(issue.title || ""),
         body: String(issue.body || ""),
         author: String(issue.user?.login || "unknown"),
+        commentsCount: Number(issue.comments ?? 0),
       },
     });
     return Response.json({ queued: "triage", issue: issue.number, instance: created.id, deliveryId });

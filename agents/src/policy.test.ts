@@ -199,6 +199,36 @@ test("a second identical loop board is not posted", async () => {
   assert.equal(github.comments.length, 1);
 });
 
+test("first-open triage skips the comment list", async () => {
+  const actions: string[] = [];
+  const github = {
+    ...memoryGithub(),
+    async listComments() { actions.push("listComments"); return []; },
+    async comment() { actions.push("comment"); },
+    async labelIssue() { actions.push("label"); },
+  };
+  await runTriage(
+    { number: 81, title: "perf: first-open triage lists every comment before the loop board", body: "receipt", author: "owner", commentsCount: 0 },
+    { github, terrarium: memoryTerrarium(), model: { modelId: "grok-4.6" } },
+  );
+  assert.deepEqual(actions, ["label", "comment"]);
+});
+
+test("perf titles classify as draftable bugs", () => {
+  const classified = classifyIssue({
+    title: "perf: first-open triage lists every comment before the loop board",
+    body: "triage:draft\nGET /comments is empty on first open",
+    author: "owner",
+  });
+  assert.equal(classified.kind, "bug");
+  assert.equal(classified.draft, true);
+  assert.equal(formatReadyPrTitle({
+    title: "perf: first-open triage lists every comment before the loop board",
+    body: "",
+    author: "owner",
+  }), "fix: first-open triage lists every comment before the loop board");
+});
+
 test("receipt correlation is fail-closed", () => {
   assert.equal(
     verifyTerrariumReceipt(

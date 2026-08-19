@@ -42,6 +42,7 @@ export interface IssueInput {
   author: string;
   authorAssociation?: string;
   filesHint?: string[];
+  commentsCount?: number;
 }
 
 export interface PullInput {
@@ -115,7 +116,8 @@ export function classifyIssue(input: IssueInput): Classification {
       summary: "Docs-only; one English README is source of truth.",
     };
   }
-  const bug = /bug|fail|repro|regression|broken|error|dies|tts|voice/i.test(text);
+  const titled = /^(bug|perf|test):/i.test(input.title.trim());
+  const bug = titled || /bug|fail|repro|regression|broken|error|dies|tts|voice/i.test(text);
   const hard = /hours|complex|investigate|root cause|across (many|multiple)|needs a cell|terrarium/i.test(text)
     || (input.body?.length ?? 0) > 2_000;
   const visual = visualLane(text);
