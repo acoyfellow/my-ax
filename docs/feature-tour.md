@@ -203,11 +203,13 @@ scheme-relative and overlong hrefs are rejected; github.com is kept
 
 ## File An Issue, Then A Ready PR
 
-A checkable GitHub issue is the start of engine work. Put one receipt in the
-body. If you want a Worker-opened pull request, add `triage:draft` and push
-`bot/issue-<n>` first. The Worker comments, labels, and may open a ready PR.
-It never merges. Hunt-only ticks file one issue and stop. See
-[agents/HUNT.md](../agents/HUNT.md).
+A live client or server error may open the issue through `POST /api/errors`.
+One fingerprint is one issue. Desk gets a card. The body has no `triage:draft`.
+The hook writes one loop board. A sweep closes same-fingerprint duplicates.
+The Worker does not write the fix. A human pushes `bot/issue-<n>` and writes
+`triage:draft` on a new comment. Then the Worker may open a ready PR. Review
+and audit never approve or merge. You merge. Hunt-only ticks file one issue
+and stop. See [agents/HUNT.md](../agents/HUNT.md).
 
 ## What This Tour Does Not Prove
 
