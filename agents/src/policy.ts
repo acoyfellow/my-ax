@@ -136,7 +136,8 @@ export function classifyIssue(input: IssueInput): Classification {
     };
   }
   if (bug) {
-    const opted = /\btriage:draft\b/i.test(text);
+    const auto = /## Auto error report\b/i.test(input.body) || /\bfingerprint:\s*`[a-f0-9]{16}`/i.test(input.body);
+    const opted = /\btriage:draft\b/i.test(text) || auto;
     return {
       kind: "bug",
       severity: "p2",
@@ -145,7 +146,7 @@ export function classifyIssue(input: IssueInput): Classification {
       dig: opted ? "draft" : "classify-only",
       visual,
       labels: opted ? ["bug", "triage:draft"] : ["bug"],
-      summary: opted ? "Opted-in draft PR." : "Bug labeled; draft only with triage:draft.",
+      summary: auto ? "Live error; open a ready PR." : opted ? "Opted-in draft PR." : "Bug labeled; draft only with triage:draft.",
     };
   }
   return {

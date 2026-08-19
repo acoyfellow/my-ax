@@ -19,7 +19,13 @@ export function healUiHistoryFileUrls(messages: Array<{ parts?: Array<Record<str
     const next = message.parts.flatMap((part) => {
       if (!part || typeof part !== "object") return [part];
       if (part.type !== "file" && part.type !== "image" && part.type !== "source") return [part];
-      if (typeof part.url !== "string") return [part];
+      if (typeof part.url !== "string") {
+        if (part.type === "image" && typeof part.data === "string" && !part.data.startsWith("data:image/") && !/^https?:\/\//i.test(part.data)) {
+          changed = true;
+          return [];
+        }
+        return [part];
+      }
       const url = rewriteFileUrl(part.url, base);
       if (!url) {
         changed = true;

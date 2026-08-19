@@ -6,9 +6,23 @@ The version stays `0.0.1`. It does not increment. The number is a deliberate sta
 
 ## 2026-08-18
 
+Public engine at `c42a473`. Employee app deploy and lifecycle agents deploy stay separate.
+
 ### Added
 
-- Live client and server errors file one GitHub issue per fingerprint through `POST /api/errors`. Same fingerprint in 24h reuses the issue. Desk gets a card. No `triage:draft`.
+- Live client and server errors file one GitHub issue per fingerprint through `POST /api/errors`. The Worker claims the fingerprint before it opens GitHub. Same fingerprint in 24h reuses the issue. Desk gets a card. A live error opens a ready PR when `bot/issue-<n>` exists.
+- Lifecycle factory: HMAC hook, `TriageWorkflow`, `AuditWorkflow`, `ReviewWorkflow`. A 15-minute sweep closes same-fingerprint duplicates and queues missed issues. Review and audit never approve or merge.
+- Desk clear: `DELETE /api/desk`, chat and MCP `desk_clear`. One owner board becomes empty. A second open desk tab can stay stale until it reloads.
+- Session heal: `POST /api/sessions/:id/heal` and MCP `heal` rewrite stored relative file URLs and drop junk image parts so a later turn can run.
+
+### Fixed
+
+- Relative or junk file URLs no longer crash a turn as `Invalid URL string.`
+- Chat timestamps no longer copy a later clock onto earlier rows.
+- Desk CSS ships with the panel. Leftover `DeskHub` is exported so apex deploy can ship.
+- Live Durable Object tag `v12-desk-hub` is declared so apex deploy does not replay `v1`.
+- UserAgent desk fan-out uses `sendDeskBoard` so `tsc` stays green.
+- First-open triage does not treat an empty comment list as a posted board.
 
 ## 2026-08-17
 
