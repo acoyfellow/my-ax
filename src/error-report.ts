@@ -32,6 +32,9 @@ function clip(value: unknown, max: number): string {
 export function normalizeErrorMessage(message: string): string {
   const text = clip(message, MAX_MESSAGE) || "unknown error";
   if (/invalid url string/i.test(text)) return "Invalid URL string.";
+  if (/does not represent a valid image/i.test(text)) {
+    return "The image data you provided does not represent a valid image.";
+  }
   return text.replace(/\s+/g, " ");
 }
 

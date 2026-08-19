@@ -9,12 +9,29 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+function looksLikeImage(value: string): boolean {
+  if (value.startsWith("data:image/")) return true;
+  if (isHttpUrl(value)) return /\.(avif|gif|jpe?g|png|webp)(\?|$)/i.test(value) || /image\//i.test(value);
+  return false;
+}
+
 function sanitizePart(part: unknown): unknown | null {
   if (!part || typeof part !== "object") return part;
-  const item = part as { type?: unknown; url?: unknown; data?: unknown };
-  if (item.type !== "file" && item.type !== "image" && item.type !== "source") return part;
-  if (typeof item.url === "string" && !isHttpUrl(item.url) && !item.url.startsWith("data:")) return null;
-  if (typeof item.data === "string" && (item.data.startsWith("http") || item.data.startsWith("/")) && !isHttpUrl(item.data) && !item.data.startsWith("data:")) return null;
+  const item = part as { type?: unknown; url?: unknown; data?: unknown; mediaType?: unknown; mimeType?: unknown };
+  const kind = typeof item.type === "string" ? item.type : "";
+  const media = typeof item.mediaType === "string" ? item.mediaType : typeof item.mimeType === "string" ? item.mimeType : "";
+  const isImage = kind === "image" || kind === "file" || kind === "source" || /image\//i.test(media);
+  if (!isImage) return part;
+  if (typeof item.url === "string") {
+    if (item.url.startsWith("data:image/")) return part;
+    if (isHttpUrl(item.url) && looksLikeImage(item.url)) return part;
+    return null;
+  }
+  if (typeof item.data === "string") {
+    if (looksLikeImage(item.data)) return part;
+    return null;
+  }
+  if (item.url != null || item.data != null) return null;
   return part;
 }
 
