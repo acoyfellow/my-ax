@@ -18,9 +18,12 @@ export function healUiHistoryFileUrls(messages: Array<{ parts?: Array<Record<str
     let changed = false;
     const next = message.parts.flatMap((part) => {
       if (!part || typeof part !== "object") return [part];
-      if (part.type !== "file" && part.type !== "image" && part.type !== "source") return [part];
+      const media = typeof part.mediaType === "string" ? part.mediaType : typeof part.mimeType === "string" ? part.mimeType : "";
+      const isImage = part.type === "file" || part.type === "image" || part.type === "source" || /image\//i.test(media);
+      if (!isImage) return [part];
       if (typeof part.url !== "string") {
-        if (part.type === "image" && typeof part.data === "string" && !part.data.startsWith("data:image/") && !/^https?:\/\//i.test(part.data)) {
+        if (typeof part.data === "string" && (part.data.startsWith("data:image/") || /^https?:\/\//i.test(part.data))) return [part];
+        if (part.data != null || media.startsWith("image/")) {
           changed = true;
           return [];
         }

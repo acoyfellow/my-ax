@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Env } from "./types";
 import { fileOwnerErrorIssue } from "./error-issue";
+import { errorFingerprint } from "./error-report";
 
 function makeEnv(opts: { token?: string; existing?: { fingerprint: string; number: number; url: string; lastSeen: string } } = {}) {
   const rows = opts.existing ? [opts.existing] : [];
@@ -86,16 +87,19 @@ test("same fingerprint reuses the open issue", async () => {
       lastSeen: "2099-01-01 00:00:00",
     },
   });
-  let posts = 0;
+  let creates = 0;
   const second = await fileOwnerErrorIssue(secondEnv.env, "owner@example.com", {
     origin: "server",
     message: "Invalid URL string.",
     stack: "Error: Invalid URL string.\n    at later (agent.ts:9:9)",
-  }, async () => {
-    posts += 1;
+  }, async (url, init) => {
+    if (init?.method === "POST") creates += 1;
+    if (String(url).endsWith("/issues/61")) {
+      return new Response(JSON.stringify({ state: "open" }), { status: 200 });
+    }
     return new Response("{}", { status: 500 });
   });
-  assert.equal(posts, 0);
+  assert.equal(creates, 0);
   assert.deepEqual(second, {
     number: 61,
     url: "https://github.com/acoyfellow/my-ax/issues/61",
@@ -113,16 +117,53 @@ test("a second racer does not create after the first claim", async () => {
     message: "The image data you provided does not represent a valid image.",
   }, async () => new Response(JSON.stringify({ number: 69, html_url: "https://github.com/acoyfellow/my-ax/issues/69" }), { status: 201 }));
   if (!("fingerprint" in first)) throw new Error("expected fingerprint");
-  let posts = 0;
+  let creates = 0;
   const second = await fileOwnerErrorIssue(env, "owner@example.com", {
     origin: "client",
     message: "The image data you provided does not represent a valid image.",
-  }, async () => {
-    posts += 1;
+  }, async (url, init) => {
+    if (init?.method === "POST") creates += 1;
+    if (String(url).includes("/issues/") && init?.method !== "POST") {
+      return new Response(JSON.stringify({ state: "open" }), { status: 200 });
+    }
     return new Response(JSON.stringify({ number: 70, html_url: "https://github.com/acoyfellow/my-ax/issues/70" }), { status: 201 });
   });
-  assert.equal(posts, 0);
+  assert.equal(creates, 0);
   assert.equal("created" in second && second.created, false);
+});
+
+test("a closed fingerprint opens a new issue", async () => {
+  const input = {
+    origin: "client" as const,
+    message: "The image data you provided does not represent a valid image. Please check your input and try again with one of the supported image formats: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].",
+  };
+  const fingerprint = await errorFingerprint(input);
+  const { env } = makeEnv({
+    token: "t",
+    existing: {
+      fingerprint,
+      number: 69,
+      url: "https://github.com/acoyfellow/my-ax/issues/69",
+      lastSeen: "2099-01-01 00:00:00",
+    },
+  });
+  let created = 0;
+  const result = await fileOwnerErrorIssue(env, "owner@example.com", input, async (url, init) => {
+    const href = String(url);
+    if (href.endsWith("/issues/69")) return new Response(JSON.stringify({ state: "closed" }), { status: 200 });
+    if (init?.method === "POST") {
+      created += 1;
+      return new Response(JSON.stringify({ number: 90, html_url: "https://github.com/acoyfellow/my-ax/issues/90" }), { status: 201 });
+    }
+    return new Response("{}", { status: 500 });
+  });
+  assert.equal(created, 1);
+  assert.deepEqual(result, {
+    number: 90,
+    url: "https://github.com/acoyfellow/my-ax/issues/90",
+    fingerprint,
+    created: true,
+  });
 });
 
 test("invalid body is rejected", async () => {
