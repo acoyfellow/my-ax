@@ -40,15 +40,15 @@ docker build -t my-ax-check .
 
 File one issue first. Title it `bug:`, `perf:`, or `test:`. The body needs a receipt: a command and its output, a file and line, or a live URL. Do not file a second finding in the same issue.
 
-A live client or server error may open that issue through `POST /api/errors`. One fingerprint is one issue for 24 hours. The body has no `triage:draft`. A human adds that after a head branch exists.
+A live client or server error may open that issue through `POST /api/errors`. One fingerprint is one issue for 24 hours. The hook classifies it and opens a ready PR when `bot/issue-<number>` exists.
 
-A GitHub webhook classifies `issues.opened`. The Worker comments and labels. A 15-minute sweep closes same-fingerprint duplicates and parks labeled issues that have no head and no new `triage:draft` comment. The Worker does not merge.
+A GitHub webhook classifies `issues.opened`. The Worker comments and labels. A 15-minute sweep closes same-fingerprint duplicates and queues missed issues. The Worker does not merge.
 
-If a new comment contains `triage:draft` and a branch `bot/issue-<number>` already exists, the Worker may open a **ready** pull request (`draft: false`). The PR body must include `Closes #<n>` and a proof command. It must not invent a Files list. Review and audit comment `neverMerge: true`. A human merges.
+If `bot/issue-<number>` exists, the Worker may open a **ready** pull request (`draft: false`). The PR body must include `Closes #<n>` and a proof command. It must not invent a Files list. Review and audit comment `neverMerge: true`. A human merges.
 
 Hunt-only work follows [agents/HUNT.md](./agents/HUNT.md): find one new issue, file it, stop. Do not open a PR from a hunt tick.
 
-Push the branch **before** you write `triage:draft` on a new comment. If the head is missing, triage comments and no PR appears.
+Push the branch. If the head is missing, triage comments and no PR appears.
 
 ## Pull Requests
 
