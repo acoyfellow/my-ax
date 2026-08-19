@@ -12,3 +12,9 @@ test("relative upload urls become absolute https urls", () => {
 test("rewriteFileUrl accepts upload paths", () => {
   assert.equal(rewriteFileUrl("/api/uploads/abc", "https://my.example"), "https://my.example/api/uploads/abc");
 });
+
+test("heal drops junk image data that is not a data image", () => {
+  const messages = [{ parts: [{ type: "image", data: "not-an-image", mediaType: "image/png" }, { type: "text", text: "ok" }] }];
+  assert.equal(healUiHistoryFileUrls(messages, "https://my.example"), 1);
+  assert.deepEqual(messages[0]?.parts, [{ type: "text", text: "ok" }]);
+});

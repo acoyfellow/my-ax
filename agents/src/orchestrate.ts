@@ -71,10 +71,10 @@ export function formatLoopBoard(input: {
   ];
   if (input.prNumber) lines.push(`pr: https://github.com/acoyfellow/my-ax/pull/${input.prNumber}`);
   if (input.stage === "blocked-missing-branch") {
-    lines.push(`blocked: push ${head} then write the opt-in token on a new human comment.`);
+    lines.push(`blocked: missing ${head}. Sweep keeps the issue open until that head exists.`);
   }
   if (input.stage === "labeled" && !input.classification.draft) {
-    lines.push("next: write the opt-in token on a new human comment after the head branch exists. Worker never merges.");
+    lines.push("next: Worker opens a ready PR after the head exists. Worker never merges.");
   }
   if (input.error) lines.push(`error: ${input.error}`);
   return lines.join("\n");

@@ -49,7 +49,7 @@ test("loop board names stage and next action", () => {
   const text = formatLoopBoard({ issueNumber: 52, classification, modelId: "grok-4.6", stage: "labeled" });
   assert.match(text, /stage: labeled/);
   assert.match(text, /issues\/52/);
-  assert.match(text, /opt-in token/);
+  assert.match(text, /ready PR/);
   assert.doesNotMatch(text, /triage:draft/);
 });
 
@@ -71,6 +71,16 @@ test("ready PR body names the issue, proof command, and never-merge rule", () =>
   assert.doesNotMatch(body, /src\/desk-board\.ts/);
   assert.doesNotMatch(body, /Machine draft\. Not reviewed/);
   assert.throws(() => formatReadyPrBody({ title: "x", body: "triage:draft", author: "o" }, classification));
+});
+
+test("an auto error report opens a ready PR without triage:draft", () => {
+  const classified = classifyIssue({
+    title: "bug: The image data you provided does not represent a valid image.",
+    body: "## Auto error report\n\nfingerprint: `e8a37db7f3311f4b`\norigin: client",
+    author: "acoyfellow",
+  });
+  assert.equal(classified.draft, true);
+  assert.equal(shouldOpenDraft(classified), true);
 });
 
 test("triage:draft still opens a draft when the bug mentions PWA", () => {

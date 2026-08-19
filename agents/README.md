@@ -11,13 +11,13 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 
 | Workflow | Trigger | Does | Never |
 |---|---|---|---|
-| `TriageWorkflow` | `issues.opened` or a new `triage:draft` comment | classify, label, one loop board; open a ready PR only when the new comment has `triage:draft` and `bot/issue-<n>` exists | merge, comment twice |
-| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue issues with no board; park labeled issues with no head and no new `triage:draft` | comment storm, unbounded close |
+| `TriageWorkflow` | `issues.opened` | classify, label, one loop board; open a ready PR when the issue is a live error and `bot/issue-<n>` exists | merge, comment twice |
+| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue issues with no board or with a head | comment storm, unbounded close |
 | `DigWorkflow` | hard bug | spawn Terrarium, wait, proceed only on a verified receipt | trust a callback alone |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
 | `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: proof comment, request changes, or close flood | approve, merge, or touch foreign PRs |
 
-`triage:draft` is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. Put it on a new human comment after the head exists. Do not put it in an auto-error issue body. The method is `openReadyPr`. The head is `bot/issue-<n>`. The body uses `Closes #<n>` and does not invent a file list.
+A live error report is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`. The body uses `Closes #<n>` and does not invent a file list.
 
 Every triage comment is a **loop board**: `stage` is `labeled`, `blocked-missing-branch`, `pr-opened`, or `pr-failed`. If the head branch is missing, the board says so. Worker never merges.
 

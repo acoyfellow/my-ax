@@ -1,7 +1,7 @@
 import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
 import { liveGithubPort } from "./ports";
-import { formatDuplicateClose, formatParkClose, planSweep, type SweepIssue } from "./sweep";
+import { formatDuplicateClose, planSweep, type SweepIssue } from "./sweep";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -129,10 +129,6 @@ export async function runIssueSweep(env: WorkerEnv): Promise<{ closed: number; q
   for (const action of actions) {
     if (action.action === "close-duplicate" && github.closeIssue) {
       await github.closeIssue(action.number, formatDuplicateClose(action.keep, action.fingerprint));
-      closed += 1;
-    }
-    if (action.action === "park" && github.closeIssue) {
-      await github.closeIssue(action.number, formatParkClose(action.number));
       closed += 1;
     }
     if (action.action === "queue") {

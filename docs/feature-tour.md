@@ -204,12 +204,10 @@ scheme-relative and overlong hrefs are rejected; github.com is kept
 ## File An Issue, Then A Ready PR
 
 A live client or server error may open the issue through `POST /api/errors`.
-One fingerprint is one issue. Desk gets a card. The body has no `triage:draft`.
-The hook writes one loop board. A sweep closes same-fingerprint duplicates.
-The Worker does not write the fix. A human pushes `bot/issue-<n>` and writes
-`triage:draft` on a new comment. Then the Worker may open a ready PR. Review
-and audit never approve or merge. You merge. Hunt-only ticks file one issue
-and stop. See [agents/HUNT.md](../agents/HUNT.md).
+One fingerprint is one issue. Desk gets a card. The hook writes one loop board.
+A sweep closes same-fingerprint duplicates. If `bot/issue-<n>` exists, the
+Worker opens a ready PR. Review and audit never approve or merge. You merge.
+Hunt-only ticks file one issue and stop. See [agents/HUNT.md](../agents/HUNT.md).
 
 ## What This Tour Does Not Prove
 

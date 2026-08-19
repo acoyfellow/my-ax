@@ -10,10 +10,10 @@ Public engine at `c42a473`. Employee app deploy and lifecycle agents deploy stay
 
 ### Added
 
-- Live client and server errors file one GitHub issue per fingerprint through `POST /api/errors`. The Worker claims the fingerprint before it opens GitHub. Same fingerprint in 24h reuses the issue. Desk gets a card. No `triage:draft`.
-- Lifecycle factory: HMAC hook, `TriageWorkflow`, `AuditWorkflow`, `ReviewWorkflow`. A 15-minute sweep closes same-fingerprint duplicates, queues issues with no loop board, and parks labeled issues that have no head and no new `triage:draft` comment. Review and audit never approve or merge.
+- Live client and server errors file one GitHub issue per fingerprint through `POST /api/errors`. The Worker claims the fingerprint before it opens GitHub. Same fingerprint in 24h reuses the issue. Desk gets a card. A live error opens a ready PR when `bot/issue-<n>` exists.
+- Lifecycle factory: HMAC hook, `TriageWorkflow`, `AuditWorkflow`, `ReviewWorkflow`. A 15-minute sweep closes same-fingerprint duplicates and queues missed issues. Review and audit never approve or merge.
 - Desk clear: `DELETE /api/desk`, chat and MCP `desk_clear`. One owner board becomes empty. A second open desk tab can stay stale until it reloads.
-- Session heal: `POST /api/sessions/:id/heal` and MCP `heal` rewrite stored relative file URLs so `convertToModelMessages` does not throw `Invalid URL string.` Heal does not drop a bad image part.
+- Session heal: `POST /api/sessions/:id/heal` and MCP `heal` rewrite stored relative file URLs and drop junk image parts so a later turn can run.
 
 ### Fixed
 
