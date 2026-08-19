@@ -145,7 +145,7 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   const board = formatLoopBoard({
     issueNumber, classification, modelId: ports.model.modelId, stage, prNumber, error,
   });
-  if (await alreadyPostedBoard(ports.github, issueNumber, board)) {
+  if (await alreadyPostedBoard(ports.github, issueNumber, board, input.commentsCount)) {
     steps.push({ step: "stop", reason: "board already posted" });
     return steps;
   }
@@ -154,7 +154,8 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   return steps;
 }
 
-async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board: string): Promise<boolean> {
+async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board: string, commentsCount?: number): Promise<boolean> {
+  if (commentsCount === 0) return false;
   if (!github.listComments) return false;
   const comments = await github.listComments(issueNumber);
   return comments.some((body) => body.trim() === board.trim());
@@ -167,7 +168,7 @@ export async function runAudit(input: PullInput, ports: { github: GithubPort; pr
 }
 
 export function formatReadyPrTitle(input: IssueInput): string {
-  return input.title.replace(/^bug:\s*/i, "fix: ").slice(0, 120);
+  return input.title.replace(/^(bug|perf|test):\s*/i, "fix: ").slice(0, 120);
 }
 
 export function formatReadyPrBody(input: IssueInput, classification: Classification): string {
