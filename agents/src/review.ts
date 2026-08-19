@@ -30,12 +30,29 @@ export function reviewPull(input: PullInput & { head?: string; proofExit?: numbe
   if (/invalid url string\.?$/i.test(input.title) && /auto error report/i.test(input.body)) {
     return { decision: "close", neverApprove: true, neverMerge: true, findings: ["auto-error flood; close"] };
   }
-  if (typeof input.proofExit === "number" && input.proofExit !== 0) {
+  if (typeof input.proofExit !== "number") {
+    return {
+      decision: "request-changes",
+      neverApprove: true,
+      neverMerge: true,
+      findings: ["proof missing; clone the head and run the proof command"],
+    };
+  }
+  if (input.proofExit !== 0) {
     return {
       decision: "request-changes",
       neverApprove: true,
       neverMerge: true,
       findings: [`proof failed (${input.proofExit})`, (input.proofLog || "").slice(0, 400)],
+    };
+  }
+  const log = input.proofLog || "";
+  if (!/# pass\b/i.test(log) && !/typecheck/i.test(log)) {
+    return {
+      decision: "request-changes",
+      neverApprove: true,
+      neverMerge: true,
+      findings: ["proof log has no typecheck or test pass line"],
     };
   }
   return {
