@@ -12,12 +12,14 @@ export interface SweepIssue {
   author: string;
   state: "open" | "closed";
   comments: string[];
+  hasHead?: boolean;
 }
 
 export type SweepAction =
   | { action: "keep"; number: number; fingerprint: string }
   | { action: "close-duplicate"; number: number; keep: number; fingerprint: string }
-  | { action: "queue"; number: number };
+  | { action: "queue"; number: number }
+  | { action: "park"; number: number };
 
 export function extractFingerprint(body: string): string | null {
   const match = body.match(FINGERPRINT_RE);
@@ -26,6 +28,11 @@ export function extractFingerprint(body: string): string | null {
 
 export function hasLoopBoard(comments: string[]): boolean {
   return comments.some((body) => LOOP_BOARD_RE.test(body));
+}
+
+export function hasTriageDraft(comments: string[], body: string): boolean {
+  if (/\btriage:draft\b/i.test(body)) return true;
+  return comments.some((text) => /\btriage:draft\b/i.test(text) && !LOOP_BOARD_RE.test(text));
 }
 
 export function planSweep(issues: SweepIssue[]): SweepAction[] {
@@ -54,11 +61,26 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
     }
   }
 
+  const closing = new Set(actions.filter((row) => row.action === "close-duplicate").map((row) => row.number));
   for (const issue of open) {
-    if (hasLoopBoard(issue.comments)) continue;
-    if (queues >= SWEEP_MAX_QUEUES) break;
-    actions.push({ action: "queue", number: issue.number });
-    queues += 1;
+    if (closing.has(issue.number)) continue;
+    const boarded = hasLoopBoard(issue.comments);
+    const opted = hasTriageDraft(issue.comments, issue.body);
+    if (!boarded) {
+      if (queues >= SWEEP_MAX_QUEUES) continue;
+      actions.push({ action: "queue", number: issue.number });
+      queues += 1;
+      continue;
+    }
+    if (opted && issue.hasHead) {
+      if (queues >= SWEEP_MAX_QUEUES) continue;
+      actions.push({ action: "queue", number: issue.number });
+      queues += 1;
+      continue;
+    }
+    if (closes >= SWEEP_MAX_CLOSES) continue;
+    actions.push({ action: "park", number: issue.number });
+    closes += 1;
   }
 
   return actions;
@@ -70,5 +92,13 @@ export function formatDuplicateClose(keep: number, fingerprint: string): string 
     `fingerprint: \`${fingerprint}\``,
     `keep: #${keep}`,
     "Closing this as a duplicate.",
+  ].join("\n");
+}
+
+export function formatParkClose(number: number): string {
+  return [
+    "Labeled with no head or no triage:draft after a sweep.",
+    `head: bot/issue-${number}`,
+    "Closing as parked. Reopen with a head branch and triage:draft to promote.",
   ].join("\n");
 }
