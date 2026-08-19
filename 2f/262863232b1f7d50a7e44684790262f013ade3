@@ -1,0 +1,21 @@
+agents/README.md
+  s_99b55ecf7d26fa::t_b80fe233bdbb1b 16
+docs/feature-matrix.md
+  s_99b55ecf7d26fa::t_42448a3a4ff8b6 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2f262863232b1f7d50a7e44684790262f013ade3",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
