@@ -17,13 +17,14 @@ function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; label
       async approvePr() { throw new Error("forbidden GitHub action: approve"); },
     },
     terrarium: {
-      async spawn() { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1" }; },
+      async spawn(_task, taskProof) { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1", taskProof }; },
       async wait() {
         return {
           runId: "r1",
           taskFingerprint: "fp1",
           nonce: "n1",
           ok,
+          taskProof: "test -f package.json",
           taskContractStatus: ok ? "proven" : "unproven",
           visual: {
             lane: "public-web",

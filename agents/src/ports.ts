@@ -122,13 +122,16 @@ export function liveTerrariumPort(env: AgentsEnv): TerrariumPort {
     return (await res.json()) as Record<string, unknown>;
   }
   return {
-    async spawn(task) {
-      const json = await call("/api/runs", { method: "POST", body: JSON.stringify({ task }) });
+    async spawn(task, taskProof) {
+      const proof = taskProof.trim();
+      if (!proof) throw new Error("Terrarium spawn needs a host taskProof");
+      const json = await call("/api/runs", { method: "POST", body: JSON.stringify({ task, taskProof: proof }) });
       const contract = (json.contract ?? json) as Record<string, string>;
       return {
         runId: String(contract.runId ?? json.runId),
         taskFingerprint: String(contract.taskFingerprint ?? ""),
         nonce: String(contract.nonce ?? ""),
+        taskProof: proof,
       };
     },
     async wait(runId) {
