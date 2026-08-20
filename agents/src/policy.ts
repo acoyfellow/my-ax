@@ -71,6 +71,7 @@ export interface TerrariumReceipt {
   nonce: string;
   ok: boolean;
   taskContractStatus?: string;
+  taskProof?: string;
   visual?: VisualProof;
 }
 
@@ -192,8 +193,16 @@ export function acceptVisualProof(lane: VisualLane, proof: VisualProof | undefin
   return proof.tiers.A === true && proof.tiers.B === true && proof.tiers.C !== false;
 }
 
-export function verifyTerrariumReceipt(expected: { runId: string; taskFingerprint: string; nonce: string }, got: TerrariumReceipt): boolean {
+export function requireTaskProof(taskProof: string | undefined): string {
+  const proof = taskProof?.trim() ?? "";
+  if (!proof) throw new Error("Terrarium spawn needs a host taskProof");
+  return proof;
+}
+
+export function verifyTerrariumReceipt(expected: { runId: string; taskFingerprint: string; nonce: string; taskProof?: string }, got: TerrariumReceipt): boolean {
+  const proof = expected.taskProof?.trim() || got.taskProof?.trim();
   return got.ok === true
+    && Boolean(proof)
     && got.runId === expected.runId
     && got.taskFingerprint === expected.taskFingerprint
     && got.nonce === expected.nonce

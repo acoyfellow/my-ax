@@ -28,8 +28,11 @@ export async function fileOwnerErrorIssue(
   const fingerprint = await errorFingerprint(input);
   const claimed = await claimFingerprint(env, ownerEmail, fingerprint);
   if (!claimed.created && claimed.issue_number && claimed.issue_url) {
-    await touchFingerprint(env, ownerEmail, fingerprint).catch(() => undefined);
-    return { number: claimed.issue_number, url: claimed.issue_url, fingerprint, created: false };
+    const open = await githubIssueIsOpen(token, repo, claimed.issue_number, post);
+    if (open) {
+      await touchFingerprint(env, ownerEmail, fingerprint).catch(() => undefined);
+      return { number: claimed.issue_number, url: claimed.issue_url, fingerprint, created: false };
+    }
   }
   const created = await createGithubIssue(token, repo, input, fingerprint, post);
   await rememberFingerprint(env, ownerEmail, fingerprint, created);
@@ -103,6 +106,20 @@ async function rememberFingerprint(env: Env, ownerEmail: string, fingerprint: st
        issue_url = excluded.issue_url,
        last_seen_at = datetime('now')`,
   ).bind(ownerEmail.toLowerCase(), fingerprint, issue.number, issue.html_url).run();
+}
+
+async function githubIssueIsOpen(token: string, repo: string, number: number, post = fetch): Promise<boolean> {
+  const res = await post(`https://api.github.com/repos/${repo}/issues/${number}`, {
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: "application/vnd.github+json",
+      "user-agent": "my-ax-error-report",
+      "x-github-api-version": "2022-11-28",
+    },
+  });
+  if (!res.ok) return false;
+  const json = await res.json().catch(() => ({})) as { state?: string };
+  return json.state === "open";
 }
 
 export async function createGithubIssue(token: string, repo: string, input: ErrorReportInput, fingerprint: string, post = fetch): Promise<GithubIssueResult> {

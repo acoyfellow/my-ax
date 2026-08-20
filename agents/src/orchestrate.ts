@@ -8,6 +8,7 @@ import {
   auditPull,
   acceptVisualProof,
   classifyIssue,
+  requireTaskProof,
   shouldOpenDraft,
   shouldSpawnDig,
   verifyTerrariumReceipt,
@@ -32,7 +33,7 @@ export interface GithubPort {
 }
 
 export interface TerrariumPort {
-  spawn(task: string): Promise<{ runId: string; taskFingerprint: string; nonce: string }>;
+  spawn(task: string, taskProof: string): Promise<{ runId: string; taskFingerprint: string; nonce: string; taskProof: string }>;
   wait(runId: string): Promise<TerrariumReceipt>;
 }
 
@@ -95,9 +96,10 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
     error = "label failed";
   }
   if (shouldSpawnDig(classification)) {
-    const contract = await ports.terrarium.spawn(`Hard issue: ${input.title}\n${input.body}`);
+    const taskProof = requireTaskProof("test -f package.json");
+    const contract = await ports.terrarium.spawn(`Hard issue: ${input.title}\n${input.body}`, taskProof);
     const receipt = await ports.terrarium.wait(contract.runId);
-    const verified = verifyTerrariumReceipt(contract, receipt);
+    const verified = verifyTerrariumReceipt({ ...contract, taskProof }, receipt);
     steps.push({ step: "dig", runId: contract.runId, verified });
     if (!verified) {
       steps.push({ step: "stop", reason: "terrarium receipt unproven" });
