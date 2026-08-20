@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveToolResultWidget } from "./tool-result-widgets";
+import { browserReplayRecordingHref, resolveToolResultWidget } from "./tool-result-widgets";
 
 const browserRun = (extra: Record<string, unknown> = {}) => ({
   kind: "browser-run",
@@ -41,4 +41,11 @@ test("an external replay url is never embedded", () => {
   assert.equal(widget.kind, "browser-run");
   assert.equal(widget.replaySrc, undefined);
   assert.ok(widget.screenshotSrc);
+});
+
+test("recording href maps an internal replay to the recordings API", () => {
+  assert.equal(browserReplayRecordingHref("/browser/replay/abc123?embed=1"), "/api/browser/recordings/abc123");
+  assert.equal(browserReplayRecordingHref("/browser/replay/abc123"), "/api/browser/recordings/abc123");
+  assert.equal(browserReplayRecordingHref("https://evil.example/replay/abc123"), undefined);
+  assert.equal(browserReplayRecordingHref(undefined), undefined);
 });
