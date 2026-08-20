@@ -6,6 +6,7 @@ import {
   assertNoMergeAction,
   auditPull,
   classifyIssue,
+  requireTaskProof,
   resolveAgentsModel,
   shouldOpenDraft,
   shouldSpawnDig,
@@ -33,8 +34,8 @@ function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } 
 
 function memoryTerrarium(ok = true): TerrariumPort {
   return {
-    async spawn() { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1" }; },
-    async wait() { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1", ok, taskContractStatus: ok ? "proven" : "unproven" }; },
+    async spawn(_task, taskProof) { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1", taskProof }; },
+    async wait() { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1", ok, taskProof: "test -f package.json", taskContractStatus: ok ? "proven" : "unproven" }; },
   };
 }
 
@@ -242,8 +243,19 @@ test("perf titles classify as draftable bugs", () => {
 test("receipt correlation is fail-closed", () => {
   assert.equal(
     verifyTerrariumReceipt(
+      { runId: "r1", taskFingerprint: "fp1", nonce: "n1", taskProof: "test -f package.json" },
+      { runId: "r1", taskFingerprint: "fp1", nonce: "other", ok: true, taskProof: "test -f package.json" },
+    ),
+    false,
+  );
+});
+
+test("a terrarium receipt without taskProof is unproven", () => {
+  assert.throws(() => requireTaskProof(""));
+  assert.equal(
+    verifyTerrariumReceipt(
       { runId: "r1", taskFingerprint: "fp1", nonce: "n1" },
-      { runId: "r1", taskFingerprint: "fp1", nonce: "other", ok: true },
+      { runId: "r1", taskFingerprint: "fp1", nonce: "n1", ok: true, taskContractStatus: "proven" },
     ),
     false,
   );

@@ -13,7 +13,7 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 |---|---|---|---|
 | `TriageWorkflow` | `issues.opened` | classify, label, one loop board; open a ready PR when the issue is a live error and `bot/issue-<n>` exists | merge, comment twice |
 | Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue issues with no board or with a head | comment storm, unbounded close |
-| `DigWorkflow` | hard bug | spawn Terrarium, wait, proceed only on a verified receipt | trust a callback alone |
+| `DigWorkflow` | hard bug | spawn Terrarium with a host `taskProof`, wait, proceed only if the receipt and the proof both hold | trust a callback or a receipt without `taskProof` |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
 | `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: proof comment, request changes, or close flood | approve, merge, or touch foreign PRs |
 

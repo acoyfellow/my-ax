@@ -73,9 +73,27 @@ test("passing owner proof is ready for owner, not approved", async () => {
     title: "fix: junk URL",
     body: "proof",
     proofExit: 0,
+    proofLog: "# pass 18\n> tsc --noEmit\n",
   }));
   assert.equal(receipt.decision, "ready-for-owner");
   assert.equal(receipt.neverApprove, true);
   assert.equal(receipt.neverMerge, true);
   assert.equal(assertPublicText(formatReviewComment(receipt)), formatReviewComment(receipt));
+});
+
+test("missing proof requests changes", () => {
+  const receipt = reviewPull(pull({ title: "fix: junk URL", body: "proof" }));
+  assert.equal(receipt.decision, "request-changes");
+  assert.match(receipt.findings.join("\n"), /proof missing/);
+});
+
+test("a terrarium plan with exit 0 is not proof", () => {
+  const receipt = reviewPull(pull({
+    title: "fix: junk URL",
+    body: "proof",
+    proofExit: 0,
+    proofLog: "TASK_RECEIVED\nClone the repository and run npm run check\nTASK_ENDED",
+  }));
+  assert.equal(receipt.decision, "request-changes");
+  assert.match(receipt.findings.join("\n"), /no typecheck or test pass/);
 });

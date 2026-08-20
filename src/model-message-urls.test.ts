@@ -32,6 +32,19 @@ test("keeps https file urls and text-only messages", () => {
   );
 });
 
+test("drops junk image data that is not a data image", () => {
+  const messages = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "see this" },
+        { type: "image", data: "not-an-image", mediaType: "image/png" },
+      ],
+    },
+  ] as ModelMessage[];
+  assert.deepEqual(sanitizeModelMessageUrls(messages)[0]?.content, [{ type: "text", text: "see this" }]);
+});
+
 test("a junk url string does not throw Invalid URL string", () => {
   const messages = [
     {

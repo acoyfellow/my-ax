@@ -9,6 +9,13 @@ import {
   stackFingerprintSite,
 } from "./error-report";
 
+test("long image errors collapse to one message", () => {
+  assert.equal(
+    normalizeErrorMessage("The image data you provided does not represent a valid image. Please check your input and try again with one of the supported image formats: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']."),
+    "The image data you provided does not represent a valid image.",
+  );
+});
+
 test("Invalid URL variants share one fingerprint", async () => {
   const a = await errorFingerprint({ origin: "server", message: "Invalid URL string.", stack: "Error: Invalid URL string.\n    at buildUrl (agent.ts:1:1)" });
   const b = await errorFingerprint({ origin: "server", message: "invalid url string", stack: "TypeError: Invalid URL string.\n    at other (agent.ts:40:2)" });
