@@ -1,0 +1,19 @@
+src/ui/browser-replay-fallback-proof.mjs
+  s_e987d30b51587b::t_094d33dc79748d 1-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "aa55df4e0480354d12d78f8565678490e18db25d",
+  "prompts": {},
+  "sessions": {
+    "s_e987d30b51587b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00ffb-0c59-74f4-8153-ea729ca0edd6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
