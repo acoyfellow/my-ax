@@ -48,7 +48,7 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         return false;
       }
     },
-    async createBranch(name) {
+    async createBranch(name, seed) {
       assertNoMergeAction("createBranch");
       const main = await gh("/git/ref/heads/main") as { object?: { sha?: string } };
       const sha = main.object?.sha;
@@ -56,6 +56,15 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       await gh("/git/refs", {
         method: "POST",
         body: JSON.stringify({ ref: `refs/heads/${name}`, sha }),
+      });
+      if (!seed) return;
+      await gh(`/contents/${encodeURI(seed.path)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          message: assertPublicText(seed.message),
+          content: btoa(unescape(encodeURIComponent(assertPublicText(seed.content)))),
+          branch: name,
+        }),
       });
     },
     async listPullFiles(number) {

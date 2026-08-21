@@ -41,17 +41,21 @@ function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; label
 }
 
 test("an auto error issue creates its head branch and opens a ready PR", async () => {
-  const created: string[] = [];
+  const created: Array<{ name: string; seed?: { path: string; message: string; content: string } }> = [];
   const p = ports();
   p.github.hasBranch = async () => false;
-  p.github.createBranch = async (name) => { created.push(name); };
+  p.github.createBranch = async (name, seed) => { created.push({ name, seed }); };
   const steps = await executeTriageWorkflow(env, {
     number: 4242,
     title: "bug: Invalid URL string.",
     body: "## Auto error report\n\nfingerprint: `deadbeefdeadbeef`\norigin: server\nmessage: Invalid URL string.",
     author: "owner",
   }, p);
-  assert.deepEqual(created, ["bot/issue-4242"], "factory must create the missing head branch");
+  assert.equal(created.length, 1, "factory must create the missing head branch");
+  assert.equal(created[0]!.name, "bot/issue-4242");
+  assert.ok(created[0]!.seed, "branch must carry a seed commit or GitHub rejects the empty PR with 422");
+  assert.match(created[0]!.seed!.path, /issue-4242/);
+  assert.ok(created[0]!.seed!.content.length > 0, "seed commit must have content");
   assert.ok(steps.some((s) => s.step === "branch"), "a branch step must be recorded");
   assert.ok(steps.some((s) => s.step === "pr"), "a ready PR must be opened with no human step");
   assert.ok(
