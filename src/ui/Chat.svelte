@@ -1534,7 +1534,7 @@
       }
       if (m.error) {
         dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Voice turn failed" } });
-        pushError(m.body || "Agent request failed");
+        pushError(m.body || "Agent request failed", { alreadyReported: true });
         activeRequestId = null;
         streamingMsgId = null;
         forgetActiveTurn();
@@ -1557,7 +1557,7 @@
       if (m.error) {
         dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Agent request failed" } });
         finalizeStreaming();
-        pushError(m.body || "Agent request failed");
+        pushError(m.body || "Agent request failed", { alreadyReported: true });
         responseRecoveryPending = false;
         activeRequestId = null;
         streamingMsgId = null;
@@ -1577,7 +1577,7 @@
       if (m.error) {
         dispatchTurn({ type: "frame", frame: { requestId: typeof m.id === "string" ? m.id : null, error: m.body || "Agent request failed" } });
         finalizeStreaming();
-        pushError(m.body || "Agent request failed");
+        pushError(m.body || "Agent request failed", { alreadyReported: true });
         responseRecoveryPending = false;
         activeRequestId = null;
         streamingMsgId = null;
