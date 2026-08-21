@@ -24,7 +24,7 @@ export interface GithubPort {
   listPullFiles?(number: number): Promise<string[]>;
   commitsBehindMain?(headSha: string): Promise<number>;
   hasBranch?(name: string): Promise<boolean>;
-  createBranch?(name: string): Promise<void>;
+  createBranch?(name: string, seed?: { path: string; message: string; content: string }): Promise<void>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
   closePr?(number: number): Promise<void>;
@@ -52,6 +52,25 @@ export type TriageStep =
   | { step: "dig"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
+
+export function formatBranchSeed(input: IssueInput, classification: Classification): string {
+  const issueNumber = input.number ?? 0;
+  return [
+    `# Work branch for issue #${issueNumber}`,
+    "",
+    `title: ${input.title}`,
+    `kind: ${classification.kind}`,
+    `severity: ${classification.severity}`,
+    "",
+    "The factory opened this branch so the pull request has a commit to carry.",
+    "Replace this file with the fix, then push to this branch.",
+    "",
+    `proof: ${PROOF_COMMAND}`,
+    "",
+    "A human merges. The Worker never merges and never approves.",
+    "",
+  ].join("\n");
+}
 
 export function formatLoopBoard(input: {
   issueNumber: number;
@@ -126,7 +145,11 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
     let exists = ports.github.hasBranch ? await ports.github.hasBranch(head) : true;
     if (!exists && ports.github.createBranch) {
       try {
-        await ports.github.createBranch(head);
+        await ports.github.createBranch(head, {
+          path: `.factory/issue-${issueNumber}.md`,
+          message: `chore: open work branch for issue #${issueNumber}`,
+          content: formatBranchSeed(input, classification),
+        });
         exists = true;
         steps.push({ step: "branch", head });
       } catch (err) {
