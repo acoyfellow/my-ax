@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   errorFingerprint,
   formatAutoIssueBody,
@@ -20,6 +21,18 @@ test("client and server fingerprints stay apart", async () => {
   const server = await errorFingerprint({ origin: "server", message: "Invalid URL string." });
   const client = await errorFingerprint({ origin: "client", message: "Invalid URL string." });
   assert.notEqual(server, client);
+});
+
+test("a server-surfaced toast is not re-reported by the client", () => {
+  const store = readFileSync(new URL("./ui/store.svelte.ts", import.meta.url), "utf8");
+  const chat = readFileSync(new URL("./ui/Chat.svelte", import.meta.url), "utf8");
+  assert.match(store, /alreadyReported\b/);
+  assert.match(store, /if \(options\?\.alreadyReported\) return;/);
+  const agentFailures = chat.match(/pushError\(m\.body \|\| "Agent request failed"[^)]*\)/g) ?? [];
+  assert.ok(agentFailures.length >= 3, "expected the server-surfaced pushError call sites");
+  for (const call of agentFailures) {
+    assert.match(call, /alreadyReported: true/, `server-surfaced error must not double-file: ${call}`);
+  }
 });
 
 test("stack site ignores node internals", () => {
@@ -56,7 +69,7 @@ test("issue body names the fingerprint and forbids auto draft", () => {
   assert.doesNotMatch(body, /session:/);
   assert.doesNotMatch(body, /version:/);
   assert.doesNotMatch(body, /href:/);
-  assert.doesNotMatch(body, /opted-in draft PR/);
-  assert.match(body, /does not opt in a ready PR/);
+  assert.doesNotMatch(body, /does not opt in a ready PR/);
+  assert.match(body, /opts in a ready PR/);
   assert.equal(normalizeErrorMessage("  invalid url string  "), "Invalid URL string.");
 });

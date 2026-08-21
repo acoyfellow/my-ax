@@ -39,6 +39,26 @@ function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; label
   };
 }
 
+test("an auto error issue creates its head branch and opens a ready PR", async () => {
+  const created: string[] = [];
+  const p = ports();
+  p.github.hasBranch = async () => false;
+  p.github.createBranch = async (name) => { created.push(name); };
+  const steps = await executeTriageWorkflow(env, {
+    number: 4242,
+    title: "bug: Invalid URL string.",
+    body: "## Auto error report\n\nfingerprint: `deadbeefdeadbeef`\norigin: server\nmessage: Invalid URL string.",
+    author: "owner",
+  }, p);
+  assert.deepEqual(created, ["bot/issue-4242"], "factory must create the missing head branch");
+  assert.ok(steps.some((s) => s.step === "branch"), "a branch step must be recorded");
+  assert.ok(steps.some((s) => s.step === "pr"), "a ready PR must be opened with no human step");
+  assert.ok(
+    !steps.some((s) => s.step === "stop" && /missing bot\/issue-4242/.test(s.reason)),
+    "the blocked-missing-branch dead end must be gone",
+  );
+});
+
 test("harness issue→label", async () => {
   const p = ports();
   const steps = await executeTriageWorkflow(env, { title: "screenshot fails", body: "bug: could not create image", author: "owner" }, p);

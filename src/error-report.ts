@@ -90,7 +90,7 @@ export function formatAutoIssueBody(input: ErrorReportInput, fingerprint: string
     ...(site !== "unknown" ? [`site: ${site}`] : []),
     "",
     "This issue was opened by My AX from a live error. One fingerprint is one issue.",
-    "This report does not opt in a ready PR. A human adds that after a head branch exists.",
+    "This report opts in a ready PR. The factory opens the head branch and the pull request.",
   ].join("\n");
 }
 

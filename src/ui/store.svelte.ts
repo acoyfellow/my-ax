@@ -178,13 +178,14 @@ export function pushSystem(text: string) {
     { id: `toast-${++toastCounter}`, kind: "system", text },
   ];
 }
-export function pushError(text: string) {
+export function pushError(text: string, options?: { alreadyReported?: boolean }) {
   const next = clarifyOwnerError(text);
   if (toastBus.pending.some((toast) => toast.kind === "error" && toast.text === next)) return;
   toastBus.pending = [
     ...toastBus.pending,
     { id: `toast-${++toastCounter}`, kind: "error", text: next },
   ];
+  if (options?.alreadyReported) return;
   void reportClientError(text);
 }
 
