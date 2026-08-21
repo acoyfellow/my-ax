@@ -10,6 +10,7 @@
   // .mov in some browsers) flips to a direct-open link instead of a silent
   // broken/blank player. Keyed by src so multiple widgets don't clobber.
   let mediaError = $state<Record<string, boolean>>({});
+  let replayFailed = $state(false);
   let reusableToolAction = $state<"idle" | "approving" | "enabled" | "error">("idle");
   let reusableToolMessage = $state("");
 
@@ -61,6 +62,17 @@
     return () => {
       document.body.style.overflow = prev;
     };
+  });
+
+  $effect(() => {
+    const href = widget.kind === "browser-run" ? widget.recordingHref : undefined;
+    if (!href) { replayFailed = false; return; }
+    replayFailed = false;
+    let cancelled = false;
+    fetch(href, { credentials: "include", headers: { accept: "application/json" } })
+      .then((response) => { if (!cancelled && !response.ok) replayFailed = true; })
+      .catch(() => { if (!cancelled) replayFailed = true; });
+    return () => { cancelled = true; };
   });
 </script>
 
@@ -144,7 +156,7 @@
       data-tool-widget="browser-run-screenshot"
     />
   {/if}
-  {#if widget.replaySrc}
+  {#if widget.replaySrc && !replayFailed}
     <iframe
       class="browser-replay-frame"
       src={widget.replaySrc}
@@ -152,6 +164,8 @@
       loading="lazy"
       referrerpolicy="no-referrer"
     ></iframe>
+  {:else if widget.replaySrc && replayFailed}
+    <span class="browser-replay-unavailable" data-tool-widget="browser-run-replay-unavailable">Replay unavailable — showing captured screenshot.</span>
   {/if}
 {:else if widget.kind === "inline-raster-image"}
   {#if mediaError[widget.src]}
