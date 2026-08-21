@@ -24,6 +24,7 @@ export interface GithubPort {
   listPullFiles?(number: number): Promise<string[]>;
   commitsBehindMain?(headSha: string): Promise<number>;
   hasBranch?(name: string): Promise<boolean>;
+  createBranch?(name: string): Promise<void>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
   closePr?(number: number): Promise<void>;
@@ -47,6 +48,7 @@ export type TriageStep =
   | { step: "label"; labels: string[] }
   | { step: "comment" }
   | { step: "pr"; number: number }
+  | { step: "branch"; head: string }
   | { step: "dig"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
@@ -121,7 +123,16 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
     }
   } else if (shouldOpenDraft(classification) && issueNumber) {
     const head = `bot/issue-${issueNumber}`;
-    const exists = ports.github.hasBranch ? await ports.github.hasBranch(head) : true;
+    let exists = ports.github.hasBranch ? await ports.github.hasBranch(head) : true;
+    if (!exists && ports.github.createBranch) {
+      try {
+        await ports.github.createBranch(head);
+        exists = true;
+        steps.push({ step: "branch", head });
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+      }
+    }
     if (!exists) {
       stage = "blocked-missing-branch";
       steps.push({ step: "stop", reason: `missing ${head}` });

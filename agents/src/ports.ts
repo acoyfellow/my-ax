@@ -48,6 +48,16 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         return false;
       }
     },
+    async createBranch(name) {
+      assertNoMergeAction("createBranch");
+      const main = await gh("/git/ref/heads/main") as { object?: { sha?: string } };
+      const sha = main.object?.sha;
+      if (!sha) throw new Error("main ref has no sha");
+      await gh("/git/refs", {
+        method: "POST",
+        body: JSON.stringify({ ref: `refs/heads/${name}`, sha }),
+      });
+    },
     async listPullFiles(number) {
       assertNoMergeAction("listPullFiles");
       const json = await gh(`/pulls/${number}/files?per_page=100`);
