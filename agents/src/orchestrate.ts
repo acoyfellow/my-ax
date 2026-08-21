@@ -75,7 +75,7 @@ export function formatLoopBoard(input: {
     lines.push(`blocked: missing ${head}. Sweep keeps the issue open until that head exists.`);
   }
   if (input.stage === "labeled" && !input.classification.draft) {
-    lines.push("next: Worker opens a ready PR after the head exists. Worker never merges.");
+    lines.push(`next: write triage:draft on a new comment after ${head} exists. Worker never merges.`);
   }
   if (input.error) lines.push(`error: ${input.error}`);
   return lines.join("\n");

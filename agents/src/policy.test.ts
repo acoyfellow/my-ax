@@ -50,8 +50,8 @@ test("loop board names stage and next action", () => {
   const text = formatLoopBoard({ issueNumber: 52, classification, modelId: "grok-4.6", stage: "labeled" });
   assert.match(text, /stage: labeled/);
   assert.match(text, /issues\/52/);
-  assert.match(text, /ready PR/);
-  assert.doesNotMatch(text, /triage:draft/);
+  assert.match(text, /write triage:draft/);
+  assert.match(text, /bot\/issue-52/);
 });
 
 test("ready PR body names the issue, proof command, and never-merge rule", () => {
