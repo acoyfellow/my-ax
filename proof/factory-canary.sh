@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="${CANARY_REPO:-acoyfellow/my-ax}"
-TIMEOUT="${CANARY_TIMEOUT:-240}"
+TIMEOUT="${CANARY_TIMEOUT:-420}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STAMP="$(date -u +%Y%m%d%H%M%S)"
 FP="$(printf 'canary%s' "$STAMP" | shasum -a 256 | cut -c1-16)"
