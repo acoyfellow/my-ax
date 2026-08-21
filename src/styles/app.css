@@ -343,6 +343,18 @@
   background: #0b0d12;
 }
 
+.browser-replay-unavailable {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface-2, #111a24);
+  color: var(--color-fg-mut);
+  font-size: 0.8rem;
+}
+
 /* Audio Messages: inline TTS clip player, rendered like an artifact card. */
 .audio-message {
   display: flex;

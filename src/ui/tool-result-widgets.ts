@@ -12,6 +12,12 @@ const INLINE_IMAGE_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,\s*([A-Za-z
 // instead of falling back to a massive raw base64 transcript.
 const MAX_INLINE_IMAGE_URL_CHARS = 32_000_000;
 const INTERNAL_BROWSER_REPLAY_RE = /^\/browser\/replay\/[A-Za-z0-9._~%+-]+$/;
+
+export function browserReplayRecordingHref(replaySrc: string | undefined): string | undefined {
+  if (!replaySrc) return undefined;
+  const match = /^\/browser\/replay\/([A-Za-z0-9._~%+-]+)/.exec(replaySrc);
+  return match ? `/api/browser/recordings/${match[1]}` : undefined;
+}
 // Match the RFC-4122 structure (group boundaries + version 1-5 + variant 8-b),
 // same as the Svelte/audio artifact routes below — a bare {36} char class also
 // accepted 36 hyphens or a wrong-boundary string.
@@ -45,6 +51,7 @@ export type ToolResultWidget =
       text?: string;
       screenshotSrc?: string;
       replaySrc?: string;
+      recordingHref?: string;
     }
   | { kind: "inline-raster-image"; src: string; alt: string }
   | { kind: "inline-video"; src: string; label: string }
@@ -217,6 +224,7 @@ function browserRunWidget(value: unknown): ToolResultWidget | null {
     text: boundedText(result.textPreview ?? result.error),
     screenshotSrc,
     replaySrc,
+    recordingHref: browserReplayRecordingHref(replaySrc),
   };
 }
 

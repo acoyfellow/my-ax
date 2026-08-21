@@ -66,11 +66,17 @@ export function createMyAxBrowserTools(env: Env, identity?: () => AccessIdentity
           // assets. Preserve the originally rendered viewport as an owned R2
           // raster artifact so the tool card always has durable visual proof.
           let screenshotSrc: string | undefined;
+          let replayUrl: string | undefined;
           const owner = identity?.();
           const ownerSession = ownerSessionId?.();
           if (owner && ownerSession) {
-            await env.DB.prepare("INSERT OR REPLACE INTO browser_recordings(id, owner_email, session_id, created_at) VALUES (?, ?, ?, datetime('now'))")
-              .bind(sessionId, owner.email.toLowerCase(), ownerSession).run();
+            try {
+              await env.DB.prepare("INSERT OR REPLACE INTO browser_recordings(id, owner_email, session_id, created_at) VALUES (?, ?, ?, datetime('now'))")
+                .bind(sessionId, owner.email.toLowerCase(), ownerSession).run();
+              replayUrl = `/browser/replay/${encodeURIComponent(sessionId)}`;
+            } catch {
+              replayUrl = undefined;
+            }
           }
           if (owner) {
             try {
@@ -106,7 +112,7 @@ export function createMyAxBrowserTools(env: Env, identity?: () => AccessIdentity
             recordingFormat: "rrweb",
             note: "Recorded by Cloudflare Browser Run with harmless inspection pointer movement and scroll so inline playback has visible motion and a scrub-able timeline.",
             replayMotion: "inspection-scroll",
-            replayUrl: `/browser/replay/${encodeURIComponent(sessionId)}`,
+            replayUrl,
             screenshotSrc,
           };
         } catch (error) {
