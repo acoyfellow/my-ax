@@ -1,0 +1,23 @@
+package.json
+  s_952b167abec97a::t_dc908d27c0bf55 44,89
+src/agentcast-tools.test.ts
+  s_952b167abec97a::t_b2fcf0a68e89e5 1-99
+src/types.ts
+  s_952b167abec97a::t_00e4064320f46c 91-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a427a839370280e7e7ce7b253066f2ab054964d6",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
