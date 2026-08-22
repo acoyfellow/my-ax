@@ -89,6 +89,7 @@ declare global {
       TERRARIUM_CONTROL_TOKEN?: string;
 
       AGENTCAST_CONTROL_TOKEN?: string;
+      AGENTCAST_ISSUER_KEY?: string;
       AGENTCAST_URL?: string;
 
       /** Optional model gateway for non-Workers-AI catalog rows. */
