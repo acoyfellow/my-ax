@@ -50,8 +50,13 @@ test("loop board names stage and next action", () => {
   const text = formatLoopBoard({ issueNumber: 52, classification, modelId: "grok-4.6", stage: "labeled" });
   assert.match(text, /stage: labeled/);
   assert.match(text, /issues\/52/);
-  assert.match(text, /write triage:draft/);
+  assert.match(text, /a human opts this in/);
   assert.match(text, /bot\/issue-52/);
+  assert.doesNotMatch(
+    text,
+    /\btriage:draft\b/,
+    "the board must not contain the literal opt-in token it would match on re-read",
+  );
 });
 
 test("ready PR body names the issue, proof command, and never-merge rule", () => {

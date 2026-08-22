@@ -13,6 +13,7 @@ export interface SweepIssue {
   state: "open" | "closed";
   comments: string[];
   hasHead?: boolean;
+  hasOpenPr?: boolean;
 }
 
 export type SweepAction =
@@ -58,12 +59,11 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   const closing = new Set(actions.filter((row) => row.action === "close-duplicate").map((row) => row.number));
   for (const issue of open) {
     if (closing.has(issue.number)) continue;
-    const boarded = hasLoopBoard(issue.comments);
-    if (!boarded || issue.hasHead) {
-      if (queues >= SWEEP_MAX_QUEUES) continue;
-      actions.push({ action: "queue", number: issue.number });
-      queues += 1;
-    }
+    if (issue.hasOpenPr) continue;
+    if (hasLoopBoard(issue.comments)) continue;
+    if (queues >= SWEEP_MAX_QUEUES) continue;
+    actions.push({ action: "queue", number: issue.number });
+    queues += 1;
   }
 
   return actions;
