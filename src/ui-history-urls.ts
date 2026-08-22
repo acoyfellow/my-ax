@@ -9,9 +9,19 @@ export function rewriteFileUrl(raw: string, origin: string): string | null {
   }
 }
 
+export function absoluteFileUrl(raw: string): string | null {
+  if (raw.startsWith("data:")) return raw;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function healUiHistoryFileUrls(messages: Array<{ parts?: Array<Record<string, unknown>> }>, origin: string): number {
   const base = origin.replace(/\/+$/, "");
-  if (!base) return 0;
   let rewritten = 0;
   for (const message of messages) {
     if (!Array.isArray(message.parts)) continue;
@@ -29,7 +39,7 @@ export function healUiHistoryFileUrls(messages: Array<{ parts?: Array<Record<str
         }
         return [part];
       }
-      const url = rewriteFileUrl(part.url, base);
+      const url = base ? rewriteFileUrl(part.url, base) : absoluteFileUrl(part.url);
       if (!url) {
         changed = true;
         return [];
