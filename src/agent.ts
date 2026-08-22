@@ -1109,7 +1109,7 @@ export class MyAgent extends Think<Env> {
 
   private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
     const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
-    if (origin) healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin);
+    healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin ?? "");
     await this.ensureNativeMcp();
     // Persist the inbound user message before the model call so stalled turns
     // remain available when the client resyncs. logAcceptedUsers is idempotent.
