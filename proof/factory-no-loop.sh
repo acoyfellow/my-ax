@@ -69,6 +69,11 @@ log "boards=$TOTAL pr-opened=$PR_OPENED labeled-after=$LABELED_AFTER"
 [ "$TOTAL" -le 3 ] || fail "expected at most 3 boards, found $TOTAL"
 log "PROVEN: no stage regression and no comment loop"
 
+RECEIPTS="$(gh pr view "$PR" --repo "$REPO" --json comments --jq '[.comments[]|select(.body|test("## review receipt"))]|length')"
+log "review receipts on PR #$PR: $RECEIPTS"
+[ "$RECEIPTS" -le 1 ] || fail "review retry storm: $RECEIPTS receipts on PR #$PR (expected at most 1)"
+log "PROVEN: the review posts at most one receipt"
+
 cleanup
 trap - EXIT
 PR=""; ISSUE=""; BRANCH=""
