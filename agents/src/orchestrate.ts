@@ -24,6 +24,7 @@ export interface GithubPort {
   listPullFiles?(number: number): Promise<string[]>;
   commitsBehindMain?(headSha: string): Promise<number>;
   hasBranch?(name: string): Promise<boolean>;
+  hasOpenPrForHead?(head: string): Promise<boolean>;
   createBranch?(name: string, seed?: { path: string; message: string; content: string }): Promise<void>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
@@ -96,7 +97,7 @@ export function formatLoopBoard(input: {
     lines.push(`blocked: missing ${head}. Sweep keeps the issue open until that head exists.`);
   }
   if (input.stage === "labeled" && !input.classification.draft) {
-    lines.push(`next: write triage:draft on a new comment after ${head} exists. Worker never merges.`);
+    lines.push("next: a human opts this in. Add the draft label on a new comment. Worker never merges.");
   }
   if (input.error) lines.push(`error: ${input.error}`);
   return lines.join("\n");

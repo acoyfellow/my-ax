@@ -120,8 +120,10 @@ export async function runIssueSweep(env: WorkerEnv): Promise<{ closed: number; q
   const issues: SweepIssue[] = [];
   for (const issue of open) {
     const comments = await github.listComments(issue.number);
-    const hasHead = github.hasBranch ? await github.hasBranch(`bot/issue-${issue.number}`) : false;
-    issues.push({ ...issue, state: "open", comments, hasHead });
+    const head = `bot/issue-${issue.number}`;
+    const hasHead = github.hasBranch ? await github.hasBranch(head) : false;
+    const hasOpenPr = github.hasOpenPrForHead ? await github.hasOpenPrForHead(head) : false;
+    issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr });
   }
   const actions = planSweep(issues);
   let closed = 0;

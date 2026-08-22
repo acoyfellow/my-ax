@@ -67,6 +67,12 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         }),
       });
     },
+    async hasOpenPrForHead(head) {
+      assertNoMergeAction("hasOpenPrForHead");
+      const owner = repo.split("/")[0];
+      const json = await gh(`/pulls?state=open&head=${encodeURIComponent(`${owner}:${head}`)}&per_page=1`);
+      return Array.isArray(json) && json.length > 0;
+    },
     async listPullFiles(number) {
       assertNoMergeAction("listPullFiles");
       const json = await gh(`/pulls/${number}/files?per_page=100`);
