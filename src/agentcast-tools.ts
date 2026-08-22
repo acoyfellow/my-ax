@@ -4,10 +4,20 @@ type Ctx = Parameters<ToolDef["execute"]>[1];
 
 const PRODUCTION_ORIGIN = "https://api.agentcast.dev";
 const READY = new Set(["ready", "active"]);
+const PROFILE_ID = "my-ax";
+const CREATE_PERMISSIONS = ["sessions:create"] as const;
+const SESSION_PERMISSIONS = [
+  "session:observe",
+  "session:input",
+  "session:control",
+  "cdp:full",
+  "network:record",
+  "network:receipt",
+] as const;
 
 function configuration(ctx: Ctx) {
-  const token = ctx.env.AGENTCAST_CONTROL_TOKEN;
-  if (!token) throw new Error("AgentCast is not configured (AGENTCAST_CONTROL_TOKEN required)");
+  const issuerKey = ctx.env.AGENTCAST_ISSUER_KEY || ctx.env.AGENTCAST_CONTROL_TOKEN;
+  if (!issuerKey) throw new Error("AgentCast is not configured (AGENTCAST_ISSUER_KEY required)");
   const origin = (ctx.env.AGENTCAST_URL || PRODUCTION_ORIGIN).replace(/\/+$/, "");
   let parsed: URL;
   try {
@@ -17,11 +27,35 @@ function configuration(ctx: Ctx) {
   }
   if (parsed.protocol !== "https:") throw new Error("AGENTCAST_URL must be https");
   if (parsed.hostname.endsWith(".workers.dev")) throw new Error("AGENTCAST_URL must not be workers.dev");
-  return { origin: parsed.origin, token };
+  return { origin: parsed.origin, issuerKey };
 }
 
-async function agentcast(ctx: Ctx, method: string, path: string, body?: unknown): Promise<{ code: number; json: Record<string, unknown> }> {
-  const { origin, token } = configuration(ctx);
+async function issueCapability(ctx: Ctx, sessionId: string, permissions: readonly string[]): Promise<string> {
+  const { origin, issuerKey } = configuration(ctx);
+  const res = await fetch(`${origin}/internal/capabilities`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${issuerKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      tenantId: "owner",
+      sessionId,
+      profileId: PROFILE_ID,
+      permissions,
+      audience: origin,
+      ttlMs: 5 * 60 * 1000,
+    }),
+  });
+  const text = await res.text();
+  let json: Record<string, unknown>;
+  try { json = text ? JSON.parse(text) as Record<string, unknown> : {}; } catch { json = { raw: text }; }
+  if (!res.ok || typeof json.token !== "string") {
+    throw new Error(String(json.error ?? json.raw ?? `AgentCast capability issue failed (HTTP ${res.status})`));
+  }
+  return json.token;
+}
+
+async function agentcast(ctx: Ctx, method: string, path: string, sessionId: string, permissions: readonly string[], body?: unknown): Promise<{ code: number; json: Record<string, unknown> }> {
+  const { origin } = configuration(ctx);
+  const token = await issueCapability(ctx, sessionId, permissions);
   const headers: Record<string, string> = { authorization: `Bearer ${token}` };
   if (body !== undefined) headers["content-type"] = "application/json";
   const res = await fetch(`${origin}${path}`, {
@@ -39,8 +73,8 @@ function fail(path: string, result: { code: number; json: Record<string, unknown
   throw new Error(String(result.json.error ?? result.json.raw ?? `AgentCast ${path} failed (HTTP ${result.code})`));
 }
 
-async function requireOk(ctx: Ctx, method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
-  const result = await agentcast(ctx, method, path, body);
+async function requireOk(ctx: Ctx, method: string, path: string, sessionId: string, permissions: readonly string[], body?: unknown): Promise<Record<string, unknown>> {
+  const result = await agentcast(ctx, method, path, sessionId, permissions, body);
   if (result.code < 200 || result.code >= 300) fail(path, result);
   return result.json;
 }
@@ -48,7 +82,7 @@ async function requireOk(ctx: Ctx, method: string, path: string, body?: unknown)
 async function waitReady(ctx: Ctx, sessionId: string): Promise<Record<string, unknown>> {
   let last: Record<string, unknown> = {};
   for (let attempt = 0; attempt < 30; attempt++) {
-    last = await requireOk(ctx, "GET", `/api/session/${sessionId}`);
+    last = await requireOk(ctx, "GET", `/api/session/${sessionId}`, sessionId, SESSION_PERMISSIONS);
     const status = String(last.status ?? "");
     if (READY.has(status)) return last;
     if (status === "error") throw new Error(String(last.error ?? "Browser session failed"));
@@ -68,19 +102,19 @@ export const AGENTCAST_WORK_METHODS = [
 export function createAgentCastWorkProvider(ctx: Ctx) {
   return {
     catalog: AGENTCAST_WORK_METHODS,
-    available: Boolean(ctx.env.AGENTCAST_CONTROL_TOKEN),
+    available: Boolean(ctx.env.AGENTCAST_ISSUER_KEY || ctx.env.AGENTCAST_CONTROL_TOKEN),
     fns: {
       open: async (input: any) => {
         const instruction = String(input?.instruction ?? "").trim();
         if (!instruction) throw new Error("agentcast.open requires a non-empty {instruction}");
-        const created = await requireOk(ctx, "POST", "/api/session", { name: typeof input?.name === "string" ? input.name : "my-ax" });
+        const created = await requireOk(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name: typeof input?.name === "string" ? input.name : "my-ax" });
         const data = (created.data ?? created) as Record<string, unknown>;
         const sessionId = String(data.sessionId ?? "");
         if (!sessionId) throw new Error("Create session did not return a session id");
         const status = await waitReady(ctx, sessionId);
-        await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`);
-        const instructed = await requireOk(ctx, "POST", `/api/session/${sessionId}/instruction`, { instruction });
-        const ticket = await requireOk(ctx, "POST", `/api/session/${sessionId}/view-ticket`);
+        await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`, sessionId, SESSION_PERMISSIONS);
+        const instructed = await requireOk(ctx, "POST", `/api/session/${sessionId}/instruction`, sessionId, SESSION_PERMISSIONS, { instruction });
+        const ticket = await requireOk(ctx, "POST", `/api/session/${sessionId}/view-ticket`, sessionId, SESSION_PERMISSIONS);
         const ticketUrl = String(ticket.ticketUrl ?? "");
         if (!ticketUrl.startsWith("https://") || ticketUrl.includes(".workers.dev") || !ticketUrl.includes("/ticket/")) {
           throw new Error("Viewer ticket URL is not a production ticket");
@@ -98,28 +132,28 @@ export function createAgentCastWorkProvider(ctx: Ctx) {
         const sessionId = String(input?.sessionId ?? "").trim();
         const instruction = String(input?.instruction ?? "").trim();
         if (!sessionId || !instruction) throw new Error("agentcast.instruct requires {sessionId, instruction}");
-        return requireOk(ctx, "POST", `/api/session/${sessionId}/instruction`, { instruction });
+        return requireOk(ctx, "POST", `/api/session/${sessionId}/instruction`, sessionId, SESSION_PERMISSIONS, { instruction });
       },
       status: async (input: any) => {
         const sessionId = String(input?.sessionId ?? "").trim();
         if (!sessionId) throw new Error("agentcast.status requires {sessionId}");
-        return requireOk(ctx, "GET", `/api/session/${sessionId}`);
+        return requireOk(ctx, "GET", `/api/session/${sessionId}`, sessionId, SESSION_PERMISSIONS);
       },
       record: async (input: any) => {
         const sessionId = String(input?.sessionId ?? "").trim();
         if (!sessionId) throw new Error("agentcast.record requires {sessionId}");
-        await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`);
-        await requireOk(ctx, "POST", `/api/session/${sessionId}/network-har/start`, {
+        await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`, sessionId, SESSION_PERMISSIONS);
+        await requireOk(ctx, "POST", `/api/session/${sessionId}/network-har/start`, sessionId, SESSION_PERMISSIONS, {
           maxDurationMs: Number(input?.maxDurationMs ?? 8_000),
           maxEntries: Number(input?.maxEntries ?? 20),
         });
-        const stopped = await requireOk(ctx, "POST", `/api/session/${sessionId}/network-har/stop`);
+        const stopped = await requireOk(ctx, "POST", `/api/session/${sessionId}/network-har/stop`, sessionId, SESSION_PERMISSIONS);
         return { ok: true, sessionId, receipt: stopped.receipt ?? null };
       },
       stop: async (input: any) => {
         const sessionId = String(input?.sessionId ?? "").trim();
         if (!sessionId) throw new Error("agentcast.stop requires {sessionId}");
-        await requireOk(ctx, "POST", `/api/session/${sessionId}/stop`);
+        await requireOk(ctx, "POST", `/api/session/${sessionId}/stop`, sessionId, SESSION_PERMISSIONS);
         return { ok: true, sessionId, stopped: true };
       },
     },
