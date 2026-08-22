@@ -85,9 +85,13 @@ export async function runReview(
     if (!ports.github.closePr) throw new Error("closePr missing");
     await ports.github.closePr(input.number ?? 0);
   }
-  if (receipt.decision === "request-changes") {
-    if (!ports.github.requestChanges) throw new Error("requestChanges missing");
-    await ports.github.requestChanges(input.number ?? 0, formatReviewComment(receipt));
+  if (receipt.decision === "request-changes" && ports.github.requestChanges) {
+    await ports.github.requestChanges(input.number ?? 0, formatReviewComment(receipt)).catch((error) => {
+      console.warn("review_request_changes_skipped", {
+        number: input.number,
+        err: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
   return receipt;
 }

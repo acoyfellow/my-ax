@@ -52,6 +52,21 @@ test("auto-error flood PRs are closed", async () => {
   assert.ok(port.actions.some((a) => a.startsWith("comment:")));
 });
 
+test("a rejected self-review does not fail the review or duplicate the comment", async () => {
+  const port = github();
+  port.requestChanges = async () => {
+    throw new Error("github /pulls/61/reviews 422");
+  };
+  const receipt = await runReview(pull({
+    number: 61,
+    title: "feat: file one GitHub issue per live error",
+    body: "proof",
+  }), { github: port });
+  assert.equal(receipt.decision, "request-changes", "the verdict must still stand");
+  const comments = port.actions.filter((a) => a.startsWith("comment:"));
+  assert.equal(comments.length, 1, "exactly one review comment, never a retry storm");
+});
+
 test("failed proof requests changes and never approves", async () => {
   const port = github();
   const receipt = await runReview(pull({
