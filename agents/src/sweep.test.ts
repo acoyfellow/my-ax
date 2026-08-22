@@ -24,11 +24,28 @@ test("issues without a loop board are queued once", () => {
   assert.ok(!actions.some((row) => row.action === "queue" && row.number === 75));
 });
 
-test("a labeled issue with a head is queued again", () => {
+test("a boarded issue with a head is not queued again", () => {
   const actions = planSweep([
     { number: 67, title: "bug: image", body: "fingerprint: `e8a37db7f3311f4b`", author: "o", state: "open", comments: ["## loop board"], hasHead: true },
   ]);
-  assert.ok(actions.some((row) => row.action === "queue" && row.number === 67));
+  assert.ok(
+    !actions.some((row) => row.action === "queue" && row.number === 67),
+    "a boarded issue whose head branch exists must not be re-queued every sweep",
+  );
+});
+
+test("an issue with an open PR is never re-queued", () => {
+  const actions = planSweep([
+    { number: 109, title: "bug: heal", body: "repro", author: "o", state: "open", comments: ["## loop board"], hasHead: true, hasOpenPr: true },
+  ]);
+  assert.deepEqual(actions, [], "an issue that already has an open PR is finished work");
+});
+
+test("an unboarded issue is still queued", () => {
+  const actions = planSweep([
+    { number: 70, title: "bug: new", body: "repro", author: "o", state: "open", comments: [], hasHead: false },
+  ]);
+  assert.ok(actions.some((row) => row.action === "queue" && row.number === 70));
 });
 
 test("sweep never parks", () => {
