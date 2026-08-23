@@ -1,1 +1,2 @@
 proof/factory-no-loop.sh
+proof/error-queue-drained.sh
