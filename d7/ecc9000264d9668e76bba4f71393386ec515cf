@@ -1,0 +1,19 @@
+proof/agentcast-live.sh
+  s_9042327d8d4b96::t_ca54f4dd1e6515 4-9,52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d7ecc9000264d9668e76bba4f71393386ec515cf",
+  "prompts": {},
+  "sessions": {
+    "s_9042327d8d4b96": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a02f27-143a-72f7-b15e-f5a3a2ae0479",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
