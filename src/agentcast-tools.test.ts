@@ -129,3 +129,33 @@ test("a slow browser start is reported as a timeout, not a mystery", async () =>
   const provider = createAgentCastWorkProvider(ctxWith(fetchImpl, { AGENTCAST_READY_ATTEMPTS: 3, AGENTCAST_READY_INTERVAL_MS: 0 }));
   await assert.rejects(() => provider.fns.open({ instruction: "x" }), /was not ready after \d+s/);
 });
+
+test("open takes over a stale profile instead of failing with 409", async () => {
+  const bodies: string[] = [];
+  let created = 0;
+  const fetchImpl = (async (url: string, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/internal/capabilities") return jsonResponse(200, { token: "cap_live" });
+    if (path === "/api/session" && init?.method === "POST") {
+      const body = String(init.body ?? "");
+      bodies.push(body);
+      if (!body.includes("takeover")) return jsonResponse(409, { success: false, error: "Profile is already active" });
+      created += 1;
+      return jsonResponse(200, { success: true, data: { sessionId } });
+    }
+    if (path === `/api/session/${sessionId}`) return jsonResponse(200, { status: "ready" });
+    if (path.endsWith("/wake")) return jsonResponse(200, { ok: true });
+    if (path.endsWith("/instruction")) return jsonResponse(200, { ok: true });
+    if (path.endsWith("/view-ticket")) return jsonResponse(200, { ticketUrl: "https://api.agentcast.dev/ticket/t" });
+    if (path.endsWith("/stop")) return jsonResponse(200, { ok: true });
+    return jsonResponse(404, { error: `unexpected ${path}` });
+  }) as any;
+
+  const provider = createAgentCastWorkProvider(ctxWith(fetchImpl));
+  const res = await provider.fns.open({ instruction: "goto https://example.com" });
+  assert.equal(res.ok, true);
+  assert.equal(created, 1, "the retry must create exactly one session");
+  assert.equal(bodies.length, 2, "the first attempt is plain, the second takes over");
+  assert.ok(!bodies[0].includes("takeover"), "the first attempt must not force a takeover");
+  assert.ok(bodies[1].includes("takeover"), "the retry must ask for a takeover");
+});
