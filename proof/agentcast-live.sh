@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ENV_FILE="${AGENTCAST_ENV_FILE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/my-ax-private/employee.env}"
+if [ -z "${AGENTCAST_ISSUER_KEY:-}" ] && [ -r "$ENV_FILE" ]; then
+  AGENTCAST_ISSUER_KEY="$(sed -n 's/^AGENTCAST_ISSUER_KEY=//p' "$ENV_FILE" | tail -1)"
+  AGENTCAST_URL="${AGENTCAST_URL:-$(sed -n 's/^AGENTCAST_URL=//p' "$ENV_FILE" | tail -1)}"
+fi
+
 ORIGIN="${AGENTCAST_URL:-https://api.agentcast.dev}"
 KEY="${AGENTCAST_ISSUER_KEY:-}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,7 +49,7 @@ call() {
   fi
 }
 
-[ -n "$KEY" ] || fail "AGENTCAST_ISSUER_KEY is required; this gate calls the live service"
+[ -n "$KEY" ] || fail "AGENTCAST_ISSUER_KEY is required; export it or put it in $ENV_FILE"
 command -v jq >/dev/null || fail "jq is required"
 
 log "opening a live session on $ORIGIN"
