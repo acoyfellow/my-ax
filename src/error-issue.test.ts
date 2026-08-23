@@ -17,8 +17,8 @@ function makeEnv(opts: { token?: string; existing?: { fingerprint: string; numbe
         bind(...args: unknown[]) { bound = args; return stmt; },
         async first<T = unknown>() {
           if (/FROM error_issue_fingerprints/.test(q)) {
-            const [owner, fingerprint, cutoff] = bound as [string, string, string];
-            const hit = rows.find((row) => row.fingerprint === fingerprint && row.lastSeen >= cutoff);
+            const [owner, fingerprint, cutoff] = bound as [string, string, string | undefined];
+            const hit = rows.find((row) => row.fingerprint === fingerprint && (cutoff === undefined || row.lastSeen >= cutoff));
             void owner;
             return (hit ? { issue_number: hit.number, issue_url: hit.url } : null) as T;
           }
@@ -66,6 +66,46 @@ test("missing token skips without throwing", async () => {
     message: "Invalid URL string.",
   });
   assert.deepEqual(result, { skipped: "not-configured" });
+});
+
+test("a concurrent report for one fingerprint files exactly one issue", async () => {
+  const { env } = makeEnv({ token: "t" });
+  let created = 0;
+  let firstIsCreating: (() => void) | undefined;
+  const firstReachedGithub = new Promise<void>((resolve) => { firstIsCreating = resolve; });
+  let releaseFirst: (() => void) | undefined;
+  const firstMayFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+  const post: typeof fetch = (async (url: string, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      created += 1;
+      const number = 200 + created;
+      if (created === 1) {
+        firstIsCreating?.();
+        await firstMayFinish;
+      }
+      return new Response(JSON.stringify({ number, html_url: `https://github.com/acoyfellow/my-ax/issues/${number}` }), { status: 201 });
+    }
+    if (/\/issues\/0$/.test(String(url))) return new Response("{}", { status: 404 });
+    return new Response(JSON.stringify({ state: "open" }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const input = {
+    origin: "client" as const,
+    message: "Invalid URL string.",
+    stack: "Error: Invalid URL string.\n    at buildUrl (index.js:1:1)",
+  };
+
+  const a = fileOwnerErrorIssue(env, "owner@example.com", input, post);
+  await firstReachedGithub;
+  const b = fileOwnerErrorIssue(env, "owner@example.com", input, post);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  releaseFirst?.();
+  const [ra, rb] = await Promise.all([a, b]);
+
+  assert.equal(created, 1, "the second report must not create a second GitHub issue");
+  const numbers = [ra, rb].map((r) => ("number" in r ? r.number : null));
+  assert.equal(numbers[0], numbers[1], "both reports must return the same issue number");
 });
 
 test("same fingerprint reuses the open issue", async () => {

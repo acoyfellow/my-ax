@@ -27,11 +27,19 @@ export async function fileOwnerErrorIssue(
   if (!token) return { skipped: "not-configured" };
   const fingerprint = await errorFingerprint(input);
   const claimed = await claimFingerprint(env, ownerEmail, fingerprint);
-  if (!claimed.created && claimed.issue_number && claimed.issue_url) {
-    const open = await githubIssueIsOpen(token, repo, claimed.issue_number, post);
-    if (open) {
-      await touchFingerprint(env, ownerEmail, fingerprint).catch(() => undefined);
-      return { number: claimed.issue_number, url: claimed.issue_url, fingerprint, created: false };
+  if (!claimed.created) {
+    if (claimed.issue_number && claimed.issue_url) {
+      const open = await githubIssueIsOpen(token, repo, claimed.issue_number, post);
+      if (open) {
+        await touchFingerprint(env, ownerEmail, fingerprint).catch(() => undefined);
+        return { number: claimed.issue_number, url: claimed.issue_url, fingerprint, created: false };
+      }
+    } else {
+      const settled = await awaitClaimedIssue(env, ownerEmail, fingerprint);
+      if (settled) {
+        await touchFingerprint(env, ownerEmail, fingerprint).catch(() => undefined);
+        return { number: settled.issue_number, url: settled.issue_url, fingerprint, created: false };
+      }
     }
   }
   const created = await createGithubIssue(token, repo, input, fingerprint, post);
@@ -89,6 +97,24 @@ async function claimFingerprint(
     issue_number: existing?.issue_number,
     issue_url: existing?.issue_url,
   };
+}
+
+async function awaitClaimedIssue(
+  env: Env,
+  ownerEmail: string,
+  fingerprint: string,
+  attempts = 8,
+  waitMs = 250,
+): Promise<{ issue_number: number; issue_url: string } | null> {
+  const owner = ownerEmail.toLowerCase();
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    const row = await env.DB.prepare(
+      "SELECT issue_number, issue_url FROM error_issue_fingerprints WHERE owner_email = ? AND fingerprint = ?",
+    ).bind(owner, fingerprint).first<{ issue_number: number; issue_url: string }>();
+    if (row?.issue_number && row.issue_url) return row;
+  }
+  return null;
 }
 
 async function touchFingerprint(env: Env, ownerEmail: string, fingerprint: string): Promise<void> {
