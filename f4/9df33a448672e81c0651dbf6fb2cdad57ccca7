@@ -1,0 +1,44 @@
+src/agent.ts
+  s_952b167abec97a::t_58c6ef8d7a7586 67-68,74-77
+package.json
+  s_952b167abec97a::t_dc908d27c0bf55 44
+  s_952b167abec97a::t_24f1bfff0b1829 89,138-139
+src/work-tools.ts
+  s_952b167abec97a::t_26fb5f0354fe6e 3,53,138,145,157,164,194,204,233-236,261,275,278,336-337
+src/work-tools-recipes.test.ts
+  s_952b167abec97a::t_e96c52dbc9e27f 32,42
+src/agentcast-tools.test.ts
+  s_952b167abec97a::t_2f843697599454 13,26-27,38-39,42,44,46,58-63,75-80,83
+  s_952b167abec97a::t_b2fcf0a68e89e5 1-12,14-25,28-37,40-41,43,45,47-57,64-74,81-82,84-97
+  s_99b55ecf7d26fa::t_07966a856037c3 98-131
+src/types.ts
+  s_952b167abec97a::t_00e4064320f46c 91,93-96
+  s_952b167abec97a::t_316a9587fc07fc 92
+src/agentcast-tools.ts
+  s_952b167abec97a::t_6305586dec34c5 1-154,158,161
+  s_99b55ecf7d26fa::t_6f748cf78fbba2 155-157,159-160,162-184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f49df33a448672e81c0651dbf6fb2cdad57ccca7",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
