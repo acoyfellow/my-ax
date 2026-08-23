@@ -86,8 +86,10 @@ log "PROVEN: a HAR capture produced a receipt"
 
 grep -qi 'secret-probe-value' "$RECEIPT" && fail "the receipt leaked a query string"
 grep -qiE '"(cookie|set-cookie|authorization)"' "$RECEIPT" && fail "the receipt leaked a forbidden header"
-jq -e '.receipt.entries // .receipt.log.entries | not' "$RECEIPT" >/dev/null 2>&1 \
-  || fail "the receipt carries raw HAR entries; it must be a receipt, not a capture"
+jq -e '[.. | objects | select(has("entries")) | .entries | select(type=="array")] | length == 0' "$RECEIPT" >/dev/null 2>&1 \
+  || fail "the receipt carries raw HAR entries at some depth; it must be a receipt, not a capture"
+jq -e '[.. | strings | select(test("^https?://[^\\s]*[?#]"))] | length == 0' "$RECEIPT" >/dev/null 2>&1 \
+  || fail "the receipt carries a URL with a query string or fragment; URLs must be origin only"
 log "PROVEN: the receipt is redacted, with no query string, header, or raw HAR leak"
 
 call POST "/api/session/$SESSION/stop" "$SESSION" >/dev/null
