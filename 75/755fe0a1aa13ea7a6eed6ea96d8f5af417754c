@@ -1,0 +1,31 @@
+package.json
+  s_952b167abec97a::t_24f1bfff0b1829 88,137-138
+src/agent.ts
+  s_952b167abec97a::t_58c6ef8d7a7586 67-68,74-77
+src/agentcast-tools.test.ts
+  s_952b167abec97a::t_2f843697599454 1-97
+src/agentcast-tools.ts
+  s_952b167abec97a::t_6305586dec34c5 1-161
+src/types.ts
+  s_952b167abec97a::t_316a9587fc07fc 91-94
+src/work-tools-recipes.test.ts
+  s_952b167abec97a::t_e96c52dbc9e27f 32,42
+src/work-tools.ts
+  s_952b167abec97a::t_26fb5f0354fe6e 3,53,138,145,157,164,194,204,233-236,261,275,278,336-337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "75755fe0a1aa13ea7a6eed6ea96d8f5af417754c",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
