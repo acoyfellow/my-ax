@@ -66,6 +66,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Refuse to deploy an empty production config
+        run: node scripts/verify-deployable-config.mjs
+
       # Same gates CI already enforces, before we touch production.
       - name: Verify public-clean
         run: npm run verify:public
