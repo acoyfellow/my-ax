@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { parse } from "jsonc-parser";
 import {
   COMPUTER_GREP_MAX_MATCHES,
   COMPUTER_LIST_MAX_ENTRIES,
@@ -342,12 +343,16 @@ test("Computer-only work code does not classify as a Sandbox snapshot mutation",
   assert.equal(shouldSnapshotSandboxForToolCall("work_code", "not-json"), true);
 });
 
-test("Computer binding, package pin, and append-only migration exist in production and dev", () => {
+test("Computer binding, package pin, and append-only migration exist in every deployed environment", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(packageJson.dependencies["@cloudflare/computer"], "0.1.1");
   const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.equal((wrangler.match(/"name": "COMPUTER", "class_name": "ComputerWorkspace"/g) ?? []).length, 2);
-  assert.equal((wrangler.match(/"tag": "v11-computer-workspace", "new_sqlite_classes": \["ComputerWorkspace"\]/g) ?? []).length, 2);
+  const config = parse(wrangler, [], { allowTrailingComma: true }) as Record<string, any>;
+  const environments = ["production", ...Object.keys(config.env ?? {})];
+  const bindings = (wrangler.match(/"name": "COMPUTER", "class_name": "ComputerWorkspace"/g) ?? []).length;
+  const migrations = (wrangler.match(/"tag": "v11-computer-workspace", "new_sqlite_classes": \["ComputerWorkspace"\]/g) ?? []).length;
+  assert.equal(bindings, environments.length, `every environment needs the COMPUTER binding: ${environments.join(", ")}`);
+  assert.equal(migrations, environments.length, `every environment needs the v11 migration: ${environments.join(", ")}`);
   const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
   assert.match(index, /export \{ ComputerWorkspace \} from "\.\/computer-workspace"/);
   const systemRoutes = readFileSync(new URL("./routes/system.ts", import.meta.url), "utf8");
