@@ -1599,7 +1599,7 @@
           lastAssistant.content.trim().length > 0 ||
           lastAssistant.parts.some((part) => (part.kind === "text" && part.text.trim().length > 0) || part.kind === "tool")
         );
-        if (!hasVisibleOutput) pushError("Agent completed without a visible response. Please retry.");
+        if (!hasVisibleOutput) pushError("Agent completed without a visible response. Please retry.", { stack: new Error("no-visible-response").stack });
         responseRecoveryPending = false;
         activeRequestId = null;
         streamingMsgId = null;

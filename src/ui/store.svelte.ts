@@ -1,4 +1,5 @@
 import { clarifyOwnerError } from "./owner-error";
+import { buildClientErrorReport } from "./client-error-report";
 
 // Shared Svelte 5 store for my-ax.
 //
@@ -178,7 +179,7 @@ export function pushSystem(text: string) {
     { id: `toast-${++toastCounter}`, kind: "system", text },
   ];
 }
-export function pushError(text: string, options?: { alreadyReported?: boolean }) {
+export function pushError(text: string, options?: { alreadyReported?: boolean; stack?: string }) {
   const next = clarifyOwnerError(text);
   if (toastBus.pending.some((toast) => toast.kind === "error" && toast.text === next)) return;
   toastBus.pending = [
@@ -186,19 +187,17 @@ export function pushError(text: string, options?: { alreadyReported?: boolean })
     { id: `toast-${++toastCounter}`, kind: "error", text: next },
   ];
   if (options?.alreadyReported) return;
-  void reportClientError(text);
+  void reportClientError(text, options?.stack);
 }
 
-function reportClientError(message: string) {
+function reportClientError(message: string, stack?: string) {
   if (typeof fetch !== "function") return;
   const sessionId = typeof localStorage === "undefined" ? "" : localStorage.getItem(SESSION_KEY) || "";
   return fetch("/api/errors", {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      message,
-    }),
+    body: JSON.stringify(buildClientErrorReport(message, stack, sessionId)),
   }).catch(() => undefined);
 }
 export function clearToast(id: string) {
