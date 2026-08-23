@@ -1,5 +1,6 @@
 import { assertNoMergeAction, type PullInput } from "./policy";
 import { assertPublicText } from "./public-text";
+import { previewFindings, type PreviewCheck } from "./preview-check";
 import type { GithubPort } from "./orchestrate";
 
 export const OWNER_LOGINS = ["acoyfellow"] as const;
@@ -20,7 +21,9 @@ export function isOwnerPr(input: { author: string; head?: string }): boolean {
   return Boolean(input.head && OWNER_HEAD.test(input.head));
 }
 
-export function reviewPull(input: PullInput & { head?: string; proofExit?: number; proofLog?: string }): ReviewReceipt {
+export type ReviewInput = PullInput & { head?: string; proofExit?: number; proofLog?: string; preview?: PreviewCheck; previewHostSuffix?: string };
+
+export function reviewPull(input: ReviewInput): ReviewReceipt {
   if (!isOwnerPr({ author: input.author, head: input.head })) {
     return { decision: "ignore", neverApprove: true, neverMerge: true, findings: ["not an owner PR"] };
   }
@@ -55,11 +58,20 @@ export function reviewPull(input: PullInput & { head?: string; proofExit?: numbe
       findings: ["proof log has no typecheck or test pass line"],
     };
   }
+  const preview = input.previewHostSuffix ? previewFindings(input, input.previewHostSuffix) : previewFindings(input);
+  if (!preview.ok) {
+    return {
+      decision: "request-changes",
+      neverApprove: true,
+      neverMerge: true,
+      findings: preview.findings,
+    };
+  }
   return {
     decision: "ready-for-owner",
     neverApprove: true,
     neverMerge: true,
-    findings: ["proof passed; owner is the last reviewer"],
+    findings: ["proof passed; owner is the last reviewer", ...preview.findings],
   };
 }
 
@@ -74,7 +86,7 @@ export function formatReviewComment(receipt: ReviewReceipt): string {
 }
 
 export async function runReview(
-  input: PullInput & { head?: string; proofExit?: number; proofLog?: string },
+  input: ReviewInput,
   ports: { github: GithubPort },
 ): Promise<ReviewReceipt> {
   const receipt = reviewPull(input);

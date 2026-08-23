@@ -83,12 +83,16 @@ test("failed proof requests changes and never approves", async () => {
   assert.match(formatReviewComment(receipt), /neverApprove: true/);
 });
 
-test("passing owner proof is ready for owner, not approved", async () => {
+test("passing owner proof with a verified preview is ready for owner, not approved", async () => {
   const receipt = reviewPull(pull({
+    number: 144,
+    head: "deadbeefcafe",
     title: "fix: junk URL",
     body: "proof",
     proofExit: 0,
     proofLog: "# pass 18\n> tsc --noEmit\n",
+    previewHostSuffix: ".preview.example",
+    preview: { url: "https://pr-144.preview.example", status: 200, version: "deadbeefcafe" },
   }));
   assert.equal(receipt.decision, "ready-for-owner");
   assert.equal(receipt.neverApprove, true);
