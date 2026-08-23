@@ -48,6 +48,10 @@ command -v jq >/dev/null || fail "jq is required"
 
 log "opening a live session on $ORIGIN"
 CREATED="$(call POST /api/session '*' '{"name":"my-ax-gate"}')"
+if printf '%s' "$CREATED" | grep -qi 'already active'; then
+  log "a stale session held the profile; taking it over"
+  CREATED="$(call POST /api/session '*' '{"name":"my-ax-gate","takeover":true}')"
+fi
 SESSION="$(printf '%s' "$CREATED" | jq -r '.data.sessionId // .sessionId // empty')"
 [ -n "$SESSION" ] || fail "create did not return a session id"
 log "PROVEN: a session was created"
