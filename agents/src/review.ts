@@ -1,6 +1,6 @@
 import { assertNoMergeAction, type PullInput } from "./policy";
 import { assertPublicText } from "./public-text";
-import { previewFindings, type PreviewCheck } from "./preview-check";
+import { previewFindings, DEFAULT_PREVIEW_HOST_SUFFIX, type PreviewCheck } from "./preview-check";
 import type { GithubPort } from "./orchestrate";
 
 export const OWNER_LOGINS = ["acoyfellow"] as const;
@@ -58,7 +58,7 @@ export function reviewPull(input: ReviewInput): ReviewReceipt {
       findings: ["proof log has no typecheck or test pass line"],
     };
   }
-  const preview = input.previewHostSuffix ? previewFindings(input, input.previewHostSuffix) : previewFindings(input);
+  const preview = previewFindings(input, input.previewHostSuffix ?? DEFAULT_PREVIEW_HOST_SUFFIX);
   if (!preview.ok) {
     return {
       decision: "request-changes",

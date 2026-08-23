@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { previewUrlForPull, isPreviewUrlForPull, previewFindings, type PreviewCheck } from "./preview-check";
+import { previewUrlForPull, isPreviewUrlForPull, previewFindings, previewHostSuffixFromEnv, type PreviewCheck } from "./preview-check";
 
 import { reviewPull, formatReviewComment } from "./review";
 
@@ -112,4 +112,23 @@ test("every preview failure message is safe to post publicly", () => {
     assert.equal(receipt.decision, "request-changes");
     assert.doesNotThrow(() => formatReviewComment(receipt), `must not leak: ${JSON.stringify(preview)}`);
   }
+});
+
+test("the preview host suffix comes from the worker env, not a global", () => {
+  assert.equal(previewHostSuffixFromEnv({ PREVIEW_HOST_SUFFIX: ".preview.example" }), ".preview.example");
+  assert.equal(previewHostSuffixFromEnv({}), "");
+  assert.equal(previewHostSuffixFromEnv(undefined), "");
+  assert.equal(previewHostSuffixFromEnv({ PREVIEW_HOST_SUFFIX: "" }), "");
+  assert.equal(previewHostSuffixFromEnv({ PREVIEW_HOST_SUFFIX: "no-leading-dot" }), "", "a suffix must start with a dot");
+});
+
+test("an unconfigured suffix fails the review closed rather than passing it", () => {
+  const receipt = reviewPull({
+    ...owner,
+    ...okProof,
+    head: HEAD,
+    previewHostSuffix: "",
+    preview: { url: url(144), status: 200, version: HEAD },
+  });
+  assert.equal(receipt.decision, "request-changes", "an unconfigured suffix must never yield ready-for-owner");
 });
