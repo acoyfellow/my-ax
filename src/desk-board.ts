@@ -110,5 +110,10 @@ function cleanDecisionHref(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const href = value.trim();
   if (!href || href.length > 2048) return null;
-  return sameOriginPath(href) ?? cleanRemoteHref(href);
+  const path = sameOriginPath(href);
+  if (path) {
+    if (/^\/\?action=/i.test(path)) return null;
+    return path;
+  }
+  return cleanRemoteHref(href);
 }
