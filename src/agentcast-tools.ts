@@ -125,7 +125,13 @@ export function createAgentCastWorkProvider(ctx: Ctx) {
       open: async (input: any) => {
         const instruction = String(input?.instruction ?? "").trim();
         if (!instruction) throw new Error("agentcast.open requires a non-empty {instruction}");
-        const created = await requireOk(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name: typeof input?.name === "string" ? input.name : "my-ax" });
+        const name = typeof input?.name === "string" ? input.name : "my-ax";
+        let attempt = await agentcast(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name });
+        if (attempt.code === 409) {
+          attempt = await agentcast(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name, takeover: true });
+        }
+        if (attempt.code < 200 || attempt.code >= 300) fail("/api/session", attempt);
+        const created = attempt.json;
         const data = (created.data ?? created) as Record<string, unknown>;
         const sessionId = String(data.sessionId ?? "");
         if (!sessionId) throw new Error("Create session did not return a session id");
