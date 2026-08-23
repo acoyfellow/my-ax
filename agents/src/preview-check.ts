@@ -1,11 +1,11 @@
 export const DEFAULT_PREVIEW_HOST_SUFFIX = "";
 
-function hostSuffix(): string {
-  const configured = (globalThis as { PREVIEW_HOST_SUFFIX?: string }).PREVIEW_HOST_SUFFIX;
-  return typeof configured === "string" && configured !== "" ? configured : DEFAULT_PREVIEW_HOST_SUFFIX;
+export function previewHostSuffixFromEnv(env: { PREVIEW_HOST_SUFFIX?: string } | undefined): string {
+  const configured = env?.PREVIEW_HOST_SUFFIX;
+  return typeof configured === "string" && configured.startsWith(".") ? configured : DEFAULT_PREVIEW_HOST_SUFFIX;
 }
 
-export function previewHostForPull(pullNumber: number, suffix = hostSuffix()): string {
+export function previewHostForPull(pullNumber: number, suffix: string): string {
   if (!Number.isInteger(pullNumber) || pullNumber <= 0) {
     throw new Error("a preview host needs a positive pull number");
   }
@@ -19,11 +19,11 @@ export interface PreviewCheck {
   version?: string;
 }
 
-export function previewUrlForPull(pullNumber: number, suffix = hostSuffix()): string {
+export function previewUrlForPull(pullNumber: number, suffix: string): string {
   return `https://${previewHostForPull(pullNumber, suffix)}`;
 }
 
-export function isPreviewUrlForPull(url: string, pullNumber: number, suffix = hostSuffix()): boolean {
+export function isPreviewUrlForPull(url: string, pullNumber: number, suffix: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return false;
@@ -35,7 +35,7 @@ export function isPreviewUrlForPull(url: string, pullNumber: number, suffix = ho
 
 export function previewFindings(
   input: { number?: number; head?: string; preview?: PreviewCheck },
-  suffix = hostSuffix(),
+  suffix: string,
 ): { ok: boolean; findings: string[] } {
   const pullNumber = input.number ?? 0;
   const preview = input.preview;
