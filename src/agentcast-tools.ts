@@ -79,16 +79,34 @@ async function requireOk(ctx: Ctx, method: string, path: string, sessionId: stri
   return result.json;
 }
 
+const READY_ATTEMPTS = 120;
+const READY_INTERVAL_MS = 250;
+
+function readyBudget(ctx: Ctx): { attempts: number; intervalMs: number } {
+  const intervalMs = Number(ctx.env.AGENTCAST_READY_INTERVAL_MS ?? READY_INTERVAL_MS);
+  const attempts = Number(ctx.env.AGENTCAST_READY_ATTEMPTS ?? READY_ATTEMPTS);
+  return {
+    attempts: Number.isFinite(attempts) && attempts > 0 ? attempts : READY_ATTEMPTS,
+    intervalMs: Number.isFinite(intervalMs) && intervalMs >= 0 ? intervalMs : READY_INTERVAL_MS,
+  };
+}
+
 async function waitReady(ctx: Ctx, sessionId: string): Promise<Record<string, unknown>> {
+  const { attempts, intervalMs } = readyBudget(ctx);
   let last: Record<string, unknown> = {};
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     last = await requireOk(ctx, "GET", `/api/session/${sessionId}`, sessionId, SESSION_PERMISSIONS);
     const status = String(last.status ?? "");
     if (READY.has(status)) return last;
     if (status === "error") throw new Error(String(last.error ?? "Browser session failed"));
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new Error(String(last.error ?? "Browser session did not become ready"));
+  const waited = Math.round((attempts * intervalMs) / 1000);
+  throw new Error(String(last.error ?? `Browser session was not ready after ${waited}s`));
+}
+
+async function stopSessionQuietly(ctx: Ctx, sessionId: string): Promise<void> {
+  await agentcast(ctx, "POST", `/api/session/${sessionId}/stop`, sessionId, SESSION_PERMISSIONS).catch(() => undefined);
 }
 
 export const AGENTCAST_WORK_METHODS = [
@@ -111,22 +129,27 @@ export function createAgentCastWorkProvider(ctx: Ctx) {
         const data = (created.data ?? created) as Record<string, unknown>;
         const sessionId = String(data.sessionId ?? "");
         if (!sessionId) throw new Error("Create session did not return a session id");
-        const status = await waitReady(ctx, sessionId);
-        await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`, sessionId, SESSION_PERMISSIONS);
-        const instructed = await requireOk(ctx, "POST", `/api/session/${sessionId}/instruction`, sessionId, SESSION_PERMISSIONS, { instruction });
-        const ticket = await requireOk(ctx, "POST", `/api/session/${sessionId}/view-ticket`, sessionId, SESSION_PERMISSIONS);
-        const ticketUrl = String(ticket.ticketUrl ?? "");
-        if (!ticketUrl.startsWith("https://") || ticketUrl.includes(".workers.dev") || !ticketUrl.includes("/ticket/")) {
-          throw new Error("Viewer ticket URL is not a production ticket");
+        try {
+          const status = await waitReady(ctx, sessionId);
+          await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`, sessionId, SESSION_PERMISSIONS);
+          const instructed = await requireOk(ctx, "POST", `/api/session/${sessionId}/instruction`, sessionId, SESSION_PERMISSIONS, { instruction });
+          const ticket = await requireOk(ctx, "POST", `/api/session/${sessionId}/view-ticket`, sessionId, SESSION_PERMISSIONS);
+          const ticketUrl = String(ticket.ticketUrl ?? "");
+          if (!ticketUrl.startsWith("https://") || ticketUrl.includes(".workers.dev") || !ticketUrl.includes("/ticket/")) {
+            throw new Error("Viewer ticket URL is not a production ticket");
+          }
+          return {
+            ok: true,
+            sessionId,
+            status: status.status ?? "ready",
+            ticketUrl,
+            instruction: instructed,
+            transport: "http",
+          };
+        } catch (error) {
+          await stopSessionQuietly(ctx, sessionId);
+          throw error;
         }
-        return {
-          ok: true,
-          sessionId,
-          status: status.status ?? "ready",
-          ticketUrl,
-          instruction: instructed,
-          transport: "http",
-        };
       },
       instruct: async (input: any) => {
         const sessionId = String(input?.sessionId ?? "").trim();

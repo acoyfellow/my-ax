@@ -91,6 +91,8 @@ declare global {
       AGENTCAST_CONTROL_TOKEN?: string;
       AGENTCAST_ISSUER_KEY?: string;
       AGENTCAST_URL?: string;
+      AGENTCAST_READY_ATTEMPTS?: number;
+      AGENTCAST_READY_INTERVAL_MS?: number;
 
       /** Optional model gateway for non-Workers-AI catalog rows. */
       LLM_GATEWAY_URL?: string;
