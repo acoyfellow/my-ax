@@ -31,6 +31,13 @@ test("Open source rejects same-origin paths; Decide keeps them", () => {
   assert.equal(board.cards[0]?.decisionHref, "/api/decisions/run-decision-test");
 });
 
+test("Decide rejects desk and attention self-links", () => {
+  const desk = upsertDeskCard(emptyDeskBoard(), { id: "self-desk", title: "x", decisionHref: "/?action=desk" });
+  assert.equal(desk.cards[0]?.decisionHref, null);
+  const attention = upsertDeskCard(emptyDeskBoard(), { id: "self-attn", title: "x", decisionHref: "/?action=attention" });
+  assert.equal(attention.cards[0]?.decisionHref, null);
+});
+
 test("emptyDeskBoard is a clearable single artifact", () => {
   const cleared = emptyDeskBoard("t-clear");
   assert.deepEqual(cleared.cards, []);
