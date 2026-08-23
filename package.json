@@ -135,8 +135,7 @@
     "test:voice-docs-tool": "tsx --test src/voice-docs-tool.test.ts",
     "test:voice-facet-lifecycle": "tsx --test src/voice-facet-lifecycle.test.ts",
     "test:workspace-mcp": "tsx --test src/workspace-mcp.test.ts src/session-turn.test.ts src/control-plane-mcp.test.ts",
-    "test:client-error-evidence": "tsx --test src/ui/client-error-evidence.test.ts",
-    "test:agentcast-connector": "tsx --test src/agentcast-tools.test.ts"
+    "test:client-error-evidence": "tsx --test src/ui/client-error-evidence.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.39",
