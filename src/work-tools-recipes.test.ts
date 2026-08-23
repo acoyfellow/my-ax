@@ -29,7 +29,7 @@ test("work_search catalog no longer emits recipe.list / recipe.run:* methods", (
   assert.doesNotMatch(source, /method:\s*"recipe\.list"/);
   assert.doesNotMatch(source, /method:\s*`recipe\.run:/);
   assert.match(source, /CODEMODE_METHODS/, "codemode runtime methods must be declared");
-  assert.match(source, /List or filter codemode tools across Workspace, Computer, My Machine, Terrarium, My AX Page, and reusable tools\./);
+  assert.match(source, /List or filter codemode tools across Workspace, Computer, My Machine, Terrarium, AgentCast, My AX Page, and reusable tools\./);
   assert.match(source, /method:\s*`codemode:\$\{snippet\.name\}`/, "snippets must be advertised under codemode:");
 });
 
@@ -39,7 +39,7 @@ test("work_code sandbox prelude no longer exposes a top-level recipe namespace",
 });
 
 test("work_code invokes submitted async arrow with ctx while preserving globals", () => {
-  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,computer:globalThis\.computer,machine:globalThis\.machine,terrarium:globalThis\.terrarium,page:globalThis\.page,codemode:globalThis\.codemode\}/);
+  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,computer:globalThis\.computer,machine:globalThis\.machine,terrarium:globalThis\.terrarium,agentcast:globalThis\.agentcast,page:globalThis\.page,codemode:globalThis\.codemode\}/);
   assert.match(source, /const executableCode = `async \(\) => await \(\$\{submittedCode\}\)\(globalThis\.ctx\)`/);
   assert.match(source, /executor\.execute\(executableCode,/);
 });
