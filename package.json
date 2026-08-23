@@ -41,6 +41,7 @@
     "test:tool-output-limit": "tsx --test src/tool-output-limit.test.ts",
     "test:machinectl-output": "tsx --test src/machinectl-output.test.ts",
     "test:terrarium-connector": "tsx --test src/terrarium-tools.test.ts",
+    "test:agentcast-connector": "tsx --test src/agentcast-tools.test.ts",
     "test:grant-crypto": "tsx --test src/grant-crypto.test.ts",
     "test:runs": "tsx --test src/routes/runs.test.ts",
     "test:jobs-route": "tsx --test src/routes/jobs.test.ts",
@@ -134,8 +135,7 @@
     "test:voice-docs-tool": "tsx --test src/voice-docs-tool.test.ts",
     "test:voice-facet-lifecycle": "tsx --test src/voice-facet-lifecycle.test.ts",
     "test:workspace-mcp": "tsx --test src/workspace-mcp.test.ts src/session-turn.test.ts src/control-plane-mcp.test.ts",
-    "test:client-error-evidence": "tsx --test src/ui/client-error-evidence.test.ts",
-    "test:agentcast-connector": "tsx --test src/agentcast-tools.test.ts"
+    "test:client-error-evidence": "tsx --test src/ui/client-error-evidence.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.39",
