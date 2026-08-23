@@ -86,11 +86,13 @@ log "PROVEN: a HAR capture produced a receipt"
 
 grep -qi 'secret-probe-value' "$RECEIPT" && fail "the receipt leaked a query string"
 grep -qiE '"(cookie|set-cookie|authorization)"' "$RECEIPT" && fail "the receipt leaked a forbidden header"
-jq -e '[.. | objects | select(has("entries")) | .entries | select(type=="array")] | length == 0' "$RECEIPT" >/dev/null 2>&1 \
-  || fail "the receipt carries raw HAR entries at some depth; it must be a receipt, not a capture"
 jq -e '[.. | strings | select(test("^https?://[^\\s]*[?#]"))] | length == 0' "$RECEIPT" >/dev/null 2>&1 \
   || fail "the receipt carries a URL with a query string or fragment; URLs must be origin only"
-log "PROVEN: the receipt is redacted, with no query string, header, or raw HAR leak"
+jq -e '[.. | objects | select(has("url") or has("headers") or has("request") or has("response") or has("postData") or has("content"))] | length == 0' "$RECEIPT" >/dev/null 2>&1 \
+  || fail "the receipt carries a raw HAR shape; a receipt entry has origin and hostname, never url, headers, or bodies"
+jq -e '[.receipt.entries // [] | .[] | select((.origin | type) != "string" or (.hostname | type) != "string")] | length == 0' "$RECEIPT" >/dev/null 2>&1 \
+  || fail "a receipt entry is missing the redacted origin and hostname fields"
+log "PROVEN: the receipt is redacted, with origin only entries and no header, body, or URL leak"
 
 call POST "/api/session/$SESSION/stop" "$SESSION" >/dev/null
 GONE="$(call GET "/api/session/$SESSION" "$SESSION" | jq -r '.status // "gone"')"
