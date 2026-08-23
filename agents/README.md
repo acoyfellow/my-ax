@@ -32,11 +32,14 @@ bash proof/factory-canary.sh    # an auto-error issue reaches a ready PR with no
 bash proof/factory-no-loop.sh   # one pr-opened board, no stage regression, at most one
                                 # review receipt, 0 open issues, 0 open PRs, check green
 bash proof/error-queue-drained.sh  # no open auto-error issue predates the running deploy
+bash proof/agentcast-live.sh       # the live browser opens, instructs, and returns a redacted receipt
 ```
 
 `factory-no-loop.sh` waits past two 15 minute sweeps on purpose. The re-queue bug it guards only appears across sweep ticks.
 
 `error-queue-drained.sh` compares each open auto-error issue against the deploy time of the running Worker. A merged but undeployed fix looks exactly like a broken fix, so the gate reads the live deploy rather than `main`.
+
+`agentcast-live.sh` calls the real service and needs `AGENTCAST_ISSUER_KEY`, so it is opt-in and never runs in CI. It stops every session it opens, including on failure, because a gate that leaks browser capacity is a broken gate.
 
 Hunt ticks that only file issues: [HUNT.md](./HUNT.md).
 
