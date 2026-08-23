@@ -1,0 +1,21 @@
+proof/agentcast-live.sh
+  s_99b55ecf7d26fa::t_b70a2a5b19e51a 51-54
+src/agentcast-tools.test.ts
+  s_99b55ecf7d26fa::t_e4de16002b00a0 132-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "682783b1b1f8ee0c4ec4c9128d41f02255770dbd",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
