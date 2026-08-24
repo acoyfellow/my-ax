@@ -56,6 +56,7 @@
     captureTitleEpoch,
     isTitleEpochCurrent,
   } from "@my-ax/store";
+  import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
 
   // Markdown ships in the application bundle so the first streamed token can
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
@@ -1271,7 +1272,6 @@
     const id = body?.result?.sessions?.[0]?.id;
     return typeof id === "string" && id ? id : null;
   }
-
   async function sessionForBootstrap(): Promise<string | null> {
     const requested = new URL(location.href).searchParams.get("session");
     const shouldResume = sessionStorage.getItem(RESUME_SESSION_ONCE_KEY) === "1";
@@ -1291,11 +1291,19 @@
 
     let resumeId = requested || (shouldResume ? cached : null);
     if (!resumeId) {
+      let outcome: LookupOutcome;
+      let wasOffline = false;
       try {
-        resumeId = await latestServerSessionId();
+        const found = await latestServerSessionId();
+        outcome = found ? { kind: "found", sessionId: found } : { kind: "empty" };
       } catch (error) {
-        pushError(`Could not load your latest conversation: ${error instanceof Error ? error.message : String(error)}`);
+        wasOffline = isOfflineFailure(error);
+        outcome = classifyLookup(error);
       }
+      const plan = planResume({ cached, outcome });
+      if (plan.forgetCachedSession) localStorage.removeItem(SESSION_KEY);
+      if (plan.toast) pushError(plan.toast, { alreadyReported: wasOffline });
+      resumeId = plan.resumeId;
     }
     if (resumeId) {
       localStorage.setItem(SESSION_KEY, resumeId);
