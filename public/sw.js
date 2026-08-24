@@ -146,13 +146,20 @@ async function navigateNotification(href) {
   const existing = sameOrigin.find((client) => client.focused) || sameOrigin.find((client) => client.visibilityState === "visible") || sameOrigin[0];
   const target = new URL(href, self.location.origin);
   const absolute = target.href;
+  const sameOriginTarget = target.origin === self.location.origin;
   if (existing) {
-    if (target.pathname === "/" && !target.search && !target.hash) return existing.focus();
+    if (target.pathname === "/" && !target.search && !target.hash && sameOriginTarget) return existing.focus();
+    if (!sameOriginTarget) return clients.openWindow(absolute);
     const acked = await new Promise((resolve) => {
       const onAck = (ev) => {
-        if (ev.data?.type === "my-ax:navigate-ack" && ev.data?.href === absolute) {
+        if (ev.data?.href !== absolute) return;
+        if (ev.data?.type === "my-ax:navigate-ack") {
           self.removeEventListener("message", onAck);
           resolve(true);
+        }
+        if (ev.data?.type === "my-ax:navigate-nack") {
+          self.removeEventListener("message", onAck);
+          resolve(false);
         }
       };
       self.addEventListener("message", onAck);
