@@ -390,6 +390,8 @@ const CODE_METHODS: Record<string, Method> = {
   deployment: "deployment",
 };
 
+const CODE_METHOD_NAMES = Object.keys(CODE_METHODS);
+
 function objectArgs(input: unknown): Record<string, unknown> {
   return (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
 }
@@ -426,6 +428,7 @@ const CODE_TYPES = `declare const codemode: {
   artifactGet(args: { id: string }): Promise<unknown>;
   deskGet(): Promise<unknown>;
   deskUpsert(args: { id: string; title?: string; body?: string; href?: string; decisionHref?: string; status?: string }): Promise<unknown>;
+  deskClear(args: { id: string }): Promise<unknown>;
   deployment(): Promise<unknown>;
 };`;
 
@@ -493,7 +496,7 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
         const executor = new DynamicWorkerExecutor({ loader: c.env.LOADER, globalOutbound: null, timeout: 30_000 });
         const execution = await executor.execute(code, [{ name: "codemode", fns: coordinatorCodeFns(c) }]);
         if (execution.error) return c.json(rpc(req.id, { ...text({ ok: false, error: execution.error, available: CODE_TYPES }), isError: true }));
-        return c.json(rpc(req.id, text({ ok: true, result: execution.result, logs: execution.logs ?? [], availableMethods: METHODS })));
+        return c.json(rpc(req.id, text({ ok: true, result: execution.result, logs: execution.logs ?? [], availableMethods: CODE_METHOD_NAMES })));
       }
       throw new Error("unknown tool");
     } catch (err) {
