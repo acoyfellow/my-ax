@@ -2340,6 +2340,10 @@
       const target = detail?.href ? parseMyAxDeepLink(detail.href, location.href) : null;
       if (target) followDeepLink(target);
     };
+    const declineServiceWorkerNavigation = (event: MessageEvent, href: string) => {
+      try { (event.source as any)?.postMessage?.({ type: "my-ax:navigate-nack", href }); } catch {}
+      try { navigator.serviceWorker?.controller?.postMessage({ type: "my-ax:navigate-nack", href }); } catch {}
+    };
     const onServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === "my-ax:attention") {
         void refreshPendingDecision(localStorage.getItem(SESSION_KEY));
@@ -2354,7 +2358,9 @@
         try { (event.source as any)?.postMessage?.({ type: "my-ax:navigate-ack", href: event.data.href }); } catch {}
         try { navigator.serviceWorker?.controller?.postMessage({ type: "my-ax:navigate-ack", href: event.data.href }); } catch {}
         followDeepLink(target);
+        return;
       }
+      declineServiceWorkerNavigation(event, event.data.href);
     };
     const onStartersRefresh = () => { void loadStarters(); };
     // Artifact -> chat bridge. An interactive Svelte artifact runs in a

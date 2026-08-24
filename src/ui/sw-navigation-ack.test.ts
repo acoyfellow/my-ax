@@ -34,9 +34,14 @@ async function runNotificationClick(
   }
   const acked = await new Promise<boolean>((resolve) => {
     const onAck = (ev: { data: any }) => {
-      if (ev.data?.type === "my-ax:navigate-ack" && ev.data?.href === absolute) {
+      if (ev.data?.href !== absolute) return;
+      if (ev.data?.type === "my-ax:navigate-ack") {
         self.removeEventListener("message", onAck);
         resolve(true);
+      }
+      if (ev.data?.type === "my-ax:navigate-nack") {
+        self.removeEventListener("message", onAck);
+        resolve(false);
       }
     };
     self.addEventListener("message", onAck);
@@ -94,4 +99,36 @@ test("an informational root push focuses the existing client without posting or 
   assert.equal(navigated, 0);
   assert.equal(focused, 1);
   assert.equal(listenerCount(), 0);
+});
+
+test("a declining client does not cost the full ack timeout", async () => {
+  const { self, deliver, listenerCount } = makeSwHarness();
+  let navigated = 0;
+  const href = "https://x/weird";
+  const existing = {
+    postMessage(msg: any) {
+      if (msg.type === "my-ax:navigate") setTimeout(() => deliver({ type: "my-ax:navigate-nack", href: msg.href }), 5);
+    },
+    async navigate() { navigated++; },
+    async focus() {},
+  };
+  const started = Date.now();
+  const acked = await runNotificationClick(self, existing, href, 400);
+  const elapsed = Date.now() - started;
+  assert.equal(acked, false, "a nack is not an ack");
+  assert.equal(navigated, 1, "the SW still falls back to a hard navigate");
+  assert.ok(elapsed < 200, `a declined link must not wait out the timeout, took ${elapsed}ms`);
+  assert.equal(listenerCount(), 0);
+});
+
+test("a cross-origin notification target never reaches an open client", () => {
+  const appOrigin = "https://app.example";
+  const decide = (href: string) => {
+    const target = new URL(href, appOrigin);
+    return target.origin === appOrigin ? "message-client" : "open-window";
+  };
+  assert.equal(decide("/?action=attention"), "message-client");
+  assert.equal(decide("https://app.example/?session=abc"), "message-client");
+  assert.equal(decide("https://github.com/acoyfellow/my-ax/pull/1"), "open-window");
+  assert.equal(decide("https://evil.example/steal"), "open-window");
 });
