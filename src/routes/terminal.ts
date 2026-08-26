@@ -1,3 +1,4 @@
+import type { PtyOptions } from "@cloudflare/sandbox";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getUserWorkspace } from "../workspace";
@@ -20,6 +21,12 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     const { sandbox } = await getUserWorkspace(c.env, identity);
     const cols = boundedDimension(c.req.query("cols"), TERMINAL_DEFAULT_COLS, 500);
     const rows = boundedDimension(c.req.query("rows"), TERMINAL_DEFAULT_ROWS, 200);
-    return sandbox.terminal(c.req.raw, { cols, rows });
+    const withTerminal = sandbox as unknown as {
+      terminal?: (request: Request, options?: PtyOptions) => Promise<Response>;
+    };
+    if (typeof withTerminal.terminal !== "function") {
+      return c.json({ ok: false, command: c.req.path, error: { code: "PTY_UNAVAILABLE", message: "this sandbox build serves no pty" }, next_actions: [] }, 501);
+    }
+    return withTerminal.terminal(c.req.raw, { cols, rows });
   });
 }
