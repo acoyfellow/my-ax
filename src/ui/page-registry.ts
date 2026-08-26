@@ -311,6 +311,56 @@ export const PAGE_VERBS: PageVerb[] = [
     },
   },
   {
+    name: "deskRead",
+    description: "Read the owner's desk state: the agent-authored app payload plus its artifactId. Input: {}.",
+    resolution: "receipt",
+    run: async () => {
+      const data = (await getJSON("/api/desk")) as { result?: unknown };
+      return { result: data?.result ?? null };
+    },
+  },
+  {
+    name: "deskWrite",
+    description: "Write the owner's desk state. Input: {state} as a JSON string, or {artifactId} to point the desk at an agent-authored app. Concurrent writers are merged server-side.",
+    resolution: "receipt",
+    run: async (args) => {
+      const payload: Record<string, unknown> = {};
+      if (typeof args.artifactId === "string" && args.artifactId) payload.artifactId = args.artifactId;
+      if (typeof args.state === "string" && args.state) {
+        try { payload.state = JSON.parse(args.state); } catch { throw new Error("deskWrite state must be a JSON string"); }
+      }
+      if (!Object.keys(payload).length) throw new Error("deskWrite requires {state} or {artifactId}");
+      const response = await fetch("/api/desk", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(`/api/desk -> ${response.status}`);
+      const body = (await response.json()) as { result?: unknown };
+      return { result: body?.result ?? null };
+    },
+  },
+  {
+    name: "sendToSession",
+    description: "Send a message to one of the owner's conversations without switching to it. Input: {sessionId, content}.",
+    resolution: "receipt",
+    run: async (args) => {
+      const sessionId = String(args.sessionId ?? "");
+      const content = String(args.content ?? "").slice(0, 4000).trim();
+      if (!sessionId || !content) throw new Error("sendToSession requires {sessionId, content}");
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/inject`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (!response.ok) throw new Error(`inject -> ${response.status}`);
+      const body = (await response.json()) as { result?: unknown };
+      return { result: body?.result ?? { sent: true } };
+    },
+  },
+  {
     name: "openDesk",
     description: "Open the owner's durable desk board (/?action=desk).",
     resolution: "receipt",

@@ -25,6 +25,7 @@
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
   import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
   import { ArtifactToolRegistry } from "./artifact-tools";
+  import { ArtifactOutboundBridge, type OutboundVerb } from "./artifact-outbound";
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import { sessionTurnLocksComposer, type SessionTurnState } from "../session-turn";
@@ -2387,6 +2388,24 @@
         try { win.postMessage(frame, "*"); return true; } catch { return false; }
       },
     });
+    const outboundBridge = new ArtifactOutboundBridge({
+      artifactIdForWindow: (source) => {
+        const frame = artifactFrames().find((f) => f.contentWindow === source);
+        return frame?.getAttribute("data-artifact-id") || null;
+      },
+      postToArtifact: (artifactId, frame) => {
+        const el = artifactFrames().find((f) => f.getAttribute("data-artifact-id") === artifactId);
+        const win = el?.contentWindow;
+        if (!win) return false;
+        try { win.postMessage(frame, "*"); return true; } catch { return false; }
+      },
+      runVerb: async (verb: OutboundVerb, args) => {
+        const outcome = await handlePageCall({ type: "page_call", requestId: `artifact-${verb}`, verb, args } as PageCallFrame);
+        if (!outcome.frame.ok) throw new Error(outcome.frame.error || "host_invoke_failed");
+        outcome.after?.();
+        return outcome.frame.result ?? null;
+      },
+    });
     const hydrateDesk = async (artifactId?: string) => {
       try {
         const response = await fetch("/api/desk", { credentials: "include" });
@@ -2409,6 +2428,10 @@
         if (!artifactWindows().has(event.source as Window)) return;
         const registered = artifactRegistry.register(event.source, data.tools);
         if (registered.ok && registered.registered?.includes("setBoard") && registered.artifactId) void hydrateDesk(registered.artifactId);
+        return;
+      }
+      if (data && data.type === "my-ax:host-invoke") {
+        void outboundBridge.handleCall(event.source, data);
         return;
       }
       if (data && data.type === "my-ax:artifact-invoke-result") {
