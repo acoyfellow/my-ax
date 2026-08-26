@@ -27,6 +27,11 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     if (typeof withTerminal.terminal !== "function") {
       return c.json({ ok: false, command: c.req.path, error: { code: "PTY_UNAVAILABLE", message: "this sandbox build serves no pty" }, next_actions: [] }, 501);
     }
-    return withTerminal.terminal(c.req.raw, { cols, rows });
+    try {
+      return await withTerminal.terminal(c.req.raw, { cols, rows });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, command: c.req.path, error: { code: "PTY_FAILED", message }, next_actions: [] }, 502);
+    }
   });
 }
