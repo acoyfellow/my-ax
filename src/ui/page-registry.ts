@@ -315,7 +315,7 @@ export const PAGE_VERBS: PageVerb[] = [
     description: "Read the owner's desk state: the agent-authored app payload plus its artifactId. Input: {}.",
     resolution: "receipt",
     run: async () => {
-      const data = (await getJSON("/api/desk")) as { result?: unknown };
+      const data = (await getJSON("/api/desk/app")) as { result?: unknown };
       return { result: data?.result ?? null };
     },
   },
@@ -330,7 +330,7 @@ export const PAGE_VERBS: PageVerb[] = [
         try { payload.state = JSON.parse(args.state); } catch { throw new Error("deskWrite state must be a JSON string"); }
       }
       if (!Object.keys(payload).length) throw new Error("deskWrite requires {state} or {artifactId}");
-      const response = await fetch("/api/desk", {
+      const response = await fetch("/api/desk/app", {
         method: "PUT",
         credentials: "include",
         headers: { "content-type": "application/json" },
