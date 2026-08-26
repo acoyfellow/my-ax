@@ -1,0 +1,23 @@
+package.json
+  s_99b55ecf7d26fa::t_1118e2e338695e 145
+src/page-verb-parity.test.ts
+  s_99b55ecf7d26fa::t_b0222814c39d26 1-21
+src/work-tools.ts
+  s_99b55ecf7d26fa::t_03557d76b5cbe8 49-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "16d99917b8430a998685d76e401d4d763e19eeb8",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
