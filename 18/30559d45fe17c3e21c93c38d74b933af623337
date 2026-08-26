@@ -1,0 +1,21 @@
+package.json
+  s_99b55ecf7d26fa::t_2d6e5bd5bfccf2 145
+src/ui/Desk.svelte
+  s_99b55ecf7d26fa::t_a9f8baeff1115e 4-6,10,13-49,62,104-113,116-118,123-124,144-155,158,243-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1830559d45fe17c3e21c93c38d74b933af623337",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
