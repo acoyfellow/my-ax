@@ -33,9 +33,9 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
       steps.ptyStatus = response.status;
       steps.ptyHasWebSocket = Boolean((response as unknown as { webSocket?: unknown }).webSocket);
       steps.ptyBody = response.status === 101 ? "(switching protocols)" : (await response.text()).slice(0, 200);
+    } catch (error) {
       steps.threw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       steps.stack = error instanceof Error ? String(error.stack ?? "").slice(0, 400) : "";
-      steps.threw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     }
     steps.totalMs = Date.now() - started;
     return c.json({ ok: true, command: c.req.path, result: steps, next_actions: [] });
