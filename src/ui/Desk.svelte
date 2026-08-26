@@ -30,12 +30,21 @@
     },
   });
 
+  function activeTheme(): "light" | "dark" {
+    if (document.documentElement.classList.contains("light")) return "light";
+    if (document.documentElement.classList.contains("dark")) return "dark";
+    return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+
   function pushStateToApp() {
     const id = deskApp.artifactId;
     if (!id || !appFrameEl) return;
     const win = appFrameEl.contentWindow;
     if (!win) return;
-    try { win.postMessage({ type: "my-ax:artifact-state", state: deskApp.state }, "*"); } catch {}
+    try {
+      win.postMessage({ type: "my-ax:artifact-theme", theme: activeTheme() }, "*");
+      win.postMessage({ type: "my-ax:artifact-state", state: deskApp.state }, "*");
+    } catch {}
   }
 
   async function refreshApp() {

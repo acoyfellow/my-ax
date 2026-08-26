@@ -82,7 +82,7 @@ export const PAGE_VERBS: PageVerb[] = [
       const data = (await getJSON(`/api/sessions?limit=${limit}`)) as { result?: { sessions?: unknown[] }; sessions?: unknown[] };
       const rows = data?.result?.sessions ?? data?.sessions ?? [];
       const list = Array.isArray(rows) ? rows : [];
-      return { result: list.map((s: any) => ({ id: s.id, title: s.title ?? null, status: s.status ?? null, updatedAt: s.updatedAt ?? s.updated_at ?? null })) };
+      return { result: list.map((s: any) => ({ id: s.id, title: s.title ?? s.name ?? null, status: s.status ?? null, updatedAt: s.updatedAt ?? s.updated_at ?? null })) };
     },
   },
   {

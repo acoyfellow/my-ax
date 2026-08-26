@@ -27,6 +27,11 @@ export const ARTIFACT_RUNTIME_JS = `(function(){
   var stateListeners = [];
   window.addEventListener("message", function(event){
     var data = event.data;
+    if (data && data.type === "my-ax:artifact-theme") {
+      if (data.theme === "light") document.documentElement.setAttribute("data-theme", "light");
+      else document.documentElement.removeAttribute("data-theme");
+      return;
+    }
     if (!data || data.type !== "my-ax:artifact-state") return;
     state = data.state;
     for (var i = 0; i < stateListeners.length; i++) {
