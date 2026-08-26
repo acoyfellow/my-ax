@@ -1,0 +1,19 @@
+src/index.tsx
+  s_99b55ecf7d26fa::t_375d97b799c901 44,297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bd75d9b84128e1c71444de2453bc74ff9723ab79",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
