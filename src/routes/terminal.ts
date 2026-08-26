@@ -72,7 +72,8 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     const identity = c.get("identity");
     const steps: Record<string, unknown> = {};
     const namespace = (c.env as unknown as { SANDBOX: DurableObjectNamespace<Sandbox> }).SANDBOX;
-    for (const transport of ["http", "rpc"] as const) {
+    const requested = c.req.query("transport") === "rpc" ? "rpc" : "http";
+    for (const transport of [requested] as const) {
       const at = Date.now();
       try {
         const stub = getSandbox(namespace, identity.email.toLowerCase(), {
