@@ -28,6 +28,8 @@ import { appendConversationLog, logAssistantMessage, logToolCall, logUserMessage
 import { assistantBackfillCandidates } from "./assistant-backfill";
 import { sanitizeToolCallIds } from "./tool-id-sanitize";
 import { sanitizeModelMessageUrls } from "./model-message-urls";
+import { uploadPathFromPart } from "./attachment-reference";
+import { alignTrailing } from "./attachment-alignment";
 import { healUiHistoryFileUrls } from "./ui-history-urls";
 import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
@@ -261,10 +263,7 @@ export class MyAgent extends Think<Env> {
           role: "user",
           parts: [
             { type: "text", text: content },
-            ...attachments.flatMap((attachment) => [
-              { type: "data-attachment" as `data-${string}`, data: attachment },
-              { type: "file" as const, url: `/api/uploads/${encodeURIComponent(attachment.key)}`, mediaType: attachment.mime, filename: attachment.name },
-            ]),
+            ...attachments.map((attachment) => ({ type: "data-attachment" as `data-${string}`, data: attachment })),
           ],
         },
       ],
@@ -1140,23 +1139,23 @@ export class MyAgent extends Think<Env> {
     const config = this.getConfig<MyAgentConfig>() ?? {};
     const selected = requestedModel ?? config.model ?? defaultModelId(this.env);
     const resolved = resolveMyAxModel(this.env, selected);
-    const attachmentByPath = new Map<string, Attachment>();
-    for (const message of this.messages.filter((item) => item.role === "user")) {
-      for (const attachment of attachmentParts(message)) {
-        attachmentByPath.set(`/api/uploads/${encodeURIComponent(attachment.key)}`, attachment);
-      }
-    }
+    const attachmentsPerUserMessage = this.messages
+      .filter((item) => item.role === "user")
+      .map((item) => attachmentParts(item));
+    const userMessageIndexes = ctx.messages.flatMap((message, index) => (message.role === "user" ? [index] : []));
+    const alignedAttachments = alignTrailing(attachmentsPerUserMessage, userMessageIndexes.length);
+    const attachmentsByMessageIndex = new Map<number, Attachment[]>();
+    userMessageIndexes.forEach((messageIndex, position) => {
+      const attachments = alignedAttachments[position];
+      if (attachments && attachments.length) attachmentsByMessageIndex.set(messageIndex, attachments);
+    });
     let preparationError: string | null = null;
-    const messages = await Promise.all(ctx.messages.map(async (message) => {
+    const messages = await Promise.all(ctx.messages.map(async (message, messageIndex) => {
       if (message.role !== "user" || !Array.isArray(message.content)) return message;
-      const content = message.content as Array<{ type: string; text?: string; data?: string | Uint8Array; mediaType?: string }>;
-      const references = content.flatMap((part) => {
-        if (part.type !== "file" || typeof part.data !== "string") return [];
-        const attachment = attachmentByPath.get(part.data);
-        return attachment ? [attachment] : [];
-      });
+      const references = attachmentsByMessageIndex.get(messageIndex) ?? [];
       if (!references.length) return message;
-      const ordinary = content.filter((part) => !(part.type === "file" && typeof part.data === "string" && attachmentByPath.has(part.data))) as Array<{ type: "text"; text: string } | { type: "file"; data: Uint8Array; mediaType: string }>;
+      const content = message.content as Array<{ type: string; text?: string; url?: string; data?: string | Uint8Array; mediaType?: string }>;
+      const ordinary = content.filter((part) => uploadPathFromPart(part) === null) as Array<{ type: "text"; text: string } | { type: "file"; data: Uint8Array; mediaType: string }>;
       if (resolved.meta.vision && identity) {
         for (const attachment of references) {
           try {
