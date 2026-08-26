@@ -5,6 +5,8 @@ import type { ApiResponse } from "../types";
 import { DESK_PREFERENCE_KEY, emptyDeskBoard, parseDeskBoard, upsertDeskCard, type DeskBoard } from "../desk-board";
 import { writeWithCompareAndSet } from "../desk-write";
 import { DESK_APP_PREFERENCE_KEY, applyDeskAppWrite, emptyDeskApp, parseDeskApp, type DeskApp } from "../desk-app";
+import { describePromotion, promotionConfirmed, type ArtifactSummary, type PromotionPreview } from "../desk-promote";
+import { getOwnedArtifactRow } from "../artifacts";
 
 async function readVersionedPreference<T>(
   env: AppEnv["Bindings"],
@@ -45,6 +47,36 @@ async function compareAndSetPreference(
 export async function ownerDeskAppGet(env: AppEnv["Bindings"], email: string): Promise<DeskApp> {
   const read = await readVersionedPreference(env, email.toLowerCase(), DESK_APP_PREFERENCE_KEY, parseDeskApp, emptyDeskApp);
   return read.value;
+}
+
+export async function ownerDeskPromotionPreview(
+  env: AppEnv["Bindings"],
+  identity: { email: string },
+  artifactId: string,
+): Promise<PromotionPreview> {
+  const incoming = await getOwnedArtifactRow(env as never, identity as never, artifactId);
+  if (!incoming) throw new Error("that artifact does not exist, or it is not yours");
+  const current = await ownerDeskAppGet(env, identity.email);
+  let replaced: ArtifactSummary | null = null;
+  if (current.artifactId) {
+    const row = await getOwnedArtifactRow(env as never, identity as never, current.artifactId);
+    replaced = { id: current.artifactId, title: row?.title ?? "an app that is no longer in your library" };
+  }
+  return describePromotion({ id: incoming.id, title: incoming.title }, replaced);
+}
+
+export async function ownerDeskPromote(
+  env: AppEnv["Bindings"],
+  identity: { email: string },
+  artifactId: string,
+  acknowledgedReplacedId: string | null,
+): Promise<{ app: DeskApp; preview: PromotionPreview }> {
+  const preview = await ownerDeskPromotionPreview(env, identity, artifactId);
+  if (!promotionConfirmed(preview, acknowledgedReplacedId)) {
+    throw new Error(`${preview.summary} Confirm by sending replacing: "${preview.replaces?.id}".`);
+  }
+  const app = await ownerDeskAppWrite(env, identity.email, { artifactId }, identity.email);
+  return { app, preview };
 }
 
 export async function ownerDeskAppWrite(env: AppEnv["Bindings"], email: string, incoming: unknown, author?: string): Promise<DeskApp> {
@@ -165,6 +197,26 @@ export function registerDeskRoutes(app: Hono<AppEnv>) {
   app.get("/api/desk/app", async (c) => {
     const app_ = await ownerDeskAppGet(c.env, c.get("identity").email);
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: app_, next_actions: [] });
+  });
+  app.get("/api/desk/app/promotion-preview", async (c) => {
+    const artifactId = c.req.query("artifactId") ?? "";
+    try {
+      const preview = await ownerDeskPromotionPreview(c.env, c.get("identity"), artifactId);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: preview, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_PROMOTION", message: error instanceof Error ? error.message : "cannot preview" }, next_actions: [] }, 400);
+    }
+  });
+  app.post("/api/desk/app/promote", async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { artifactId?: unknown; replacing?: unknown };
+    try {
+      const artifactId = typeof body.artifactId === "string" ? body.artifactId : "";
+      const replacing = typeof body.replacing === "string" ? body.replacing : null;
+      const { app: app_, preview } = await ownerDeskPromote(c.env, c.get("identity"), artifactId, replacing);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { app: app_, promoted: preview }, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_PROMOTION", message: error instanceof Error ? error.message : "cannot promote" }, next_actions: [] }, 400);
+    }
   });
   app.put("/api/desk/app", async (c) => {
     const body = await c.req.json().catch(() => ({}));

@@ -120,6 +120,7 @@
     open = true;
     refreshJobs();
     void refreshArtifacts();
+    void refreshDeskApp();
     void refreshStarters();
     void refreshRecipePreferences();
     void refreshRecipes().then(async () => {
@@ -185,6 +186,31 @@
     finally { artifactsLoading = false; }
   }
   function openArtifact(artifact: LibraryArtifact) { window.open("/api/artifacts/" + encodeURIComponent(artifact.id) + "/preview", "_blank", "noopener,noreferrer"); }
+  let deskArtifactId = $state<string | null>(null);
+  async function refreshDeskApp() {
+    try {
+      const response = await fetch("/api/desk/app", { credentials: "include" });
+      const body = await response.json();
+      deskArtifactId = body?.result?.artifactId ?? null;
+    } catch { deskArtifactId = null; }
+  }
+  async function promoteArtifact(artifact: LibraryArtifact) {
+    artifactStatus = "";
+    const preview = await fetch("/api/desk/app/promotion-preview?artifactId=" + encodeURIComponent(artifact.id), { credentials: "include" });
+    const previewBody = await preview.json();
+    if (!preview.ok) { artifactStatus = previewBody?.error?.message || "Could not check the desk"; return; }
+    const { summary, replaces, isNoop } = previewBody.result as { summary: string; replaces: { id: string; title: string } | null; isNoop: boolean };
+    if (isNoop) { artifactStatus = summary; return; }
+    if (replaces && !window.confirm(summary)) return;
+    const response = await fetch("/api/desk/app/promote", {
+      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ artifactId: artifact.id, replacing: replaces?.id ?? null }),
+    });
+    const body = await response.json();
+    if (!response.ok) { artifactStatus = body?.error?.message || "Promote failed"; return; }
+    await refreshDeskApp();
+    artifactStatus = replaces ? `“${artifact.title}” is on the desk. “${replaces.title}” came down.` : `“${artifact.title}” is on the desk.`;
+  }
   function openArtifactConversation(artifact: LibraryArtifact) { closeDrawer(); window.location.href = "/?session=" + encodeURIComponent(artifact.sessionId); }
   async function renameArtifact(artifact: LibraryArtifact) {
     const title = window.prompt("Rename artifact", artifact.title)?.trim();
@@ -1155,6 +1181,11 @@
                   <div class="p-3"><strong class="block truncate text-sm text-fg">{artifact.title}</strong><span class="mt-1 block text-[11px] text-fg-mut">{artifact.kind} · {new Date(artifact.updatedAt || artifact.createdAt).toLocaleDateString()}</span></div>
                 </button>
                 <div class="flex flex-wrap justify-end gap-1.5 border-t border-line p-2">
+                  {#if deskArtifactId === artifact.id}
+                    <span class="job-action-button border-brand/60 text-brand">On the desk</span>
+                  {:else}
+                    <button type="button" class="job-action-button hover:border-brand/60" onclick={() => promoteArtifact(artifact)} title={deskArtifactId ? "Put this on the desk and take down the app that is there" : "Put this on the desk"}>Put on desk</button>
+                  {/if}
                   <button type="button" class="job-action-button text-brand hover:border-brand/60" onclick={() => openArtifact(artifact)}>Open</button>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => openArtifactConversation(artifact)}>Conversation</button>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => renameArtifact(artifact)}>Rename</button>
