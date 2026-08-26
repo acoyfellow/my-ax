@@ -2,7 +2,7 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
-import { ownerDeskClear, ownerDeskGet, ownerDeskUpsert } from "./routes/desk";
+import { ownerDeskClear, ownerDeskGet, ownerDeskPromote, ownerDeskPromotionPreview, ownerDeskUpsert } from "./routes/desk";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { CODE_DIFF_MAX_TEXT_BYTES } from "./code-diff";
 import { createVerifiedCodeDiffReceipt } from "./code-diff-read";
@@ -37,6 +37,29 @@ export const DESK_GET_TOOL: ToolDef = {
   description: "Read the owner's durable desk board.",
   parameters: { type: "object", properties: {} },
   execute: async (_args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskGet(ctx.env, ctx.identity.email) }),
+};
+
+export const DESK_PROMOTE_TOOL: ToolDef = {
+  name: "desk_promote_artifact",
+  description: "Put an existing artifact on the owner's desk at /?action=desk, where it becomes the live app every open client sees. The desk holds exactly ONE app, so this replaces whatever is there now. Call it first with confirm omitted to get a summary naming the app you would take down, tell the owner that sentence, and only call again with confirm true after they agree. Use search_artifacts or the id returned by create_svelte_artifact to find the id.",
+  parameters: {
+    type: "object",
+    properties: {
+      artifactId: { type: "string", description: "The artifact to put on the desk." },
+      confirm: { type: "boolean", description: "Only true after the owner agreed to replace the named app." },
+    },
+    required: ["artifactId"],
+  },
+  execute: async (args, ctx) => {
+    const artifactId = String((args as { artifactId?: unknown }).artifactId ?? "");
+    const confirm = (args as { confirm?: unknown }).confirm === true;
+    const preview = await ownerDeskPromotionPreview(ctx.env, ctx.identity, artifactId);
+    if (!confirm && preview.replaces) {
+      return JSON.stringify({ ok: false, needsConfirmation: true, summary: preview.summary, replaces: preview.replaces });
+    }
+    const promoted = await ownerDeskPromote(ctx.env, ctx.identity, artifactId, preview.replaces?.id ?? null);
+    return JSON.stringify({ ok: true, summary: promoted.preview.summary, desk: { artifactId: promoted.app.artifactId } });
+  },
 };
 
 export const DESK_CLEAR_TOOL: ToolDef = {
@@ -146,6 +169,7 @@ export const CMUX_OBSERVE_TOOL = createCmuxObserveTool({ readerForContext: creat
 export const TOOLS: ToolDef[] = [
   DESK_UPSERT_TOOL,
   DESK_GET_TOOL,
+  DESK_PROMOTE_TOOL,
   DESK_CLEAR_TOOL,
   ASK_USER_TOOL,
   SHOW_DIFF_TOOL,

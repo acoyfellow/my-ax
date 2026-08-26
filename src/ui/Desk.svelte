@@ -71,19 +71,6 @@
     await refreshApp();
   }
 
-  async function clearDesk() {
-    try {
-      const response = await fetch("/api/desk", { method: "DELETE", credentials: "include" });
-      if (!response.ok) throw new Error("clear failed");
-      const body = await response.json();
-      board = body?.result ?? { cards: [], updatedAt: "" };
-      error = null;
-      window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: board }));
-    } catch (err) {
-      error = err instanceof Error ? err.message : "clear failed";
-    }
-  }
-
   const liveCards = $derived(board.cards.filter((card) => card.status === "pending"));
 
   function closePanel() {
@@ -143,9 +130,6 @@
   <div class="notif-header safe-area-appbar">
     <h2 class="truncate text-sm font-semibold text-fg">Desk</h2>
     <div class="flex items-center gap-2">
-      {#if board.cards.length > 0}
-        <button type="button" class="desk-clear" onclick={() => void clearDesk()}>Clear</button>
-      {/if}
       <button type="button" onclick={closePanel} class="notif-close" aria-label="Close desk">×</button>
     </div>
   </div>
@@ -224,17 +208,6 @@
     line-height: 1;
   }
   .notif-close:hover { color: var(--fg); background: var(--surface-2); }
-  .desk-clear {
-    min-height: 36px;
-    padding: 0 10px;
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    background: var(--bg);
-    color: var(--fg-mut);
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .desk-clear:hover { color: var(--fg); background: var(--surface-2); }
   .notif-body {
     flex: 1;
     min-height: 0;
