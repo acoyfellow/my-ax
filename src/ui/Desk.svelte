@@ -1,11 +1,52 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { parseDeskBoard, type DeskBoard } from "../desk-board";
+  import { parseDeskApp, type DeskApp } from "../desk-app";
+  import { ArtifactOutboundBridge, type OutboundVerb } from "./artifact-outbound";
+  import { handlePageCall, type PageCallFrame } from "./page-registry";
 
   let open = $state(false);
   let board = $state<DeskBoard>({ cards: [], updatedAt: "" });
+  let deskApp = $state<DeskApp>({ artifactId: null, state: null, updatedAt: "", updatedBy: null });
   let error = $state<string | null>(null);
   let dialogEl: HTMLDialogElement | null = null;
+  let appFrameEl: HTMLIFrameElement | null = null;
+
+  const hostedArtifactId = $derived(deskApp.artifactId);
+
+  const outbound = new ArtifactOutboundBridge({
+    artifactIdForWindow: (source) => (appFrameEl && source === appFrameEl.contentWindow ? appFrameEl.getAttribute("data-artifact-id") : null),
+    postToArtifact: (artifactId, frame) => {
+      if (!appFrameEl || appFrameEl.getAttribute("data-artifact-id") !== artifactId) return false;
+      const win = appFrameEl.contentWindow;
+      if (!win) return false;
+      try { win.postMessage(frame, "*"); return true; } catch { return false; }
+    },
+    runVerb: async (verb: OutboundVerb, args) => {
+      const outcome = await handlePageCall({ type: "page_call", requestId: `desk-${verb}`, verb, args } as PageCallFrame);
+      if (!outcome.frame.ok) throw new Error(outcome.frame.error || "host_invoke_failed");
+      outcome.after?.();
+      return outcome.frame.result ?? null;
+    },
+  });
+
+  function pushStateToApp() {
+    const id = deskApp.artifactId;
+    if (!id || !appFrameEl) return;
+    const win = appFrameEl.contentWindow;
+    if (!win) return;
+    try { win.postMessage({ type: "my-ax:artifact-state", state: deskApp.state }, "*"); } catch {}
+  }
+
+  async function refreshApp() {
+    try {
+      const response = await fetch("/api/desk/app", { credentials: "include" });
+      if (!response.ok) return;
+      const body = await response.json();
+      deskApp = parseDeskApp(body?.result);
+      pushStateToApp();
+    } catch {}
+  }
 
   async function refresh() {
     try {
@@ -18,6 +59,7 @@
     } catch (err) {
       error = err instanceof Error ? err.message : "desk unavailable";
     }
+    await refreshApp();
   }
 
   async function clearDesk() {
@@ -59,12 +101,27 @@
       board = next;
       error = null;
     };
+    const onAppState = (event: Event) => {
+      deskApp = parseDeskApp((event as CustomEvent).detail);
+      pushStateToApp();
+    };
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === "my-ax:host-invoke") { void outbound.handleCall(event.source, data); return; }
+      if (data.type === "my-ax:desk-app-write") { void refreshApp(); }
+    };
     window.addEventListener("my-ax:desk-open", onOpen);
     window.addEventListener("my-ax:desk-board", onBoard);
+    window.addEventListener("my-ax:desk-app", onAppState);
+    window.addEventListener("message", onMessage);
+    void refreshApp();
     if (new URL(location.href).searchParams.get("action") === "desk") void openPanel();
     return () => {
       window.removeEventListener("my-ax:desk-open", onOpen);
       window.removeEventListener("my-ax:desk-board", onBoard);
+      window.removeEventListener("my-ax:desk-app", onAppState);
+      window.removeEventListener("message", onMessage);
     };
   });
 </script>
@@ -84,10 +141,21 @@
     </div>
   </div>
   <div class="notif-body">
-    {#if error}
+    {#if hostedArtifactId}
+      <iframe
+        bind:this={appFrameEl}
+        class="desk-app-frame"
+        title="Desk"
+        data-artifact-id={hostedArtifactId}
+        src={`/api/artifacts/${encodeURIComponent(hostedArtifactId)}/preview`}
+        sandbox="allow-scripts"
+        referrerpolicy="no-referrer"
+        onload={pushStateToApp}
+      ></iframe>
+    {:else if error}
       <p class="notif-empty text-bad">{error}</p>
     {:else if liveCards.length === 0}
-      <p class="notif-empty">Nothing on the desk. Agents write here with desk_upsert instead of a new conversation.</p>
+      <p class="notif-empty">The desk is empty. An agent can build one with deskWrite: point it at an artifact for a full app, or write state for a simple board.</p>
     {:else}
       <ul class="notif-list">
         {#each liveCards as card (card.id)}
@@ -171,6 +239,13 @@
     text-align: center;
     color: var(--fg-mut);
     font-size: 0.875rem;
+  }
+  .desk-app-frame {
+    display: block;
+    width: 100%;
+    height: min(560px, calc(100dvh - 8rem));
+    border: 0;
+    background: var(--bg);
   }
   .notif-list { display: flex; flex-direction: column; }
   .notif-item {
