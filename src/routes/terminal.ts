@@ -1,4 +1,3 @@
-import { proxyTerminal } from "@cloudflare/sandbox";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getUserWorkspace } from "../workspace";
@@ -21,6 +20,6 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     const { sandbox } = await getUserWorkspace(c.env, identity);
     const cols = boundedDimension(c.req.query("cols"), TERMINAL_DEFAULT_COLS, 500);
     const rows = boundedDimension(c.req.query("rows"), TERMINAL_DEFAULT_ROWS, 200);
-    return proxyTerminal(sandbox, identity.email.toLowerCase(), c.req.raw, { cols, rows });
+    return sandbox.terminal(c.req.raw, { cols, rows });
   });
 }
