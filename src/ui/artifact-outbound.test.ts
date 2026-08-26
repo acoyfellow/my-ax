@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ArtifactOutboundBridge, MAX_OUTBOUND_CALLS_PER_MINUTE, boundOutboundArgs, isOutboundVerbAllowed } from "./artifact-outbound";
+import { ArtifactOutboundBridge, MAX_OUTBOUND_CALLS_PER_MINUTE, OUTBOUND_ALLOWLIST, boundOutboundArgs, isOutboundVerbAllowed } from "./artifact-outbound";
 
 function harness(options: { runVerb?: (verb: string, args: Record<string, unknown>) => Promise<unknown>; windowId?: string | null } = {}) {
   const posted: Array<Record<string, unknown>> = [];
@@ -84,4 +84,11 @@ test("args are bounded: objects, arrays, and long strings are refused", () => {
   assert.equal(boundOutboundArgs({ big: "x".repeat(4001) }).ok, false);
   assert.equal(boundOutboundArgs([1, 2]).ok, false);
   assert.equal(boundOutboundArgs({ "bad key": 1 }).ok, false);
+});
+
+test("every allowlisted verb exists in the page verb catalog", async () => {
+  const { PAGE_VERBS } = await import("./page-registry");
+  const known = new Set(PAGE_VERBS.map((v) => v.name));
+  const missing = OUTBOUND_ALLOWLIST.filter((name) => !known.has(name));
+  assert.deepEqual(missing, [], `allowlist names verbs that do not exist: ${missing.join(", ")}`);
 });
