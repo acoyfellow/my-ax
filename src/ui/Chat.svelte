@@ -6,6 +6,7 @@
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
+  import { evaluateTurnStall, stallFingerprint, stallMessage } from "./turn-stall";
   import { VOICE_CLIENT_OPTIONS } from "./voice-client-options";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
@@ -1092,7 +1093,18 @@
   // FR-2: last time ANY turn frame moved the FSM; the stall watchdog uses this.
   let lastTurnFrameAt = Date.now();
   let turnStallSurfaced = false;
-  const TURN_STALL_MS = 45_000;
+
+  function firstPendingTool(): { name: string; startedAt: number } | null {
+    for (const message of messages) {
+      if (!message.streaming) continue;
+      for (const part of message.parts) {
+        if (part.kind === "tool" && part.tool.state === "pending") {
+          return { name: part.tool.name, startedAt: part.tool.startedAt };
+        }
+      }
+    }
+    return null;
+  }
   let connectionWatchdogId: ReturnType<typeof setInterval> | null = null;
   const ACTIVE_TURN_KEY_PREFIX = "my-ax-active-turn:";
 
@@ -2296,16 +2308,17 @@
       // a genuinely-slow server turn can still land and reconcile via the normal
       // frame/adopt path. Fire once per stall (turnStallSurfaced resets on the
       // next real frame in dispatchTurn).
-      if (
-        !turnStallSurfaced &&
-        composerLocked &&
-        (ws as any).readyState === WebSocket.OPEN &&
-        Date.now() - lastTurnFrameAt > TURN_STALL_MS
-      ) {
+      const verdict = evaluateTurnStall({
+        now: Date.now(),
+        composerLocked,
+        socketOpen: (ws as any).readyState === WebSocket.OPEN,
+        alreadySurfaced: turnStallSurfaced,
+        lastTurnFrameAt,
+        pendingTool: firstPendingTool(),
+      });
+      if (verdict.kind === "stalled") {
         turnStallSurfaced = true;
-        pushSystem("The agent has gone quiet without finishing this turn. It may still be working — you can wait, or send another message to retry or steer.");
-        dispatchTurn({ type: "frame", frame: { requestId: activeRequestId, done: true } });
-        applyStatus("idle");
+        pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
       }
     }, 5_000);
 
