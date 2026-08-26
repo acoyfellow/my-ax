@@ -1,4 +1,4 @@
-import type { PtyOptions } from "@cloudflare/sandbox";
+import { getSandbox, type PtyOptions, type Sandbox } from "@cloudflare/sandbox";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getUserWorkspace } from "../workspace";
@@ -65,6 +65,26 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
       steps.threw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     }
     steps.totalMs = Date.now() - started;
+    return c.json({ ok: true, command: c.req.path, result: steps, next_actions: [] });
+  });
+
+  app.get("/api/workspace/transport-probe", async (c) => {
+    const identity = c.get("identity");
+    const steps: Record<string, unknown> = {};
+    const namespace = (c.env as unknown as { SANDBOX: DurableObjectNamespace<Sandbox> }).SANDBOX;
+    for (const transport of ["http", "rpc"] as const) {
+      const at = Date.now();
+      try {
+        const stub = getSandbox(namespace, identity.email.toLowerCase(), {
+          containerTimeouts: { instanceGetTimeoutMS: 120_000, portReadyTimeoutMS: 240_000 },
+          transport,
+        });
+        const result = await stub.exec("echo TRANSPORT_OK", { timeout: 30_000 });
+        steps[transport] = { ms: Date.now() - at, stdout: (result.stdout ?? "").trim().slice(0, 40), exitCode: result.exitCode };
+      } catch (error) {
+        steps[transport] = { ms: Date.now() - at, threw: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
+      }
+    }
     return c.json({ ok: true, command: c.req.path, result: steps, next_actions: [] });
   });
 
