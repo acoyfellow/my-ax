@@ -2104,10 +2104,7 @@
       role: "user",
       parts: [
         { type: "text", text },
-        ...attachments.flatMap((a) => [
-          { type: "data-attachment", data: a },
-          { type: "file", url: `/api/uploads/${encodeURIComponent(a.key)}`, mediaType: a.mime, filename: a.name },
-        ]),
+        ...attachments.map((a) => ({ type: "data-attachment", data: a })),
       ],
     };
     thinkMessages = [...thinkMessages, user];
