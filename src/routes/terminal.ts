@@ -82,6 +82,16 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
           transport,
         });
         const result = await stub.exec("echo TRANSPORT_OK", { timeout: 20_000 });
+        const ptyAt = Date.now();
+        const upgrade = new Request("https://internal/ws/pty", { headers: { Upgrade: "websocket", Connection: "Upgrade" } });
+        const ptyResponse = await (stub as unknown as { terminal: (r: Request, o?: PtyOptions) => Promise<Response> })
+          .terminal(upgrade, { cols: 80, rows: 24 });
+        steps.pty = {
+          ms: Date.now() - ptyAt,
+          status: ptyResponse.status,
+          hasWebSocket: Boolean((ptyResponse as unknown as { webSocket?: unknown }).webSocket),
+          body: ptyResponse.status === 101 ? "(switching protocols)" : (await ptyResponse.text()).slice(0, 200),
+        };
         steps[transport] = { ms: Date.now() - at, sandboxId, stdout: (result.stdout ?? "").trim().slice(0, 40), exitCode: result.exitCode };
       } catch (error) {
         steps[transport] = { ms: Date.now() - at, sandboxId, threw: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
