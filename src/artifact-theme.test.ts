@@ -49,3 +49,11 @@ test("the preview shell injects the theme before the artifact's own css", () => 
   );
   assert.doesNotMatch(styleLine, /background:#0a0a0a/, "the hardcoded off-theme background should be gone");
 });
+
+test("the artifact body has breathing room instead of bleeding to the frame edge", () => {
+  const body = ARTIFACT_THEME_CSS.match(/\nbody \{[^}]*\}/)?.[0] ?? "";
+  const padding = body.match(/padding:\s*([^;]+);/)?.[1]?.trim();
+  assert.ok(padding && padding !== "0", `the artifact body must have padding, got ${padding ?? "none"}`);
+  assert.match(ARTIFACT_THEME_CSS, /\*, \*::before, \*::after \{ box-sizing: border-box; \}/,
+    "padding must not push content past the frame width");
+});

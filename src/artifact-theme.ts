@@ -33,7 +33,9 @@ export const ARTIFACT_THEME_CSS = `
   --surface-3: rgba(0, 0, 0, 0.10);
 }
 *, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 14px; line-height: 1.5; }
+html { padding: 0; }
+body { padding: 0.875rem; }
 h1 { font-size: 1.25rem; font-weight: 650; margin: 0 0 0.75rem; letter-spacing: -0.01em; }
 h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
 h3 { font-size: 0.875rem; font-weight: 600; margin: 0 0 0.375rem; color: var(--fg-mut); }
