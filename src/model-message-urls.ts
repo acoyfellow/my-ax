@@ -15,6 +15,10 @@ function looksLikeImage(value: string): boolean {
   return false;
 }
 
+function isBinaryData(value: unknown): boolean {
+  return value instanceof Uint8Array || value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+}
+
 function sanitizePart(part: unknown): unknown | null {
   if (!part || typeof part !== "object") return part;
   const item = part as { type?: unknown; url?: unknown; data?: unknown; mediaType?: unknown; mimeType?: unknown };
@@ -31,6 +35,7 @@ function sanitizePart(part: unknown): unknown | null {
     if (looksLikeImage(item.data)) return part;
     return null;
   }
+  if (isBinaryData(item.data)) return part;
   if (item.url != null || item.data != null) return null;
   return part;
 }

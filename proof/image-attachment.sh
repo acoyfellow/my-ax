@@ -54,5 +54,48 @@ FETCHED="$(curl -s -o /dev/null -w '%{http_code}' "$HOST/api/uploads/$KEY" -H "c
 [ "$FETCHED" = "200" ] || fail "GET /api/uploads/<key> returned $FETCHED"
 echo "ok: upload stored and readable"
 
+echo "== 5. a vision turn describes the image it was sent =="
+RED_PNG="$(mktemp /tmp/proof-red-XXXXXX.png)"
+python3 - "$RED_PNG" <<'PY'
+import sys, zlib, struct
+def chunk(tag, data):
+    body = tag + data
+    return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body) & 0xffffffff)
+w = h = 96
+raw = b''.join(b'\x00' + bytes([220, 20, 20] * w) for _ in range(h))
+png = (b'\x89PNG\r\n\x1a\n'
+       + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+       + chunk(b'IDAT', zlib.compress(raw))
+       + chunk(b'IEND', b''))
+open(sys.argv[1], 'wb').write(png)
+PY
+VISION_UPLOAD="$(curl -s "$HOST/api/uploads" -H "cf-access-token: $TOKEN" -F "file=@$RED_PNG;type=image/png" --max-time 60 || true)"
+rm -f "$RED_PNG"
+VISION_JSON="$(printf '%s' "$VISION_UPLOAD" | sed -n 's/.*"result":{\([^}]*\)}.*/{\1}/p')"
+[ -n "$VISION_JSON" ] || fail "could not parse the vision upload result: $(printf '%s' "$VISION_UPLOAD" | head -c 200)"
+SESSION="$(curl -s "$HOST/api/sessions" -X POST -H "cf-access-token: $TOKEN" -H 'content-type: application/json' -d '{"name":"image attachment proof"}' --max-time 40)"
+SID="$(printf '%s' "$SESSION" | sed -n 's/.*"sessionId":"\([^"]*\)".*/\1/p')"
+[ -n "$SID" ] || fail "could not create a session for the vision turn"
+MSG_ID="proof-vision-$RANDOM"
+INJECT="$(curl -s "$HOST/api/sessions/$SID/inject" -X POST -H "cf-access-token: $TOKEN" -H 'content-type: application/json' \
+  -d "{\"content\":\"Look at the attached image. Name its single fill color in one word.\",\"clientMsgId\":\"$MSG_ID\",\"attachments\":[$VISION_JSON]}" --max-time 120 || true)"
+printf '%s' "$INJECT" | grep -q '"injected":true' || fail "the vision turn was refused: $(printf '%s' "$INJECT" | head -c 300)"
+ANSWER=""
+for _ in $(seq 1 20); do
+  sleep 6
+  ENTRIES="$(curl -s "$HOST/api/sessions/$SID/entries?limit=20" -H "cf-access-token: $TOKEN" --max-time 40 || true)"
+  TURN_ERROR="$(printf '%s' "$ENTRIES" | jq -r '[(.result.entries // [])[] | select(.role != "tool") | select(.isError == true)] | length')"
+  if [ "$TURN_ERROR" != "0" ]; then
+    fail "the vision turn recorded an error entry: $(printf '%s' "$ENTRIES" | jq -r '[(.result.entries // [])[] | select(.role != "tool") | select(.isError == true) | .content][0] // ""' | head -c 200)"
+  fi
+  ANSWER="$(printf '%s' "$ENTRIES" | jq -r '[(.result.entries // [])[] | select(.role == "assistant") | .content // ""] | last // ""')"
+  printf '%s' "$ENTRIES" | grep -q '"status":"completed"' && [ -n "$ANSWER" ] && break
+done
+[ -n "$ANSWER" ] || fail "the vision turn produced no assistant text"
+if ! printf '%s' "$ANSWER" | grep -qiE 'red|crimson|scarlet|maroon'; then
+  fail "the model did not describe the red image it was sent (got: $(printf '%s' "$ANSWER" | head -c 120)); the bytes are not reaching the model"
+fi
+echo "ok: the model described the image it was sent"
+
 echo
-echo "PASS: image attachments can be sent; no relative file-part url reaches the model SDK"
+echo "PASS: image attachments reach a vision model and the turn completes"
