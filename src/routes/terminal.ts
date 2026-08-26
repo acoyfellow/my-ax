@@ -75,15 +75,16 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     const requested = c.req.query("transport") === "rpc" ? "rpc" : "http";
     for (const transport of [requested] as const) {
       const at = Date.now();
+      const sandboxId = c.req.query("fresh") === "1" ? `probe-${Date.now()}` : identity.email.toLowerCase();
       try {
-        const stub = getSandbox(namespace, identity.email.toLowerCase(), {
+        const stub = getSandbox(namespace, sandboxId, {
           containerTimeouts: { instanceGetTimeoutMS: 25_000, portReadyTimeoutMS: 35_000 },
           transport,
         });
         const result = await stub.exec("echo TRANSPORT_OK", { timeout: 20_000 });
-        steps[transport] = { ms: Date.now() - at, stdout: (result.stdout ?? "").trim().slice(0, 40), exitCode: result.exitCode };
+        steps[transport] = { ms: Date.now() - at, sandboxId, stdout: (result.stdout ?? "").trim().slice(0, 40), exitCode: result.exitCode };
       } catch (error) {
-        steps[transport] = { ms: Date.now() - at, threw: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
+        steps[transport] = { ms: Date.now() - at, sandboxId, threw: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
       }
     }
     return c.json({ ok: true, command: c.req.path, result: steps, next_actions: [] });
