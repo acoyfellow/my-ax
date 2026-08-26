@@ -1,0 +1,21 @@
+package.json
+  s_99b55ecf7d26fa::t_c858dc689a78f4 145
+src/ui/artifact-outbound.test.ts
+  s_99b55ecf7d26fa::t_4b3b9f4f5f92f3 3,88-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d87da82ecec3e7dfd103d0ae5966c7e945b7b4cb",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
