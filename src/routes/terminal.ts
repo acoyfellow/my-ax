@@ -18,7 +18,7 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     const started = Date.now();
     const steps: Record<string, unknown> = {};
     try {
-      const { sandbox } = await getUserWorkspace(c.env, identity);
+      const { sandbox } = await getUserWorkspace(c.env, identity, { restoreLatest: false });
       steps.workspaceMs = Date.now() - started;
       steps.hasTerminal = typeof (sandbox as unknown as { terminal?: unknown }).terminal === "function";
       const execAt = Date.now();
@@ -33,12 +33,41 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
       steps.ptyStatus = response.status;
       steps.ptyHasWebSocket = Boolean((response as unknown as { webSocket?: unknown }).webSocket);
       steps.ptyBody = response.status === 101 ? "(switching protocols)" : (await response.text()).slice(0, 200);
+      steps.threw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      steps.stack = error instanceof Error ? String(error.stack ?? "").slice(0, 400) : "";
+      steps.threw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    }
+    steps.totalMs = Date.now() - started;
+    return c.json({ ok: true, command: c.req.path, result: steps, next_actions: [] });
+  });
+  app.get("/api/workspace/restore-probe", async (c) => {
+    const identity = c.get("identity");
+    const steps: Record<string, unknown> = {};
+    const started = Date.now();
+    try {
+      const row = await c.env.DB.prepare(
+        "SELECT backup_id, backup_dir FROM workspace_snapshots WHERE owner_email = ?",
+      ).bind(identity.email.toLowerCase()).first<{ backup_id: string; backup_dir: string }>();
+      steps.pointer = row ? { backupId: row.backup_id, backupDir: row.backup_dir } : null;
+      if (row) {
+        const { sandbox } = await getUserWorkspace(c.env, identity, { restoreLatest: false });
+        const attemptAt = Date.now();
+        try {
+          const restored = await sandbox.restoreBackup({ id: row.backup_id, dir: row.backup_dir });
+          steps.restoreMs = Date.now() - attemptAt;
+          steps.restoreRaw = { success: restored.success, id: restored.id, dir: restored.dir };
+        } catch (inner) {
+          steps.restoreMs = Date.now() - attemptAt;
+          steps.restoreThrew = inner instanceof Error ? `${inner.name}: ${inner.message}` : String(inner);
+        }
+      }
     } catch (error) {
       steps.threw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     }
     steps.totalMs = Date.now() - started;
     return c.json({ ok: true, command: c.req.path, result: steps, next_actions: [] });
   });
+
 
   app.get("/api/workspace/terminal", async (c) => {
     if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
