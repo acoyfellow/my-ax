@@ -4,7 +4,7 @@ This is the default development loop. Issues and pull requests are handled here,
 
 | Host | Who can reach it | Holds |
 |---|---|---|
-| `hooks.ax.cloudflare.dev` | GitHub (HMAC) | webhook secret |
+| the hook host (see `EMPLOYEE_HOOK_ROUTE` in local config) | GitHub (HMAC) | webhook secret |
 | `my-ax-agents` (no public hostname) | hook service binding only | gateway token, GitHub token, Terrarium, workflows |
 
 GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do not Access-gate the hook. The hook verifies `x-hub-signature-256`, then service-binds to the inner Worker. The inner Worker re-checks HMAC.
@@ -35,6 +35,8 @@ bash proof/error-queue-drained.sh  # no open auto-error issue predates the runni
 bash proof/agentcast-live.sh       # the live browser opens, instructs, and returns a redacted receipt
 bash proof/preview-per-pr.sh       # an open PR has an isolated preview behind Access, running its own head
 bash proof/image-attachment.sh      # an image attachment reaches a vision model and the turn completes
+bash proof/desk-live.sh            # the desk is a styled agent-authored app that updates live on every
+                                   # client, both from an agent and from an action on the desk itself
 bash proof/desk-app.sh             # the desk hosts an agent-authored app that can call the app back,
                                    # keeps free-form state, refuses a bad write, and does not lose a
                                    # concurrent write
