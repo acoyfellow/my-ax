@@ -6,13 +6,24 @@
 
 import { Agent, getSubAgentByName } from "agents";
 import { MyAgent } from "./agent";
-import { deskBoardFrame } from "./desk-live";
+import { deskAppFrame, deskBoardFrame } from "./desk-live";
 import type { DeskBoard } from "./desk-board";
+import type { DeskApp } from "./desk-app";
 import type { Env } from "./types";
 
 export class UserAgent extends Agent<Env> {
   async broadcastDeskBoard(sessionIds: string[], board: DeskBoard): Promise<void> {
     const frame = deskBoardFrame(board);
+    for (const sessionId of sessionIds) {
+      if (!sessionId) continue;
+      const facet = await getSubAgentByName(this, MyAgent, sessionId);
+      await facet.sendDeskBoard(frame);
+    }
+  }
+
+  async broadcastDeskApp(sessionIds: string[], app: DeskApp): Promise<void> {
+    const frame = deskAppFrame(app);
+    this.broadcast(frame);
     for (const sessionId of sessionIds) {
       if (!sessionId) continue;
       const facet = await getSubAgentByName(this, MyAgent, sessionId);

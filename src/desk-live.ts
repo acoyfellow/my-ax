@@ -1,6 +1,19 @@
 import { parseDeskBoard, type DeskBoard } from "./desk-board";
+import { parseDeskApp, type DeskApp } from "./desk-app";
 
 export const DESK_BOARD_FRAME = "desk.board";
+export const DESK_APP_FRAME = "desk.app";
+
+export function deskAppFrame(app: DeskApp): string {
+  return JSON.stringify({ type: DESK_APP_FRAME, app });
+}
+
+export function parseDeskAppFrame(raw: unknown): DeskApp | null {
+  if (!raw || typeof raw !== "object") return null;
+  const frame = raw as { type?: unknown; app?: unknown };
+  if (frame.type !== DESK_APP_FRAME || !("app" in frame)) return null;
+  return parseDeskApp(frame.app);
+}
 
 export function deskBoardFrame(board: DeskBoard): string {
   return JSON.stringify({ type: DESK_BOARD_FRAME, board });

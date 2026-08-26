@@ -57,7 +57,17 @@ export async function ownerDeskAppWrite(env: AppEnv["Bindings"], email: string, 
     },
     (current) => applyDeskAppWrite(current, incoming, { author: author ?? null }),
   );
+  await broadcastDeskApp(env, owner, written.value);
   return written.value;
+}
+
+async function broadcastDeskApp(env: AppEnv["Bindings"], email: string, app: DeskApp): Promise<void> {
+  const owner = email.toLowerCase();
+  const rows = await env.DB.prepare(
+    "SELECT id FROM sessions WHERE owner_email = ? AND status != 'archived' ORDER BY updated_at DESC LIMIT 40",
+  ).bind(owner).all<{ id: string }>();
+  const parent = await getAgentByName(env.USER_AGENT, owner);
+  await parent.broadcastDeskApp((rows.results ?? []).map((row) => row.id), app);
 }
 
 async function readBoard(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
