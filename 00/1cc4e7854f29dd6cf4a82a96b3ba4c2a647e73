@@ -1,0 +1,23 @@
+package.json
+  s_99b55ecf7d26fa::t_e77d6a1bfea1d0 89,145-146
+src/ui/Chat.svelte
+  s_99b55ecf7d26fa::t_027173c292ed0a 9,1096-1107,2311-2319,2321
+src/ui/turn-stall.ts
+  s_99b55ecf7d26fa::t_cdf330852ac23f 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "001cc4e7854f29dd6cf4a82a96b3ba4c2a647e73",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
