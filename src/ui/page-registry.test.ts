@@ -251,3 +251,13 @@ test("unknown verb resolves to a typed error frame keyed by requestId", async ()
 test("every catalog verb is wired to a runnable implementation", () => {
   for (const v of PAGE_VERBS) assert.equal(typeof v.run, "function", `${v.name} has a run()`);
 });
+
+test("listSessions returns a real title from the shape /api/sessions actually sends", async () => {
+  installGlobals({ fetchJson: () => ({ ok: true, command: "GET /api/sessions", result: { sessions: [
+    { id: "s1", name: "Desk work", status: "active", updated_at: "t1", created_at: "t0", pinned: 0, pin_rank: null },
+  ] } }) });
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "rn", verb: "listSessions", args: {} });
+  assert.equal(frame.ok, true);
+  const rows = frame.result as Array<{ id: string; title: string | null }>;
+  assert.equal(rows[0].title, "Desk work", "a desk app renders this; null becomes an em-dash");
+});
