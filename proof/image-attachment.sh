@@ -26,15 +26,20 @@ HEALTH="$(curl -s -o /dev/null -w '%{http_code}' "$HOST/api/health" -H "cf-acces
 echo "ok: health 200"
 
 echo "== 3. the deployed bundle carries the fixed submit shape =="
-BUNDLE="$(curl -s "$HOST/" -H "cf-access-token: $TOKEN" --max-time 30 | grep -oE '/assets/client[^"]*\.js' | head -1)"
-[ -n "$BUNDLE" ] || fail "could not find the client bundle url in the served document"
-BODY="$(curl -s "$HOST$BUNDLE" -H "cf-access-token: $TOKEN" --max-time 60)"
-[ -n "$BODY" ] || fail "client bundle $BUNDLE was empty"
-printf '%s' "$BODY" | grep -q 'data-attachment' || fail "deployed bundle has no data-attachment part; attachments cannot be sent"
-if printf '%s' "$BODY" | grep -qE 'type:"file",url:"/api/uploads/'; then
-  fail "deployed bundle still builds a file part with a relative upload url (the crash shape)"
+DOC="$(curl -s "$HOST/" -H "cf-access-token: $TOKEN" --max-time 30)"
+[ -n "$DOC" ] || fail "the served document was empty"
+CHAT_CHUNKS="$(printf '%s' "$DOC" | grep -oE '/__svelte/[A-Za-z0-9_.-]+\.js' | sort -u)"
+[ -n "$CHAT_CHUNKS" ] || fail "could not find any /__svelte/*.js chunk in the served document"
+CHUNK_DIR="$(mktemp -d /tmp/proof-chunks-XXXXXX)"
+trap 'rm -rf "$CHUNK_DIR"' EXIT
+for chunk in $CHAT_CHUNKS; do
+  curl -s "$HOST$chunk" -H "cf-access-token: $TOKEN" --max-time 60 -o "$CHUNK_DIR/$(basename "$chunk")"
+done
+if LC_ALL=C grep -rqE 'type:"file",url:"/api/uploads/' "$CHUNK_DIR"; then
+  fail "a deployed chunk still builds a file part with a relative upload url (the crash shape)"
 fi
-echo "ok: deployed bundle carries data-attachment and no relative file-part url"
+LC_ALL=C grep -rq 'data-attachment' "$CHUNK_DIR" || fail "no deployed chunk carries a data-attachment part; attachments cannot be sent"
+echo "ok: deployed chunks carry data-attachment and no relative file-part url"
 
 echo "== 4. an upload round-trips =="
 PNG="$(mktemp /tmp/proof-image-XXXXXX.png)"
