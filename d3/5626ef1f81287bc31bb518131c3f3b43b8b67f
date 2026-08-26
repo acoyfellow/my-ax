@@ -1,0 +1,29 @@
+package.json
+  s_99b55ecf7d26fa::t_f8d98febdc084e 145
+src/artifact-theme.test.ts
+  s_99b55ecf7d26fa::t_220eefaa459063 1-51
+src/artifact-theme.ts
+  s_99b55ecf7d26fa::t_42aa20a2d33ebc 1-94
+src/routes/artifacts.ts
+  s_99b55ecf7d26fa::t_7be2aa3efd68a9 6,13
+src/ui/page-registry.test.ts
+  s_99b55ecf7d26fa::t_324ffd56466aca 254-263
+src/ui/page-registry.ts
+  s_99b55ecf7d26fa::t_24957e01ed74f0 85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d35626ef1f81287bc31bb518131c3f3b43b8b67f",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
