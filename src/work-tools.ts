@@ -46,6 +46,11 @@ const PAGE_WORK_METHODS = [
   { name: "navigate", description: "Navigate the owner's UI to an in-app deep link (/?session=<id>, /?action=attention|settings, /runs/<id>). Input: {target}." },
   { name: "listArtifactTools", description: "List tools that live artifact widgets have self-registered: [{artifactId,name,description}]. Discover them here, then call invokeArtifactTool." },
   { name: "invokeArtifactTool", description: "Invoke a tool a live artifact widget self-registered (agent-drivable UI). Input: {artifactId, name, args?}. Parent-mediated + arg-validated." },
+  { name: "openDesk", description: "Open the owner's desk control board." },
+  { name: "applyDeskBoard", description: "Replace the live desk panel with one owner board payload. Legacy card path; prefer deskWrite." },
+  { name: "deskRead", description: "Read the owner's desk: {artifactId,state,updatedAt,updatedBy}. The desk is an app any agent can read and write." },
+  { name: "deskWrite", description: "Write the owner's desk. Input: {state} as a JSON string for free-form board state, and/or {artifactId} to host an agent-authored app. Concurrent writers are merged; oversized state is refused." },
+  { name: "sendToSession", description: "Send a message to one of the owner's conversations without switching to it. Input: {sessionId, content}." },
 ] as const;
 
 type WorkCall = {
