@@ -71,9 +71,24 @@ test("the terminal route refuses a non-upgrade request and never persists termin
 
 test("the live gate asserts the pty, the auth refusal, and the leak scan", () => {
   const gate = readFileSync(new URL("../proof/terminal-live.sh", import.meta.url), "utf8");
-  assert.match(gate, /"ptyStatus":101/, "the gate must require a real protocol switch");
-  assert.match(gate, /"ptyHasWebSocket":true/, "the gate must require a websocket, not just a 101");
+  assert.match(gate, /terminal-upgrade-probe\.mjs/, "the gate must upgrade the real terminal endpoint");
   assert.match(gate, /without a valid Access token/, "the gate must prove the door is gated");
   assert.match(gate, /leaked into the error queue/, "the gate must scan the error queue");
   assert.match(gate, /leaked into transcript/, "the gate must scan transcripts");
+  assert.doesNotMatch(gate, /workspace\/terminal-probe/, "the gate must not depend on a deleted probe route");
+});
+
+test("the upgrade probe requires a 101 and real pty bytes, not just a reachable socket", () => {
+  const probe = readFileSync(new URL("../proof/terminal-upgrade-probe.mjs", import.meta.url), "utf8");
+  assert.match(probe, /statusCode === 101/, "the probe must require a protocol switch");
+  assert.match(probe, /isBinary/, "the probe must require binary pty output");
+  assert.match(probe, /without a 101 upgrade/, "binary bytes without an upgrade must fail");
+});
+
+test("the spike debris routes are gone and the recovery route stays", () => {
+  const routes = readFileSync(new URL("./routes/terminal.ts", import.meta.url), "utf8");
+  for (const debris of ["terminal-probe", "restore-probe", "transport-probe"]) {
+    assert.doesNotMatch(routes, new RegExp(debris), `${debris} was spike debris and must not come back`);
+  }
+  assert.match(routes, /\/api\/workspace\/recycle/, "recycle is the only recovery path for a wedged container");
 });
