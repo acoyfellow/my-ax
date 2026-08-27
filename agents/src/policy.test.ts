@@ -149,6 +149,23 @@ test("usableIssueLabels drops unknown names without a repo list", () => {
   assert.deepEqual(usableIssueLabels(["bug", "triage:draft", "not-a-label"]), ["bug", "triage:draft"]);
 });
 
+test("auditPull does not recommend merge when the only files are factory seeds", () => {
+  const stamp = auditPull(
+    {
+      title: "fix: terminal",
+      body: "Closes #158",
+      author: "acoyfellow",
+      draft: false,
+      headSha: "abc",
+      files: [".factory/issue-158.md"],
+      behindMain: 0,
+    },
+    "d",
+  );
+  assert.equal(stamp.recommendation, "needs-human");
+  assert.ok(stamp.findings.some((finding) => finding.includes("product files missing")));
+});
+
 test("auditPull treats empty files and unknown behindMain as unknown, not clean", () => {
   const empty = auditPull(
     { title: "feat", body: "ok", author: "m", draft: false, headSha: "abc", files: [], behindMain: 0 },
