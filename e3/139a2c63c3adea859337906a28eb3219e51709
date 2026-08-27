@@ -1,0 +1,19 @@
+src/ui/page-registry.ts
+  s_99b55ecf7d26fa::t_f71b8ca15b6bf1 67-71,216,219-220,351,354,356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e3139a2c63c3adea859337906a28eb3219e51709",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
