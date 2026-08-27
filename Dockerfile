@@ -6,9 +6,11 @@
 # the in-container HTTP server speaks a different protocol than the SDK.
 #
 # Container ships with a deliberately lean utility baseline for the agent's
-# durable /home/user workspace. Repository mounting, Git checkouts, and
-# self-deployment CLIs are intentionally absent: my-ax is not a self-development
-# environment.
+# durable /home/user workspace. Repository mounting and self-deployment remain
+# absent: my-ax is not a self-development environment. The GitHub CLI is the
+# one exception, because `gh auth login` is an interactive device-code flow
+# that the inline terminal exists to complete, and a per-container manual
+# install does not survive a recycle.
 FROM docker.io/cloudflare/sandbox:0.12.1
 
 # Required for `wrangler dev` local development. Without this EXPOSE, the
@@ -36,6 +38,28 @@ RUN apt-get update -qq \
 # Modern Python/user-tool path. Install uv as a small pair of static binaries;
 # uv-managed tools can live under /home/user and persist with workspace backups.
 COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /uvx /usr/local/bin/
+
+# GitHub CLI, pinned and checksum-verified. Installed into the image rather
+# than /home/user so it survives a container recycle: a workspace-local copy
+# disappears with the container and leaves `gh: command not found` again.
+ARG TARGETARCH
+ARG GH_VERSION=2.63.2
+ARG GH_SHA256_AMD64=912fdb1ca29cb005fb746fc5d2b787a289078923a29d0f9ec19a0b00272ded00
+ARG GH_SHA256_ARM64=0f31e2a8549c64b5c1679f0b99ce5e0dac7c91da9e86f6246adb8805b0f0b4bb
+RUN set -eux; \
+    arch="${TARGETARCH:-amd64}"; \
+    case "$arch" in \
+      amd64) sha="${GH_SHA256_AMD64}" ;; \
+      arm64) sha="${GH_SHA256_ARM64}" ;; \
+      *) echo "unsupported arch for gh: $arch" >&2; exit 1 ;; \
+    esac; \
+    url="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz"; \
+    curl -fsSL -o /tmp/gh.tgz "$url"; \
+    echo "${sha}  /tmp/gh.tgz" | sha256sum -c -; \
+    tar -xzf /tmp/gh.tgz -C /tmp; \
+    install -m 0755 "/tmp/gh_${GH_VERSION}_linux_${arch}/bin/gh" /usr/local/bin/gh; \
+    rm -rf /tmp/gh.tgz "/tmp/gh_${GH_VERSION}_linux_${arch}"; \
+    gh --version
 
 # Keep /home/user empty in the image. Runtime workspace restore repopulates
 # it from the latest Sandbox backup when available; otherwise users get a
