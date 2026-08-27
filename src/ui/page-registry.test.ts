@@ -191,7 +191,34 @@ test("switchSession without id is a typed error, not a throw", async () => {
   installGlobals({});
   const { frame } = await handlePageCall({ type: "page_call", requestId: "r5", verb: "switchSession", args: {} });
   assert.equal(frame.ok, false);
-  assert.match(String(frame.error), /requires \{id\}/);
+  assert.match(String(frame.error), /requires \{id\} or \{sessionId\}/);
+});
+
+test("switchSession accepts sessionId, the key listSessions callers reach for", async () => {
+  const events = installGlobals({});
+  const { frame, after } = await handlePageCall({ type: "page_call", requestId: "r5b", verb: "switchSession", args: { sessionId: "from-desk" } });
+  assert.equal(frame.ok, true, `switchSession({sessionId}) must not error: ${String(frame.error)}`);
+  assert.deepEqual(frame.result, { ok: true, id: "from-desk" });
+  after!();
+  assert.deepEqual(events, ["my-ax:switch-session"]);
+});
+
+test("sendToSession accepts id as well as sessionId", async () => {
+  installGlobals({ fetchJson: () => ({ ok: true, result: { injected: true } }) });
+  const viaId = await handlePageCall({ type: "page_call", requestId: "r5c", verb: "sendToSession", args: { id: "target", content: "hello" } });
+  assert.equal(viaId.frame.ok, true, `sendToSession({id}) must not error: ${String(viaId.frame.error)}`);
+  const viaSessionId = await handlePageCall({ type: "page_call", requestId: "r5d", verb: "sendToSession", args: { sessionId: "target", content: "hello" } });
+  assert.equal(viaSessionId.frame.ok, true, `sendToSession({sessionId}) must not error: ${String(viaSessionId.frame.error)}`);
+});
+
+test("a session id survives the round trip from listSessions into switchSession", async () => {
+  installGlobals({ fetchJson: () => ({ ok: true, result: { sessions: [{ id: "s-round-trip", title: "Desk", status: "active" }] } }) });
+  const listed = await handlePageCall({ type: "page_call", requestId: "r5e", verb: "listSessions", args: {} });
+  const first = (listed.frame.result as Array<{ id: string }>)[0];
+  for (const shape of [{ id: first.id }, { sessionId: first.id }]) {
+    const switched = await handlePageCall({ type: "page_call", requestId: "r5f", verb: "switchSession", args: shape });
+    assert.equal(switched.frame.ok, true, `switchSession(${JSON.stringify(shape)}) must accept what listSessions returned`);
+  }
 });
 
 test("openSettings / openAttention / openSessions / openDesk dispatch their window events synchronously", async () => {

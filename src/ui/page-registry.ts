@@ -64,6 +64,11 @@ export interface ArtifactBridge {
 let artifactBridge: ArtifactBridge | null = null;
 export function setArtifactBridge(bridge: ArtifactBridge | null): void { artifactBridge = bridge; }
 
+export function sessionArgument(args: Record<string, unknown>): string {
+  const candidate = args.id ?? args.sessionId;
+  return typeof candidate === "string" || typeof candidate === "number" ? String(candidate).trim() : "";
+}
+
 async function getJSON(url: string): Promise<unknown> {
   const r = await fetch(url, { credentials: "include", headers: { accept: "application/json" } });
   if (!r.ok) throw new Error(`${url} -> ${r.status}`);
@@ -208,11 +213,11 @@ export const PAGE_VERBS: PageVerb[] = [
   },
   {
     name: "switchSession",
-    description: "Switch the active conversation to {id}. Resolves on the client's switch ack.",
+    description: "Switch the active conversation. Input: {id} or {sessionId}, as returned by listSessions. Resolves on the client's switch ack.",
     resolution: "ack",
     run: async (args) => {
-      const id = String(args.id ?? "");
-      if (!id) throw new Error("switchSession requires {id}");
+      const id = sessionArgument(args);
+      if (!id) throw new Error("switchSession requires {id} or {sessionId}");
       // Disruptive: the switch tears down this very socket. Reply FIRST
       // (return the result), then perform the switch in `after` once the
       // page_result frame has been flushed to the awaiting DO.
@@ -343,12 +348,12 @@ export const PAGE_VERBS: PageVerb[] = [
   },
   {
     name: "sendToSession",
-    description: "Send a message to one of the owner's conversations without switching to it. Input: {sessionId, content}.",
+    description: "Send a message to one of the owner's conversations without switching to it. Input: {sessionId} or {id}, plus {content}.",
     resolution: "receipt",
     run: async (args) => {
-      const sessionId = String(args.sessionId ?? "");
+      const sessionId = sessionArgument(args);
       const content = String(args.content ?? "").slice(0, 4000).trim();
-      if (!sessionId || !content) throw new Error("sendToSession requires {sessionId, content}");
+      if (!sessionId || !content) throw new Error("sendToSession requires {sessionId} or {id}, plus {content}");
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/inject`, {
         method: "POST",
         credentials: "include",
