@@ -161,7 +161,7 @@
     "@pierre/theme": "1.1.0",
     "agents": "^0.20.1",
     "ai": "7.0.66",
-    "cloudterm": "github:acoyfellow/cloudterm#v0.0.3",
+    "cloudterm": "github:acoyfellow/cloudterm#v0.0.9",
     "effect": "3.21.3",
     "hono": "4.12.25",
     "jose": "6.2.3",

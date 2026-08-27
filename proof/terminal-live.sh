@@ -23,10 +23,8 @@ TOKEN="$(cloudflared access token --app="$HOST" 2>/dev/null || true)"
 api() { curl -s -H "cf-access-token: $TOKEN" --max-time 60 "$@"; }
 
 echo "== 2. the deployed worker serves a pty on the owner container =="
-PROBE="$(api "$HOST/api/workspace/terminal-probe")"
-echo "$PROBE" | grep -q '"hasTerminal":true' || fail "deployed sandbox exposes no terminal method: $PROBE"
-echo "$PROBE" | grep -q '"ptyStatus":101' || fail "pty did not answer 101 switching protocols: $PROBE"
-echo "$PROBE" | grep -q '"ptyHasWebSocket":true' || fail "pty answered 101 with no websocket: $PROBE"
+MYAX_HOST="$HOST" MYAX_TOKEN="$TOKEN" node proof/terminal-upgrade-probe.mjs \
+  || fail "the real terminal endpoint did not upgrade to a live pty"
 echo "ok: pty upgrade reaches a live container"
 
 echo "== 3. a non-upgrade request is refused instead of hanging =="
