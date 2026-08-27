@@ -53,7 +53,17 @@ MYAX_HOST="$HOST" MYAX_TOKEN="$TOKEN" MYAX_CANARY="$CANARY" \
   node proof/terminal-live-client.mjs || fail "the live pty client did not prove typing, reconnect, and resize"
 echo "ok: typed input executes, shell state survives a reconnect"
 
-echo "== 6. terminal bytes never reach the error queue or a transcript =="
+echo "== 6. cloudterm paints real pty bytes, not just markup =="
+if curl -s --max-time 5 "${CDP_URL:-http://127.0.0.1:19222}/json/version" >/dev/null 2>&1; then
+  npx esbuild node_modules/cloudterm/dist/index.js --bundle --format=esm --outfile=/tmp/cloudterm-bundle.js --log-level=error >/dev/null 2>&1 \
+    || fail "could not bundle cloudterm for the render proof"
+  MYAX_HOST="$HOST" MYAX_TOKEN="$TOKEN" CLOUDTERM_BUNDLE=/tmp/cloudterm-bundle.js \
+    node proof/terminal-render-proof.mjs || fail "cloudterm did not paint real pty output"
+else
+  echo "SKIP: no browser on ${CDP_URL:-http://127.0.0.1:19222}; start one to prove the rendered outcome"
+fi
+
+echo "== 7. terminal bytes never reach the error queue or a transcript =="
 sleep 4
 ERRORS="$(api "$HOST/api/errors?limit=50" || true)"
 case "$ERRORS" in
