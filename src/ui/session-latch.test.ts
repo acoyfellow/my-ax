@@ -42,6 +42,19 @@ test("active-turn latch older than the max age is rejected", () => {
   );
 });
 
+test("a twelve-hour-old latch is not a broken session", () => {
+  const now = 1_000_000_000;
+  assert.equal(
+    activeTurnIsRestorable(
+      { id: "R1", clientMsgId: "u1", at: now - 12 * 60 * 60 * 1000, sessionId: "S1" },
+      "S1",
+      now,
+    ),
+    false,
+  );
+  assert.ok(ACTIVE_TURN_MAX_AGE_MS <= 15 * 60_000);
+});
+
 test("null/empty latch is not restorable", () => {
   assert.equal(activeTurnIsRestorable(null, "S1"), false);
   assert.equal(activeTurnIsRestorable({} as any, "S1"), false);
@@ -52,10 +65,10 @@ test("pending-first payload adopted only by its bound session", () => {
   assert.equal(pendingFirstBelongsHere("S1", "S2"), false);
 });
 
-test("pending-first payload with no binding is backward-compatible", () => {
-  assert.equal(pendingFirstBelongsHere(null, "S1"), true);
-  assert.equal(pendingFirstBelongsHere(undefined, "S1"), true);
-  assert.equal(pendingFirstBelongsHere("", "S1"), true);
+test("pending-first payload with no binding is not adopted", () => {
+  assert.equal(pendingFirstBelongsHere(null, "S1"), false);
+  assert.equal(pendingFirstBelongsHere(undefined, "S1"), false);
+  assert.equal(pendingFirstBelongsHere("", "S1"), false);
 });
 
 test("a latch missing clientMsgId is not restorable (fail closed, sound narrowing)", () => {

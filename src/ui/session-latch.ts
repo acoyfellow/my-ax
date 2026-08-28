@@ -10,7 +10,7 @@ export type ActiveTurnLatch = {
   sessionId: string;
 };
 
-export const ACTIVE_TURN_MAX_AGE_MS = 86_400_000; // 24h
+export const ACTIVE_TURN_MAX_AGE_MS = 15 * 60_000;
 
 /**
  * Decide whether a stored active-turn latch should be restored for the
@@ -44,6 +44,6 @@ export function pendingFirstBelongsHere(
   boundSessionId: string | null | undefined,
   currentSessionId: string,
 ): boolean {
-  if (!boundSessionId) return true;
+  if (!boundSessionId) return false;
   return boundSessionId === currentSessionId;
 }

@@ -44,3 +44,14 @@ test("D1 reload retains malformed show_diff output as an inert raw result", () =
   assert.equal(message.parts[0].tool.result, raw);
   assert.equal(message.parts[0].tool.name, "show_diff");
 });
+
+test("a D1 row without createdAt does not pretend it was just sent", () => {
+  const before = Date.now();
+  const message = d1EntryToTranscriptMessage({
+    id: 99,
+    role: "user",
+    content: "old turn",
+  }, (text) => text);
+  assert.equal(message.timestamp, undefined);
+  assert.ok(before);
+});

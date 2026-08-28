@@ -30,8 +30,10 @@ function objectValue(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function timestamp(value: unknown): number {
-  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? Date.parse(value) : Date.now();
+function timestamp(value: unknown): number | undefined {
+  if (typeof value === "string" && Number.isFinite(Date.parse(value))) return Date.parse(value);
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  return undefined;
 }
 
 function codeDiffResult(value: string, toolName: string, isError: boolean): unknown {
@@ -64,7 +66,7 @@ export function d1EntryToTranscriptMessage(entry: D1Entry, renderMarkdown: (text
       name: toolName,
       arguments: meta.args ?? {},
       state: isError ? "error" : "done",
-      startedAt: createdAt,
+      startedAt: createdAt ?? 0,
       elapsedText: "",
       result: codeDiffResult(content, toolName, isError),
       isError,
