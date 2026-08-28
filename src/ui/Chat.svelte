@@ -219,6 +219,7 @@
   let thinkingVisible = $state(false);
   let scrollToBottomVisible = $state(false);
   let pendingDecision = $state<{ id: string; question: string; href: string } | null>(null);
+  let terminalOpen = $state(false);
 
   let logEl = $state<HTMLElement | undefined>(undefined);
   let inputEl = $state<HTMLTextAreaElement | undefined>(undefined);
@@ -2483,6 +2484,8 @@
     window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
     window.addEventListener("my-ax:navigate", onNavigate as EventListener);
     window.addEventListener("my-ax:toast", onPageToast as EventListener);
+    const onTerminalOpen = () => { terminalOpen = true; };
+    window.addEventListener("my-ax:terminal-open", onTerminalOpen);
     window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
     window.addEventListener("message", onArtifactMessage);
     navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
@@ -2494,6 +2497,7 @@
       window.removeEventListener("my-ax:switch-session", onSwitch as EventListener);
       window.removeEventListener("my-ax:navigate", onNavigate as EventListener);
       window.removeEventListener("my-ax:toast", onPageToast as EventListener);
+      window.removeEventListener("my-ax:terminal-open", onTerminalOpen);
       window.removeEventListener("message", onArtifactMessage);
       setArtifactBridge(null);
       navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
@@ -2779,7 +2783,9 @@
             <span class="agent-thinking__dot" aria-hidden="true"></span>
           </div>
         {/if}
-        <Terminal />
+        {#if terminalOpen}
+          <Terminal onClose={() => (terminalOpen = false)} />
+        {/if}
       </main>
 
       {#if scrollToBottomVisible}

@@ -44,6 +44,7 @@ bash proof/factory-implements.sh   # an opted-in draft does not open a ready PR 
 bash proof/terminal-live.sh        # the deployed Worker serves a real pty; typed input executes
 bash proof/terminal-remainders.sh  # desk session verbs, baked gh, no spike probes, no 2004h leak
 bash proof/terminal-inline.sh      # no top-bar terminal; inline host; size is measured
+bash proof/terminal-on-demand.sh   # terminals are on-demand cards, not a permanent chat strip
 ```
 
 `factory-no-loop.sh` waits past two 15 minute sweeps on purpose. The re-queue bug it guards only appears across sweep ticks.

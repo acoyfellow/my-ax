@@ -11,6 +11,7 @@ export const OUTBOUND_ALLOWLIST = [
   "openSettings",
   "openAttention",
   "openSessions",
+  "openTerminal",
   "notify",
   "navigate",
   "deskRead",

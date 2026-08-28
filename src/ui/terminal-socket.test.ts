@@ -109,10 +109,14 @@ test("the panel sends what cloudterm gives it and paints what the socket returns
   assert.doesNotMatch(source, /\/api\/errors/, "terminal bytes must never be posted to the error queue");
 });
 
-test("chat hosts the inline terminal and the shell has no top-bar control", () => {
+test("chat mounts the terminal only after an explicit open and the shell has no top-bar control", () => {
   const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
   const shell = readFileSync(new URL("./AppShell.svelte", import.meta.url), "utf8");
-  assert.match(chat, /<Terminal \/>/, "the terminal must be mounted in chat");
-  assert.doesNotMatch(shell, /id="terminal-button"/, "the top-bar terminal button must be gone");
+  const panel = readFileSync(new URL("./Terminal.svelte", import.meta.url), "utf8");
+  assert.match(chat, /terminalOpen/, "chat must gate the terminal behind an explicit open");
+  assert.match(chat, /my-ax:terminal-open/, "an open event must show the card");
+  assert.match(chat, /\{#if terminalOpen\}/, "the terminal must not mount on every load");
+  assert.match(panel, /data-on-demand/, "the card must be on-demand, not a permanent strip");
+  assert.doesNotMatch(shell, /id="terminal-button"/, "the top-bar terminal button must stay gone");
   assert.doesNotMatch(shell, /<Terminal \/>/, "the shell must not host a global terminal overlay");
 });
