@@ -26,6 +26,7 @@ export interface GithubPort {
   hasBranch?(name: string): Promise<boolean>;
   hasOpenPrForHead?(head: string): Promise<boolean>;
   createBranch?(name: string, seed?: { path: string; message: string; content: string }): Promise<void>;
+  listBranchFiles?(head: string): Promise<string[]>;
   mergePr(number: number): Promise<void>;
   approvePr(number: number): Promise<void>;
   closePr?(number: number): Promise<void>;
@@ -50,9 +51,27 @@ export type TriageStep =
   | { step: "comment" }
   | { step: "pr"; number: number }
   | { step: "branch"; head: string }
+  | { step: "implement"; runId: string; verified: boolean }
   | { step: "dig"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
+
+export function productFilesOnBranch(files: string[]): string[] {
+  return files.filter((file) => file.length > 0 && !file.startsWith(".factory/"));
+}
+
+export function formatImplementTask(input: IssueInput): string {
+  const issueNumber = input.number ?? 0;
+  const head = `bot/issue-${issueNumber}`;
+  return [
+    `Implement issue #${issueNumber} on branch ${head}.`,
+    input.title,
+    input.body,
+    "Do not add files under .factory/.",
+    "Change at least one product file named by the issue.",
+    "Worker never merges and never approves.",
+  ].join("\n");
+}
 
 export function formatBranchSeed(input: IssueInput, classification: Classification): string {
   const issueNumber = input.number ?? 0;
@@ -77,7 +96,7 @@ export function formatLoopBoard(input: {
   issueNumber: number;
   classification: Classification;
   modelId: string;
-  stage: "labeled" | "blocked-missing-branch" | "pr-opened" | "pr-failed";
+  stage: "labeled" | "blocked-missing-branch" | "blocked-stamp" | "pr-opened" | "pr-failed";
   prNumber?: number;
   error?: string;
 }): string {
@@ -96,6 +115,9 @@ export function formatLoopBoard(input: {
   if (input.stage === "blocked-missing-branch") {
     lines.push(`blocked: missing ${head}. Sweep keeps the issue open until that head exists.`);
   }
+  if (input.stage === "blocked-stamp") {
+    lines.push(`blocked: ${head} has no product files. A .factory seed is not a ready PR.`);
+  }
   if (input.stage === "labeled" && !input.classification.draft) {
     lines.push("next: a human opts this in. Add the draft label on a new comment. Worker never merges.");
   }
@@ -107,7 +129,7 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
   const classification = ports.model.classify ? await ports.model.classify(input) : classifyIssue(input);
   const steps: TriageStep[] = [{ step: "classify", classification }];
   const issueNumber = input.number ?? 0;
-  let stage: "labeled" | "blocked-missing-branch" | "pr-opened" | "pr-failed" = "labeled";
+  let stage: "labeled" | "blocked-missing-branch" | "blocked-stamp" | "pr-opened" | "pr-failed" = "labeled";
   let prNumber: number | undefined;
   let error: string | undefined;
   try {
@@ -161,19 +183,32 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
       stage = "blocked-missing-branch";
       steps.push({ step: "stop", reason: `missing ${head}` });
     } else {
-      try {
-        const pr = await ports.github.openReadyPr({
-          title: formatReadyPrTitle(input),
-          body: formatReadyPrBody(input, classification),
-          head,
-        });
-        prNumber = pr.number;
-        stage = "pr-opened";
-        steps.push({ step: "pr", number: pr.number });
-      } catch (err) {
-        stage = "pr-failed";
-        error = err instanceof Error ? err.message : String(err);
+      const implementProof = requireTaskProof("test -f package.json");
+      const implement = await ports.terrarium.spawn(formatImplementTask(input), implementProof);
+      const implementReceipt = await ports.terrarium.wait(implement.runId);
+      const implementVerified = verifyTerrariumReceipt({ ...implement, taskProof: implementProof }, implementReceipt);
+      steps.push({ step: "implement", runId: implement.runId, verified: implementVerified });
+      const files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [];
+      const product = productFilesOnBranch(files);
+      if (!product.length) {
+        stage = "blocked-stamp";
+        error = "product files missing; a .factory seed is not a ready PR";
         steps.push({ step: "stop", reason: error });
+      } else {
+        try {
+          const pr = await ports.github.openReadyPr({
+            title: formatReadyPrTitle(input),
+            body: formatReadyPrBody(input, classification),
+            head,
+          });
+          prNumber = pr.number;
+          stage = "pr-opened";
+          steps.push({ step: "pr", number: pr.number });
+        } catch (err) {
+          stage = "pr-failed";
+          error = err instanceof Error ? err.message : String(err);
+          steps.push({ step: "stop", reason: error });
+        }
       }
     }
   } else {
