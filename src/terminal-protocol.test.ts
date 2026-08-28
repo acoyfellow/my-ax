@@ -12,6 +12,7 @@ import {
   isWebSocketUpgrade,
   resizeFrame,
   terminalDimensions,
+  usableTerminalGrid,
 } from "./terminal-protocol";
 
 test("keystrokes encode to bytes, because the container writes binary frames to the pty and parses text frames as control json", () => {
@@ -44,6 +45,13 @@ test("dimensions fall back and clamp instead of trusting the query string", () =
 test("terminalDimensions applies the documented defaults and ceilings", () => {
   assert.deepEqual(terminalDimensions({}), { cols: TERMINAL_DEFAULT_COLS, rows: TERMINAL_DEFAULT_ROWS });
   assert.deepEqual(terminalDimensions({ cols: "999999", rows: "999999" }), { cols: TERMINAL_MAX_COLS, rows: TERMINAL_MAX_ROWS });
+});
+
+test("a one-column or unmeasured grid is not live enough to open the pty", () => {
+  assert.equal(usableTerminalGrid(1, 24), false);
+  assert.equal(usableTerminalGrid(39, 24), false);
+  assert.equal(usableTerminalGrid(40, 24), true);
+  assert.equal(usableTerminalGrid(80, 0), false);
 });
 
 test("only a websocket upgrade opens the terminal", () => {

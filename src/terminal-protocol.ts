@@ -2,6 +2,11 @@ export const TERMINAL_DEFAULT_COLS = 80;
 export const TERMINAL_DEFAULT_ROWS = 24;
 export const TERMINAL_MAX_COLS = 500;
 export const TERMINAL_MAX_ROWS = 200;
+export const TERMINAL_MIN_LIVE_COLS = 40;
+
+export function usableTerminalGrid(cols: number, rows: number): boolean {
+  return Number.isInteger(cols) && Number.isInteger(rows) && cols >= TERMINAL_MIN_LIVE_COLS && rows > 0 && cols <= TERMINAL_MAX_COLS && rows <= TERMINAL_MAX_ROWS;
+}
 
 export type TerminalControlFrame = { type: "resize"; cols: number; rows: number };
 

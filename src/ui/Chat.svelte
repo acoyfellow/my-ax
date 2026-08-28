@@ -14,6 +14,7 @@
   import { shouldResumeVoiceCall } from "./voice-continue";
   import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
+  import Terminal from "./Terminal.svelte";
   import ImageLightbox from "./ImageLightbox.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { myAxDeepLinkIntent, parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
@@ -2778,6 +2779,7 @@
             <span class="agent-thinking__dot" aria-hidden="true"></span>
           </div>
         {/if}
+        <Terminal />
       </main>
 
       {#if scrollToBottomVisible}

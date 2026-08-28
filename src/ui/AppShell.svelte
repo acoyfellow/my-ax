@@ -7,7 +7,6 @@
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
-  import Terminal from "./Terminal.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -19,9 +18,6 @@
   }
   function openSettings() {
     window.dispatchEvent(new Event("my-ax:settings-toggle"));
-  }
-  function openTerminal() {
-    window.dispatchEvent(new Event("my-ax:terminal-toggle"));
   }
   let editingTitle = $state(false);
   let titleDraft = $state("");
@@ -111,21 +107,6 @@
   <Attention />
 
   <button
-    id="terminal-button"
-    type="button"
-    onclick={openTerminal}
-    class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
-    aria-label="Workspace terminal"
-    aria-haspopup="dialog"
-    title="Workspace terminal"
-  >
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="4 17 10 11 4 5" />
-      <line x1="12" y1="19" x2="20" y2="19" />
-    </svg>
-  </button>
-
-  <button
     id="settings-button"
     type="button"
     onclick={openSettings}
@@ -142,5 +123,3 @@
 </header>
 
 <RunReceiptModal />
-
-<Terminal />
