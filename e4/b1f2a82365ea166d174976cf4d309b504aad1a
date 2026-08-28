@@ -1,0 +1,21 @@
+proof/terminal-on-demand.sh
+  s_99b55ecf7d26fa::t_699a7b0448940f 1-51
+src/ui/Chat.svelte
+  s_99b55ecf7d26fa::t_1c3f374f568e04 222,2487-2488,2500,2786-2788
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e4b1f2a82365ea166d174976cf4d309b504aad1a",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
