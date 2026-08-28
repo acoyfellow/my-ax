@@ -27,6 +27,7 @@ function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } 
     async listComments() { return comments; },
     async openReadyPr(input) { actions.push(`pr:${input.title}`); actions.push(`head:${input.head}`); actions.push(`body:${input.body}`); return { number: 7 }; },
     async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
+    async listBranchFiles(head) { actions.push(`listBranchFiles:${head}`); return [".factory/issue-40.md"]; },
     async mergePr() { actions.push("merge"); },
     async approvePr() { actions.push("approve"); },
   };
@@ -147,6 +148,33 @@ test("unproven Terrarium receipt stops the graph", async () => {
 
 test("usableIssueLabels drops unknown names without a repo list", () => {
   assert.deepEqual(usableIssueLabels(["bug", "triage:draft", "not-a-label"]), ["bug", "triage:draft"]);
+});
+
+test("an opted-in draft does not open a ready PR when the branch is only a factory seed", async () => {
+  const github = memoryGithub();
+  github.hasBranch = async () => true;
+  github.listBranchFiles = async () => [".factory/issue-40.md"];
+  const steps = await runTriage(
+    { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
+    { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
+  );
+  assert.ok(steps.some((s) => s.step === "implement"));
+  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
+  assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
+  assert.ok(github.comments.some((body) => /blocked-stamp/.test(body)));
+});
+
+test("an opted-in draft opens a ready PR after the implementer writes a product file", async () => {
+  const github = memoryGithub();
+  github.hasBranch = async () => true;
+  github.listBranchFiles = async () => ["src/desk-board.ts"];
+  const steps = await runTriage(
+    { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
+    { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
+  );
+  assert.ok(steps.some((s) => s.step === "implement" && s.verified));
+  assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
+  assert.ok(github.actions.some((action) => action.startsWith("pr:")));
 });
 
 test("auditPull does not recommend merge when the only files are factory seeds", () => {

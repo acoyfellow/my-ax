@@ -13,6 +13,7 @@ function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; label
       async labelIssue(_n, next) { labels.push(...next); },
       async comment() {},
       async openReadyPr() { return { number: 1 }; },
+      async listBranchFiles() { return ["src/error-issue.ts"]; },
       async mergePr() { throw new Error("forbidden GitHub action: merge"); },
       async approvePr() { throw new Error("forbidden GitHub action: approve"); },
     },
@@ -45,6 +46,7 @@ test("an auto error issue creates its head branch and opens a ready PR", async (
   const p = ports();
   p.github.hasBranch = async () => false;
   p.github.createBranch = async (name, seed) => { created.push({ name, seed }); };
+  p.github.listBranchFiles = async () => ["src/error-issue.ts"];
   const steps = await executeTriageWorkflow(env, {
     number: 4242,
     title: "bug: Invalid URL string.",

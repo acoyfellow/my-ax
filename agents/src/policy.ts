@@ -249,6 +249,21 @@ export function auditPull(input: PullInput, promptDigest: string): AuditReceipt 
     };
   }
   if (input.draft) findings.push("still a draft");
+  const stampOnly =
+    Array.isArray(input.files) &&
+    input.files.length > 0 &&
+    input.files.every((file) => file.startsWith(".factory/"));
+  if (stampOnly) {
+    findings.push("product files missing; a .factory seed is not a fix");
+    return {
+      headSha: input.headSha,
+      promptDigest,
+      recommendation: "needs-human",
+      neverApprove: true,
+      neverMerge: true,
+      findings,
+    };
+  }
   return {
     headSha: input.headSha,
     promptDigest,

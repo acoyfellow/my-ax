@@ -11,15 +11,15 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 
 | Workflow | Trigger | Does | Never |
 |---|---|---|---|
-| `TriageWorkflow` | `issues.opened` | classify, label, one loop board; create `bot/issue-<n>` with a seed commit and open a ready PR when the issue is a live error | merge, comment twice |
+| `TriageWorkflow` | `issues.opened` | classify, label, one loop board; create `bot/issue-<n>` with a seed commit, spawn an implementer, and open a ready PR only when that head has a product file | merge, comment twice, call a `.factory` seed ready |
 | Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue only issues that have no loop board and no open PR | comment storm, re-queue a boarded issue |
 | `DigWorkflow` | hard bug | spawn Terrarium with a host `taskProof`, wait, proceed only if the receipt and the proof both hold | trust a callback or a receipt without `taskProof` |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
 | `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: one proof receipt per step, verify the PR against its own live preview deploy, request changes when it can, or close flood | approve, merge, or touch foreign PRs |
 
-A live error report is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`, and triage creates it with a seed commit, because a branch at the exact SHA of `main` makes `/pulls` answer 422. The body uses `Closes #<n>` and does not invent a file list.
+A live error report is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`, and triage creates it with a seed commit, because a branch at the exact SHA of `main` makes `/pulls` answer 422. After the seed, triage spawns an implementer and lists files on that head. A ready PR opens only when at least one path is not under `.factory/`. The body uses `Closes #<n>` and does not invent a file list.
 
-Every triage comment is a **loop board**: `stage` is `labeled`, `pr-opened`, `pr-failed`, or `blocked-missing-branch` when branch creation fails. Worker never merges.
+Every triage comment is a **loop board**: `stage` is `labeled`, `pr-opened`, `pr-failed`, `blocked-missing-branch` when branch creation fails, or `blocked-stamp` when the head has no product files. Worker never merges.
 
 GitHub refuses a review on your own pull request. The review comment is the artifact; a rejected `requestChanges` is logged and does not fail the run. Each review action is a separate workflow step, so a retry never repeats the receipt comment.
 
@@ -40,6 +40,10 @@ bash proof/desk-live.sh            # the desk is a styled agent-authored app tha
 bash proof/desk-app.sh             # the desk hosts an agent-authored app that can call the app back,
                                    # keeps free-form state, refuses a bad write, and does not lose a
                                    # concurrent write
+bash proof/factory-implements.sh   # an opted-in draft does not open a ready PR on a .factory seed
+bash proof/terminal-live.sh        # the deployed Worker serves a real pty; typed input executes
+bash proof/terminal-remainders.sh  # desk session verbs, baked gh, no spike probes, no 2004h leak
+bash proof/terminal-inline.sh      # no top-bar terminal; inline host; size is measured
 ```
 
 `factory-no-loop.sh` waits past two 15 minute sweeps on purpose. The re-queue bug it guards only appears across sweep ticks.

@@ -1,1 +1,2 @@
 src/web-search.test.ts
+agents/src/harness.test.ts
