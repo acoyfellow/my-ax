@@ -35,6 +35,15 @@ test("dedupes persisted and replayed copies by stable message id with last repla
   assert.equal(merged[0].content, "complete");
 });
 
+test("untimed restore rows keep first-seen order instead of sorting as newest", () => {
+  const existing = [msg("old-user", "user"), msg("old-user-2", "user"), msg("recent", "assistant", 50)];
+  const incoming = [msg("recent", "assistant", 50)];
+  assert.deepEqual(
+    mergeTranscript(existing, incoming).map((message) => message.id),
+    ["old-user", "old-user-2", "recent"],
+  );
+});
+
 test("orders shuffled input by sequence or timestamp with stable id ties", () => {
   const existing = [
     msg("charlie", "assistant", 30),

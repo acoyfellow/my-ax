@@ -121,7 +121,27 @@ export function mergeTranscript<T extends MergeableMessage>(
     chosen.set(id, mergeVersions(preferred, fallback));
   }
 
-  return [...chosen.entries()].sort(compareMessages).map(([, message]) => message);
+  const firstSeen = new Map<string, number>();
+  let seen = 0;
+  for (const message of existing) {
+    const id = keyOf(message);
+    if (!firstSeen.has(id)) firstSeen.set(id, seen++);
+  }
+  for (const message of incoming) {
+    const id = keyOf(message);
+    if (!firstSeen.has(id)) firstSeen.set(id, seen++);
+  }
+  return [...chosen.entries()].sort((left, right) => {
+    const leftOrder = orderOf(left[1]);
+    const rightOrder = orderOf(right[1]);
+    const leftTimed = Number.isFinite(leftOrder);
+    const rightTimed = Number.isFinite(rightOrder);
+    if (leftTimed && rightTimed) return compareMessages(left, right);
+    const leftSeen = firstSeen.get(left[0]) ?? 0;
+    const rightSeen = firstSeen.get(right[0]) ?? 0;
+    if (leftSeen !== rightSeen) return leftSeen - rightSeen;
+    return compareMessages(left, right);
+  }).map(([, message]) => message);
 }
 
 export function fillChronologicalTimestampsWithFlags(values: Array<number | undefined>): {
