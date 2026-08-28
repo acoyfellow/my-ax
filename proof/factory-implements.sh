@@ -10,13 +10,17 @@ npx tsx --test agents/src/policy.test.ts agents/src/harness.test.ts >/tmp/factor
   || { tail -20 /tmp/factory-implements-unit.log >&2; fail "factory unit tests do not pass"; }
 echo "ok: stamp blocks ready PR; product files open it"
 
-echo "== 2. live stamps #159 and #161 must not be the implementer contract =="
-for PR in 159 161; do
-  FILES="$(gh pr view "$PR" --repo acoyfellow/my-ax --json files --jq '[.files[].path] | join(" ")')"
-  PRODUCT="$(printf '%s\n' $FILES | grep -v '^\.factory/' || true)"
-  [ -z "$PRODUCT" ] || fail "PR $PR already has product files; this step asserts the historical stamp"
-  echo "ok: PR $PR is still a stamp (audit must say needs-human)"
+echo "== 2. at least one open ready PR has a product file =="
+PRODUCT_PR=""
+for PR in $(gh pr list --repo acoyfellow/my-ax --state open --limit 30 --json number --jq '.[].number'); do
+  FILES="$(gh pr view "$PR" --repo acoyfellow/my-ax --json files --jq '[.files[].path] | join("\n")')"
+  if printf '%s\n' "$FILES" | grep -qv '^\.factory/'; then
+    PRODUCT_PR="$PR"
+    break
+  fi
 done
+[ -n "$PRODUCT_PR" ] || fail "no open PR has a non-.factory product file; implementer still only stamps"
+echo "ok: PR $PRODUCT_PR has product files"
 
 echo "== 3. source: implement step exists and refuses .factory-only heads =="
 grep -q 'step: "implement"' agents/src/orchestrate.ts || fail "runTriage has no implement step"

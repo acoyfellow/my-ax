@@ -166,17 +166,24 @@ export function liveTerrariumPort(env: AgentsEnv): TerrariumPort {
       };
     },
     async wait(runId) {
-      const json = await call(`/api/runs/${encodeURIComponent(runId)}/status`);
-      const status = (json.status ?? json) as Record<string, unknown>;
-      const terminal = (status.terminal ?? {}) as Record<string, unknown>;
-      const receipt: TerrariumReceipt = {
-        runId,
-        taskFingerprint: String(terminal.taskFingerprint ?? ""),
-        nonce: String(terminal.nonce ?? ""),
-        ok: status.status === "done" && terminal.ok === true,
-        taskContractStatus: String(terminal.taskContractStatus ?? ""),
-      };
-      return receipt;
+      const started = Date.now();
+      const budgetMs = 8 * 60_000;
+      while (true) {
+        const json = await call(`/api/runs/${encodeURIComponent(runId)}/status`);
+        const status = (json.status ?? json) as Record<string, unknown>;
+        const terminal = (status.terminal ?? {}) as Record<string, unknown>;
+        const name = String(status.status ?? "");
+        if (name === "done" || name === "failed" || name === "cancelled" || Date.now() - started > budgetMs) {
+          return {
+            runId,
+            taskFingerprint: String(terminal.taskFingerprint ?? ""),
+            nonce: String(terminal.nonce ?? ""),
+            ok: name === "done" && terminal.ok === true,
+            taskContractStatus: String(terminal.taskContractStatus ?? ""),
+          } satisfies TerrariumReceipt;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+      }
     },
   };
 }
