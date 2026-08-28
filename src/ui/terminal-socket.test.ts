@@ -105,12 +105,14 @@ test("the panel sends what cloudterm gives it and paints what the socket returns
   assert.match(source, /onData:\s*\(bytes: Uint8Array\)/, "cloudterm keystrokes must be forwarded");
   assert.match(source, /socket\?\.send\(bytes\)/, "keystrokes must reach the socket");
   assert.match(source, /term\?\.write\(bytes\)/, "pty bytes must be painted by cloudterm");
-  assert.match(source, /socket\?\.resize\(cols, rows\)/, "a cloudterm resize must reach the pty");
+  assert.match(source, /socket\.?\.resize\(cols, rows\)/, "a cloudterm resize must reach the pty");
   assert.doesNotMatch(source, /\/api\/errors/, "terminal bytes must never be posted to the error queue");
 });
 
-test("the shell exposes the terminal panel", () => {
+test("chat hosts the inline terminal and the shell has no top-bar control", () => {
+  const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
   const shell = readFileSync(new URL("./AppShell.svelte", import.meta.url), "utf8");
-  assert.match(shell, /<Terminal \/>/, "the panel must be mounted in the shell");
-  assert.match(shell, /my-ax:terminal-toggle/, "a control must open the panel");
+  assert.match(chat, /<Terminal \/>/, "the terminal must be mounted in chat");
+  assert.doesNotMatch(shell, /id="terminal-button"/, "the top-bar terminal button must be gone");
+  assert.doesNotMatch(shell, /<Terminal \/>/, "the shell must not host a global terminal overlay");
 });

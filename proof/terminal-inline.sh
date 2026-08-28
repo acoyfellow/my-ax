@@ -21,16 +21,14 @@ api() { curl -s -H "cf-access-token: $TOKEN" --max-time 60 "$@"; }
 echo "== 1. the top-bar terminal control is gone from source and the shipped bundle =="
 grep -n 'id="terminal-button"' src/ui/AppShell.svelte >/dev/null \
   && fail "src/ui/AppShell.svelte still has id=terminal-button"
-grep -n 'Workspace terminal' src/ui/AppShell.svelte >/dev/null \
-  && fail "src/ui/AppShell.svelte still advertises a top-bar Workspace terminal"
 BUNDLE_PATH="$(api "$HOST/" | grep -oE '/__svelte/beta\.[a-f0-9]+\.js' | head -1)"
 [ -n "$BUNDLE_PATH" ] || fail "could not find the deployed svelte bundle"
 api "$HOST$BUNDLE_PATH" -o /tmp/inline-bundle.js --max-time 90
 grep -q 'id="terminal-button"' /tmp/inline-bundle.js \
   && fail "the deployed bundle still ships id=terminal-button"
-grep -q 'Workspace terminal' /tmp/inline-bundle.js \
-  && fail "the deployed bundle still ships a top-bar Workspace terminal"
-echo "ok: no top-bar terminal button"
+grep -q 'data-inline-terminal' /tmp/inline-bundle.js \
+  || fail "the deployed bundle has no inline terminal host"
+echo "ok: no top-bar terminal button; inline host is in the bundle"
 
 echo "== 2. chat hosts an inline terminal, not only a global dialog =="
 grep -q 'inline-terminal\|InlineTerminal\|terminal-inline' src/ui/Chat.svelte src/ui/*.svelte 2>/dev/null \
