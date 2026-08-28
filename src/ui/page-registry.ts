@@ -256,6 +256,15 @@ export const PAGE_VERBS: PageVerb[] = [
     },
   },
   {
+    name: "openTerminal",
+    description: "Show a compact on-demand terminal card in this conversation. The pty stays in the background until this is called.",
+    resolution: "receipt",
+    run: async () => {
+      window.dispatchEvent(new Event("my-ax:terminal-open"));
+      return { result: { ok: true, shown: true } };
+    },
+  },
+  {
     name: "notify",
     description: "Show a transient in-app notice (toast) to the owner in the live UI. Input: {text, kind?: 'system'|'error'}.",
     resolution: "receipt",

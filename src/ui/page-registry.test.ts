@@ -78,7 +78,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["applyDeskBoard", "deskRead", "deskWrite", "invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "sendToSession", "setViewportDebug", "switchSession"]);
+  assert.deepEqual(names, ["applyDeskBoard", "deskRead", "deskWrite", "invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "openTerminal", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "sendToSession", "setViewportDebug", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });

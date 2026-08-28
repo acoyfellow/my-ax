@@ -3,15 +3,26 @@
   import { usableTerminalGrid } from "../terminal-protocol";
   import { TerminalSocket, terminalUrl, type TerminalStatus } from "./terminal-socket";
 
+  let { onClose }: { onClose?: () => void } = $props();
+
   let status = $state<TerminalStatus>("closed");
   let detail = $state<string | null>(null);
   let hostEl: HTMLDivElement | null = null;
   let socket: TerminalSocket | null = null;
   let term: { write: (data: string | Uint8Array) => void; cols?: number; rows?: number; destroy?: () => void } | null = null;
   let connectedUrl = "";
+  let painted = $state(false);
 
   const statusLabel = $derived(
-    status === "ready" ? "live" : status === "connecting" ? "connecting" : status === "error" ? "error" : "closed",
+    !painted && status === "ready"
+      ? "waiting"
+      : status === "ready"
+        ? "live"
+        : status === "connecting"
+          ? "connecting"
+          : status === "error"
+            ? "error"
+            : "closed",
   );
 
   function attachWhenWide(cols: number, rows: number) {
@@ -22,7 +33,10 @@
     const url = terminalUrl(window.location.origin, cols, rows);
     if (!socket) {
       socket = new TerminalSocket({
-        onBytes: (bytes) => term?.write(bytes),
+        onBytes: (bytes) => {
+          painted = true;
+          term?.write(bytes);
+        },
         onStatus: (next, why) => {
           status = next;
           detail = why ?? null;
@@ -49,16 +63,18 @@
         attachWhenWide(cols, rows);
       },
     });
-    const cols = Number(term.cols ?? 0);
-    const rows = Number(term.rows ?? 0);
-    attachWhenWide(cols, rows);
+    attachWhenWide(Number(term.cols ?? 0), Number(term.rows ?? 0));
   }
 
   function reconnect() {
-    const cols = Number(term?.cols ?? 0);
-    const rows = Number(term?.rows ?? 0);
+    painted = false;
     connectedUrl = "";
-    attachWhenWide(cols, rows);
+    attachWhenWide(Number(term?.cols ?? 0), Number(term?.rows ?? 0));
+  }
+
+  function hide() {
+    socket?.close();
+    onClose?.();
   }
 
   onMount(() => {
@@ -70,14 +86,15 @@
   });
 </script>
 
-<section class="inline-terminal" data-inline-terminal="1" aria-label="Workspace terminal">
+<section class="inline-terminal" data-inline-terminal="1" data-on-demand="1" aria-label="Workspace terminal">
   <header class="term-head">
-    <strong>Workspace terminal</strong>
-    <span class="term-pill" data-status={status}>{statusLabel}</span>
+    <strong>Terminal</strong>
+    <span class="term-pill" data-status={painted ? status : status === "ready" ? "connecting" : status}>{statusLabel}</span>
     <div class="term-spacer"></div>
-    {#if status !== "ready"}
+    {#if status !== "ready" || !painted}
       <button type="button" class="term-btn" onclick={reconnect}>Reconnect</button>
     {/if}
+    <button type="button" class="term-btn" onclick={hide} aria-label="Hide terminal">Hide</button>
   </header>
   {#if detail}
     <p class="term-detail">{detail}</p>
@@ -87,19 +104,20 @@
 
 <style>
   .inline-terminal {
-    margin: 0.5rem 0 0.75rem;
+    margin: 0.5rem 0;
     border: 1px solid var(--border, #2a3441);
     border-radius: 0.6rem;
     background: #0b1118;
     color: #e6edf3;
     min-width: 40ch;
+    max-width: 100%;
     overflow: hidden;
   }
   .term-head {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.6rem 0.75rem;
+    padding: 0.4rem 0.65rem;
     border-bottom: 1px solid #2a3441;
   }
   .term-spacer { flex: 1; }
@@ -115,7 +133,7 @@
   .term-btn {
     font: inherit;
     font-size: 0.8rem;
-    padding: 0.25rem 0.6rem;
+    padding: 0.2rem 0.5rem;
     border-radius: 0.35rem;
     border: 1px solid #2a3441;
     background: #161b22;
@@ -125,14 +143,14 @@
   .term-btn:hover { border-color: #f6821f; }
   .term-detail {
     margin: 0;
-    padding: 0.4rem 0.75rem;
+    padding: 0.3rem 0.65rem;
     font-size: 0.78rem;
     color: #f85149;
   }
   .term-host {
-    height: min(40vh, 22rem);
+    height: 12rem;
     min-width: 40ch;
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0.35rem;
   }
 </style>
