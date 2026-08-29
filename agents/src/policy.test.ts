@@ -158,13 +158,14 @@ test("an opted-in draft does not open a ready PR when the branch is only a facto
     { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
-  assert.ok(steps.some((s) => s.step === "implement"));
+  assert.ok(!steps.some((s) => s.step === "dig"));
   assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
   assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
   assert.ok(github.comments.some((body) => /blocked-stamp/.test(body)));
+  assert.ok(!github.actions.some((action) => action.includes("terrarium")));
 });
 
-test("an opted-in draft opens a ready PR after the implementer writes a product file", async () => {
+test("an opted-in draft opens a ready PR when the head already has a product file", async () => {
   const github = memoryGithub();
   github.hasBranch = async () => true;
   github.listBranchFiles = async () => ["src/desk-board.ts"];
@@ -172,7 +173,7 @@ test("an opted-in draft opens a ready PR after the implementer writes a product 
     { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
-  assert.ok(steps.some((s) => s.step === "implement" && s.verified));
+  assert.ok(!steps.some((s) => s.step === "dig"));
   assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
   assert.ok(github.actions.some((action) => action.startsWith("pr:")));
 });
