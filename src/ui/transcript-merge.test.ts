@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import nodeTest from "node:test";
-import { boundToSession, fillChronologicalTimestamps, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
+import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
 
 const test = (import.meta as ImportMeta & { vitest?: { test: typeof nodeTest } }).vitest?.test ?? nodeTest;
 
@@ -204,6 +204,19 @@ test("a Think replay whose user turns share no text with D1 is foreign", () => {
   ];
   assert.equal(thinkReplayLooksForeign(d1, think), true);
   assert.equal(thinkReplayLooksForeign(d1, [msg("d1-1", "user", 1, { content: "r u broken" })]), false);
+});
+
+test("untimed Think-only user turns that D1 never stored are dropped", () => {
+  const d1 = [msg("d1-1", "user", 1, { content: "r u broken" })];
+  const think = [
+    msg("d1-1", "user", 1, { content: "r u broken" }),
+    msg("u-lexoxp1j", "user", undefined, { content: "Can you tell me about the active CMUX sessions" }),
+    msg("u-2009cyt4", "user", undefined, { content: "Oh no what the fuck read only?" }),
+  ];
+  assert.deepEqual(
+    dropHomelessThinkTurns(d1, think).map((m) => m.id),
+    ["d1-1"],
+  );
 });
 
 test("boundToSession drops rows from another conversation", () => {

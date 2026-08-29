@@ -21,7 +21,7 @@
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { d1EntryToTranscriptMessage } from "./d1-transcript";
-  import { boundToSession, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
+  import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
@@ -1880,8 +1880,9 @@
       void restoreD1History(sessionGeneration.capture(), true);
       return;
     }
-    const merged = thinkViews.length > 0
-      ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: keepDurableTurn })
+    const ownedThink = dropHomelessThinkTurns(priorMessages, thinkViews);
+    const merged = ownedThink.length > 0
+      ? mergeTranscript(priorMessages, ownedThink, { keepExistingOnlyIf: keepDurableTurn })
       : priorMessages;
     messages = boundToSession(merged, sessionId);
     void hydrateHistoryTimestamps();
