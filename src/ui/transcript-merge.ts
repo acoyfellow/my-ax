@@ -37,6 +37,28 @@ export function keepDurableTurn(message: MergeableMessage): boolean {
   return !String(message.id).startsWith("d1-");
 }
 
+export function boundToSession<T extends { sessionId?: string }>(messages: T[], sessionId: string): T[] {
+  if (!sessionId) return [];
+  return messages.filter((message) => !message.sessionId || message.sessionId === sessionId);
+}
+
+export function thinkReplayLooksForeign(
+  existing: Array<{ id: string; sourceId?: string; role?: string; content?: unknown }>,
+  incoming: Array<{ id: string; sourceId?: string; role?: string; content?: unknown }>,
+): boolean {
+  const existingUsers = existing
+    .filter((message) => message.role === "user")
+    .map((message) => String(message.content ?? "").trim())
+    .filter(Boolean);
+  const incomingUsers = incoming
+    .filter((message) => message.role === "user")
+    .map((message) => String(message.content ?? "").trim())
+    .filter(Boolean);
+  if (existingUsers.length === 0 || incomingUsers.length < 2) return false;
+  const known = new Set(existingUsers);
+  return !incomingUsers.some((text) => known.has(text));
+}
+
 const finiteNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 

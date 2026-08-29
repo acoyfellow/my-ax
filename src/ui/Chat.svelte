@@ -21,7 +21,7 @@
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { d1EntryToTranscriptMessage } from "./d1-transcript";
-  import { fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, keepDurableTurn, mergeTranscript } from "./transcript-merge";
+  import { boundToSession, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
@@ -204,7 +204,8 @@
      *  observed). Interpolated timestamps must not reorder past real anchors. */
     timestampInterpolated?: boolean;
     streaming: boolean;
-    pending: boolean; // optimistic user message
+    pending: boolean;
+    sessionId?: string;
   }
 
   let messages = $state<MessageView[]>([]);
@@ -1225,6 +1226,7 @@
     responseRecoveryPending = false;
     dispatchTurn({ type: "session-switch" });
     messages = [];
+    thinkMessages = [];
     toastBus.pending = []; // don't carry a prior session's notices into this one
     applyStatus("idle");
     onboardingHidden = true;
@@ -1682,9 +1684,9 @@
     return;
   }
 
-  function d1EntryToMessage(entry: any): MessageView {
+  function d1EntryToMessage(entry: any, sessionId = currentSessionId()): MessageView {
     const message = d1EntryToTranscriptMessage(entry, renderMarkdown);
-    return { ...message, id: entry.meta?.uiMessageId || message.id };
+    return { ...message, id: entry.meta?.uiMessageId || message.id, sessionId };
   }
 
   async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
@@ -1854,6 +1856,7 @@
         timestampInterpolated: thinkTimestampInterpolated[messageIndex],
         streaming: false,
         pending: false,
+        sessionId: currentSessionId(),
       };
       thinkViews.push(m);
     }
@@ -1871,9 +1874,16 @@
     const wasPinned = logEl ? (logEl.scrollHeight - logEl.clientHeight - logEl.scrollTop < 80) : true;
     const prevTop = logEl?.scrollTop ?? 0;
     const prevHeight = logEl?.scrollHeight ?? 0;
-    messages = thinkViews.length > 0
+    const sessionId = currentSessionId();
+    if (thinkReplayLooksForeign(priorMessages, thinkViews)) {
+      thinkMessages = [];
+      void restoreD1History(sessionGeneration.capture(), true);
+      return;
+    }
+    const merged = thinkViews.length > 0
       ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: keepDurableTurn })
       : priorMessages;
+    messages = boundToSession(merged, sessionId);
     void hydrateHistoryTimestamps();
     if (wasPinned) {
       void revealResumedHistoryAtBottom();
@@ -2093,6 +2103,7 @@
         streaming: false,
         pending: true,
         parts: [],
+        sessionId: currentSessionId(),
       },
     ];
     queueScrollToBottom();
