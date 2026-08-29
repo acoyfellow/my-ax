@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractFingerprint, formatDuplicateClose, hasLoopBoard, planSweep, SWEEP_MAX_CLOSES, SWEEP_MAX_QUEUES } from "./sweep";
+import { extractFingerprint, formatDuplicateClose, hasLoopBoard, isBlockedStamp, planSweep, SWEEP_MAX_CLOSES, SWEEP_MAX_QUEUES } from "./sweep";
 
 test("same fingerprint keeps the lowest number and closes the rest", () => {
   const actions = planSweep([
@@ -22,6 +22,23 @@ test("issues without a loop board are queued once", () => {
   ]);
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 74));
   assert.ok(!actions.some((row) => row.action === "queue" && row.number === 75));
+});
+
+test("a blocked-stamp board is re-queued so the factory can try again", () => {
+  const actions = planSweep([
+    {
+      number: 162,
+      title: "bug: stall",
+      body: "fingerprint: `dbcb9c47f004c45e`",
+      author: "o",
+      state: "open",
+      comments: ["## loop board\nstage: blocked-stamp"],
+      hasHead: true,
+    },
+  ]);
+  assert.ok(actions.some((row) => row.action === "queue" && row.number === 162));
+  assert.equal(isBlockedStamp(["## loop board\nstage: blocked-stamp"]), true);
+  assert.equal(isBlockedStamp(["## loop board\nstage: pr-opened"]), false);
 });
 
 test("a boarded issue with a head is not queued again", () => {

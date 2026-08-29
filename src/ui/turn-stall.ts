@@ -37,7 +37,7 @@ export function evaluateTurnStall(input: StallInput): StallVerdict {
 }
 
 export function stallFingerprint(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
-  return `turn-stall:no-frames-for-${Math.floor(verdict.silentMs / 1000)}s`;
+  return "turn-stall:no-frames-past-window";
 }
 
 export function stallMessage(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
