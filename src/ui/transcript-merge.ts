@@ -42,6 +42,26 @@ export function boundToSession<T extends { sessionId?: string }>(messages: T[], 
   return messages.filter((message) => !message.sessionId || message.sessionId === sessionId);
 }
 
+export function dropHomelessThinkTurns<T extends { id: string; sourceId?: string; role?: string; content?: unknown; timestamp?: number }>(
+  existing: T[],
+  incoming: T[],
+): T[] {
+  if (!existing.length) return incoming;
+  const known = new Set(existing.map((message) => keyOf(message)));
+  const knownUserText = new Set(
+    existing
+      .filter((message) => message.role === "user")
+      .map((message) => String(message.content ?? "").trim())
+      .filter(Boolean),
+  );
+  return incoming.filter((message) => {
+    if (known.has(keyOf(message))) return true;
+    if (message.role === "user" && knownUserText.has(String(message.content ?? "").trim())) return true;
+    if (message.timestamp == null && (message.role === "user" || message.role === "assistant")) return false;
+    return true;
+  });
+}
+
 export function thinkReplayLooksForeign(
   existing: Array<{ id: string; sourceId?: string; role?: string; content?: unknown }>,
   incoming: Array<{ id: string; sourceId?: string; role?: string; content?: unknown }>,

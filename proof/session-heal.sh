@@ -13,7 +13,9 @@ grep -q 'thinkMessages = \[\]' src/ui/Chat.svelte \
   || fail "Chat.svelte does not clear Think history on session switch"
 grep -q 'boundToSession' src/ui/Chat.svelte \
   || fail "Chat.svelte does not stamp/filter rows by session"
-echo "ok: switch clears Think; foreign replay restores D1"
+grep -q 'dropHomelessThinkTurns' src/ui/Chat.svelte \
+  || fail "Chat.svelte does not drop untimed Think-only turns"
+echo "ok: switch clears Think; foreign replay restores D1; homeless Think turns drop"
 
 echo "== 2. mutant: accepting a foreign replay must fail =="
 cp src/ui/transcript-merge.ts /tmp/session-heal.bak
