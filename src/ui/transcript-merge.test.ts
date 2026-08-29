@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import nodeTest from "node:test";
-import { fillChronologicalTimestamps, keepDurableTurn, mergeTranscript } from "./transcript-merge";
+import { boundToSession, fillChronologicalTimestamps, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
 
 const test = (import.meta as ImportMeta & { vitest?: { test: typeof nodeTest } }).vitest?.test ?? nodeTest;
 
@@ -194,4 +194,23 @@ test("filled Think timestamps keep long-turn agent messages ordered", () => {
   const merged = mergeTranscript([msg("u2", "user", 400)], think);
   assert.deepEqual(merged.map((message) => message.id), ["u1", "a1", "a2", "u2"]);
   assert.equal(merged.every((message) => typeof message.timestamp === "number"), true);
+});
+
+test("a Think replay whose user turns share no text with D1 is foreign", () => {
+  const d1 = [msg("d1-1", "user", 1, { content: "r u broken" })];
+  const think = [
+    msg("other-1", "user", 2, { content: "Oh no what the fuck read only?" }),
+    msg("other-2", "user", 3, { content: "Can you tell me about the active CMUX sessions" }),
+  ];
+  assert.equal(thinkReplayLooksForeign(d1, think), true);
+  assert.equal(thinkReplayLooksForeign(d1, [msg("d1-1", "user", 1, { content: "r u broken" })]), false);
+});
+
+test("boundToSession drops rows from another conversation", () => {
+  const mixed = [
+    { ...msg("a", "user", 1), sessionId: "oracle" },
+    { ...msg("b", "user", 2), sessionId: "other" },
+    msg("c", "user", 3),
+  ];
+  assert.deepEqual(boundToSession(mixed, "oracle").map((m) => m.id), ["a", "c"]);
 });
