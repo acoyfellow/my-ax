@@ -35,6 +35,9 @@ export function normalizeErrorMessage(message: string): string {
   if (/does not represent a valid image/i.test(text)) {
     return "The image data you provided does not represent a valid image.";
   }
+  if (/no response from the agent for \d+s, and no tool is running/i.test(text)) {
+    return "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.";
+  }
   return text.replace(/\s+/g, " ");
 }
 

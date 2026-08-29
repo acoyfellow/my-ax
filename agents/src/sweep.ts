@@ -30,6 +30,10 @@ export function hasLoopBoard(comments: string[]): boolean {
   return comments.some((body) => LOOP_BOARD_RE.test(body));
 }
 
+export function isBlockedStamp(comments: string[]): boolean {
+  return comments.some((body) => LOOP_BOARD_RE.test(body) && /\bstage: blocked-stamp\b/.test(body));
+}
+
 export function planSweep(issues: SweepIssue[]): SweepAction[] {
   const open = issues.filter((issue) => issue.state === "open").slice(0, SWEEP_MAX_ISSUES);
   const byFingerprint = new Map<string, SweepIssue[]>();
@@ -60,7 +64,7 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   for (const issue of open) {
     if (closing.has(issue.number)) continue;
     if (issue.hasOpenPr) continue;
-    if (hasLoopBoard(issue.comments)) continue;
+    if (hasLoopBoard(issue.comments) && !isBlockedStamp(issue.comments)) continue;
     if (queues >= SWEEP_MAX_QUEUES) continue;
     actions.push({ action: "queue", number: issue.number });
     queues += 1;

@@ -17,6 +17,12 @@ test("long image errors collapse to one message", () => {
   );
 });
 
+test("stall reports that differ only in elapsed seconds share one fingerprint", async () => {
+  const a = await errorFingerprint({ origin: "client", message: "No response from the agent for 45s, and no tool is running. The turn may have failed. Send another message to retry or steer." });
+  const b = await errorFingerprint({ origin: "client", message: "No response from the agent for 46s, and no tool is running. The turn may have failed. Send another message to retry or steer." });
+  assert.equal(a, b);
+});
+
 test("Invalid URL variants share one fingerprint", async () => {
   const a = await errorFingerprint({ origin: "server", message: "Invalid URL string.", stack: "Error: Invalid URL string.\n    at buildUrl (agent.ts:1:1)" });
   const b = await errorFingerprint({ origin: "server", message: "invalid url string", stack: "TypeError: Invalid URL string.\n    at other (agent.ts:40:2)" });
