@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import nodeTest from "node:test";
-import { fillChronologicalTimestamps, mergeTranscript } from "./transcript-merge";
+import { fillChronologicalTimestamps, keepDurableTurn, mergeTranscript } from "./transcript-merge";
 
 const test = (import.meta as ImportMeta & { vitest?: { test: typeof nodeTest } }).vitest?.test ?? nodeTest;
 
@@ -78,6 +78,19 @@ test("merge is idempotent under repeated Think replays", () => {
 });
 
 // THE bug: D1 restored an assistant reply; Think's compacted replay omits it.
+test("keeps D1 user turns that only have a d1- id when Think omits them", () => {
+  const d1 = [
+    msg("d1-11", "user", 1, { content: "from the phone" }),
+    msg("d1-12", "assistant", 2, { content: "reply" }),
+    msg("d1-99", "tool", 3),
+  ];
+  const think = [msg("ui-later", "user", 4, { content: "newer" })];
+  const merged = mergeTranscript(d1, think, { keepExistingOnlyIf: keepDurableTurn });
+  assert.ok(merged.some((m) => m.id === "d1-11"), "the durable user turn must survive Think replay");
+  assert.ok(merged.some((m) => m.id === "d1-12"), "the durable assistant turn must survive Think replay");
+  assert.ok(!merged.some((m) => m.id === "d1-99"), "a D1 tool row must not duplicate Think tool parts");
+});
+
 test("keeps a D1-only assistant reply that Think's replay omitted", () => {
   const d1 = [msg("u1", "user", 1), msg("a1", "assistant", 2), msg("u2", "user", 3), msg("a2", "assistant", 4)];
   const think = [msg("u1", "user", 1), msg("u2", "user", 3), msg("a2", "assistant", 4)]; // a1 compacted away

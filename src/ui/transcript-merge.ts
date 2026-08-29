@@ -32,6 +32,11 @@ export type MergeableMessage = {
 
 const keyOf = (msg: MergeableMessage): string => msg.sourceId ?? msg.id;
 
+export function keepDurableTurn(message: MergeableMessage): boolean {
+  if (message.role === "user" || message.role === "assistant" || message.role === "error") return true;
+  return !String(message.id).startsWith("d1-");
+}
+
 const finiteNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
 

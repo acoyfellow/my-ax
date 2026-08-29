@@ -21,7 +21,7 @@
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { d1EntryToTranscriptMessage } from "./d1-transcript";
-  import { fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, mergeTranscript } from "./transcript-merge";
+  import { fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, keepDurableTurn, mergeTranscript } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
@@ -1872,7 +1872,7 @@
     const prevTop = logEl?.scrollTop ?? 0;
     const prevHeight = logEl?.scrollHeight ?? 0;
     messages = thinkViews.length > 0
-      ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: (m) => !m.id.startsWith("d1-") })
+      ? mergeTranscript(priorMessages, thinkViews, { keepExistingOnlyIf: keepDurableTurn })
       : priorMessages;
     void hydrateHistoryTimestamps();
     if (wasPinned) {
