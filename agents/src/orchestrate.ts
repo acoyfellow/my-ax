@@ -51,28 +51,12 @@ export type TriageStep =
   | { step: "comment" }
   | { step: "pr"; number: number }
   | { step: "branch"; head: string }
-  | { step: "implement"; runId: string; verified: boolean }
   | { step: "dig"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
 
 export function productFilesOnBranch(files: string[]): string[] {
   return files.filter((file) => file.length > 0 && !file.startsWith(".factory/"));
-}
-
-export const IMPLEMENT_TASK_PROOF = "git fetch origin main && git diff --name-only origin/main...HEAD | grep -v '^\\.factory/' | grep -q .";
-
-export function formatImplementTask(input: IssueInput): string {
-  const issueNumber = input.number ?? 0;
-  const head = `bot/issue-${issueNumber}`;
-  return [
-    `Implement issue #${issueNumber} on branch ${head} in acoyfellow/my-ax.`,
-    input.title,
-    input.body,
-    `Checkout ${head}, change at least one product file named by the issue, commit, and push to origin/${head}.`,
-    "Do not add files under .factory/.",
-    "Do not open or merge a pull request. Worker never merges and never approves.",
-  ].join("\n");
 }
 
 export function formatBranchSeed(input: IssueInput, classification: Classification): string {
@@ -185,16 +169,11 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
       stage = "blocked-missing-branch";
       steps.push({ step: "stop", reason: `missing ${head}` });
     } else {
-      const implementProof = requireTaskProof(IMPLEMENT_TASK_PROOF);
-      const implement = await ports.terrarium.spawn(formatImplementTask(input), implementProof);
-      const implementReceipt = await ports.terrarium.wait(implement.runId);
-      const implementVerified = verifyTerrariumReceipt({ ...implement, taskProof: implementProof }, implementReceipt);
-      steps.push({ step: "implement", runId: implement.runId, verified: implementVerified });
       const files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [];
       const product = productFilesOnBranch(files);
       if (!product.length) {
         stage = "blocked-stamp";
-        error = `product files missing after implement ${implement.runId} verified=${implementVerified}`;
+        error = "product files missing; a .factory seed is not a ready PR. Terrarium is not on this path.";
         steps.push({ step: "stop", reason: error });
       } else {
         try {
