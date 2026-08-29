@@ -1,0 +1,29 @@
+agents/README.md
+  s_980221f942959f::t_c29c4e6410c95b 48
+proof/transcript-parity.sh
+  s_99b55ecf7d26fa::t_a7a0bee9dc3ab2 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "05a74531b79f9ef5ec6a0f32c2b96cdec32bf974",
+  "prompts": {},
+  "sessions": {
+    "s_980221f942959f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04dae-e52e-7b57-ad8e-7e48376654a8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
