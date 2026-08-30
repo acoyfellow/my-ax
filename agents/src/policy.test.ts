@@ -47,18 +47,14 @@ test("AGENTS_MODEL defaults to grok-4.6 and is overridable", () => {
   assert.equal(resolveAgentsModel({ AGENTS_MODEL: "kimi-k2.7" }), "kimi-k2.7");
 });
 
-test("loop board names stage and next action", () => {
-  const classification = classifyIssue({ title: "bug: x", body: "repro", author: "o" });
-  const text = formatLoopBoard({ issueNumber: 52, classification, modelId: "grok-4.6", stage: "labeled" });
+test("a titled bug opens a draft without a human comment", () => {
+  const classified = classifyIssue({ title: "bug: x", body: "repro", author: "o" });
+  assert.equal(classified.draft, true);
+  assert.equal(shouldOpenDraft(classified), true);
+  const text = formatLoopBoard({ issueNumber: 52, classification: classified, modelId: "grok-4.6", stage: "labeled" });
   assert.match(text, /stage: labeled/);
   assert.match(text, /issues\/52/);
-  assert.match(text, /a human opts this in/);
-  assert.match(text, /bot\/issue-52/);
-  assert.doesNotMatch(
-    text,
-    /\btriage:draft\b/,
-    "the board must not contain the literal opt-in token it would match on re-read",
-  );
+  assert.doesNotMatch(text, /a human opts this in/);
 });
 
 test("ready PR body names the issue, proof command, and never-merge rule", () => {

@@ -12,6 +12,7 @@ export interface SweepIssue {
   author: string;
   state: "open" | "closed";
   comments: string[];
+  labels?: string[];
   hasHead?: boolean;
   hasOpenPr?: boolean;
 }
@@ -64,7 +65,7 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   for (const issue of open) {
     if (closing.has(issue.number)) continue;
     if (issue.hasOpenPr) continue;
-    if (hasLoopBoard(issue.comments) && !isBlockedStamp(issue.comments)) continue;
+    if ((issue.labels ?? []).includes("triage:needs-human")) continue;
     if (queues >= SWEEP_MAX_QUEUES) continue;
     actions.push({ action: "queue", number: issue.number });
     queues += 1;

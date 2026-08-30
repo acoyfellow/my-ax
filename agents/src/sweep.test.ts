@@ -15,13 +15,13 @@ test("same fingerprint keeps the lowest number and closes the rest", () => {
   ]);
 });
 
-test("issues without a loop board are queued once", () => {
+test("issues without an open PR are queued even if boarded", () => {
   const actions = planSweep([
     { number: 74, title: "bug: race", body: "repro", author: "o", state: "open", comments: [] },
     { number: 75, title: "bug: sweep", body: "repro", author: "o", state: "open", comments: ["## loop board\nstage: labeled"] },
   ]);
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 74));
-  assert.ok(!actions.some((row) => row.action === "queue" && row.number === 75));
+  assert.ok(actions.some((row) => row.action === "queue" && row.number === 75));
 });
 
 test("a blocked-stamp board is re-queued so the factory can try again", () => {
@@ -41,13 +41,13 @@ test("a blocked-stamp board is re-queued so the factory can try again", () => {
   assert.equal(isBlockedStamp(["## loop board\nstage: pr-opened"]), false);
 });
 
-test("a boarded issue with a head is not queued again", () => {
+test("a boarded issue with a head but no PR is queued", () => {
   const actions = planSweep([
     { number: 67, title: "bug: image", body: "fingerprint: `e8a37db7f3311f4b`", author: "o", state: "open", comments: ["## loop board"], hasHead: true },
   ]);
   assert.ok(
-    !actions.some((row) => row.action === "queue" && row.number === 67),
-    "a boarded issue whose head branch exists must not be re-queued every sweep",
+    actions.some((row) => row.action === "queue" && row.number === 67),
+    "speed to PR: boarded bugs with no open PR must be re-queued",
   );
 });
 
@@ -63,6 +63,13 @@ test("an unboarded issue is still queued", () => {
     { number: 70, title: "bug: new", body: "repro", author: "o", state: "open", comments: [], hasHead: false },
   ]);
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 70));
+});
+
+test("needs-human issues are not queued", () => {
+  const actions = planSweep([
+    { number: 146, title: "blocked: access", body: "needs zero trust", author: "o", state: "open", comments: [], labels: ["triage:needs-human"] },
+  ]);
+  assert.ok(!actions.some((row) => row.action === "queue" && row.number === 146));
 });
 
 test("sweep never parks", () => {
