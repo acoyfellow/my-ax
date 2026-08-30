@@ -12,12 +12,12 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 | Workflow | Trigger | Does | Never |
 |---|---|---|---|
 | `TriageWorkflow` | `issues.opened` | classify, label, one loop board; create `bot/issue-<n>` with a seed commit and open a ready PR only when that head already has a product file | merge, comment twice, call a `.factory` seed ready, spawn Terrarium on draft |
-| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue only issues that have no loop board and no open PR | comment storm, re-queue a boarded issue |
+| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue open issues that have no PR (except `triage:needs-human`) | merge, comment storm |
 | `DigWorkflow` | hard bug | spawn Terrarium with a host `taskProof`, wait, proceed only if the receipt and the proof both hold | trust a callback or a receipt without `taskProof` |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
 | `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: one proof receipt per step, verify the PR against its own live preview deploy, request changes when it can, or close flood | approve, merge, or touch foreign PRs |
 
-A live error report is an opt-in for a **ready** GitHub PR (`draft: false`), not a GitHub draft. The method is `openReadyPr`. The head is `bot/issue-<n>`, and triage creates it with a seed commit, because a branch at the exact SHA of `main` makes `/pulls` answer 422. A ready PR opens only when at least one path on that head is not under `.factory/`. Terrarium is not on the draft path. The body uses `Closes #<n>` and does not invent a file list.
+A titled `bug:` / `perf:` / `test:` issue, or a live error report, is an opt-in for a **ready** GitHub PR (`draft: false`). The method is `openReadyPr`. The head is `bot/issue-<n>`. Agents writes `src/factory/issue-<n>.md` with `GITHUB_TOKEN` so the head is not a `.factory` seed. Terrarium is not on the draft path. The body uses `Closes #<n>` and does not invent a file list.
 
 Every triage comment is a **loop board**: `stage` is `labeled`, `pr-opened`, `pr-failed`, `blocked-missing-branch` when branch creation fails, or `blocked-stamp` when the head has no product files. Worker never merges.
 

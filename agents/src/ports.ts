@@ -136,6 +136,9 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
           title: String((row as { title?: string }).title || ""),
           body: String((row as { body?: string }).body || ""),
           author: String((row as { user?: { login?: string } }).user?.login || "unknown"),
+          labels: Array.isArray((row as { labels?: Array<{ name?: string }> }).labels)
+            ? (row as { labels: Array<{ name?: string }> }).labels.map((label) => String(label.name || "")).filter(Boolean)
+            : [],
         }));
     },
     async closeIssue(number, body) {
