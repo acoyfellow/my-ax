@@ -57,7 +57,12 @@ export type TriageStep =
   | { step: "stop"; reason: string };
 
 export function productFilesOnBranch(files: string[]): string[] {
-  return files.filter((file) => file.length > 0 && !file.startsWith(".factory/"));
+  return files.filter((file) => {
+    if (!file.length) return false;
+    if (file.startsWith(".factory/")) return false;
+    if (/^src\/factory\/issue-\d+\.md$/.test(file)) return false;
+    return file.startsWith("src/");
+  });
 }
 
 export function factoryReceiptPath(issueNumber: number): string {
