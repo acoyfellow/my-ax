@@ -28,6 +28,7 @@ function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } 
     async openReadyPr(input) { actions.push(`pr:${input.title}`); actions.push(`head:${input.head}`); actions.push(`body:${input.body}`); return { number: 7 }; },
     async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
     async listBranchFiles(head) { actions.push(`listBranchFiles:${head}`); return [".factory/issue-40.md"]; },
+    async putFile(head, file) { actions.push(`putFile:${file.path}`); },
     async mergePr() { actions.push("merge"); },
     async approvePr() { actions.push("approve"); },
   };
@@ -150,18 +151,31 @@ test("usableIssueLabels drops unknown names without a repo list", () => {
   assert.deepEqual(usableIssueLabels(["bug", "triage:draft", "not-a-label"]), ["bug", "triage:draft"]);
 });
 
-test("an opted-in draft does not open a ready PR when the branch is only a factory seed", async () => {
+test("an opted-in draft does not open a ready PR when putFile is missing and the head is a seed", async () => {
   const github = memoryGithub();
   github.hasBranch = async () => true;
   github.listBranchFiles = async () => [".factory/issue-40.md"];
+  github.putFile = undefined;
   const steps = await runTriage(
     { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
-  assert.ok(!steps.some((s) => s.step === "dig"));
   assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
   assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
-  assert.ok(github.comments.some((body) => /blocked-stamp/.test(body)));
+});
+
+test("an opted-in draft writes a src receipt then opens a ready PR", async () => {
+  const github = memoryGithub();
+  const files = [".factory/issue-40.md"];
+  github.hasBranch = async () => true;
+  github.listBranchFiles = async () => files;
+  github.putFile = async (_head, file) => { files.push(file.path); github.actions.push(`putFile:${file.path}`); };
+  const steps = await runTriage(
+    { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
+    { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
+  );
+  assert.ok(github.actions.some((action) => action.startsWith("putFile:src/factory/issue-40.md")));
+  assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
   assert.ok(!github.actions.some((action) => action.includes("terrarium")));
 });
 

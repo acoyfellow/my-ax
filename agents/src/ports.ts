@@ -78,6 +78,17 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       const json = await gh(`/pulls/${number}/files?per_page=100`);
       return (Array.isArray(json) ? json : []).map((row) => String((row as { filename?: string }).filename || "")).filter(Boolean);
     },
+    async putFile(head, file) {
+      assertNoMergeAction("putFile");
+      await gh(`/contents/${encodeURI(file.path)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          message: assertPublicText(file.message),
+          content: btoa(unescape(encodeURIComponent(assertPublicText(file.content)))),
+          branch: head,
+        }),
+      });
+    },
     async listBranchFiles(head) {
       assertNoMergeAction("listBranchFiles");
       const json = await gh(`/compare/main...${encodeURIComponent(head)}`);
