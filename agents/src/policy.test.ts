@@ -160,7 +160,7 @@ test("an opted-in draft does not open a ready PR when putFile is missing and the
   assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
 });
 
-test("an opted-in draft writes a src receipt then opens a ready PR", async () => {
+test("an opted-in draft does not open a ready PR when putFile only writes a factory receipt", async () => {
   const github = memoryGithub();
   const files = [".factory/issue-40.md"];
   github.hasBranch = async () => true;
@@ -171,7 +171,8 @@ test("an opted-in draft writes a src receipt then opens a ready PR", async () =>
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
   assert.ok(github.actions.some((action) => action.startsWith("putFile:src/factory/issue-40.md")));
-  assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
+  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
+  assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
   assert.ok(!github.actions.some((action) => action.includes("terrarium")));
 });
 
