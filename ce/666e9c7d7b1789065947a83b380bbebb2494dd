@@ -1,0 +1,35 @@
+src/check-in.test.ts
+  s_99b55ecf7d26fa::t_0e8567a65d0686 155-164,166,179,268,285,292
+src/check-in.ts
+  s_99b55ecf7d26fa::t_8e0611e70b9b17 84-89
+src/mcp-method-names.test.ts
+  s_99b55ecf7d26fa::t_168aed20cbe74e 6,21-26
+src/routes/check-in.ts
+  s_99b55ecf7d26fa::t_4c12c0fbe34e49 37,44
+src/routes/mcp.ts
+  s_99b55ecf7d26fa::t_5dc2fcb7e23bae 30-31,142-157,410-417,520
+src/tools.ts
+  s_99b55ecf7d26fa::t_ba5abc6780d0d4 113
+src/work-code-output.test.ts
+  s_99b55ecf7d26fa::t_33950c421d801d 7,17-29
+src/workspace-mcp.test.ts
+  s_99b55ecf7d26fa::t_3d4ee81d762d2b 13,26,33-34
+src/workspace-mcp.ts
+  s_99b55ecf7d26fa::t_8a6905193bf47a 44,53-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ce666e9c7d7b1789065947a83b380bbebb2494dd",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
