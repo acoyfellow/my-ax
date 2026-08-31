@@ -110,7 +110,7 @@ function createCmuxMachineReader(context: ToolContext): CmuxReader {
     return tail({
       workspaceId: request.workspaceId,
       surfaceId: request.surfaceId,
-      lines: Math.max(1, Math.ceil(request.maxBytes / 80)),
+      lines: Math.min(200, Math.max(1, Math.ceil(request.maxBytes / 80))),
     });
   };
 }

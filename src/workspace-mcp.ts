@@ -41,7 +41,7 @@ export async function listWorkspace(sandbox: WorkspaceExec, path?: string, limit
   const abs = resolveWorkspacePath(path);
   const cap = Math.max(1, Math.min(Number(limit) || 80, WORKSPACE_LIST_MAX_ENTRIES));
   const result = await sandbox.exec(
-    `find ${shellQuote(abs)} -mindepth 1 -maxdepth 2 \\( -type f -o -type d \\) -print 2>/dev/null | head -n ${cap + 1}`,
+    `find ${shellQuote(abs)} -mindepth 1 -maxdepth 2 \\( -type d -printf 'd %p\\n' -o -type f -printf 'f %p\\n' \\) 2>/dev/null | head -n ${cap + 1}`,
     { cwd: WORKSPACE_HOME, timeout: 15_000 },
   );
   if (result.exitCode !== 0 && !(result.stdout ?? "").trim()) {
@@ -50,8 +50,10 @@ export async function listWorkspace(sandbox: WorkspaceExec, path?: string, limit
   const lines = (result.stdout ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
   const truncated = lines.length > cap;
   const entries: WorkspaceListEntry[] = lines.slice(0, cap).map((line) => {
-    const name = line.slice(line.lastIndexOf("/") + 1);
-    return { path: publicWorkspacePath(line), name, kind: "file" };
+    const kind = line.startsWith("d ") ? "dir" : "file";
+    const absPath = line.startsWith("d ") || line.startsWith("f ") ? line.slice(2) : line;
+    const name = absPath.slice(absPath.lastIndexOf("/") + 1);
+    return { path: publicWorkspacePath(absPath), name, kind };
   });
   return { path: publicWorkspacePath(abs), entries, truncated };
 }

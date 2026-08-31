@@ -27,8 +27,8 @@ function isMcpNotificationKind(value: unknown): value is McpNotificationKind {
 const TOOLS = [
   {
     name: "my_ax_code",
-    description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations and workspace. Preferred for multi-step inspection and steering. Available typed methods include listSessions, workspaceList, workspaceRead, getSession, entries, inject. No raw fetch or outbound network.",
-    inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function using codemode.<method>(args)." } }, required: ["code"] },
+    description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations and workspace. Preferred for multi-step inspection and steering. Use an async arrow function. Bare names such as listSessions are wrapped onto codemode automatically. workspaceList path must be /workspace or /home/user, never /. jobsList returns an index without prompt bodies. No raw fetch or outbound network.",
+    inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function. Bare coordinator names are bound from codemode." } }, required: ["code"] },
   },
   {
     name: "my_ax_check_in",
@@ -139,7 +139,22 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     const input = { sessionId: args.sessionId as string | undefined, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
     if (method === "jobs_list") {
       const status = typeof args.status === "string" && ["active", "paused"].includes(args.status) ? args.status as "active" | "paused" : undefined;
-      return { jobs: await jobs.list(status) };
+      const jobsList = await jobs.list(status);
+      return {
+        jobs: jobsList.map((job) => ({
+          id: job.id,
+          name: job.name,
+          status: job.status,
+          cadence_secs: job.cadence_secs,
+          run_count: job.run_count,
+          max_runs: job.max_runs,
+          next_run_at: job.next_run_at,
+          last_run_at: job.last_run_at,
+          last_error: job.last_error,
+          session_id: job.session_id,
+          promptChars: typeof job.prompt === "string" ? job.prompt.length : 0,
+        })),
+      };
     }
     if (method === "jobs_create") return jobs.create(input, args.idempotencyKey as string | undefined);
     if (method === "jobs_update") return jobs.update(id, input);
@@ -392,6 +407,14 @@ const CODE_METHODS: Record<string, Method> = {
 
 const CODE_METHOD_NAMES = Object.keys(CODE_METHODS);
 
+export function wrapCoordinatorCode(code: string): string {
+  const trimmed = code.trim();
+  if (!trimmed) return trimmed;
+  if (/\bcodemode\./.test(trimmed)) return trimmed;
+  const names = CODE_METHOD_NAMES.join(", ");
+  return `async () => { const { ${names} } = codemode; const __fn = ${trimmed}; return typeof __fn === "function" ? await __fn() : __fn; }`;
+}
+
 function objectArgs(input: unknown): Record<string, unknown> {
   return (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
 }
@@ -494,7 +517,7 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
         const code = typeof args.code === "string" ? args.code : "";
         if (!code) throw new Error("code is required");
         const executor = new DynamicWorkerExecutor({ loader: c.env.LOADER, globalOutbound: null, timeout: 30_000 });
-        const execution = await executor.execute(code, [{ name: "codemode", fns: coordinatorCodeFns(c) }]);
+        const execution = await executor.execute(wrapCoordinatorCode(code), [{ name: "codemode", fns: coordinatorCodeFns(c) }]);
         if (execution.error) return c.json(rpc(req.id, { ...text({ ok: false, error: execution.error, available: CODE_TYPES }), isError: true }));
         return c.json(rpc(req.id, text({ ok: true, result: execution.result, logs: execution.logs ?? [], availableMethods: CODE_METHOD_NAMES })));
       }

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+
 const source = readFileSync(join(import.meta.dirname, "routes", "mcp.ts"), "utf8");
 
 function codeMethodKeys(): string[] {
@@ -16,6 +17,12 @@ function declaredTypeNames(): string[] {
   assert.ok(block, "CODE_TYPES must exist");
   return [...block[1].matchAll(/([A-Za-z0-9_]+)\((?:args)?[?:)]/g)].map((match) => match[1]);
 }
+
+test("my_ax_code wraps bare listSessions so agents do not need codemode.", () => {
+  assert.match(source, /export function wrapCoordinatorCode/);
+  assert.match(source, /bcodemode/);
+  assert.match(source, /} = codemode/);
+});
 
 test("the runtime advertises the names it can actually dispatch", () => {
   assert.match(

@@ -10,6 +10,7 @@ test("resolveWorkspacePath aliases /workspace to /home/user", () => {
 
 test("resolveWorkspacePath rejects escape", () => {
   assert.throws(() => resolveWorkspacePath("/etc/passwd"), /must be inside/);
+  assert.throws(() => resolveWorkspacePath("/"), /must be inside/);
   assert.throws(() => resolveWorkspacePath("/home/user/../etc/passwd"), /must not contain/);
 });
 
@@ -22,13 +23,15 @@ test("listWorkspace returns public paths and truncated", async () => {
   const sandbox = {
     exec: async () => ({
       exitCode: 0,
-      stdout: "/home/user/feature-requests\n/home/user/feature-requests/session-hygiene-and-cleanup.md\n/home/user/extra\n",
+      stdout: "d /home/user/feature-requests\nf /home/user/feature-requests/session-hygiene-and-cleanup.md\nd /home/user/extra\n",
     }),
   };
   const listed = await listWorkspace(sandbox, "/workspace", 2);
   assert.equal(listed.path, "/workspace");
   assert.equal(listed.truncated, true);
   assert.equal(listed.entries.length, 2);
+  assert.equal(listed.entries[0]?.kind, "dir");
+  assert.equal(listed.entries[1]?.kind, "file");
   assert.equal(listed.entries[1]?.path, "/workspace/feature-requests/session-hygiene-and-cleanup.md");
 });
 
