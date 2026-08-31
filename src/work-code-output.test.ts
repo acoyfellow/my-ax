@@ -4,6 +4,7 @@ import {
   capWorkCodeCollection,
   capWorkCodeCollectionWithMetadata,
   capWorkCodeValue,
+  summarizeCmuxInventory,
   WORK_CODE_CALLS_MAX_BYTES,
   WORK_CODE_CALLS_MAX_ENTRIES,
   WORK_CODE_LOGS_MAX_BYTES,
@@ -12,6 +13,19 @@ import {
 } from "./work-code-output";
 
 const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+test("cmux inventory is summarized before the work_code byte cap", () => {
+  const workspaces = Array.from({ length: 39 }, (_, index) => ({
+    id: `id-${index}`,
+    title: `ws-${index}`,
+    surfaces: [{ id: "s" }],
+    piSessions: [{ dispatchable: index < 32 }],
+  }));
+  const capped = capWorkCodeValue({ workspaces }, WORK_CODE_RESULT_MAX_BYTES) as { workspaceCount?: number; truncated?: boolean; reason?: string };
+  assert.equal(capped.workspaceCount, 39);
+  assert.equal(capped.reason, "cmux_inventory_summary");
+  assert.ok(bytes(capped) <= WORK_CODE_RESULT_MAX_BYTES);
+});
 
 test("work_code result cap bounds nested strings before outer serialization", () => {
   const result = capWorkCodeValue({ output: "x".repeat(WORK_CODE_RESULT_MAX_BYTES * 8), nested: { more: "y".repeat(WORK_CODE_RESULT_MAX_BYTES * 8) } }, WORK_CODE_RESULT_MAX_BYTES);
