@@ -86,5 +86,12 @@ export async function getPantryRecipe(env: Env, name: string): Promise<PantryFul
 }
 
 export function pantryRecipeExecutionCode(recipeCode: string): string {
+  const trimmed = recipeCode.trim().replace(/;+$/, "");
+  const callable = /^(async\s*)?(\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(trimmed)
+    || /^(async\s+)?function\b/.test(trimmed)
+    || /\bexport\s+default\b/.test(trimmed);
+  if (callable) {
+    return `async (input) => { const ctx = { input }; const __fn = ${trimmed}; return typeof __fn === "function" ? await __fn(input, ctx) : __fn; }`;
+  }
   return `async (input) => { const ctx = { input }; ${recipeCode}\n}`;
 }

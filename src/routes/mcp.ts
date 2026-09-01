@@ -217,6 +217,13 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
       try {
         const existing = await recipes.getByName(pantryRecipe.name);
         localId = existing.id;
+        await recipes.update(existing.id, {
+          code: pantryRecipeExecutionCode(pantryRecipe.code),
+          description: pantryRecipe.description,
+          inputSchema: pantryRecipe.inputSchema,
+          capabilities: pantryRecipe.capabilities.length ? pantryRecipe.capabilities : ["workspace.none"],
+          status: "enabled",
+        });
       } catch {
         const created = await recipes.create({
           name: pantryRecipe.name,
