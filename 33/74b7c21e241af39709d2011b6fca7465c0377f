@@ -1,0 +1,21 @@
+src/routes/mcp.ts
+  s_952b167abec97a::t_69319201ccf2ad 220-226
+src/routes/recipes.ts
+  s_952b167abec97a::t_21b1d59a0c66e3 10,109-113,143-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3374b7c21e241af39709d2011b6fca7465c0377f",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
