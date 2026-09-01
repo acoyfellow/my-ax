@@ -30,7 +30,15 @@ function ok(c: Context<AppEnv>, command: string, result: unknown, status: Conten
 export function registerRecipeRoutes(app: Hono<AppEnv>) {
   app.get("/api/recipes", async (c) => {
     const command = "GET /api/recipes";
-    try { return ok(c, command, { recipes: await service(c).list() }); }
+    try {
+      const recipes = await service(c).list();
+      let pantry: unknown[] = [];
+      try {
+        const { listPantryRecipes } = await import("../pantry-client");
+        pantry = await listPantryRecipes(c.env);
+      } catch { pantry = []; }
+      return ok(c, command, { recipes, pantry });
+    }
     catch (error) { return failure(c, command, error); }
   });
 
