@@ -75,7 +75,7 @@ Use this rollout order so sessions carrying still-valid tokens continue to work 
 3. Wait at least the longest configured Access token or session lifetime.
 4. Remove the old issuer and deploy again.
 
-The unverified token issuer is used only to select an issuer already present in the configured allowlist. Signature, issuer, and audience verification still run against that selected issuer. Empty, malformed, and unlisted issuers fail closed.
+The unverified token issuer is used only to select an issuer already present in the configured allowlist. Signature, issuer, and audience verification still run against that selected issuer. Empty, malformed, and unlisted issuers fail closed. See the [dual-issuer verifier implementation](https://github.com/acoyfellow/my-ax/pull/10).
 
 Production requests remain rejected if the Access issuer or audience is absent. The `--env dev` configuration is the only local identity bypass.
 
