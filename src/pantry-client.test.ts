@@ -57,3 +57,9 @@ test("pantryRecipeExecutionCode exposes ctx.input to pantry bodies", () => {
   assert.match(code, /async \(input\) =>/);
   assert.match(code, /const ctx = \{ input \}/);
 });
+
+test("pantryRecipeExecutionCode invokes an async arrow instead of nesting it", () => {
+  const code = pantryRecipeExecutionCode("async (input, ctx) => ({ n: ctx.input.n })");
+  assert.match(code, /await __fn\(input, ctx\)/);
+  assert.doesNotMatch(code, /async \(input\) => \{ const ctx = \{ input \}; async \(input, ctx\)/);
+});

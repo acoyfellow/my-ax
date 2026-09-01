@@ -7,6 +7,7 @@ import { publicRecipe, SavedRecipeError, SavedRecipeService, validateRecipeRunIn
 import { projectSavedRecipe } from "../cm-snippets";
 import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences";
 import { requireOwnedSession } from "../session-ownership";
+import { syncRecipesToPantry } from "../pantry-sync";
 
 function body(c: Context<AppEnv>): Promise<Record<string, unknown>> {
   return c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
@@ -105,7 +106,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
         throw new SavedRecipeError("Conflict", "This card no longer matches the saved reusable tool. Open Reusable tools to review the current version.");
       }
       const recipe = await service(c).update(existing.id, { status: action === "approve" ? "enabled" : "disabled" });
-      if (action === "approve") await projectSavedRecipe(c.env, await service(c).get(existing.id));
+      if (action === "approve") {
+        const row = await service(c).get(existing.id);
+        await projectSavedRecipe(c.env, row);
+        c.executionCtx.waitUntil(syncRecipesToPantry(c.env, c.get("identity").email).then(() => undefined));
+      }
       return ok(c, command, { recipe, action });
     } catch (error) { return failure(c, command, error); }
   });
@@ -135,7 +140,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const action = request.action === "reject" ? "reject" : request.action === "approve" ? "approve" : "";
       if (!action) throw new SavedRecipeError("InvalidInput", "action must be approve or reject");
       const recipe = await service(c).update(c.req.param("id"), { status: action === "approve" ? "enabled" : "disabled" });
-      if (action === "approve") await projectSavedRecipe(c.env, await service(c).get(c.req.param("id")));
+      if (action === "approve") {
+        const row = await service(c).get(c.req.param("id"));
+        await projectSavedRecipe(c.env, row);
+        c.executionCtx.waitUntil(syncRecipesToPantry(c.env, c.get("identity").email).then(() => undefined));
+      }
       return ok(c, command, { recipe, action });
     }
     catch (error) { return failure(c, command, error); }
