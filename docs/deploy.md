@@ -62,6 +62,21 @@ Create a Zero Trust **Self-hosted** Access application for the final hostname. S
 }
 ```
 
+`CF_ACCESS_ISS` normally contains one issuer. During a Zero Trust team-domain migration, it accepts an exact comma-separated allowlist:
+
+```jsonc
+"CF_ACCESS_ISS": "https://OLD-TEAM.cloudflareaccess.com,https://NEW-TEAM.cloudflareaccess.com"
+```
+
+Use this rollout order so sessions carrying still-valid tokens continue to work across the rename:
+
+1. Add both the current and replacement issuers, then deploy every Worker that verifies Access tokens.
+2. Rename the Zero Trust team domain.
+3. Wait at least the longest configured Access token or session lifetime.
+4. Remove the old issuer and deploy again.
+
+The unverified token issuer is used only to select an issuer already present in the configured allowlist. Signature, issuer, and audience verification still run against that selected issuer. Empty, malformed, and unlisted issuers fail closed.
+
 Production requests remain rejected if the Access issuer or audience is absent. The `--env dev` configuration is the only local identity bypass.
 
 ## 3. Configure Durable Workspace Snapshots
@@ -206,7 +221,7 @@ Inspect Docker/Colima health and the Wrangler build output. The Sandbox image is
 
 ### Worker Returns an Auth Error After Access Succeeds
 
-Confirm `CF_ACCESS_ISS` and `CF_ACCESS_AUD` match the Access application protecting the deployed hostname.
+Confirm `CF_ACCESS_AUD` matches the Access application protecting the deployed hostname. Confirm the token's issuer is an exact member of `CF_ACCESS_ISS`; during a team-domain migration, keep both the old and new issuers in the comma-separated allowlist until the token/session soak completes.
 
 ### Workspace Restore Is Unavailable
 
