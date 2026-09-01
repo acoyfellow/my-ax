@@ -107,6 +107,9 @@ declare global {
       /** Explicit opt-in: saved recipe promotions skip pending gate and become enabled. */
       MY_AX_RECIPE_AUTOTRUST?: string;
       RECIPE_AUTOTRUST?: string;
+      PANTRY_URL?: string;
+      PANTRY_TOKEN?: string;
+      PANTRY?: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
 
     }
   }
