@@ -32,6 +32,7 @@ const WORKSPACE_METHODS = [
 // PAGE_VERBS. Each verb marshals over the chat WS to the live browser client.
 const PAGE_WORK_METHODS = [
   { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
+  { name: "listNotifications", description: "Read up to 20 owner-scoped notification items and unread summaries. Optional {limit,kind,sessionId}. Read-only." },
   { name: "readHealth", description: "Read workspace container health for the live session: {diskPct,files,version,region,...}. Prefer page.readVersion for deploy freshness." },
   { name: "readVersion", description: "Read live client vs Worker deploy: {clientId,deployedId,fresh,stale}. Fast; no sandbox." },
   { name: "readTranscriptTail", description: "Read the last N entries of the active conversation as rendered: [{role,text,ts}]. Optional {n}." },
@@ -41,6 +42,7 @@ const PAGE_WORK_METHODS = [
   { name: "openSettings", description: "Open the settings dialog in the owner's UI, optionally to {section}." },
   { name: "openAttention", description: "Open the notifications/attention panel in the owner's UI." },
   { name: "openSessions", description: "Open the conversations sidebar in the owner's UI." },
+  { name: "openTerminal", description: "Open the on-demand terminal in the owner's UI." },
   { name: "notify", description: "Show a transient in-app toast to the owner in the live UI. Input: {text, kind?}." },
   { name: "reload", description: "Hard-reload the owner's live UI including iOS PWA (skipWaiting + cache-bust)." },
   { name: "navigate", description: "Navigate the owner's UI to an in-app deep link (/?session=<id>, /?action=attention|settings, /runs/<id>). Input: {target}." },

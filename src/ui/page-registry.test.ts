@@ -78,7 +78,7 @@ beforeEach(() => {
 
 test("catalog exposes the v1 verb set with resolution metadata", () => {
   const names = pageVerbCatalog().map((v) => v.name).sort();
-  assert.deepEqual(names, ["applyDeskBoard", "deskRead", "deskWrite", "invokeArtifactTool", "listArtifactTools", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "openTerminal", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "sendToSession", "setViewportDebug", "switchSession"]);
+  assert.deepEqual(names, ["applyDeskBoard", "deskRead", "deskWrite", "invokeArtifactTool", "listArtifactTools", "listNotifications", "listSessions", "navigate", "notify", "openAttention", "openDesk", "openSessions", "openSettings", "openTerminal", "readHealth", "readTranscriptTail", "readVersion", "readViewport", "reload", "sendToSession", "setViewportDebug", "switchSession"]);
   assert.equal(pageVerbCatalog().find((v) => v.name === "switchSession")?.resolution, "ack");
   assert.equal(pageVerbCatalog().find((v) => v.name === "listSessions")?.resolution, "receipt");
 });
@@ -94,6 +94,18 @@ test("listSessions unwraps the REST { result: { sessions } } envelope", async ()
     { id: "s1", title: "One", status: "active", updatedAt: "t1" },
     { id: "s2", title: null, status: "idle", updatedAt: "t2" },
   ]);
+});
+
+test("listNotifications reads owner-scoped attention and clamps the result", async () => {
+  let requested = "";
+  installGlobals({ fetchJson: (url) => {
+    requested = url;
+    return { ok: true, result: { unread: 3, items: [{ id: "n1" }, { id: "n2" }], filter: { kind: "review" }, summary: { byKind: [] } } };
+  } });
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "notifications", verb: "listNotifications", args: { limit: 1, kind: "review" } });
+  assert.equal(frame.ok, true);
+  assert.equal(requested, "/api/attention?kind=review");
+  assert.deepEqual(frame.result, { unread: 3, items: [{ id: "n1" }], filter: { kind: "review" }, summary: { byKind: [] } });
 });
 
 test("readVersion compares client boot id to /api/version without hitting /api/system", async () => {
