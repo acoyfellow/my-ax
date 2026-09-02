@@ -1,7 +1,7 @@
 import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
 import { liveGithubPort } from "./ports";
-import { formatDuplicateClose, planSweep, type SweepIssue } from "./sweep";
+import { formatDuplicateClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -108,14 +108,14 @@ export default {
     }
     return new Response("not found", { status: 404 });
   },
-  async scheduled(_event: unknown, env: WorkerEnv): Promise<void> {
-    await runIssueSweep(env);
+  async scheduled(event: { scheduledTime?: number }, env: WorkerEnv): Promise<void> {
+    await runIssueSweep(env, Number(event.scheduledTime) || Date.now());
   },
 };
 
-export async function runIssueSweep(env: WorkerEnv): Promise<{ closed: number; queued: number }> {
+export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()): Promise<{ closed: number; queued: number; needsHuman: number }> {
   const github = liveGithubPort(env);
-  if (!github.listOpenIssues || !github.listComments) return { closed: 0, queued: 0 };
+  if (!github.listOpenIssues || !github.listComments) return { closed: 0, queued: 0, needsHuman: 0 };
   const open = await github.listOpenIssues();
   const issues: SweepIssue[] = [];
   for (const issue of open) {
@@ -128,22 +128,28 @@ export async function runIssueSweep(env: WorkerEnv): Promise<{ closed: number; q
   const actions = planSweep(issues);
   let closed = 0;
   let queued = 0;
+  let needsHuman = 0;
   for (const action of actions) {
     if (action.action === "close-duplicate" && github.closeIssue) {
       await github.closeIssue(action.number, formatDuplicateClose(action.keep, action.fingerprint));
       closed += 1;
     }
+    if (action.action === "needs-human") {
+      await github.labelIssue(action.number, ["triage:needs-human"]);
+      await github.comment(action.number, formatRetryExhausted(action.attempts));
+      needsHuman += 1;
+    }
     if (action.action === "queue") {
       const issue = issues.find((row) => row.number === action.number);
       if (!issue) continue;
-      await queueTriage(env, `sweep-${action.number}`, {
+      const response = await queueTriage(env, sweepLeaseId(issue.number, scheduledTime), {
         number: issue.number,
         title: issue.title,
         body: issue.body,
         user: { login: issue.author },
       });
-      queued += 1;
+      if (response.ok) queued += 1;
     }
   }
-  return { closed, queued };
+  return { closed, queued, needsHuman };
 }

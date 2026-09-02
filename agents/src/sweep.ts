@@ -1,6 +1,8 @@
 export const SWEEP_MAX_ISSUES = 40;
 export const SWEEP_MAX_CLOSES = 8;
 export const SWEEP_MAX_QUEUES = 8;
+export const SWEEP_MAX_ATTEMPTS = 3;
+export const SWEEP_LEASE_MS = 15 * 60 * 1000;
 
 const FINGERPRINT_RE = /fingerprint:\s*`([a-f0-9]{16})`/i;
 const LOOP_BOARD_RE = /^## loop board\b/m;
@@ -20,7 +22,8 @@ export interface SweepIssue {
 export type SweepAction =
   | { action: "keep"; number: number; fingerprint: string }
   | { action: "close-duplicate"; number: number; keep: number; fingerprint: string }
-  | { action: "queue"; number: number };
+  | { action: "queue"; number: number }
+  | { action: "needs-human"; number: number; attempts: number };
 
 export function extractFingerprint(body: string): string | null {
   const match = body.match(FINGERPRINT_RE);
@@ -33,6 +36,15 @@ export function hasLoopBoard(comments: string[]): boolean {
 
 export function isBlockedStamp(comments: string[]): boolean {
   return comments.some((body) => LOOP_BOARD_RE.test(body) && /\bstage: blocked-stamp\b/.test(body));
+}
+
+export function loopBoardAttempts(comments: string[]): number {
+  return comments.filter((body) => LOOP_BOARD_RE.test(body)).length;
+}
+
+export function sweepLeaseId(issueNumber: number, scheduledTime: number): string {
+  const bucket = Math.floor(scheduledTime / SWEEP_LEASE_MS);
+  return `sweep-${bucket}-${issueNumber}`;
 }
 
 export function planSweep(issues: SweepIssue[]): SweepAction[] {
@@ -66,12 +78,30 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
     if (closing.has(issue.number)) continue;
     if (issue.hasOpenPr) continue;
     if ((issue.labels ?? []).includes("triage:needs-human")) continue;
+    const attempts = loopBoardAttempts(issue.comments);
+    const optedIn = (issue.labels ?? []).includes("triage:draft");
+    const retryable = optedIn || isBlockedStamp(issue.comments) || !hasLoopBoard(issue.comments);
+    if (!retryable) continue;
+    if (attempts >= SWEEP_MAX_ATTEMPTS) {
+      actions.push({ action: "needs-human", number: issue.number, attempts });
+      continue;
+    }
     if (queues >= SWEEP_MAX_QUEUES) continue;
     actions.push({ action: "queue", number: issue.number });
     queues += 1;
   }
 
   return actions;
+}
+
+export function formatRetryExhausted(attempts: number): string {
+  return [
+    "## loop board",
+    "stage: retry-exhausted",
+    `attempts: ${attempts}`,
+    "next: triage:needs-human",
+    "Worker stopped automatic retries. Worker never merges and never approves.",
+  ].join("\n");
 }
 
 export function formatDuplicateClose(keep: number, fingerprint: string): string {
