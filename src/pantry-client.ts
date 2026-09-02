@@ -91,7 +91,7 @@ export function pantryRecipeExecutionCode(recipeCode: string): string {
     || /^(async\s+)?function\b/.test(trimmed)
     || /\bexport\s+default\b/.test(trimmed);
   if (callable) {
-    return `async (input) => { const ctx = { input }; const __fn = ${trimmed}; return typeof __fn === "function" ? await __fn(input, ctx) : __fn; }`;
+    return `async (input) => { const ctx = { input, bindings: globalThis.ctx }; const __fn = ${trimmed}; return typeof __fn === "function" ? await __fn(input, ctx) : __fn; }`;
   }
-  return `async (input) => { const ctx = { input }; ${recipeCode}\n}`;
+  return `async (input) => { const ctx = { input, bindings: globalThis.ctx }; ${recipeCode}\n}`;
 }

@@ -52,14 +52,14 @@ test("getPantryRecipe returns code for an enabled recipe", async () => {
   assert.equal(recipe?.code, "return { ok: true };");
 });
 
-test("pantryRecipeExecutionCode exposes ctx.input to pantry bodies", () => {
+test("pantryRecipeExecutionCode exposes input and capability-gated bindings", () => {
   const code = pantryRecipeExecutionCode("return ctx.input.n;");
   assert.match(code, /async \(input\) =>/);
-  assert.match(code, /const ctx = \{ input \}/);
+  assert.match(code, /const ctx = \{ input, bindings: globalThis\.ctx \}/);
 });
 
 test("pantryRecipeExecutionCode invokes an async arrow instead of nesting it", () => {
   const code = pantryRecipeExecutionCode("async (input, ctx) => ({ n: ctx.input.n })");
   assert.match(code, /await __fn\(input, ctx\)/);
-  assert.doesNotMatch(code, /async \(input\) => \{ const ctx = \{ input \}; async \(input, ctx\)/);
+  assert.doesNotMatch(code, /async \(input\) => \{ const ctx = \{ input, bindings: globalThis\.ctx \}; async \(input, ctx\)/);
 });
