@@ -57,25 +57,7 @@ export type TriageStep =
   | { step: "stop"; reason: string };
 
 export function productFilesOnBranch(files: string[]): string[] {
-  return files.filter((file) => file.length > 0 && !file.startsWith(".factory/"));
-}
-
-export function factoryReceiptPath(issueNumber: number): string {
-  return `src/factory/issue-${issueNumber}.md`;
-}
-
-export function formatFactoryReceipt(input: IssueInput, classification: Classification): string {
-  const issueNumber = input.number ?? 0;
-  return [
-    `# Issue ${issueNumber}`,
-    "",
-    `title: ${input.title}`,
-    `kind: ${classification.kind}`,
-    "",
-    "Agents wrote this file with GITHUB_TOKEN so the head is not a .factory seed.",
-    "Replace this receipt with the fix. Worker never merges.",
-    "",
-  ].join("\n");
+  return files.filter((file) => file.length > 0 && !file.startsWith(".factory/") && !file.startsWith("src/factory/"));
 }
 
 export function formatBranchSeed(input: IssueInput, classification: Classification): string {
@@ -188,21 +170,8 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
       stage = "blocked-missing-branch";
       steps.push({ step: "stop", reason: `missing ${head}` });
     } else {
-      let files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [];
-      let product = productFilesOnBranch(files);
-      if (!product.length && ports.github.putFile) {
-        try {
-          await ports.github.putFile(head, {
-            path: factoryReceiptPath(issueNumber),
-            message: `fix: open work on issue #${issueNumber}`,
-            content: formatFactoryReceipt(input, classification),
-          });
-          files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [factoryReceiptPath(issueNumber)];
-          product = productFilesOnBranch(files);
-        } catch (err) {
-          error = err instanceof Error ? err.message : String(err);
-        }
-      }
+      const files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [];
+      const product = productFilesOnBranch(files);
       if (!product.length) {
         stage = "blocked-stamp";
         error = error ?? "product files missing; a .factory seed is not a ready PR. Terrarium is not on this path.";
