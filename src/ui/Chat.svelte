@@ -537,6 +537,7 @@
     }
     voiceClient = attempt.client;
     voiceReady = attempt.client.connected;
+    voiceEnabled = true;
     localStorage.setItem("my-ax-voice-mode", "1");
     if (voiceTransport) startVoiceOutputMeter(attempt.client, voiceTransport);
     syncVoiceModelForSession(sessionId!);
@@ -546,7 +547,6 @@
     void attempt.completion.then(
       () => {
         if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) return;
-        voiceEnabled = true;
         voiceStarting = false;
         voiceError = null;
       },
