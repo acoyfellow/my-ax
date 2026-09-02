@@ -160,19 +160,17 @@ test("an opted-in draft does not open a ready PR when putFile is missing and the
   assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
 });
 
-test("an opted-in draft writes a src receipt then opens a ready PR", async () => {
+test("an opted-in draft never converts a factory receipt into a ready PR", async () => {
   const github = memoryGithub();
-  const files = [".factory/issue-40.md"];
   github.hasBranch = async () => true;
-  github.listBranchFiles = async () => files;
-  github.putFile = async (_head, file) => { files.push(file.path); github.actions.push(`putFile:${file.path}`); };
+  github.listBranchFiles = async () => [".factory/issue-40.md", "src/factory/issue-40.md"];
   const steps = await runTriage(
     { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
-  assert.ok(github.actions.some((action) => action.startsWith("putFile:src/factory/issue-40.md")));
-  assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
-  assert.ok(!github.actions.some((action) => action.includes("terrarium")));
+  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
+  assert.ok(!github.actions.some((action) => action.startsWith("putFile:")));
+  assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
 });
 
 test("an opted-in draft opens a ready PR when the head already has a product file", async () => {
@@ -188,7 +186,7 @@ test("an opted-in draft opens a ready PR when the head already has a product fil
   assert.ok(github.actions.some((action) => action.startsWith("pr:")));
 });
 
-test("auditPull does not recommend merge when the only files are factory seeds", () => {
+test("auditPull does not recommend merge when the only files are factory receipts", () => {
   const stamp = auditPull(
     {
       title: "fix: terminal",
@@ -196,7 +194,7 @@ test("auditPull does not recommend merge when the only files are factory seeds",
       author: "acoyfellow",
       draft: false,
       headSha: "abc",
-      files: [".factory/issue-158.md"],
+      files: [".factory/issue-158.md", "src/factory/issue-158.md"],
       behindMain: 0,
     },
     "d",
