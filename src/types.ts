@@ -21,6 +21,7 @@ declare global {
     interface Env {
       // Bridge ticket signing
       BRIDGE_JWT_SECRET: string;
+      PREVIEW_GIT_SHA?: string;
 
       // OAuth token encryption-at-rest in OAuthClientDO (AES-GCM-256, HKDF
       // per-user key derivation). 32+ bytes base64. Generate with:
