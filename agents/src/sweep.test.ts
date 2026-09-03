@@ -76,6 +76,20 @@ test("an unboarded issue is still queued", () => {
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 70));
 });
 
+test("an unexpired implementation lease keeps active work open", () => {
+  const actions = planSweep([
+    { number: 153, title: "bug", body: "repro", author: "o", state: "open", comments: ["## factory implementation lease\nrun: ter_1\nstate: active\nexpires: 2026-09-03T19:30:00Z"], labels: ["triage:needs-human"] },
+  ], Date.parse("2026-09-03T19:00:00Z"));
+  assert.deepEqual(actions, []);
+});
+
+test("an expired implementation lease returns to terminal triage", () => {
+  const actions = planSweep([
+    { number: 153, title: "bug", body: "repro", author: "o", state: "open", comments: ["## factory implementation lease\nrun: ter_1\nstate: active\nexpires: 2026-09-03T19:30:00Z"], labels: ["triage:needs-human"] },
+  ], Date.parse("2026-09-03T19:31:00Z"));
+  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 153 }]);
+});
+
 test("needs-human issues close as terminal boundaries instead of parking", () => {
   const actions = planSweep([
     { number: 146, title: "blocked: access", body: "needs zero trust", author: "o", state: "open", comments: [], labels: ["triage:needs-human"] },
