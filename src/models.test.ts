@@ -11,7 +11,6 @@ describe("model catalog", () => {
   it("keeps Workers AI and AI Gateway rows in the full catalog", () => {
     assert.ok(findModel("@cf/moonshotai/kimi-k2.7-code"));
     assert.ok(findModel("@cf/zai-org/glm-5.3"));
-    assert.equal(findModel("gpt-5.5")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-luna")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-terra")?.route, "gateway-openai");
     for (const model of MODELS) assert.equal(model.tools, true, model.id);
@@ -19,7 +18,7 @@ describe("model catalog", () => {
 
   it("shows gateway rows only when the installation has gateway config", () => {
     assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"]);
-    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "gpt-5.6-luna", "gpt-5.6-terra"]);
     assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
   });
 
@@ -30,12 +29,12 @@ describe("model catalog", () => {
     assert.equal(resolveModelId("claude-opus-5"), DEFAULT_MODEL_ID);
     assert.equal(resolveModelId("claude-opus-4-8"), DEFAULT_MODEL_ID);
     assert.equal(resolveModelId("gpt-5.6-sol"), DEFAULT_MODEL_ID);
+    assert.equal(resolveModelId("gpt-5.5"), DEFAULT_MODEL_ID);
   });
 
   it("uses a visible default and preserves valid gateway ids", () => {
     assert.ok(findModel(DEFAULT_MODEL_ID));
     assert.equal(resolveModelId(undefined), DEFAULT_MODEL_ID);
-    assert.equal(resolveModelId("gpt-5.5"), "gpt-5.5");
     assert.equal(resolveModelId("gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveModelId("gpt-5.6-terra"), "gpt-5.6-terra");
   });
@@ -43,8 +42,6 @@ describe("model catalog", () => {
   it("heals stale gateway selections when this installation has no gateway", () => {
     // Gateway-less: the only runnable rows are Workers-AI, so a stale gateway id
     // heals to the Workers-AI fallback default.
-    assert.equal(resolveAvailableModelId(minimalEnv, "gpt-5.5"), DEFAULT_MODEL_ID);
-    assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), "gpt-5.5");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-terra"), "gpt-5.6-terra");
   });
