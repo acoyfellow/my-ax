@@ -10,7 +10,7 @@ const serviceGatewayEnv = { LLM_GATEWAY_URL: "https://gateway.example/openai", L
 describe("model catalog", () => {
   it("keeps Workers AI and AI Gateway rows in the full catalog", () => {
     assert.ok(findModel("@cf/moonshotai/kimi-k2.7-code"));
-    assert.ok(findModel("@cf/zai-org/glm-5.2"));
+    assert.ok(findModel("@cf/zai-org/glm-5.3"));
     assert.equal(findModel("gpt-5.5")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-luna")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-sol")?.route, "gateway-openai");
@@ -21,8 +21,8 @@ describe("model catalog", () => {
   });
 
   it("shows gateway rows only when the installation has gateway config", () => {
-    assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2"]);
-    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-5", "claude-opus-4-8", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "claude-opus-5", "claude-opus-4-8", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
     assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
   });
 
