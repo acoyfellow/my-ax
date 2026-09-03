@@ -12,6 +12,7 @@ test("same fingerprint keeps the lowest number and closes the rest", () => {
     { action: "keep", number: 67, fingerprint: "e8a37db7f3311f4b" },
     { action: "close-duplicate", number: 69, keep: 67, fingerprint: "e8a37db7f3311f4b" },
     { action: "close-duplicate", number: 68, keep: 67, fingerprint: "e8a37db7f3311f4b" },
+    { action: "close-human-boundary", number: 67 },
   ]);
 });
 
@@ -89,11 +90,11 @@ test("a real linked PR receives the work and closes the issue", () => {
   assert.deepEqual(actions, [{ action: "close-issue-to-pr", number: 155, prNumber: 169 }]);
 });
 
-test("a boarded issue without draft opt-in waits instead of consuming every cron", () => {
+test("a boarded issue without draft opt-in closes as a terminal boundary", () => {
   const actions = planSweep([
     { number: 174, title: "Feature: notifications", body: "request", author: "o", state: "open", comments: ["## loop board\nstage: labeled"], labels: ["bug"] },
   ]);
-  assert.ok(!actions.some((row) => row.action === "queue"));
+  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 174 }]);
 });
 
 test("retry exhaustion routes an opted-in issue to a human", () => {

@@ -101,7 +101,10 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
     const attempts = loopBoardAttempts(issue.comments);
     const optedIn = (issue.labels ?? []).includes("triage:draft");
     const retryable = optedIn || isBlockedStamp(issue.comments) || !hasLoopBoard(issue.comments);
-    if (!retryable) continue;
+    if (!retryable) {
+      actions.push({ action: "close-human-boundary", number: issue.number });
+      continue;
+    }
     if (attempts >= SWEEP_MAX_ATTEMPTS) {
       actions.push({ action: "needs-human", number: issue.number, attempts });
       continue;
