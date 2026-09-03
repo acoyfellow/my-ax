@@ -1,0 +1,35 @@
+src/control-plane-mcp.test.ts
+  s_3a287577ef0d27::t_d40b9ed9df6f66 43-51
+src/routes/desk.ts
+  s_99b55ecf7d26fa::t_c2db743b0906e7 5,10-11,179-204,225-233
+src/tools.test.ts
+  s_3a287577ef0d27::t_2f25c9b33df278 3,43-67
+src/ui/Desk.svelte
+  s_99b55ecf7d26fa::t_6076586eee3f30 3,12-14,68,77-105,188,190,192-205,300-336
+src/ui/desk-host.test.ts
+  s_3a287577ef0d27::t_eb1ca09391de84 34-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8c886ac213c83736765955948d3a835b5cb904a0",
+  "prompts": {},
+  "sessions": {
+    "s_3a287577ef0d27": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f17f7-b570-7a6a-9f50-817745d03cdb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
