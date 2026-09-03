@@ -129,7 +129,7 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
     const hasOpenPr = openPr ? true : github.hasOpenPrForHead ? await github.hasOpenPrForHead(head) : false;
     issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr, openPr, linkedPr });
   }
-  const actions = planSweep(issues);
+  const actions = planSweep(issues, scheduledTime);
   let closed = 0;
   let queued = 0;
   let needsHuman = 0;

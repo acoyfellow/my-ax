@@ -6,6 +6,7 @@ export const SWEEP_LEASE_MS = 15 * 60 * 1000;
 
 const FINGERPRINT_RE = /fingerprint:\s*`([a-f0-9]{16})`/i;
 const LOOP_BOARD_RE = /^## loop board\b/m;
+const IMPLEMENTATION_LEASE_RE = /^## factory implementation lease\b[\s\S]*?^state: active\s*$[\s\S]*?^expires: (\S+)\s*$/m;
 
 export interface SweepIssue {
   number: number;
@@ -43,6 +44,14 @@ export function isBlockedStamp(comments: string[]): boolean {
   return comments.some((body) => LOOP_BOARD_RE.test(body) && /\bstage: blocked-stamp\b/.test(body));
 }
 
+export function hasActiveImplementationLease(comments: string[], now: number): boolean {
+  return comments.some((body) => {
+    const match = body.match(IMPLEMENTATION_LEASE_RE);
+    const expiresAt = match ? Date.parse(match[1]) : Number.NaN;
+    return Number.isFinite(expiresAt) && expiresAt > now;
+  });
+}
+
 export function isFactoryOnlyChange(files: string[]): boolean {
   return files.length > 0 && files.every((file) => file.startsWith(".factory/") || file.startsWith("src/factory/"));
 }
@@ -56,7 +65,7 @@ export function sweepLeaseId(issueNumber: number, scheduledTime: number): string
   return `sweep-${bucket}-${issueNumber}`;
 }
 
-export function planSweep(issues: SweepIssue[]): SweepAction[] {
+export function planSweep(issues: SweepIssue[], now = Date.now()): SweepAction[] {
   const open = issues.filter((issue) => issue.state === "open").slice(0, SWEEP_MAX_ISSUES);
   const byFingerprint = new Map<string, SweepIssue[]>();
   const actions: SweepAction[] = [];
@@ -94,6 +103,7 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
       continue;
     }
     if (issue.hasOpenPr || issue.openPr) continue;
+    if (hasActiveImplementationLease(issue.comments, now)) continue;
     if ((issue.labels ?? []).includes("triage:needs-human")) {
       actions.push({ action: "close-human-boundary", number: issue.number });
       continue;
