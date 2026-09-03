@@ -81,6 +81,12 @@ export function upsertDeskCard(board: DeskBoard, incoming: unknown, now = new Da
   return { cards: next, updatedAt: now };
 }
 
+export function removeDeskCard(board: DeskBoard, incomingId: unknown, now = new Date().toISOString()): DeskBoard {
+  const id = typeof incomingId === "string" ? incomingId.trim() : "";
+  if (!ID_RE.test(id)) throw new Error("invalid desk card id");
+  return { cards: board.cards.filter((card) => card.id !== id), updatedAt: now };
+}
+
 function sameOriginPath(href: string): string | null {
   if (href.startsWith("/") && href[1] !== "/" && href[1] !== "\\") return href;
   return null;

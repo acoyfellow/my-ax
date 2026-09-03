@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyDeskBoard, parseDeskBoard, upsertDeskCard } from "./desk-board";
+import { emptyDeskBoard, parseDeskBoard, removeDeskCard, upsertDeskCard } from "./desk-board";
 
 const gitlabHost = ["gitlab", ["cf", "data"].join(""), "org"].join(".");
 const gitlabMr = ["https://", gitlabHost, "/group/project/-/merge_requests/1"].join("");
@@ -12,6 +12,17 @@ test("upsert replaces a card by id and keeps newest first", () => {
   assert.equal(second.cards[0]?.title, "new draft");
   assert.equal(second.cards[0]?.href, gitlabMr);
   assert.equal(second.updatedAt, "t2");
+});
+
+test("removing one card keeps the other cards intact", () => {
+  const first = upsertDeskCard(emptyDeskBoard("t0"), { id: "first", title: "First", body: "keep this" }, "t1");
+  const second = upsertDeskCard(first, { id: "middle", title: "Middle", href: gitlabMr }, "t2");
+  const board = upsertDeskCard(second, { id: "last", title: "Last", status: "approved" }, "t3");
+  const removed = removeDeskCard(board, "middle", "t4");
+
+  assert.deepEqual(removed.cards, [board.cards[0], board.cards[2]]);
+  assert.equal(removed.updatedAt, "t4");
+  assert.throws(() => removeDeskCard(board, ""), /invalid desk card id/);
 });
 
 test("javascript and unknown hosts are stripped from hrefs", () => {
