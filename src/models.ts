@@ -30,14 +30,14 @@ export const MODELS: ModelEntry[] = [
     label: "Kimi K2.7 Code",
   },
   {
-    id: "@cf/zai-org/glm-5.2",
+    id: "@cf/zai-org/glm-5.3",
     route: "workers-ai",
     owned_by: "zai",
-    context: 262_144,
+    context: 1_310_720,
     reasoning: true,
     tools: true,
     vision: false,
-    label: "GLM 5.2",
+    label: "GLM 5.3",
   },
   {
     id: "claude-opus-5",
