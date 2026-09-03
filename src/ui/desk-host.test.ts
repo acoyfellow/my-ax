@@ -31,6 +31,13 @@ test("the desk reads its app state from the app endpoint", () => {
   assert.match(desk, /fetch\("\/api\/desk\/app"/);
 });
 
+test("the desk retains status reports and returns answers to their cards", () => {
+  assert.match(desk, /const liveCards = \$derived\(board\.cards\)/);
+  assert.match(desk, /Agent: \{card\.agent\}/);
+  assert.match(desk, /\/api\/desk\/\$\{encodeURIComponent\(card\.id\)\}\/reply/);
+  assert.match(desk, /card\.reply\.prompt/);
+});
+
 test("the empty state tells the owner how a desk gets built", () => {
   assert.match(desk, /deskWrite/);
   assert.doesNotMatch(desk, /desk_upsert instead of a new conversation/);

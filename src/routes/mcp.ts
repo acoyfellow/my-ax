@@ -57,16 +57,29 @@ const TOOLS = [
   },
   {
     name: "desk_upsert",
-    description: "Upsert one card on the owner's durable desk board at /?action=desk. Always write here instead of flattening Approve/Reject into notify_owner body text. Wake with notify_owner href /?action=desk. If the PWA tab is open and page.listArtifactTools has setBoard, also invoke that tool.",
+    description: "Upsert one card on the owner's durable desk board at /?action=desk. Use it for status reports as well as decisions. Set agent and a descriptive status such as in progress, waiting, or done. To return free-text owner input to a My AX conversation, provide reply and its owner-scoped originSessionId. Wake with notify_owner href /?action=desk.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string" },
         title: { type: "string" },
         body: { type: "string" },
-        href: { type: "string", description: "https GitLab or GitHub source URL, or a same-origin path." },
-        decisionHref: { type: "string" },
-        status: { type: "string", enum: ["pending", "approved", "rejected"] },
+        href: { type: "string", description: "Optional https GitLab or GitHub source URL." },
+        actionHref: { type: "string", description: "Optional same-origin or GitHub/GitLab action link." },
+        actionLabel: { type: "string" },
+        decisionHref: { type: "string", description: "Legacy alias for actionHref." },
+        status: { type: "string", description: "Optional descriptive state." },
+        agent: { type: "string", description: "Optional agent or workflow owner." },
+        originSessionId: { type: "string", description: "Owner-scoped conversation that receives reply." },
+        reply: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            prompt: { type: "string" },
+            placeholder: { type: "string" },
+          },
+          required: ["label", "prompt"],
+        },
       },
       required: ["id", "title"],
       additionalProperties: false,
@@ -427,7 +440,7 @@ const CODE_TYPES = `declare const codemode: {
   artifactList(args?: { limit?: number }): Promise<unknown>;
   artifactGet(args: { id: string }): Promise<unknown>;
   deskGet(): Promise<unknown>;
-  deskUpsert(args: { id: string; title?: string; body?: string; href?: string; decisionHref?: string; status?: string }): Promise<unknown>;
+  deskUpsert(args: { id: string; title?: string; body?: string; href?: string; actionHref?: string; actionLabel?: string; decisionHref?: string; status?: string; agent?: string; originSessionId?: string; reply?: { label: string; prompt: string; placeholder?: string } | null }): Promise<unknown>;
   deskClear(args: { id: string }): Promise<unknown>;
   deployment(): Promise<unknown>;
 };`;

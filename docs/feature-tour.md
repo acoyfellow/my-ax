@@ -185,20 +185,24 @@ if push fails, so a dropped notification does not lose the work.
 ## Sit On One Desk
 
 Work that should wait for you does not start a new conversation. The agent calls
-`desk_upsert` with a stable card id, a title, and a real source href. You open
-`/?action=desk`, tap Open source or Decide, and leave the rest of the board
-intact. A later upsert with the same id replaces that card and keeps an omitted
-href. `notify_owner` only wakes you, with href `/?action=desk`.
+`desk_upsert` with a stable card id and title. A card can name its owning agent
+and report a descriptive status such as `in progress`, `waiting`, or `done`;
+it does not need to pretend every update is a pending decision. The agent can
+also add a free-text question. You answer it on `/?action=desk`, and My AX sends
+the answer to the conversation that created the card before marking it
+`answered`. A later upsert with the same id replaces that card and keeps omitted
+fields. Open source stays a GitLab or GitHub URL; a separate action can stay in
+My AX or open GitLab/GitHub. `notify_owner` only wakes you, with href
+`/?action=desk`.
 
 Test receipt:
 
 ```text
 upsert replaces a card by id and keeps newest first
-javascript and unknown hosts are stripped from hrefs
-Open source rejects same-origin paths; Decide keeps them
-parseDeskBoard fails closed on junk
-desk status keeps known values and falls back to pending
-scheme-relative and overlong hrefs are rejected; github.com is kept
+legacy card data keeps a descriptive status and a decision action
+an answerable card prepares a reply for its originating conversation
+answered cards cannot be replied to again
+invalid reply metadata and reply text fail closed
 ```
 
 ## File An Issue, Then A Ready PR

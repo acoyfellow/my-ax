@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ASK_USER_TOOL } from "./tools";
+import { ASK_USER_TOOL, DESK_UPSERT_TOOL, deskCardForCurrentSession } from "./tools";
 import type { Env, ToolContext } from "./types";
 
 type DecisionRow = {
@@ -39,6 +39,31 @@ function decisionStore() {
   } as unknown as Env;
   return { env, decisions };
 }
+
+test("desk_upsert binds an answerable card to the writing conversation", () => {
+  const card = deskCardForCurrentSession({
+    id: "release",
+    title: "Choose a target",
+    originSessionId: "forged-session",
+    reply: { label: "Send", prompt: "Where should I deploy?" },
+  }, "actual-session");
+  assert.equal(card.originSessionId, "actual-session");
+
+  const report = deskCardForCurrentSession({
+    id: "report",
+    title: "Everything is healthy",
+    originSessionId: "forged-session",
+  }, "actual-session");
+  assert.equal("originSessionId" in report, false);
+});
+
+test("desk_upsert advertises status reports and answerable cards", () => {
+  const properties = (DESK_UPSERT_TOOL.parameters.properties ?? {}) as Record<string, Record<string, unknown>>;
+  assert.equal(properties.status?.enum, undefined);
+  assert.equal(properties.agent?.type, "string");
+  assert.equal(properties.reply?.type, "object");
+  assert.equal(properties.actionHref?.type, "string");
+});
 
 test("ask_user sends one owner notification when a retried decision is reused", async () => {
   const { env, decisions } = decisionStore();

@@ -14,22 +14,40 @@ import { getConversationStarters, setConversationStarters } from "./conversation
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
 import { createCmuxObserveTool, type CmuxReader } from "./cmux-observer";
 
+export function deskCardForCurrentSession(args: Record<string, unknown>, sessionId: string): Record<string, unknown> {
+  const { originSessionId: _originSessionId, ...card } = args;
+  return Object.hasOwn(card, "reply") && card.reply !== null ? { ...card, originSessionId: sessionId } : card;
+}
+
 export const DESK_UPSERT_TOOL: ToolDef = {
   name: "desk_upsert",
-  description: "Upsert one card on the owner's durable desk board at /?action=desk. Use this instead of flattening Approve/Reject into notify_owner body text. Pair with notify_owner href /?action=desk to wake the owner. If the PWA tab is open and page.listArtifactTools has setBoard, also invoke that tool.",
+  description: "Upsert one card on the owner's durable desk board at /?action=desk. Use it for status reports as well as decisions. Set agent to say who owns the work and use a descriptive status such as in progress, waiting, or done. To ask the owner for free-text input, set reply with a label and prompt; their answer is sent back to this conversation. Pair with notify_owner href /?action=desk to wake the owner. If the PWA tab is open and page.listArtifactTools has setBoard, also invoke that tool.",
   parameters: {
     type: "object",
     properties: {
       id: { type: "string", description: "Stable card id, reused on later updates." },
       title: { type: "string", description: "Short card title." },
       body: { type: "string", description: "Optional short body. No secrets." },
-      href: { type: "string", description: "https GitLab or GitHub source URL, or a same-origin path." },
-      decisionHref: { type: "string", description: "Optional same-origin Decide link." },
-      status: { type: "string", enum: ["pending", "approved", "rejected"] },
+      href: { type: "string", description: "Optional https GitLab or GitHub source URL." },
+      actionHref: { type: "string", description: "Optional same-origin or GitHub/GitLab action link." },
+      actionLabel: { type: "string", description: "Label for actionHref." },
+      decisionHref: { type: "string", description: "Legacy alias for actionHref." },
+      status: { type: "string", description: "Optional descriptive state, such as in progress, waiting, needs input, or done." },
+      agent: { type: "string", description: "Optional name of the agent or workflow that owns this card." },
+      reply: {
+        type: "object",
+        description: "Optional free-text question for the owner. Its answer resumes this conversation.",
+        properties: {
+          label: { type: "string", description: "Submit button label." },
+          prompt: { type: "string", description: "Question shown above the answer field." },
+          placeholder: { type: "string", description: "Optional answer field hint." },
+        },
+        required: ["label", "prompt"],
+      },
     },
     required: ["id", "title"],
   },
-  execute: async (args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskUpsert(ctx.env, ctx.identity.email, args) }),
+  execute: async (args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskUpsert(ctx.env, ctx.identity.email, deskCardForCurrentSession(args, ctx.sessionId)) }),
 };
 
 export const DESK_GET_TOOL: ToolDef = {

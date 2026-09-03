@@ -40,3 +40,12 @@ test("MCP exposes desk_get, desk_upsert, and desk_clear as first-class tools", (
   assert.match(source, /name: "desk_upsert"/);
   assert.match(source, /name: "desk_clear"/);
 });
+
+test("MCP desk_upsert supports descriptive status and conversation replies", () => {
+  const deskTool = source.slice(source.indexOf('name: "desk_upsert"'), source.indexOf('name: "desk_get"'));
+  assert.match(deskTool, /actionHref/);
+  assert.match(deskTool, /agent/);
+  assert.match(deskTool, /originSessionId/);
+  assert.match(deskTool, /reply:/);
+  assert.doesNotMatch(deskTool, /enum: \["pending", "approved", "rejected"\]/);
+});

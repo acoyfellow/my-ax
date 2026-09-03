@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { parseDeskBoard, type DeskBoard } from "../desk-board";
+  import { deskStatusTone, parseDeskBoard, type DeskBoard, type DeskCard } from "../desk-board";
   import { parseDeskApp, type DeskApp } from "../desk-app";
   import { ArtifactOutboundBridge, type OutboundVerb } from "./artifact-outbound";
   import { handlePageCall, type PageCallFrame } from "./page-registry";
@@ -9,6 +9,9 @@
   let board = $state<DeskBoard>({ cards: [], updatedAt: "" });
   let deskApp = $state<DeskApp>({ artifactId: null, state: null, updatedAt: "", updatedBy: null });
   let error = $state<string | null>(null);
+  let replyDrafts = $state<Record<string, string>>({});
+  let replyingCardId = $state<string | null>(null);
+  let replyError = $state<{ cardId: string; message: string } | null>(null);
   let dialogEl: HTMLDialogElement | null = null;
   let appFrameEl: HTMLIFrameElement | null = null;
 
@@ -62,7 +65,7 @@
       const response = await fetch("/api/desk", { credentials: "include" });
       if (!response.ok) throw new Error("desk unavailable");
       const body = await response.json();
-      board = body?.result ?? { cards: [], updatedAt: "" };
+      board = parseDeskBoard(body?.result);
       error = null;
       window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: board }));
     } catch (err) {
@@ -71,7 +74,35 @@
     await refreshApp();
   }
 
-  const liveCards = $derived(board.cards.filter((card) => card.status === "pending"));
+  const liveCards = $derived(board.cards);
+
+  async function replyToCard(card: DeskCard) {
+    if (!card.reply || !card.originSessionId || replyingCardId) return;
+    const response = replyDrafts[card.id]?.trim() ?? "";
+    if (!response) {
+      replyError = { cardId: card.id, message: "Write a reply before sending." };
+      return;
+    }
+    replyingCardId = card.id;
+    replyError = null;
+    try {
+      const result = await fetch(`/api/desk/${encodeURIComponent(card.id)}/reply`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ response }),
+      });
+      const body = await result.json().catch(() => null);
+      if (!result.ok) throw new Error(body?.error?.message || "reply unavailable");
+      board = parseDeskBoard(body?.result);
+      replyDrafts = { ...replyDrafts, [card.id]: "" };
+      window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: board }));
+    } catch (err) {
+      replyError = { cardId: card.id, message: err instanceof Error ? err.message : "reply unavailable" };
+    } finally {
+      replyingCardId = null;
+    }
+  }
 
   function closePanel() {
     open = false;
@@ -154,13 +185,24 @@
         {#each liveCards as card (card.id)}
           <li class="notif-item">
             <div class="notif-item-main">
-              <div class="notif-pill" data-tone={card.status === "rejected" ? "bad" : card.status === "approved" ? "ok" : "attention"}>{card.status}</div>
+              {#if card.status}<div class="notif-pill" data-tone={deskStatusTone(card.status)}>{card.status}</div>{/if}
               <strong>{card.title}</strong>
+              {#if card.agent}<p class="desk-card-agent">Agent: {card.agent}</p>{/if}
               {#if card.body}<p class="notif-detail-body">{card.body}</p>{/if}
-              <div class="flex gap-2 mt-2">
-                {#if card.href}<a class="notif-detail-source" href={card.href} target="_blank" rel="noopener noreferrer">Open source</a>{/if}
-                {#if card.decisionHref}<a class="notif-detail-source" href={card.decisionHref}>Decide</a>{/if}
-              </div>
+              {#if card.href || card.actionHref}
+                <div class="flex gap-2 mt-2">
+                  {#if card.href}<a class="notif-detail-source" href={card.href} target="_blank" rel="noopener noreferrer">Open source</a>{/if}
+                  {#if card.actionHref}<a class="notif-detail-source" href={card.actionHref}>{card.actionLabel}</a>{/if}
+                </div>
+              {/if}
+              {#if card.reply && card.originSessionId}
+                <form class="desk-reply" onsubmit={(event) => { event.preventDefault(); void replyToCard(card); }}>
+                  <label for={`desk-reply-${card.id}`}>{card.reply.prompt}</label>
+                  <textarea id={`desk-reply-${card.id}`} bind:value={replyDrafts[card.id]} placeholder={card.reply.placeholder} maxlength="3000" required></textarea>
+                  {#if replyError?.cardId === card.id}<p class="desk-reply-error">{replyError.message}</p>{/if}
+                  <button type="submit" disabled={replyingCardId !== null}>{replyingCardId === card.id ? "Sending…" : card.reply.label}</button>
+                </form>
+              {/if}
             </div>
           </li>
         {/each}
@@ -255,6 +297,43 @@
     font-weight: 700;
     color: white;
   }
+  .desk-card-agent {
+    margin-top: 5px;
+    font-size: 0.75rem;
+    color: var(--fg-mut);
+  }
+  .desk-reply {
+    display: grid;
+    gap: 7px;
+    margin-top: 12px;
+  }
+  .desk-reply label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .desk-reply textarea {
+    min-height: 72px;
+    resize: vertical;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--bg);
+    padding: 0.55rem 0.65rem;
+    color: var(--fg);
+    font: inherit;
+  }
+  .desk-reply button {
+    justify-self: start;
+    border: 0;
+    border-radius: 0.5rem;
+    background: var(--brand);
+    padding: 0.45rem 0.75rem;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .desk-reply button:disabled { cursor: default; opacity: 0.6; }
+  .desk-reply-error { color: var(--bad); font-size: 0.8rem; }
   .notif-pill {
     flex: none;
     display: inline-flex;

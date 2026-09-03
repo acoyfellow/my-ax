@@ -2,11 +2,13 @@ import { getAgentByName } from "agents";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { DESK_PREFERENCE_KEY, emptyDeskBoard, parseDeskBoard, upsertDeskCard, type DeskBoard } from "../desk-board";
+import { DESK_PREFERENCE_KEY, emptyDeskBoard, markDeskCardReplied, parseDeskBoard, prepareDeskCardReply, upsertDeskCard, type DeskBoard } from "../desk-board";
 import { writeWithCompareAndSet } from "../desk-write";
 import { DESK_APP_PREFERENCE_KEY, applyDeskAppWrite, emptyDeskApp, parseDeskApp, type DeskApp } from "../desk-app";
 import { describePromotion, promotionConfirmed, type ArtifactSummary, type PromotionPreview } from "../desk-promote";
 import { getOwnedArtifactRow } from "../artifacts";
+import { getSessionAgent } from "../agent-stub";
+import { requireOwnedSession } from "../session-ownership";
 
 async function readVersionedPreference<T>(
   env: AppEnv["Bindings"],
@@ -174,6 +176,32 @@ export async function ownerDeskUpsert(env: AppEnv["Bindings"], email: string, ca
   return written.value;
 }
 
+export async function ownerDeskReply(
+  env: AppEnv["Bindings"],
+  identity: AppEnv["Variables"]["identity"],
+  cardId: string,
+  response: unknown,
+): Promise<DeskBoard> {
+  const owner = identity.email.toLowerCase();
+  const current = await readVersionedBoard(env, owner);
+  const reply = prepareDeskCardReply(current.value, cardId, response);
+  if (!(await requireOwnedSession(env, reply.originSessionId, owner))) throw new Error("the originating conversation is unavailable");
+  const agent = await getSessionAgent(env, owner, reply.originSessionId);
+  await agent.seedIdentity(identity);
+  await agent.injectUserMessage({ content: reply.content, clientMsgId: reply.clientMsgId });
+  await env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
+    .bind(reply.originSessionId, owner).run();
+  const written = await writeWithCompareAndSet<DeskBoard>(
+    {
+      read: () => readVersionedBoard(env, owner),
+      compareAndSet: (next, expectedVersion) => compareAndSetBoard(env, owner, next, expectedVersion),
+    },
+    (board) => markDeskCardReplied(board, reply),
+  );
+  await broadcastBoard(env, owner, written.value);
+  return written.value;
+}
+
 export async function ownerDeskClear(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
   const next = emptyDeskBoard();
   await writeBoard(env, email.toLowerCase(), next);
@@ -192,6 +220,15 @@ export function registerDeskRoutes(app: Hono<AppEnv>) {
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result: board, next_actions: [] });
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CARD", message: error instanceof Error ? error.message : "invalid desk card" }, next_actions: [] }, 400);
+    }
+  });
+  app.post("/api/desk/:id/reply", async (c) => {
+    const body: { response?: unknown } = await c.req.json<{ response?: unknown }>().catch(() => ({} as { response?: unknown }));
+    try {
+      const board = await ownerDeskReply(c.env, c.get("identity"), c.req.param("id"), body.response);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: board, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REPLY", message: error instanceof Error ? error.message : "cannot send desk reply" }, next_actions: [] }, 400);
     }
   });
   app.get("/api/desk/app", async (c) => {
