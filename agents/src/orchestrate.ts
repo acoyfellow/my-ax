@@ -1,4 +1,5 @@
 import { assertPublicText } from "./public-text";
+import { formatIssueTransferredToPr } from "./sweep";
 import {
   type AuditReceipt,
   type Classification,
@@ -26,6 +27,7 @@ export interface GithubPort {
   hasBranch?(name: string): Promise<boolean>;
   hasOpenPrForHead?(head: string): Promise<boolean>;
   findOpenPrForHead?(head: string): Promise<{ number: number; files: string[] } | null>;
+  findOpenPrForIssue?(number: number): Promise<{ number: number; files: string[] } | null>;
   createBranch?(name: string, seed?: { path: string; message: string; content: string }): Promise<void>;
   putFile?(head: string, file: { path: string; message: string; content: string }): Promise<void>;
   listBranchFiles?(head: string): Promise<string[]>;
@@ -50,6 +52,7 @@ export type TriageStep =
   | { step: "label"; labels: string[] }
   | { step: "comment" }
   | { step: "pr"; number: number }
+  | { step: "issue-closed"; number: number }
   | { step: "branch"; head: string }
   | { step: "dig"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
@@ -185,6 +188,10 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
           prNumber = pr.number;
           stage = "pr-opened";
           steps.push({ step: "pr", number: pr.number });
+          if (ports.github.closeIssue) {
+            await ports.github.closeIssue(issueNumber, formatIssueTransferredToPr(pr.number));
+            steps.push({ step: "issue-closed", number: issueNumber });
+          }
         } catch (err) {
           stage = "pr-failed";
           error = err instanceof Error ? err.message : String(err);

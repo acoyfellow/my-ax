@@ -1,7 +1,7 @@
 import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
 import { liveGithubPort } from "./ports";
-import { formatDuplicateClose, formatPlaceholderPrClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
+import { formatDuplicateClose, formatHumanBoundaryClose, formatIssueTransferredToPr, formatPlaceholderPrClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -122,9 +122,12 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
     const comments = await github.listComments(issue.number);
     const head = `bot/issue-${issue.number}`;
     const hasHead = github.hasBranch ? await github.hasBranch(head) : false;
-    const openPr = github.findOpenPrForHead ? await github.findOpenPrForHead(head) : null;
+    const [openPr, linkedPr] = await Promise.all([
+      github.findOpenPrForHead ? github.findOpenPrForHead(head) : Promise.resolve(null),
+      github.findOpenPrForIssue ? github.findOpenPrForIssue(issue.number) : Promise.resolve(null),
+    ]);
     const hasOpenPr = openPr ? true : github.hasOpenPrForHead ? await github.hasOpenPrForHead(head) : false;
-    issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr, openPr });
+    issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr, openPr, linkedPr });
   }
   const actions = planSweep(issues);
   let closed = 0;
@@ -135,17 +138,27 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
       await github.closeIssue(action.number, formatDuplicateClose(action.keep, action.fingerprint));
       closed += 1;
     }
-    if (action.action === "close-placeholder-pr" && github.closePr) {
-      await github.comment(action.prNumber, formatPlaceholderPrClose(action.number));
-      await github.closePr(action.prNumber);
-      await github.labelIssue(action.number, ["triage:needs-human"]);
-      await github.comment(action.number, formatPlaceholderPrClose(action.number));
+    if (action.action === "close-issue-to-pr" && github.closeIssue) {
+      await github.closeIssue(action.number, formatIssueTransferredToPr(action.prNumber));
+      closed += 1;
+    }
+    if (action.action === "close-human-boundary" && github.closeIssue) {
+      await github.closeIssue(action.number, formatHumanBoundaryClose());
       closed += 1;
       needsHuman += 1;
     }
-    if (action.action === "needs-human") {
+    if (action.action === "close-placeholder-pr" && github.closePr && github.closeIssue) {
+      await github.comment(action.prNumber, formatPlaceholderPrClose(action.number));
+      await github.closePr(action.prNumber);
       await github.labelIssue(action.number, ["triage:needs-human"]);
-      await github.comment(action.number, formatRetryExhausted(action.attempts));
+      await github.closeIssue(action.number, formatPlaceholderPrClose(action.number));
+      closed += 2;
+      needsHuman += 1;
+    }
+    if (action.action === "needs-human" && github.closeIssue) {
+      await github.labelIssue(action.number, ["triage:needs-human"]);
+      await github.closeIssue(action.number, formatRetryExhausted(action.attempts));
+      closed += 1;
       needsHuman += 1;
     }
     if (action.action === "queue") {
