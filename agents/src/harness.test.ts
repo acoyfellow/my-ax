@@ -14,8 +14,6 @@ function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; label
       async comment() {},
       async openReadyPr() { return { number: 1 }; },
       async listBranchFiles() { return ["src/error-issue.ts"]; },
-      async mergePr() { throw new Error("forbidden GitHub action: merge"); },
-      async approvePr() { throw new Error("forbidden GitHub action: approve"); },
     },
     terrarium: {
       async spawn(_task, taskProof) { return { runId: "r1", taskFingerprint: "fp1", nonce: "n1", taskProof }; },

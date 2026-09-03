@@ -17,11 +17,13 @@ export interface SweepIssue {
   labels?: string[];
   hasHead?: boolean;
   hasOpenPr?: boolean;
+  openPr?: { number: number; files: string[] } | null;
 }
 
 export type SweepAction =
   | { action: "keep"; number: number; fingerprint: string }
   | { action: "close-duplicate"; number: number; keep: number; fingerprint: string }
+  | { action: "close-placeholder-pr"; number: number; prNumber: number }
   | { action: "queue"; number: number }
   | { action: "needs-human"; number: number; attempts: number };
 
@@ -36,6 +38,10 @@ export function hasLoopBoard(comments: string[]): boolean {
 
 export function isBlockedStamp(comments: string[]): boolean {
   return comments.some((body) => LOOP_BOARD_RE.test(body) && /\bstage: blocked-stamp\b/.test(body));
+}
+
+export function isFactoryOnlyChange(files: string[]): boolean {
+  return files.length > 0 && files.every((file) => file.startsWith(".factory/") || file.startsWith("src/factory/"));
 }
 
 export function loopBoardAttempts(comments: string[]): number {
@@ -76,7 +82,11 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   const closing = new Set(actions.filter((row) => row.action === "close-duplicate").map((row) => row.number));
   for (const issue of open) {
     if (closing.has(issue.number)) continue;
-    if (issue.hasOpenPr) continue;
+    if (issue.openPr && isFactoryOnlyChange(issue.openPr.files)) {
+      actions.push({ action: "close-placeholder-pr", number: issue.number, prNumber: issue.openPr.number });
+      continue;
+    }
+    if (issue.hasOpenPr || issue.openPr) continue;
     if ((issue.labels ?? []).includes("triage:needs-human")) continue;
     const attempts = loopBoardAttempts(issue.comments);
     const optedIn = (issue.labels ?? []).includes("triage:draft");
@@ -92,6 +102,16 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   }
 
   return actions;
+}
+
+export function formatPlaceholderPrClose(issueNumber: number): string {
+  return [
+    "## factory cleanup",
+    `issue: #${issueNumber}`,
+    "reason: the pull request contains only factory receipt files and no product change",
+    "result: closed without merge or approval",
+    "next: triage:needs-human",
+  ].join("\n");
 }
 
 export function formatRetryExhausted(attempts: number): string {
