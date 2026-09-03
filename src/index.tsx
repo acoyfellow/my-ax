@@ -314,6 +314,7 @@ app.get("/api/system", async (c) => {
   const cf = (c.req.raw as { cf?: IncomingRequestCfProperties }).cf;
   const sys: Record<string, unknown> = {
     identity: identity.email,
+    commit: c.env.PREVIEW_GIT_SHA ?? null,
     region: cf?.colo ?? null,
     country: cf?.country ?? null,
     // Container spec is hardcoded — matches wrangler.jsonc instance_type.
