@@ -18,12 +18,15 @@ export interface SweepIssue {
   hasHead?: boolean;
   hasOpenPr?: boolean;
   openPr?: { number: number; files: string[] } | null;
+  linkedPr?: { number: number; files: string[] } | null;
 }
 
 export type SweepAction =
   | { action: "keep"; number: number; fingerprint: string }
   | { action: "close-duplicate"; number: number; keep: number; fingerprint: string }
   | { action: "close-placeholder-pr"; number: number; prNumber: number }
+  | { action: "close-issue-to-pr"; number: number; prNumber: number }
+  | { action: "close-human-boundary"; number: number }
   | { action: "queue"; number: number }
   | { action: "needs-human"; number: number; attempts: number };
 
@@ -82,12 +85,19 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   const closing = new Set(actions.filter((row) => row.action === "close-duplicate").map((row) => row.number));
   for (const issue of open) {
     if (closing.has(issue.number)) continue;
+    if (issue.linkedPr && !isFactoryOnlyChange(issue.linkedPr.files)) {
+      actions.push({ action: "close-issue-to-pr", number: issue.number, prNumber: issue.linkedPr.number });
+      continue;
+    }
     if (issue.openPr && isFactoryOnlyChange(issue.openPr.files)) {
       actions.push({ action: "close-placeholder-pr", number: issue.number, prNumber: issue.openPr.number });
       continue;
     }
     if (issue.hasOpenPr || issue.openPr) continue;
-    if ((issue.labels ?? []).includes("triage:needs-human")) continue;
+    if ((issue.labels ?? []).includes("triage:needs-human")) {
+      actions.push({ action: "close-human-boundary", number: issue.number });
+      continue;
+    }
     const attempts = loopBoardAttempts(issue.comments);
     const optedIn = (issue.labels ?? []).includes("triage:draft");
     const retryable = optedIn || isBlockedStamp(issue.comments) || !hasLoopBoard(issue.comments);
@@ -102,6 +112,26 @@ export function planSweep(issues: SweepIssue[]): SweepAction[] {
   }
 
   return actions;
+}
+
+export function formatIssueTransferredToPr(prNumber: number): string {
+  return [
+    "## factory triage",
+    "truth: actionable",
+    `work: transferred to #${prNumber}`,
+    "result: issue closed; pull request owns implementation and proof",
+    "Worker never merges and never approves.",
+  ].join("\n");
+}
+
+export function formatHumanBoundaryClose(): string {
+  return [
+    "## factory triage",
+    "truth: blocked by an external human or security boundary",
+    "result: issue closed instead of parked",
+    "reopen only with the missing authority or evidence attached",
+    "Worker never merges and never approves.",
+  ].join("\n");
 }
 
 export function formatPlaceholderPrClose(issueNumber: number): string {

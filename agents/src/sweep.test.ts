@@ -75,11 +75,18 @@ test("an unboarded issue is still queued", () => {
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 70));
 });
 
-test("needs-human issues are not queued", () => {
+test("needs-human issues close as terminal boundaries instead of parking", () => {
   const actions = planSweep([
     { number: 146, title: "blocked: access", body: "needs zero trust", author: "o", state: "open", comments: [], labels: ["triage:needs-human"] },
   ]);
-  assert.ok(!actions.some((row) => row.action === "queue" && row.number === 146));
+  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 146 }]);
+});
+
+test("a real linked PR receives the work and closes the issue", () => {
+  const actions = planSweep([
+    { number: 155, title: "bug: sessions", body: "repro", author: "o", state: "open", comments: [], linkedPr: { number: 169, files: ["src/session-title.ts", "src/session-title.test.ts"] } },
+  ]);
+  assert.deepEqual(actions, [{ action: "close-issue-to-pr", number: 155, prNumber: 169 }]);
 });
 
 test("a boarded issue without draft opt-in waits instead of consuming every cron", () => {

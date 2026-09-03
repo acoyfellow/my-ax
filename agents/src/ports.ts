@@ -86,6 +86,23 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         files: (Array.isArray(files) ? files : []).map((row) => String((row as { filename?: string }).filename || "")).filter(Boolean),
       };
     },
+    async findOpenPrForIssue(issueNumber) {
+      assertNoMergeAction("findOpenPrForIssue");
+      const json = await gh("/pulls?state=open&per_page=100&sort=updated&direction=desc");
+      const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const closes = new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${escaped}\\b`, "i");
+      const row = (Array.isArray(json) ? json : []).find((candidate) => {
+        const pr = candidate as { number?: number; title?: string; body?: string; head?: { ref?: string } };
+        return closes.test(String(pr.body || "")) || String(pr.head?.ref || "").includes(`issue-${issueNumber}`);
+      }) as { number?: number } | undefined;
+      const number = Number(row?.number);
+      if (!Number.isInteger(number) || number <= 0) return null;
+      const files = await gh(`/pulls/${number}/files?per_page=100`);
+      return {
+        number,
+        files: (Array.isArray(files) ? files : []).map((file) => String((file as { filename?: string }).filename || "")).filter(Boolean),
+      };
+    },
     async listPullFiles(number) {
       assertNoMergeAction("listPullFiles");
       const json = await gh(`/pulls/${number}/files?per_page=100`);

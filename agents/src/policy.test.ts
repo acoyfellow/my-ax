@@ -29,6 +29,7 @@ function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } 
     async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
     async listBranchFiles(head) { actions.push(`listBranchFiles:${head}`); return [".factory/issue-40.md"]; },
     async putFile(head, file) { actions.push(`putFile:${file.path}`); },
+    async closeIssue(number, body) { actions.push(`closeIssue:${number}`); comments.push(body ?? ""); },
   };
 }
 
@@ -181,7 +182,9 @@ test("an opted-in draft opens a ready PR when the head already has a product fil
   );
   assert.ok(!steps.some((s) => s.step === "dig"));
   assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
+  assert.ok(steps.some((s) => s.step === "issue-closed" && s.number === 40));
   assert.ok(github.actions.some((action) => action.startsWith("pr:")));
+  assert.ok(github.actions.includes("closeIssue:40"));
 });
 
 test("auditPull does not recommend merge when the only files are factory receipts", () => {
