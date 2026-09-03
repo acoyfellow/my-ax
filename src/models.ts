@@ -40,16 +40,6 @@ export const MODELS: ModelEntry[] = [
     label: "GLM 5.3",
   },
   {
-    id: "gpt-5.5",
-    route: "gateway-openai",
-    owned_by: "openai",
-    context: 400_000,
-    reasoning: true,
-    tools: true,
-    vision: true,
-    label: "GPT-5.5",
-  },
-  {
     id: "gpt-5.6-luna",
     route: "gateway-openai",
     owned_by: "openai",
