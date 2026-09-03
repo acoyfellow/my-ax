@@ -126,6 +126,7 @@ const ENDPOINTS: Array<{ path: string; use: string }> = [
   { path: "GET /api/attention", use: "Owner-scoped unread items with source links." },
   { path: "GET /api/runs", use: "Run status summaries and receipt hrefs." },
   { path: "GET /api/jobs", use: "Recurring job status and history hrefs." },
+  { path: "POST /api/sessions", use: "Create a user conversation. Send stableName to create or reuse one durable automated owner thread." },
   { path: "POST /api/sessions/:id/inject", use: "Send a durable turn into a conversation from outside." },
 ];
 

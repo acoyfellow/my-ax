@@ -13,10 +13,33 @@ import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
 import { buildSessionTurnState } from "../session-turn";
+import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS } from "../unicode-text";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
   sequence_number: number | null;
 };
+
+type SessionRow = { id: string; name: string };
+
+type CreateSessionBody = { name?: unknown; model?: unknown; stableName?: unknown };
+
+function stableSessionName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized || Array.from(normalized).length > MAX_GENERATED_SESSION_TITLE_CODE_POINTS) return null;
+  return normalized;
+}
+
+function sessionCreationResponse(id: string, name: string, owner: string, stableName: string | null, created: boolean) {
+  return {
+    sessionId: id,
+    name,
+    owner,
+    stableName,
+    created,
+    wsUrl: `/agents/my-agent/${id}`,
+  };
+}
 
 function reportConversationSequenceIntegrity(
   sessionId: string,
@@ -228,42 +251,71 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
 
   app.post("/api/sessions", async (c) => {
     const identity = c.get("identity");
-    const body = (await c.req.json<{ name?: string; model?: string }>().catch(
-      () => ({}),
-    )) as { name?: string; model?: string };
-    const id = crypto.randomUUID();
-    const requestedName = typeof body.name === "string" ? body.name.replace(/\s+/g, " ").trim().slice(0, 200) : "";
-    const name = requestedName || `Session ${id.slice(0, 8)}`;
-
-    try {
-      await c.env.DB.prepare(
-        "INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))",
-      )
-        .bind(id, name, identity.email)
-        .run();
-    } catch {
-      // D1 missing in dev; tolerate
+    const parsedBody = await c.req.json<unknown>().catch(() => ({}));
+    const body: CreateSessionBody = parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)
+      ? parsedBody as CreateSessionBody
+      : {};
+    const hasStableName = Object.hasOwn(body, "stableName");
+    const requestedStableName = hasStableName ? stableSessionName(body.stableName) : null;
+    if (hasStableName && !requestedStableName) {
+      return c.json<ApiResponse>({
+        ok: false,
+        command: "POST /api/sessions",
+        error: { code: "INVALID_STABLE_NAME", message: `stableName must contain 1 to ${MAX_GENERATED_SESSION_TITLE_CODE_POINTS} Unicode code points` },
+        next_actions: [],
+      }, 400);
     }
 
-    // Seed identity into the native Think agent so owner-scoped workspace,
-    // connector, upload, and notification tools run as the verified user.
+    let id: string = crypto.randomUUID();
+    const requestedName = typeof body.name === "string" ? body.name.replace(/\s+/g, " ").trim().slice(0, 200) : "";
+    let name = requestedName || `Session ${id.slice(0, 8)}`;
+    let created = true;
+
+    if (requestedStableName) {
+      name = requestedStableName;
+      try {
+        const insert = await c.env.DB.prepare(
+          "INSERT INTO sessions (id, name, stable_name, status, owner_email, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
+        ).bind(id, name, requestedStableName, identity.email).run();
+        created = (insert.meta?.changes ?? 0) === 1;
+        if (!created) {
+          const existing = await c.env.DB.prepare(
+            "SELECT id, name FROM sessions WHERE owner_email = ? AND stable_name = ?",
+          ).bind(identity.email, requestedStableName).first<SessionRow>();
+          if (!existing) throw new Error("stable session was not found after insert conflict");
+          id = existing.id;
+          name = existing.name;
+        }
+      } catch (error) {
+        return c.json<ApiResponse>({
+          ok: false,
+          command: "POST /api/sessions",
+          error: { code: "SESSION_UPSERT_UNAVAILABLE", message: error instanceof Error ? error.message : String(error) },
+          next_actions: [],
+        }, 503);
+      }
+    } else {
+      try {
+        await c.env.DB.prepare(
+          "INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))",
+        )
+          .bind(id, name, identity.email)
+          .run();
+      } catch {
+      }
+    }
+
     try {
       const stub = await getSessionAgent(c.env, identity.email, id);
       await stub.seedIdentity(identity);
     } catch {
-      // best-effort; first WS message will also seed
     }
 
     return c.json<ApiResponse>(
       {
         ok: true,
         command: "POST /api/sessions",
-        result: {
-          sessionId: id,
-          name,
-          owner: identity.email,
-          wsUrl: `/agents/my-agent/${id}`,
-        },
+        result: sessionCreationResponse(id, name, identity.email, requestedStableName, created),
         next_actions: [
           {
             command: `POST /api/sessions/${id}/ticket`,
@@ -275,7 +327,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
           },
         ],
       },
-      201,
+      created ? 201 : 200,
     );
   });
 

@@ -409,7 +409,7 @@
   let jobName = $state("");
   let jobPrompt = $state("");
   let jobCadence = $state("60");
-  let jobThreadMode = $state<JobThreadMode>("new_session_per_run");
+  let jobThreadMode = $state<JobThreadMode>("same_session");
   let jobSpecificId = $state("");
   let jobActionBusy = $state<Record<string, boolean>>({});
   // Inline edit state: which job is open, plus its editable fields.
@@ -565,7 +565,7 @@
     }
     jobName = "";
     jobPrompt = "";
-    jobThreadMode = "new_session_per_run";
+    jobThreadMode = "same_session";
     jobSpecificId = "";
     jobsStatusText = "Job added.";
     await refreshJobs();

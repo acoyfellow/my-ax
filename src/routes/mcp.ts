@@ -4,6 +4,7 @@ import type { AppEnv } from "../app-env";
 import { getSessionAgent } from "../agent-stub";
 import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { JobService } from "../job-service";
+import type { JobInput } from "../jobs";
 import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
@@ -136,7 +137,14 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   if (method.startsWith("jobs_")) {
     const jobs = new JobService(c.env, email);
     const id = typeof args.id === "string" ? args.id : "";
-    const input = { sessionId: args.sessionId as string | undefined, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined };
+    const input: Partial<JobInput> = {
+      sessionId: typeof args.sessionId === "string" ? args.sessionId : undefined,
+      threadMode: typeof args.threadMode === "string" ? args.threadMode as JobInput["threadMode"] : undefined,
+      name: typeof args.name === "string" ? args.name : undefined,
+      prompt: typeof args.prompt === "string" ? args.prompt : undefined,
+      cadenceSecs: typeof args.cadenceSecs === "number" ? args.cadenceSecs : undefined,
+      maxRuns: args.maxRuns === null ? null : typeof args.maxRuns === "number" ? args.maxRuns : undefined,
+    };
     if (method === "jobs_list") {
       const status = typeof args.status === "string" && ["active", "paused"].includes(args.status) ? args.status as "active" | "paused" : undefined;
       return { jobs: await jobs.list(status) };
@@ -413,8 +421,8 @@ const CODE_TYPES = `declare const codemode: {
   recipesDelete(args: { id: string }): Promise<unknown>;
   recipesRun(args: { sessionId: string; recipeId: string; input?: Record<string, unknown>; callerCapabilities?: string[] }): Promise<unknown>;
   jobsList(args?: {}): Promise<unknown>;
-  jobsCreate(args: { sessionId: string; name: string; prompt: string; cadenceSecs: number; idempotencyKey?: string }): Promise<unknown>;
-  jobsUpdate(args: { id: string; sessionId?: string; name?: string; prompt?: string; cadenceSecs?: number }): Promise<unknown>;
+  jobsCreate(args: { sessionId: string; name: string; prompt: string; cadenceSecs: number; threadMode?: "same_session" | "new_session_per_run" | "specific_session"; maxRuns?: number | null; idempotencyKey?: string }): Promise<unknown>;
+  jobsUpdate(args: { id: string; sessionId?: string; name?: string; prompt?: string; cadenceSecs?: number; threadMode?: "same_session" | "new_session_per_run" | "specific_session"; maxRuns?: number | null }): Promise<unknown>;
   jobsPause(args: { id: string }): Promise<unknown>; jobsResume(args: { id: string }): Promise<unknown>;
   jobsRun(args: { id: string; idempotencyKey?: string }): Promise<unknown>; jobsDelete(args: { id: string }): Promise<unknown>;
   jobsHistory(args: { id: string }): Promise<unknown>;
