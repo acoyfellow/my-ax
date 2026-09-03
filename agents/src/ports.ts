@@ -73,6 +73,19 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       const json = await gh(`/pulls?state=open&head=${encodeURIComponent(`${owner}:${head}`)}&per_page=1`);
       return Array.isArray(json) && json.length > 0;
     },
+    async findOpenPrForHead(head) {
+      assertNoMergeAction("findOpenPrForHead");
+      const owner = repo.split("/")[0];
+      const json = await gh(`/pulls?state=open&head=${encodeURIComponent(`${owner}:${head}`)}&per_page=1`);
+      if (!Array.isArray(json) || !json.length) return null;
+      const number = Number((json[0] as { number?: number }).number);
+      if (!Number.isInteger(number) || number <= 0) return null;
+      const files = await gh(`/pulls/${number}/files?per_page=100`);
+      return {
+        number,
+        files: (Array.isArray(files) ? files : []).map((row) => String((row as { filename?: string }).filename || "")).filter(Boolean),
+      };
+    },
     async listPullFiles(number) {
       assertNoMergeAction("listPullFiles");
       const json = await gh(`/pulls/${number}/files?per_page=100`);
@@ -108,12 +121,6 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
         body: JSON.stringify({ title: assertPublicText(input.title), body: assertPublicText(input.body), head: input.head, base: "main", draft: false }),
       });
       return { number: Number((json as { number?: number }).number) };
-    },
-    async mergePr() {
-      assertNoMergeAction("merge");
-    },
-    async approvePr() {
-      assertNoMergeAction("approve");
     },
     async closePr(number) {
       assertNoMergeAction("closePr");

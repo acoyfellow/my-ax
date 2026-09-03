@@ -25,11 +25,10 @@ export interface GithubPort {
   commitsBehindMain?(headSha: string): Promise<number>;
   hasBranch?(name: string): Promise<boolean>;
   hasOpenPrForHead?(head: string): Promise<boolean>;
+  findOpenPrForHead?(head: string): Promise<{ number: number; files: string[] } | null>;
   createBranch?(name: string, seed?: { path: string; message: string; content: string }): Promise<void>;
   putFile?(head: string, file: { path: string; message: string; content: string }): Promise<void>;
   listBranchFiles?(head: string): Promise<string[]>;
-  mergePr(number: number): Promise<void>;
-  approvePr(number: number): Promise<void>;
   closePr?(number: number): Promise<void>;
   requestChanges?(number: number, body: string): Promise<void>;
   listOpenIssues?(): Promise<Array<{ number: number; title: string; body: string; author: string; labels?: string[] }>>;

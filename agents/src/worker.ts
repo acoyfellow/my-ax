@@ -1,7 +1,7 @@
 import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows";
 import { verifyGithubSignature } from "./github-hmac";
 import { liveGithubPort } from "./ports";
-import { formatDuplicateClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
+import { formatDuplicateClose, formatPlaceholderPrClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -122,8 +122,9 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
     const comments = await github.listComments(issue.number);
     const head = `bot/issue-${issue.number}`;
     const hasHead = github.hasBranch ? await github.hasBranch(head) : false;
-    const hasOpenPr = github.hasOpenPrForHead ? await github.hasOpenPrForHead(head) : false;
-    issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr });
+    const openPr = github.findOpenPrForHead ? await github.findOpenPrForHead(head) : null;
+    const hasOpenPr = openPr ? true : github.hasOpenPrForHead ? await github.hasOpenPrForHead(head) : false;
+    issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr, openPr });
   }
   const actions = planSweep(issues);
   let closed = 0;
@@ -133,6 +134,14 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
     if (action.action === "close-duplicate" && github.closeIssue) {
       await github.closeIssue(action.number, formatDuplicateClose(action.keep, action.fingerprint));
       closed += 1;
+    }
+    if (action.action === "close-placeholder-pr" && github.closePr) {
+      await github.comment(action.prNumber, formatPlaceholderPrClose(action.number));
+      await github.closePr(action.prNumber);
+      await github.labelIssue(action.number, ["triage:needs-human"]);
+      await github.comment(action.number, formatPlaceholderPrClose(action.number));
+      closed += 1;
+      needsHuman += 1;
     }
     if (action.action === "needs-human") {
       await github.labelIssue(action.number, ["triage:needs-human"]);

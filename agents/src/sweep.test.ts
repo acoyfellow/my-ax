@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractFingerprint, formatDuplicateClose, formatRetryExhausted, hasLoopBoard, isBlockedStamp, loopBoardAttempts, planSweep, sweepLeaseId, SWEEP_MAX_ATTEMPTS, SWEEP_MAX_CLOSES, SWEEP_MAX_QUEUES } from "./sweep";
+import { extractFingerprint, formatDuplicateClose, formatPlaceholderPrClose, formatRetryExhausted, hasLoopBoard, isBlockedStamp, isFactoryOnlyChange, loopBoardAttempts, planSweep, sweepLeaseId, SWEEP_MAX_ATTEMPTS, SWEEP_MAX_CLOSES, SWEEP_MAX_QUEUES } from "./sweep";
 
 test("same fingerprint keeps the lowest number and closes the rest", () => {
   const actions = planSweep([
@@ -49,6 +49,16 @@ test("a boarded issue with a head but no PR is queued", () => {
     actions.some((row) => row.action === "queue" && row.number === 67),
     "speed to PR: boarded bugs with no open PR must be re-queued",
   );
+});
+
+test("a factory-only open PR is closed and routed to a human", () => {
+  const actions = planSweep([
+    { number: 153, title: "bug: stale", body: "repro", author: "o", state: "open", comments: [], hasOpenPr: true, openPr: { number: 165, files: [".factory/issue-153.md", "src/factory/issue-153.md"] } },
+  ]);
+  assert.deepEqual(actions, [{ action: "close-placeholder-pr", number: 153, prNumber: 165 }]);
+  assert.equal(isFactoryOnlyChange([".factory/a", "src/factory/b"]), true);
+  assert.equal(isFactoryOnlyChange([".factory/a", "src/index.tsx"]), false);
+  assert.match(formatPlaceholderPrClose(153), /closed without merge or approval/);
 });
 
 test("an issue with an open PR is never re-queued", () => {

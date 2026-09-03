@@ -29,8 +29,6 @@ function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } 
     async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
     async listBranchFiles(head) { actions.push(`listBranchFiles:${head}`); return [".factory/issue-40.md"]; },
     async putFile(head, file) { actions.push(`putFile:${file.path}`); },
-    async mergePr() { actions.push("merge"); },
-    async approvePr() { actions.push("approve"); },
   };
 }
 
