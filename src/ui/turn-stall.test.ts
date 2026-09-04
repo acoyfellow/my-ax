@@ -45,12 +45,11 @@ test("an unlocked composer, a closed socket, or an already-surfaced stall stays 
   assert.equal(evaluateTurnStall({ ...base, alreadySurfaced: true }).kind, "quiet");
 });
 
-test("a stall reports elapsed time and a stable fingerprint", () => {
+test("a stall reports the retry notice and a stable fingerprint", () => {
   const verdict = evaluateTurnStall(base);
   assert.equal(verdict.kind, "stalled");
   if (verdict.kind !== "stalled") return;
-  assert.match(stallMessage(verdict), /65s/);
-  assert.match(stallMessage(verdict), /no tool is running/);
+  assert.equal(stallMessage(verdict), "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.");
   assert.equal(stallFingerprint(verdict), stallFingerprint(verdict));
   assert.match(stallFingerprint(verdict), /^turn-stall:/);
 });
@@ -76,4 +75,13 @@ test("a genuine stall is reported as an error, not a system aside", () => {
 test("the watchdog asks whether a tool is running before it judges", () => {
   assert.match(watchdogBlock(), /pendingTool:\s*firstPendingTool\(\)/,
     "without the pending-tool input the evaluator cannot tell work from silence");
+});
+
+test("a surfaced stall finalizes only the local view so the composer can retry", () => {
+  const block = watchdogBlock();
+  assert.match(block, /finalizeStreaming\(\)/);
+  assert.match(block, /activeRequestId = null/);
+  assert.match(block, /dispatchTurn\(\{ type: "reset" \}\)/);
+  assert.match(block, /applyStatus\("idle"\)/);
+  assert.doesNotMatch(block, /cf_agent_chat_request_cancel/);
 });

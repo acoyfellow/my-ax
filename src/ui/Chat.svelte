@@ -2331,6 +2331,14 @@
         pendingTool: firstPendingTool(),
       });
       if (verdict.kind === "stalled") {
+        finalizeStreaming();
+        responseRecoveryPending = false;
+        activeRequestId = null;
+        restoredActiveTurn = false;
+        streamingMsgId = null;
+        dispatchTurn({ type: "reset" });
+        forgetActiveTurn();
+        applyStatus("idle");
         turnStallSurfaced = true;
         pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
       }

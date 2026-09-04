@@ -70,7 +70,7 @@ assertIncludes(chat, 'window.addEventListener("message", onArtifactMessage)', "t
 // FR-2: a silently-stalled turn (socket healthy, no frames) must self-recover
 // into a truthful, non-destructive retry affordance instead of locking forever.
 assertIncludes(chat, "TURN_STALL_MS", "a turn-stall threshold exists");
-assertIncludes(chat, "gone quiet without finishing", "stalled turn surfaces a truthful notice");
+assertIncludes(chat, "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.", "stalled turn surfaces the retry notice");
 assertIncludes(chat, "lastTurnFrameAt", "the watchdog tracks the last turn frame time");
 
 assertIncludes(appCss, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled (in the compiled stylesheet)");
