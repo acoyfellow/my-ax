@@ -8,7 +8,12 @@ afterEach(() => { globalThis.fetch = realFetch; });
 const sessionId = "123e4567-e89b-42d3-a456-426614174000";
 
 function ctxWith(fetchImpl: typeof fetch, env: Record<string, unknown> = {}) {
-  globalThis.fetch = fetchImpl;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (new URL(String(url)).pathname === "/api/sessions" && (init?.method ?? "GET") === "GET") {
+      return jsonResponse(200, { sessions: env.AGENTCAST_EXISTING_SESSIONS ?? [] });
+    }
+    return fetchImpl(url, init);
+  }) as any;
   return {
     env: { AGENTCAST_ISSUER_KEY: "iss_test", ...env },
     identity: { email: "owner@example.com" },
@@ -67,6 +72,28 @@ test("open mints a capability then runs create, poll, wake, instruct, and ticket
     `POST /api/session/${sessionId}/instruction`,
     `POST /api/session/${sessionId}/view-ticket`,
   ]);
+});
+
+test("open reuses a durable session with the requested stable name", async () => {
+  const calls: string[] = [];
+  const fetchImpl = (async (url: string, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/internal/capabilities") return jsonResponse(200, { token: "cap_live" });
+    calls.push(`${init?.method ?? "GET"} ${path}`);
+    if (path === `/api/session/${sessionId}`) return jsonResponse(200, { status: "ready" });
+    if (path.endsWith("/wake")) return jsonResponse(200, { ok: true });
+    if (path.endsWith("/instruction")) return jsonResponse(200, { ok: true });
+    if (path.endsWith("/view-ticket")) return jsonResponse(200, { ticketUrl: "https://api.agentcast.dev/ticket/t" });
+    return jsonResponse(404, { error: `unexpected ${path}` });
+  }) as any;
+  const provider = createAgentCastWorkProvider(ctxWith(fetchImpl, {
+    AGENTCAST_EXISTING_SESSIONS: [{ id: sessionId, name: "nightly deployment" }],
+  }));
+
+  const result = await provider.fns.open({ name: "nightly deployment", instruction: "check deployment" });
+
+  assert.equal(result.sessionId, sessionId);
+  assert.ok(!calls.some((call) => call === "POST /api/session"), "an existing named session must not create another row");
 });
 
 test("record wakes then starts and stops a redacted HAR receipt", async () => {

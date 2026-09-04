@@ -13,5 +13,5 @@ export function deriveSessionTitle(content: string): string {
   // Truncate by Unicode code points, not UTF-16 code units, so a supplementary
   // character (e.g. an emoji) straddling the 200 boundary is never split into a
   // lone surrogate that renders as �.
-  return Array.from(cleaned).slice(0, 200).join("");
+  return Array.from(cleaned).slice(0, 60).join("").trim() || "Untitled session";
 }

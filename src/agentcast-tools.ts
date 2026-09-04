@@ -6,6 +6,7 @@ const PRODUCTION_ORIGIN = "https://api.agentcast.dev";
 const READY = new Set(["ready", "active"]);
 const PROFILE_ID = "my-ax";
 const CREATE_PERMISSIONS = ["sessions:create"] as const;
+const SESSION_LIST_PERMISSIONS = ["sessions:list"] as const;
 const SESSION_PERMISSIONS = [
   "session:observe",
   "session:input",
@@ -109,6 +110,24 @@ async function stopSessionQuietly(ctx: Ctx, sessionId: string): Promise<void> {
   await agentcast(ctx, "POST", `/api/session/${sessionId}/stop`, sessionId, SESSION_PERMISSIONS).catch(() => undefined);
 }
 
+function stableSessionName(input: unknown): string {
+  const requested = typeof input === "string" ? input : PROFILE_ID;
+  return requested.replace(/\s+/g, " ").trim().slice(0, 60) || PROFILE_ID;
+}
+
+async function existingSessionId(ctx: Ctx, name: string): Promise<string | undefined> {
+  const result = await agentcast(ctx, "GET", "/api/sessions", "*", SESSION_LIST_PERMISSIONS);
+  if (result.code < 200 || result.code >= 300) fail("/api/sessions", result);
+  const data = (result.json.data ?? result.json) as Record<string, unknown>;
+  const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
+  for (const session of sessions) {
+    if (!session || typeof session !== "object") continue;
+    const row = session as Record<string, unknown>;
+    if (row.name === name && typeof (row.sessionId ?? row.id) === "string") return String(row.sessionId ?? row.id);
+  }
+  return undefined;
+}
+
 export const AGENTCAST_WORK_METHODS = [
   { name: "open", description: "Create a logged-in AgentCast browser on api.agentcast.dev over HTTPS, wait until ready, wake it, and run one instruction. Input: {instruction, name?}. Returns {ok, sessionId, status, ticketUrl, transport}." },
   { name: "instruct", description: "Send one natural-language instruction to an existing AgentCast session over HTTPS. Input: {sessionId, instruction}." },
@@ -125,16 +144,19 @@ export function createAgentCastWorkProvider(ctx: Ctx) {
       open: async (input: any) => {
         const instruction = String(input?.instruction ?? "").trim();
         if (!instruction) throw new Error("agentcast.open requires a non-empty {instruction}");
-        const name = typeof input?.name === "string" ? input.name : "my-ax";
-        let attempt = await agentcast(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name });
-        if (attempt.code === 409) {
-          attempt = await agentcast(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name, takeover: true });
+        const name = stableSessionName(input?.name);
+        let sessionId = await existingSessionId(ctx, name);
+        if (!sessionId) {
+          let attempt = await agentcast(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name });
+          if (attempt.code === 409) {
+            attempt = await agentcast(ctx, "POST", "/api/session", "*", CREATE_PERMISSIONS, { name, takeover: true });
+          }
+          if (attempt.code < 200 || attempt.code >= 300) fail("/api/session", attempt);
+          const created = attempt.json;
+          const data = (created.data ?? created) as Record<string, unknown>;
+          sessionId = String(data.sessionId ?? "");
+          if (!sessionId) throw new Error("Create session did not return a session id");
         }
-        if (attempt.code < 200 || attempt.code >= 300) fail("/api/session", attempt);
-        const created = attempt.json;
-        const data = (created.data ?? created) as Record<string, unknown>;
-        const sessionId = String(data.sessionId ?? "");
-        if (!sessionId) throw new Error("Create session did not return a session id");
         try {
           const status = await waitReady(ctx, sessionId);
           await requireOk(ctx, "POST", `/api/session/${sessionId}/wake`, sessionId, SESSION_PERMISSIONS);
