@@ -1060,6 +1060,29 @@
     });
     noteAgentActivity();
   }
+  function ensureVisibleCompletedResponse() {
+    const id = streamingMsgId || `a-${activeRequestId || Date.now()}`;
+    const message = messages.find((candidate) => candidate.id === id);
+    const visible = message && (message.content.trim().length > 0 || message.parts.some((part) =>
+      (part.kind === "text" && part.text.trim().length > 0) || part.kind === "tool",
+    ));
+    if (visible) return;
+    const text = "The agent completed without returning a visible response. Please retry.";
+    if (message) {
+      updateMessage(id, (current) => ({
+        ...current,
+        content: text,
+        parts: [{ kind: "text", text, rendered: renderMarkdown(text) }],
+      }));
+    } else {
+      getOrCreateMessage(id, "assistant", {
+        content: text,
+        parts: [{ kind: "text", text, rendered: renderMarkdown(text) }],
+        streaming: false,
+      });
+    }
+  }
+
   function finalizeStreaming() {
     messages = messages.map((m) => {
       if (!m.streaming || m.role !== "assistant") return m.streaming ? { ...m, streaming: false } : m;
@@ -1622,12 +1645,7 @@
         // Inspect the latest assistant message, not just the captured
         // streamingMsgId (text and tool/artifact output can land in different
         // messages, which falsely tripped the "no visible response" error).
-        const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
-        const hasVisibleOutput = !!lastAssistant && (
-          lastAssistant.content.trim().length > 0 ||
-          lastAssistant.parts.some((part) => (part.kind === "text" && part.text.trim().length > 0) || part.kind === "tool")
-        );
-        if (!hasVisibleOutput) pushError("Agent completed without a visible response. Please retry.", { stack: new Error("no-visible-response").stack });
+        ensureVisibleCompletedResponse();
         responseRecoveryPending = false;
         activeRequestId = null;
         streamingMsgId = null;
@@ -1902,15 +1920,15 @@
   }
 
   function handleThinkChunk(chunk: any) {
-    if (typeof chunk?.type === "string") {
-      dispatchTurn({ type: "frame", frame: { requestId: activeRequestId, chunkType: chunk.type } });
-    }
     const serverMessageId = chunkMessageId(chunk);
+    if (typeof chunk?.type === "string") {
+      dispatchTurn({ type: "frame", frame: { requestId: activeRequestId, messageId: serverMessageId, chunkType: chunk.type } });
+    }
     if (serverMessageId) {
       streamingMsgId = serverMessageId;
     } else if (
       !streamingMsgId &&
-      ["text-start", "text-delta", "reasoning-start", "reasoning-delta", "tool-input-start", "tool-input-available"].includes(chunk.type)
+      ["text-start", "text-delta", "reasoning-start", "reasoning-delta", "tool-input-start", "tool-input-available", "tool-output-available", "tool-output-error"].includes(chunk.type)
     ) {
       streamingMsgId = `a-${activeRequestId || Date.now()}`;
     }

@@ -20,6 +20,7 @@ export type StreamingTurnState =
 
 export type StreamingTurnFrame = {
   requestId: string | null;
+  messageId?: string | null;
   chunkType?: string;
   error?: string;
   done?: boolean;
@@ -74,29 +75,30 @@ export function classifyFrame(state: StreamingTurnState, frame: StreamingTurnFra
 }
 
 function applyNonterminalFrame(state: Extract<StreamingTurnState, { tag: "active" }>, frame: StreamingTurnFrame): StreamingTurnState {
+  const messagePatch = frame.messageId ? { streamingMessageId: frame.messageId } : {};
   if (frame.replayComplete) {
-    return { ...state, recoveryPending: false, replaying: false, lastActivityKind: "replay" };
+    return { ...state, ...messagePatch, recoveryPending: false, replaying: false, lastActivityKind: "replay" };
   }
 
   switch (frame.chunkType) {
     case "text-delta":
-      return { ...state, producedVisibleText: true, lastActivityKind: "text" };
+      return { ...state, ...messagePatch, producedVisibleText: true, lastActivityKind: "text" };
     case "tool-output-available":
     case "tool-output-error":
-      return { ...state, producedToolOutput: true, lastActivityKind: "tool" };
+      return { ...state, ...messagePatch, producedToolOutput: true, lastActivityKind: "tool" };
     case "tool-input-start":
     case "tool-input-available":
-      return { ...state, lastActivityKind: "tool" };
+      return { ...state, ...messagePatch, lastActivityKind: "tool" };
     case "reasoning-start":
     case "reasoning-delta":
-      return { ...state, lastActivityKind: "reasoning" };
+      return { ...state, ...messagePatch, lastActivityKind: "reasoning" };
     case "start":
     case "start-step":
     case "finish-step":
     case "finish":
-      return { ...state, lastActivityKind: "step" };
+      return { ...state, ...messagePatch, lastActivityKind: "step" };
     default:
-      return state;
+      return Object.keys(messagePatch).length ? { ...state, ...messagePatch } : state;
   }
 }
 
@@ -111,8 +113,6 @@ function applyFrame(state: StreamingTurnState, frame: StreamingTurnFrame): Strea
 
   if (classification === "different") return state;
 
-  // Terminal settlement requires same-id correlation. Null-id terminal frames
-  // are weaker evidence than different-id frames and must not kill a live turn.
   if (classification === "null-id" && isTerminalFrame(frame)) return state;
 
   if (frame.error) {
