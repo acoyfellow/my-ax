@@ -4,14 +4,21 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("./worker.ts", import.meta.url), "utf8");
 
-test("issue_comment ignores loop-board comments", () => {
-  assert.match(source, /reason: "loop-board"/);
-  assert.match(source, /## loop board/);
+test("issue_comment ignores factory status comments", () => {
+  assert.match(source, /reason: "factory-status"/);
+  assert.match(source, /Factory status/);
 });
 
 test("issue_comment requires the opt-in token on the new comment, not the issue body", () => {
   assert.match(source, /test\(commentBody\)/);
   assert.doesNotMatch(source, /const text = `\$\{issue\.body/);
+});
+
+test("a closed unmerged factory PR resets its carrier", () => {
+  assert.match(source, /action === "closed"/);
+  assert.match(source, /carrier-reset/);
+  assert.match(source, /deleteBranch/);
+  assert.match(source, /reopenIssue/);
 });
 
 test("worker has a scheduled sweep entry", () => {
