@@ -71,7 +71,18 @@
     await refreshApp();
   }
 
-  const liveCards = $derived(board.cards.filter((card) => card.status === "pending"));
+  async function removeCard(cardId: string) {
+    try {
+      const response = await fetch(`/api/desk/${encodeURIComponent(cardId)}`, { method: "DELETE", credentials: "include" });
+      if (!response.ok) throw new Error("remove failed");
+      const body = await response.json();
+      board = parseDeskBoard(body?.result);
+      error = null;
+      window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: board }));
+    } catch (err) {
+      error = err instanceof Error ? err.message : "remove failed";
+    }
+  }
 
   function closePanel() {
     open = false;
@@ -147,11 +158,11 @@
       ></iframe>
     {:else if error}
       <p class="notif-empty text-bad">{error}</p>
-    {:else if liveCards.length === 0}
+    {:else if board.cards.length === 0}
       <p class="notif-empty">The desk is empty. An agent can build one with deskWrite: point it at an artifact for a full app, or write state for a simple board.</p>
     {:else}
       <ul class="notif-list">
-        {#each liveCards as card (card.id)}
+        {#each board.cards as card (card.id)}
           <li class="notif-item">
             <div class="notif-item-main">
               <div class="notif-pill" data-tone={card.status === "rejected" ? "bad" : card.status === "approved" ? "ok" : "attention"}>{card.status}</div>
@@ -162,6 +173,7 @@
                 {#if card.decisionHref}<a class="notif-detail-source" href={card.decisionHref}>Decide</a>{/if}
               </div>
             </div>
+            <button type="button" class="desk-remove" aria-label={`Remove ${card.title}`} onclick={() => void removeCard(card.id)}>Remove</button>
           </li>
         {/each}
       </ul>
@@ -239,6 +251,19 @@
     position: relative;
   }
   .notif-item-main { display: block; min-width: 0; flex: 1; }
+  .desk-remove {
+    align-self: center;
+    flex: none;
+    min-height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--fg-mut);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .desk-remove:hover { color: var(--fg); background: var(--surface-2); }
   .notif-detail-body {
     margin-top: 8px;
     white-space: pre-wrap;

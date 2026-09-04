@@ -2,7 +2,7 @@ import { getAgentByName } from "agents";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { DESK_PREFERENCE_KEY, emptyDeskBoard, parseDeskBoard, upsertDeskCard, type DeskBoard } from "../desk-board";
+import { DESK_PREFERENCE_KEY, emptyDeskBoard, parseDeskBoard, removeDeskCard, upsertDeskCard, type DeskBoard } from "../desk-board";
 import { writeWithCompareAndSet } from "../desk-write";
 import { DESK_APP_PREFERENCE_KEY, applyDeskAppWrite, emptyDeskApp, parseDeskApp, type DeskApp } from "../desk-app";
 import { describePromotion, promotionConfirmed, type ArtifactSummary, type PromotionPreview } from "../desk-promote";
@@ -174,6 +174,20 @@ export async function ownerDeskUpsert(env: AppEnv["Bindings"], email: string, ca
   return written.value;
 }
 
+export async function ownerDeskRemove(env: AppEnv["Bindings"], email: string, cardId: unknown): Promise<DeskBoard> {
+  const owner = email.toLowerCase();
+  removeDeskCard(emptyDeskBoard(), cardId);
+  const written = await writeWithCompareAndSet<DeskBoard>(
+    {
+      read: () => readVersionedBoard(env, owner),
+      compareAndSet: (next, expectedVersion) => compareAndSetBoard(env, owner, next, expectedVersion),
+    },
+    (current) => removeDeskCard(current, cardId),
+  );
+  await broadcastBoard(env, owner, written.value);
+  return written.value;
+}
+
 export async function ownerDeskClear(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
   const next = emptyDeskBoard();
   await writeBoard(env, email.toLowerCase(), next);
@@ -192,6 +206,14 @@ export function registerDeskRoutes(app: Hono<AppEnv>) {
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result: board, next_actions: [] });
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CARD", message: error instanceof Error ? error.message : "invalid desk card" }, next_actions: [] }, 400);
+    }
+  });
+  app.delete("/api/desk/:cardId", async (c) => {
+    try {
+      const board = await ownerDeskRemove(c.env, c.get("identity").email, c.req.param("cardId"));
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: board, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CARD", message: error instanceof Error ? error.message : "invalid desk card id" }, next_actions: [] }, 400);
     }
   });
   app.get("/api/desk/app", async (c) => {
