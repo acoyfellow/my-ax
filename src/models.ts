@@ -20,14 +20,14 @@ export interface ModelEntry {
 
 export const MODELS: ModelEntry[] = [
   {
-    id: "@cf/moonshotai/kimi-k2.7-code",
+    id: "@cf/moonshotai/kimi-k3",
     route: "workers-ai",
     owned_by: "moonshotai",
-    context: 262_144,
+    context: 1_048_576,
     reasoning: true,
     tools: true,
     vision: true,
-    label: "Kimi K2.7 Code",
+    label: "Kimi K3",
   },
   {
     id: "@cf/zai-org/glm-5.3",
@@ -65,7 +65,7 @@ export const MODELS: ModelEntry[] = [
 // only routes such a build can run are the Workers-AI rows, so the constant
 // default must stay a Workers-AI model or resolveAvailableModelId can never heal
 // a pinned/absent model to something runnable.
-export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
+export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k3";
 
 // Preferred default when the deployment HAS the LLM gateway (the employee/prod
 // path). Routed through the AI gateway, so it inherits the transient 3021/429

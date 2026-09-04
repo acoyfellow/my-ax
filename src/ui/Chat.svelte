@@ -1533,7 +1533,7 @@
       connectorBanner.visible = true;
       (window as any).__refreshConnectors?.();
     } else if (m.type === "my_ax_model_auth_required") {
-      if (typeof m.fallbackModel === "string" && m.fallbackModel) setModel(m.fallbackModel, "Kimi K2.7 Code", true);
+      if (typeof m.fallbackModel === "string" && m.fallbackModel) setModel(m.fallbackModel, "Kimi K3", true);
       authenticationRecovery.modelRequired = true;
       authenticationRecovery.message = typeof m.message === "string" ? m.message : "Model access expired. Retry with the fallback model.";
       const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
