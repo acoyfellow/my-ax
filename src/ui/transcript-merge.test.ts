@@ -219,6 +219,18 @@ test("untimed Think-only user turns that D1 never stored are dropped", () => {
   );
 });
 
+test("accepts transcript rows whose role is optional", () => {
+  const existing: Array<{ id: string; role?: string; content?: string }> = [{ id: "u1", role: "user", content: "saved" }];
+  const incoming: Array<{ id: string; role?: string; content?: string }> = [{ id: "u1", content: "replayed" }];
+  assert.equal(mergeTranscript(existing, incoming)[0].content, "replayed");
+  assert.deepEqual(dropHomelessThinkTurns(existing, incoming).map((message) => message.id), ["u1"]);
+});
+
+test("boundToSession preserves rows without a sessionId property", () => {
+  const rows = [{ id: "a" }, { id: "b" }];
+  assert.deepEqual(boundToSession(rows, "oracle").map((row) => row.id), ["a", "b"]);
+});
+
 test("boundToSession drops rows from another conversation", () => {
   const mixed = [
     { ...msg("a", "user", 1), sessionId: "oracle" },
