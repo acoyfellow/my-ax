@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 
 const base = process.env.MY_AX_BASE_URL ?? "https://my-ax.coey.dev";
 const outPath = resolve(process.argv[2] ?? `proof/experiments/overhead-attribution-${new Date().toISOString().slice(0, 10)}.json`);
-const model = "@cf/moonshotai/kimi-k2.7-code";
+const model = "@cf/moonshotai/kimi-k3";
 const authCookie = process.env.MY_AX_COOKIE;
 const cyclesPerCondition = Number(process.env.MY_AX_OVERHEAD_CYCLES || 1);
 const samples = [
