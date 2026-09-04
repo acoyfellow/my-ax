@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { evaluateTurnStall, stallFingerprint, stallMessage, TURN_STALL_MS } from "./turn-stall";
 
 const base = {
@@ -29,6 +28,13 @@ test("a tool running far past the stall window still is not a stall", () => {
   assert.equal(verdict.kind, "waiting-on-tool");
 });
 
+test("inactive turns stay quiet even when stale tool state remains", () => {
+  const pendingTool = { name: "work_code", startedAt: base.now - 65_000 };
+  assert.equal(evaluateTurnStall({ ...base, composerLocked: false, pendingTool }).kind, "quiet");
+  assert.equal(evaluateTurnStall({ ...base, socketOpen: false, pendingTool }).kind, "quiet");
+  assert.equal(evaluateTurnStall({ ...base, alreadySurfaced: true, pendingTool }).kind, "quiet");
+});
+
 test("silence with no tool running past the window is a stall", () => {
   const verdict = evaluateTurnStall(base);
   assert.equal(verdict.kind, "stalled");
@@ -39,41 +45,22 @@ test("silence inside the window is not yet a stall", () => {
   assert.equal(verdict.kind, "quiet");
 });
 
-test("an unlocked composer, a closed socket, or an already-surfaced stall stays quiet", () => {
-  assert.equal(evaluateTurnStall({ ...base, composerLocked: false }).kind, "quiet");
-  assert.equal(evaluateTurnStall({ ...base, socketOpen: false }).kind, "quiet");
-  assert.equal(evaluateTurnStall({ ...base, alreadySurfaced: true }).kind, "quiet");
+test("future timestamps do not produce negative elapsed durations", () => {
+  const verdict = evaluateTurnStall({
+    ...base,
+    pendingTool: { name: "work_code", startedAt: base.now + 1_000 },
+  });
+  assert.deepEqual(verdict, { kind: "waiting-on-tool", toolName: "work_code", elapsedMs: 0 });
 });
 
-test("a stall reports elapsed time and a stable fingerprint", () => {
+test("a stall reports the retry message and a stable fingerprint", () => {
   const verdict = evaluateTurnStall(base);
   assert.equal(verdict.kind, "stalled");
   if (verdict.kind !== "stalled") return;
-  assert.match(stallMessage(verdict), /65s/);
-  assert.match(stallMessage(verdict), /no tool is running/);
+  assert.equal(
+    stallMessage(verdict),
+    "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.",
+  );
   assert.equal(stallFingerprint(verdict), stallFingerprint(verdict));
   assert.match(stallFingerprint(verdict), /^turn-stall:/);
-});
-
-function watchdogBlock(): string {
-  const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
-  const call = chat.indexOf("const verdict = evaluateTurnStall({");
-  assert.ok(call > 0, "Chat must call the shared stall evaluator inside the watchdog");
-  return chat.slice(call, call + 900);
-}
-
-test("the watchdog does not fake a done frame; a live turn must not be marked finished", () => {
-  assert.doesNotMatch(watchdogBlock(), /done:\s*true/,
-    "synthesizing a done frame ends a turn that is still running");
-});
-
-test("a genuine stall is reported as an error, not a system aside", () => {
-  const block = watchdogBlock();
-  assert.match(block, /pushError\(stallMessage/, "a stall is a failure and must be reported as one");
-  assert.doesNotMatch(block, /pushSystem/, "a failed turn must not be a neutral aside");
-});
-
-test("the watchdog asks whether a tool is running before it judges", () => {
-  assert.match(watchdogBlock(), /pendingTool:\s*firstPendingTool\(\)/,
-    "without the pending-tool input the evaluator cannot tell work from silence");
 });

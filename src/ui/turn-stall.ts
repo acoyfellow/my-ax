@@ -22,15 +22,18 @@ export type StallVerdict =
 
 export function evaluateTurnStall(input: StallInput): StallVerdict {
   const stallMs = input.stallMs ?? TURN_STALL_MS;
-  const silentMs = input.now - input.lastTurnFrameAt;
+  const silentMs = Math.max(0, input.now - input.lastTurnFrameAt);
+  if (input.alreadySurfaced || !input.composerLocked || !input.socketOpen) {
+    return { kind: "quiet" };
+  }
   if (input.pendingTool) {
     return {
       kind: "waiting-on-tool",
       toolName: input.pendingTool.name,
-      elapsedMs: input.now - input.pendingTool.startedAt,
+      elapsedMs: Math.max(0, input.now - input.pendingTool.startedAt),
     };
   }
-  if (input.alreadySurfaced || !input.composerLocked || !input.socketOpen || silentMs <= stallMs) {
+  if (silentMs <= stallMs) {
     return { kind: "quiet" };
   }
   return { kind: "stalled", silentMs };
@@ -41,6 +44,5 @@ export function stallFingerprint(verdict: Extract<StallVerdict, { kind: "stalled
 }
 
 export function stallMessage(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
-  const seconds = Math.floor(verdict.silentMs / 1000);
-  return `No response from the agent for ${seconds}s, and no tool is running. The turn may have failed. Send another message to retry or steer.`;
+  return "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.";
 }
