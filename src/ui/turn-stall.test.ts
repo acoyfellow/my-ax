@@ -45,14 +45,15 @@ test("an unlocked composer, a closed socket, or an already-surfaced stall stays 
   assert.equal(evaluateTurnStall({ ...base, alreadySurfaced: true }).kind, "quiet");
 });
 
-test("a stall reports elapsed time and a stable fingerprint", () => {
+test("a stall reports the incident message and fingerprint", () => {
   const verdict = evaluateTurnStall(base);
   assert.equal(verdict.kind, "stalled");
   if (verdict.kind !== "stalled") return;
-  assert.match(stallMessage(verdict), /65s/);
-  assert.match(stallMessage(verdict), /no tool is running/);
-  assert.equal(stallFingerprint(verdict), stallFingerprint(verdict));
-  assert.match(stallFingerprint(verdict), /^turn-stall:/);
+  assert.equal(
+    stallMessage(verdict),
+    "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.",
+  );
+  assert.equal(stallFingerprint(verdict), "f2970425d0bea313");
 });
 
 function watchdogBlock(): string {
