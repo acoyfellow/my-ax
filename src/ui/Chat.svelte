@@ -2065,8 +2065,8 @@
       pushError("Message not sent: reconnecting. Your draft is still in the composer — retry when the connection is live.");
       return;
     }
-    const text = composerText.trim();
-    if (!text && pendingAttachments.length === 0) return;
+    const text = composerText;
+    if (!text.trim() && pendingAttachments.length === 0) return;
 
     if (!ws) {
       // First message: spin a session, stash payload, reload.
@@ -2695,8 +2695,7 @@
                       {/each}
                     </div>
                   {/if}
-                  {m.content}
-                </div>
+                  {m.content}</div>
               {:else if m.role === "assistant"}
                 {#if m.parts.length === 0 && !m.streaming}
                   <div class="msg-body" data-empty="1"></div>
