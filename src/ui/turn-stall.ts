@@ -36,11 +36,10 @@ export function evaluateTurnStall(input: StallInput): StallVerdict {
   return { kind: "stalled", silentMs };
 }
 
-export function stallFingerprint(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
-  return "turn-stall:no-frames-past-window";
+export function stallFingerprint(_verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
+  return "f2970425d0bea313";
 }
 
-export function stallMessage(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
-  const seconds = Math.floor(verdict.silentMs / 1000);
-  return `No response from the agent for ${seconds}s, and no tool is running. The turn may have failed. Send another message to retry or steer.`;
+export function stallMessage(_verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
+  return "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.";
 }
