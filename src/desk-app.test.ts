@@ -64,3 +64,15 @@ test("a stored row round-trips, and junk degrades to an empty desk", () => {
   assert.equal(parseDeskApp("nonsense").artifactId, null);
   assert.equal(parseDeskApp({ artifactId: 5 }).artifactId, null);
 });
+
+test("desk state can carry an agent question and the owner's in-app answer", () => {
+  const question = { cards: [{ id: "oracle-question", phase: "in progress", question: "Ship this?" }] };
+  const asked = applyDeskAppWrite(emptyDeskApp(), { state: question }, { author: "oracle" });
+  const answered = applyDeskAppWrite(asked, {
+    state: { cards: [{ ...question.cards[0], phase: "answered", answer: "Yes, ship it." }] },
+  }, { author: "owner" });
+  assert.deepEqual(answered.state, {
+    cards: [{ id: "oracle-question", phase: "answered", question: "Ship this?", answer: "Yes, ship it." }],
+  });
+  assert.equal(answered.updatedBy, "owner");
+});
