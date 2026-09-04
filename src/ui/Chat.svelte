@@ -620,6 +620,7 @@
 
   // ── Composer derived ───────────────────────────────────────────────
   let remoteTurn = $state<SessionTurnState | null>(null);
+  let remoteTurnEpoch = 0;
   const composerLocked = $derived(
     isComposerLocked(turnState)
       || sessionTurnLocksComposer(remoteTurn)
@@ -628,12 +629,13 @@
 
   async function refreshRemoteTurn(sessionId = currentSessionId()) {
     if (!sessionId || sessionId === "unknown") return;
+    const epoch = remoteTurnEpoch;
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, { credentials: "include" });
       if (!response.ok) return;
       const body = await response.json();
       const result = body?.result;
-      if (result && typeof result === "object") remoteTurn = result as SessionTurnState;
+      if (epoch === remoteTurnEpoch && result && typeof result === "object") remoteTurn = result as SessionTurnState;
     } catch {}
   }
   const wsDown = $derived(wsState.conn !== "live");
@@ -2168,11 +2170,16 @@
     if (window.confirm("Stop the agent?")) cancelAgent();
   }
   function cancelAgent() {
-    if (wsState.status === "idle" || wsState.status === "done") return;
+    if (!activeRequestId && (wsState.status === "idle" || wsState.status === "done")) return;
     if (ws && (ws as any).readyState === WebSocket.OPEN) {
       if (activeRequestId)
         (ws as any).send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId }));
     }
+    // A turn fetch begun before cancellation may report the old active state
+    // after this local recovery. Retire that result with the same cancellation
+    // path so it cannot re-lock the composer after the owner is allowed to retry.
+    remoteTurnEpoch += 1;
+    remoteTurn = null;
     // Clean up the local view: finalize the stream so any still-pending tool
     // card stops showing RUNNING, and clear the active-stream pointers.
     finalizeStreaming();
@@ -2329,8 +2336,10 @@
         alreadySurfaced: turnStallSurfaced,
         lastTurnFrameAt,
         pendingTool: firstPendingTool(),
+        requestActive: !!activeRequestId,
       });
       if (verdict.kind === "stalled") {
+        cancelAgent();
         turnStallSurfaced = true;
         pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
       }

@@ -10,6 +10,7 @@ export interface StallInput {
   composerLocked: boolean;
   socketOpen: boolean;
   alreadySurfaced: boolean;
+  requestActive: boolean;
   lastTurnFrameAt: number;
   pendingTool: PendingToolSnapshot | null;
   stallMs?: number;
@@ -30,7 +31,7 @@ export function evaluateTurnStall(input: StallInput): StallVerdict {
       elapsedMs: input.now - input.pendingTool.startedAt,
     };
   }
-  if (input.alreadySurfaced || !input.composerLocked || !input.socketOpen || silentMs <= stallMs) {
+  if (input.alreadySurfaced || !input.requestActive || !input.composerLocked || !input.socketOpen || silentMs <= stallMs) {
     return { kind: "quiet" };
   }
   return { kind: "stalled", silentMs };
@@ -40,7 +41,6 @@ export function stallFingerprint(verdict: Extract<StallVerdict, { kind: "stalled
   return "turn-stall:no-frames-past-window";
 }
 
-export function stallMessage(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
-  const seconds = Math.floor(verdict.silentMs / 1000);
-  return `No response from the agent for ${seconds}s, and no tool is running. The turn may have failed. Send another message to retry or steer.`;
+export function stallMessage(_verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
+  return "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.";
 }
