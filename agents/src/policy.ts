@@ -43,6 +43,7 @@ export interface IssueInput {
   authorAssociation?: string;
   filesHint?: string[];
   commentsCount?: number;
+  labels?: string[];
 }
 
 export interface PullInput {
@@ -90,7 +91,7 @@ export function requireGateway(env: { LLM_GATEWAY_URL?: string; LLM_GATEWAY_TOKE
 }
 
 export function classifyIssue(input: IssueInput): Classification {
-  const text = `${input.title}\n${input.body}`;
+  const text = `${input.title}\n${input.body}\n${(input.labels ?? []).join(" ")}`;
   const spray = isSpray(input);
   if (spray) {
     return {
