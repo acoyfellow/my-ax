@@ -86,6 +86,17 @@ test("an auto error report opens a ready PR without triage:draft", () => {
   assert.equal(shouldOpenDraft(classified), true);
 });
 
+test("a triage draft label opts in a feature issue", () => {
+  const classified = classifyIssue({
+    title: "Feature: expose notifications",
+    body: "Add a bounded owner-scoped read.",
+    author: "owner",
+    labels: ["bug", "triage:draft"],
+  });
+  assert.equal(classified.draft, true);
+  assert.equal(shouldOpenDraft(classified), true);
+});
+
 test("triage:draft still opens a draft when the bug mentions PWA", () => {
   const classified = classifyIssue({
     title: "bug: second device can send while a turn is running",

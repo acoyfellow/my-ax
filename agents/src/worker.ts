@@ -16,7 +16,7 @@ export interface WorkerEnv extends AgentsEnv {
   REVIEW: WorkflowBinding;
 }
 
-async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string }; comments?: number }) {
+async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string }; comments?: number; labels?: Array<{ name?: string }> | string[] }) {
   try {
     const created = await env.TRIAGE.create({
       id: deliveryId,
@@ -26,6 +26,7 @@ async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: 
         body: String(issue.body || ""),
         author: String(issue.user?.login || "unknown"),
         commentsCount: Number(issue.comments ?? 0),
+        labels: (issue.labels ?? []).map((label) => typeof label === "string" ? label : String(label.name || "")).filter(Boolean),
       },
     });
     return Response.json({ queued: "triage", issue: issue.number, instance: created.id, deliveryId });
@@ -57,7 +58,7 @@ export default {
       const action = String(payload.action || "");
       const deliveryId = request.headers.get("x-github-delivery") || crypto.randomUUID();
       if (event === "issues" && action === "opened") {
-        const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string } };
+        const issue = payload.issue as { number: number; title?: string; body?: string; user?: { login?: string }; labels?: Array<{ name?: string }> };
         return queueTriage(env, deliveryId, issue);
       }
       if (event === "issue_comment" && action === "created") {
@@ -169,6 +170,7 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
         title: issue.title,
         body: issue.body,
         user: { login: issue.author },
+        labels: issue.labels,
       });
       if (response.ok) queued += 1;
     }
