@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import nodeTest from "node:test";
 import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
+
+const test = (import.meta as ImportMeta & { vitest?: { test: typeof nodeTest } }).vitest?.test ?? nodeTest;
 
 const msg = (
   id: string,
@@ -215,6 +217,18 @@ test("untimed Think-only user turns that D1 never stored are dropped", () => {
     dropHomelessThinkTurns(d1, think).map((m) => m.id),
     ["d1-1"],
   );
+});
+
+test("accepts transcript rows whose role is optional", () => {
+  const existing: Array<{ id: string; role?: string; content?: string }> = [{ id: "u1", role: "user", content: "saved" }];
+  const incoming: Array<{ id: string; role?: string; content?: string }> = [{ id: "u1", content: "replayed" }];
+  assert.equal(mergeTranscript(existing, incoming)[0].content, "replayed");
+  assert.deepEqual(dropHomelessThinkTurns(existing, incoming).map((message) => message.id), ["u1"]);
+});
+
+test("boundToSession preserves rows without a sessionId property", () => {
+  const rows = [{ id: "a" }, { id: "b" }];
+  assert.deepEqual(boundToSession(rows, "oracle").map((row) => row.id), ["a", "b"]);
 });
 
 test("boundToSession drops rows from another conversation", () => {
