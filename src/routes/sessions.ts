@@ -13,6 +13,7 @@ import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
 import { buildSessionTurnState } from "../session-turn";
+import { selectForkCutoffSql } from "../session-fork";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
   sequence_number: number | null;
@@ -333,7 +334,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))").bind(forkId, forkName, identity.email).run();
       const forkStub = await getSessionAgent(c.env, identity.email, forkId);
       await forkStub.seedForkHistory(identity, history);
-      const cutoff = await c.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND json_extract(meta_json, '$.uiMessageId') = ? ORDER BY id DESC LIMIT 1").bind(sourceId, identity.email, atMessageId).first<{ id: number }>();
+      const cutoff = await c.env.DB.prepare(selectForkCutoffSql).bind(sourceId, identity.email, atMessageId).first<{ id: number }>();
       if (cutoff) {
         await c.env.DB.prepare(`INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
           SELECT ?, owner_email, ts, role, tool, is_error, content, meta_json, ROW_NUMBER() OVER (ORDER BY id) FROM conversation_entries
