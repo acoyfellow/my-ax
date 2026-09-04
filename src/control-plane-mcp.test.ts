@@ -14,13 +14,13 @@ function methodList(text: string): string[] {
 
 test("coordinator catalog includes the control-plane methods", () => {
   const methods = methodList(source);
-  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_clear"]) {
+  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear"]) {
     assert.ok(methods.includes(method), `missing ${method}`);
   }
 });
 
 test("control-plane methods are exposed on my_ax_code", () => {
-  for (const name of ["workspaceWrite", "sessionState", "abort", "heal", "artifactList", "artifactGet", "deskGet", "deskUpsert", "deskClear"]) {
+  for (const name of ["workspaceWrite", "sessionState", "abort", "heal", "artifactList", "artifactGet", "deskGet", "deskUpsert", "deskRemove", "deskClear"]) {
     assert.match(source, new RegExp(`${name}:`));
   }
 });
@@ -35,8 +35,13 @@ test("MCP exposes ask_owner as a durable decision cockpit", () => {
   assert.match(source, /decision: \{ id: decision.id, options \}/);
 });
 
-test("MCP exposes desk_get, desk_upsert, and desk_clear as first-class tools", () => {
-  assert.match(source, /name: "desk_get"/);
-  assert.match(source, /name: "desk_upsert"/);
-  assert.match(source, /name: "desk_clear"/);
+test("MCP exposes and dispatches desk_remove as a first-class owner-scoped tool", () => {
+  assert.match(source, /name: "desk_remove"/);
+  assert.match(source, /method === "desk_remove"\) \{\n    return ownerDeskRemove/);
+  assert.match(source, /name === "desk_remove"\) \{\n        return c\.json\(rpc\(req\.id, text\(await ownerDeskRemove/);
+});
+
+test("the chat tool exposes and registers desk_remove", () => {
+  assert.match(toolsSource, /export const DESK_REMOVE_TOOL: ToolDef = \{[\s\S]*?name: "desk_remove"[\s\S]*?ownerDeskRemove/);
+  assert.match(toolsSource, /DESK_REMOVE_TOOL,/);
 });

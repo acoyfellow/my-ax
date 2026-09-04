@@ -188,12 +188,14 @@ Work that should wait for you does not start a new conversation. The agent calls
 `desk_upsert` with a stable card id, a title, and a real source href. You open
 `/?action=desk`, tap Open source or Decide, and leave the rest of the board
 intact. A later upsert with the same id replaces that card and keeps an omitted
-href. `notify_owner` only wakes you, with href `/?action=desk`.
+href. Remove retracts only that card, including cards marked approved or
+rejected. `notify_owner` only wakes you, with href `/?action=desk`.
 
 Test receipt:
 
 ```text
 upsert replaces a card by id and keeps newest first
+removing one card keeps the other cards intact
 javascript and unknown hosts are stripped from hrefs
 Open source rejects same-origin paths; Decide keeps them
 parseDeskBoard fails closed on junk

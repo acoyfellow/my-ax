@@ -2,7 +2,7 @@ import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
-import { ownerDeskClear, ownerDeskGet, ownerDeskPromote, ownerDeskPromotionPreview, ownerDeskUpsert } from "./routes/desk";
+import { ownerDeskClear, ownerDeskGet, ownerDeskPromote, ownerDeskPromotionPreview, ownerDeskRemove, ownerDeskUpsert } from "./routes/desk";
 import { WORK_CODE_TOOL, WORK_SEARCH_TOOL } from "./work-tools";
 import { CODE_DIFF_MAX_TEXT_BYTES } from "./code-diff";
 import { createVerifiedCodeDiffReceipt } from "./code-diff-read";
@@ -60,6 +60,19 @@ export const DESK_PROMOTE_TOOL: ToolDef = {
     const promoted = await ownerDeskPromote(ctx.env, ctx.identity, artifactId, preview.replaces?.id ?? null);
     return JSON.stringify({ ok: true, summary: promoted.preview.summary, desk: { artifactId: promoted.app.artifactId } });
   },
+};
+
+export const DESK_REMOVE_TOOL: ToolDef = {
+  name: "desk_remove",
+  description: "Remove one card by id from the owner's durable desk board at /?action=desk, without changing the other cards.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "Stable id of the card to remove." },
+    },
+    required: ["id"],
+  },
+  execute: async (args, ctx) => JSON.stringify({ ok: true, board: await ownerDeskRemove(ctx.env, ctx.identity.email, args.id) }),
 };
 
 export const DESK_CLEAR_TOOL: ToolDef = {
@@ -170,6 +183,7 @@ export const TOOLS: ToolDef[] = [
   DESK_UPSERT_TOOL,
   DESK_GET_TOOL,
   DESK_PROMOTE_TOOL,
+  DESK_REMOVE_TOOL,
   DESK_CLEAR_TOOL,
   ASK_USER_TOOL,
   SHOW_DIFF_TOOL,

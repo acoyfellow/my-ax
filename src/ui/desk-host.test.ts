@@ -35,3 +35,12 @@ test("the empty state tells the owner how a desk gets built", () => {
   assert.match(desk, /deskWrite/);
   assert.doesNotMatch(desk, /desk_upsert instead of a new conversation/);
 });
+
+test("every legacy desk card has an owner-controlled removal action", () => {
+  const removeCard = desk.slice(desk.indexOf("async function removeCard"), desk.indexOf("function closePanel"));
+  assert.match(removeCard, /encodeURIComponent\(cardId\)/);
+  assert.match(removeCard, /method: "DELETE"/);
+  assert.match(desk, /\{#each board\.cards as card \(card\.id\)\}/);
+  assert.match(desk, /class="desk-remove"/);
+  assert.match(desk, /removeCard\(card\.id\)/);
+});

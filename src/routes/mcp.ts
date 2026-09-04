@@ -8,13 +8,13 @@ import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
 import { createDecision } from "./decisions";
-import { ownerDeskClear, ownerDeskGet, ownerDeskUpsert } from "./desk";
+import { ownerDeskClear, ownerDeskGet, ownerDeskRemove, ownerDeskUpsert } from "./desk";
 import { getUserWorkspace } from "../workspace";
 import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_clear", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -76,6 +76,16 @@ const TOOLS = [
     name: "desk_get",
     description: "Read the owner's durable desk board.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "desk_remove",
+    description: "Remove one card by id from the owner's durable desk board without changing the other cards.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+      additionalProperties: false,
+    },
   },
   {
     name: "desk_clear",
@@ -216,6 +226,9 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   }
   if (method === "desk_upsert") {
     return ownerDeskUpsert(c.env, email, args.card ?? args);
+  }
+  if (method === "desk_remove") {
+    return ownerDeskRemove(c.env, email, args.id);
   }
   if (method === "desk_clear") {
     return ownerDeskClear(c.env, email);
@@ -386,6 +399,7 @@ const CODE_METHODS: Record<string, Method> = {
   artifactGet: "artifact_get",
   deskGet: "desk_get",
   deskUpsert: "desk_upsert",
+  deskRemove: "desk_remove",
   deskClear: "desk_clear",
   deployment: "deployment",
 };
@@ -428,7 +442,8 @@ const CODE_TYPES = `declare const codemode: {
   artifactGet(args: { id: string }): Promise<unknown>;
   deskGet(): Promise<unknown>;
   deskUpsert(args: { id: string; title?: string; body?: string; href?: string; decisionHref?: string; status?: string }): Promise<unknown>;
-  deskClear(args: { id: string }): Promise<unknown>;
+  deskRemove(args: { id: string }): Promise<unknown>;
+  deskClear(): Promise<unknown>;
   deployment(): Promise<unknown>;
 };`;
 
@@ -475,6 +490,9 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
       }
       if (name === "desk_upsert") {
         return c.json(rpc(req.id, text(await ownerDeskUpsert(c.env, c.get("identity").email, args))));
+      }
+      if (name === "desk_remove") {
+        return c.json(rpc(req.id, text(await ownerDeskRemove(c.env, c.get("identity").email, args.id))));
       }
       if (name === "desk_clear") {
         return c.json(rpc(req.id, text(await ownerDeskClear(c.env, c.get("identity").email))));
