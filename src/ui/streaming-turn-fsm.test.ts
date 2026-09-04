@@ -10,6 +10,7 @@ import {
   isComposerLocked,
   progressEligible,
   shouldRenderChunk,
+  streamingMessageIdOf,
   transition,
   type StreamingTurnEvent,
   type StreamingTurnFrame,
@@ -38,6 +39,13 @@ test("chunkMessageId keys rendering to the server messageId, never a synthesized
   assert.equal(chunkMessageId({ messageId: "" } as any), null);
   assert.equal(chunkMessageId(null), null);
   assert.equal(chunkMessageId(undefined), null);
+});
+
+test("tracks the authoritative message id for text and tool-only streams", () => {
+  let state = activeState("r1");
+  state = transition(state, { type: "frame", frame: { requestId: "r1", messageId: "assistant-1", chunkType: "tool-output-available" } });
+  assert.equal(streamingMessageIdOf(state), "assistant-1");
+  assert.equal(hasProducedOutput(state), true);
 });
 const done = (requestId: string | null): StreamingTurnEvent => ({ type: "frame", frame: { requestId, done: true } });
 const error = (requestId: string | null, message = "boom"): StreamingTurnEvent => ({ type: "frame", frame: { requestId, error: message } });
