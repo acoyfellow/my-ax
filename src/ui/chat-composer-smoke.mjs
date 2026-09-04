@@ -67,11 +67,13 @@ assertIncludes(chat, 'my-ax:artifact-submit', "chat listens for artifact form su
 assertIncludes(chat, 'artifactWindows()', "artifact submits are accepted only from live artifact iframes (anti-spoof)");
 assertIncludes(chat, 'window.addEventListener("message", onArtifactMessage)', "the artifact message bridge is wired");
 
-// FR-2: a silently-stalled turn (socket healthy, no frames) must self-recover
-// into a truthful, non-destructive retry affordance instead of locking forever.
-assertIncludes(chat, "TURN_STALL_MS", "a turn-stall threshold exists");
-assertIncludes(chat, "gone quiet without finishing", "stalled turn surfaces a truthful notice");
+// FR-2: a silently-stalled request with no running tool must use the normal
+// cancellation path and release both local and remote composer locks.
+assertIncludes(chat, "evaluateTurnStall", "the watchdog evaluates silent turns");
 assertIncludes(chat, "lastTurnFrameAt", "the watchdog tracks the last turn frame time");
+assertIncludes(chat, "hasActiveRequest: activeRequestId !== null", "only an active server request is retired by the watchdog");
+assertIncludes(chat, "if (verdict.kind === \"stalled\") {\n        // This is a real request with no running tool and no progress frame.\n        // Retire it through the normal cancel path before releasing the owner.\n        cancelAgent();", "the wired Chat watchdog cancels a genuine stall through cancelAgent");
+assertIncludes(chat, "remoteTurn = null;", "recovery clears authoritative remote turn state before unlocking the composer");
 
 assertIncludes(appCss, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled (in the compiled stylesheet)");
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");

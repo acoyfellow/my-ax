@@ -2180,6 +2180,9 @@
     restoredActiveTurn = false;
     streamingMsgId = null;
     responseRecoveryPending = false;
+    // A turn snapshot fetched before cancellation can still describe the
+    // retired request. It must not re-lock the composer after recovery.
+    remoteTurn = null;
     dispatchTurn({ type: "reset" });
     forgetActiveTurn();
     applyStatus("idle");
@@ -2329,8 +2332,12 @@
         alreadySurfaced: turnStallSurfaced,
         lastTurnFrameAt,
         pendingTool: firstPendingTool(),
+        hasActiveRequest: activeRequestId !== null,
       });
       if (verdict.kind === "stalled") {
+        // This is a real request with no running tool and no progress frame.
+        // Retire it through the normal cancel path before releasing the owner.
+        cancelAgent();
         turnStallSurfaced = true;
         pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
       }

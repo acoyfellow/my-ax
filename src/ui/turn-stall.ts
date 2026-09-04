@@ -12,6 +12,7 @@ export interface StallInput {
   alreadySurfaced: boolean;
   lastTurnFrameAt: number;
   pendingTool: PendingToolSnapshot | null;
+  hasActiveRequest?: boolean;
   stallMs?: number;
 }
 
@@ -30,7 +31,7 @@ export function evaluateTurnStall(input: StallInput): StallVerdict {
       elapsedMs: input.now - input.pendingTool.startedAt,
     };
   }
-  if (input.alreadySurfaced || !input.composerLocked || !input.socketOpen || silentMs <= stallMs) {
+  if (input.hasActiveRequest === false || input.alreadySurfaced || !input.composerLocked || !input.socketOpen || silentMs <= stallMs) {
     return { kind: "quiet" };
   }
   return { kind: "stalled", silentMs };
