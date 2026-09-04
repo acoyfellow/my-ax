@@ -2168,7 +2168,7 @@
     if (window.confirm("Stop the agent?")) cancelAgent();
   }
   function cancelAgent() {
-    if (wsState.status === "idle" || wsState.status === "done") return;
+    if (!activeRequestId && (wsState.status === "idle" || wsState.status === "done")) return;
     if (ws && (ws as any).readyState === WebSocket.OPEN) {
       if (activeRequestId)
         (ws as any).send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId }));
@@ -2180,6 +2180,7 @@
     restoredActiveTurn = false;
     streamingMsgId = null;
     responseRecoveryPending = false;
+    remoteTurn = null;
     dispatchTurn({ type: "reset" });
     forgetActiveTurn();
     applyStatus("idle");
@@ -2333,6 +2334,7 @@
       if (verdict.kind === "stalled") {
         turnStallSurfaced = true;
         pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
+        cancelAgent();
       }
     }, 5_000);
 

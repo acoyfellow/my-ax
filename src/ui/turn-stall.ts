@@ -40,7 +40,6 @@ export function stallFingerprint(verdict: Extract<StallVerdict, { kind: "stalled
   return "turn-stall:no-frames-past-window";
 }
 
-export function stallMessage(verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
-  const seconds = Math.floor(verdict.silentMs / 1000);
-  return `No response from the agent for ${seconds}s, and no tool is running. The turn may have failed. Send another message to retry or steer.`;
+export function stallMessage(_verdict: Extract<StallVerdict, { kind: "stalled" }>): string {
+  return "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.";
 }
