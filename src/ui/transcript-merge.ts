@@ -14,7 +14,7 @@
 
 export type MergeableMessage = {
   id: string;
-  role: string;
+  role?: string;
   timestamp?: number;
   sequence?: number;
   // Stable logical id for dedup/ordering. When a view assigns a synthetic
@@ -37,9 +37,12 @@ export function keepDurableTurn(message: MergeableMessage): boolean {
   return !String(message.id).startsWith("d1-");
 }
 
-export function boundToSession<T extends { sessionId?: string }>(messages: T[], sessionId: string): T[] {
+export function boundToSession<T extends { id: string }>(messages: T[], sessionId: string): T[] {
   if (!sessionId) return [];
-  return messages.filter((message) => !message.sessionId || message.sessionId === sessionId);
+  return messages.filter((message) => {
+    const messageSessionId = (message as T & { sessionId?: string }).sessionId;
+    return !messageSessionId || messageSessionId === sessionId;
+  });
 }
 
 export function dropHomelessThinkTurns<T extends { id: string; sourceId?: string; role?: string; content?: unknown; timestamp?: number }>(

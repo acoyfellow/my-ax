@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
-import nodeTest from "node:test";
+import test from "node:test";
 import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
-
-const test = (import.meta as ImportMeta & { vitest?: { test: typeof nodeTest } }).vitest?.test ?? nodeTest;
 
 const msg = (
   id: string,
