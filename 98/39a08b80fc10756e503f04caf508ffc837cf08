@@ -1,0 +1,57 @@
+agents/src/worker-comment.test.ts
+  s_99b55ecf7d26fa::t_074b27d2bf8b10 7-9
+agents/src/harness.test.ts
+  s_99b55ecf7d26fa::t_95456163ca75a6 67-127
+agents/src/implementation-submission.test.ts
+  s_99b55ecf7d26fa::t_780371150ca01d 1-32
+agents/src/sweep.test.ts
+  s_99b55ecf7d26fa::t_01d4485f601f82 3,15,22,47,55-64,79-93,97-142
+agents/src/orchestrate.ts
+  s_99b55ecf7d26fa::t_3e88ea0ad114ad 2,29-30,32-35,37,39-40,49,56,64,67,72,104-117,119-135,137,201-212,214-217,219-267,270-272,277,289-292,319-320
+agents/src/policy.ts
+  s_99b55ecf7d26fa::t_af731e434c9bb3 46,94,257,259
+agents/src/implementation-hook.test.ts
+  s_99b55ecf7d26fa::t_b9718b78207d4d 1-29
+agents/src/ports.ts
+  s_99b55ecf7d26fa::t_bc1e2c7d8acc11 5,71-101,108-137,154-198,258,271-284,286-312
+  s_99b55ecf7d26fa::t_fa50d83ce594d3 323,326-327
+agents/src/implementation-handler.ts
+  s_99b55ecf7d26fa::t_f49cf6785352c8 1-26
+agents/src/implementation-submission.ts
+  s_99b55ecf7d26fa::t_9f89ff0a0c0dc2 1-80
+agents/src/implementation-worker.test.ts
+  s_99b55ecf7d26fa::t_f8c9d4d9ce0231 1-62
+agents/src/sweep.ts
+  s_99b55ecf7d26fa::t_b1d6debc46d1f3 4-5,8-9,21-22,28-32,47-72,101-126,135-182
+agents/src/policy.test.ts
+  s_99b55ecf7d26fa::t_8854055b6ca93e 32,89-99,169,173,176,181-182,196,198,201,209,278
+agents/src/workflows.ts
+  s_99b55ecf7d26fa::t_85b5b965ca7247 19
+  s_99b55ecf7d26fa::t_02569e7df51ff8 10,16,45
+agents/src/hook.ts
+  s_99b55ecf7d26fa::t_5599e39d114975 12,14-20,25
+agents/src/terrarium-port.test.ts
+  s_99b55ecf7d26fa::t_47098712ea16b6 1-37
+agents/src/worker.ts
+  s_99b55ecf7d26fa::t_f36150f030834f 4-5,20,30,50-53,66,74,117-118,122,124,131-136,138,141,147-168,172,177,179,182
+agents/src/model-implementation.test.ts
+  s_99b55ecf7d26fa::t_b0ee08aafeac23 1-40
+agents/src/model-implementation.ts
+  s_99b55ecf7d26fa::t_c55c7a404912f2 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9839a08b80fc10756e503f04caf508ffc837cf08",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
