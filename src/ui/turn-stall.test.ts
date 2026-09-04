@@ -51,8 +51,19 @@ test("a stall reports elapsed time and a stable fingerprint", () => {
   if (verdict.kind !== "stalled") return;
   assert.match(stallMessage(verdict), /65s/);
   assert.match(stallMessage(verdict), /no tool is running/);
+  assert.match(stallMessage(verdict), /Send another message to retry or steer/);
   assert.equal(stallFingerprint(verdict), stallFingerprint(verdict));
   assert.match(stallFingerprint(verdict), /^turn-stall:/);
+});
+
+test("clock skew cannot produce negative elapsed times", () => {
+  const verdict = evaluateTurnStall({
+    ...base,
+    now: 1,
+    lastTurnFrameAt: 2,
+    pendingTool: { name: "work_code", startedAt: 3 },
+  });
+  assert.deepEqual(verdict, { kind: "waiting-on-tool", toolName: "work_code", elapsedMs: 0 });
 });
 
 function watchdogBlock(): string {
@@ -76,4 +87,11 @@ test("a genuine stall is reported as an error, not a system aside", () => {
 test("the watchdog asks whether a tool is running before it judges", () => {
   assert.match(watchdogBlock(), /pendingTool:\s*firstPendingTool\(\)/,
     "without the pending-tool input the evaluator cannot tell work from silence");
+});
+
+test("a surfaced stall unlocks the composer for a retry without ending the turn", () => {
+  const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
+  assert.match(chat, /!turnStallSurfaced\s*&&\s*\(/);
+  assert.match(chat, /pushError\(stallMessage\(verdict\), \{ stack: stallFingerprint\(verdict\) \}\)/);
+  assert.doesNotMatch(watchdogBlock(), /done:\s*true/);
 });

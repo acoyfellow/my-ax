@@ -69,9 +69,11 @@ assertIncludes(chat, 'window.addEventListener("message", onArtifactMessage)', "t
 
 // FR-2: a silently-stalled turn (socket healthy, no frames) must self-recover
 // into a truthful, non-destructive retry affordance instead of locking forever.
-assertIncludes(chat, "TURN_STALL_MS", "a turn-stall threshold exists");
-assertIncludes(chat, "gone quiet without finishing", "stalled turn surfaces a truthful notice");
+assertIncludes(chat, 'import { evaluateTurnStall, stallFingerprint, stallMessage } from "./turn-stall";', "the watchdog uses the shared turn-stall policy");
 assertIncludes(chat, "lastTurnFrameAt", "the watchdog tracks the last turn frame time");
+assertIncludes(chat, "pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });", "stalled turn surfaces the actionable error report");
+assertIncludes(chat, "!turnStallSurfaced && (", "a surfaced stall unlocks the composer for retry or steering");
+assertNotIncludes(chat, "gone quiet without finishing", "stalls use the standard actionable error wording");
 
 assertIncludes(appCss, '.connector-banner[data-state="upstream-auth"]', "connector upstream-auth banner state is visibly styled (in the compiled stylesheet)");
 assertNotIncludes(appCss, '#send', "global CSS must not define stale #send composer selectors");

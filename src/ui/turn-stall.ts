@@ -22,12 +22,12 @@ export type StallVerdict =
 
 export function evaluateTurnStall(input: StallInput): StallVerdict {
   const stallMs = input.stallMs ?? TURN_STALL_MS;
-  const silentMs = input.now - input.lastTurnFrameAt;
+  const silentMs = Math.max(0, input.now - input.lastTurnFrameAt);
   if (input.pendingTool) {
     return {
       kind: "waiting-on-tool",
       toolName: input.pendingTool.name,
-      elapsedMs: input.now - input.pendingTool.startedAt,
+      elapsedMs: Math.max(0, input.now - input.pendingTool.startedAt),
     };
   }
   if (input.alreadySurfaced || !input.composerLocked || !input.socketOpen || silentMs <= stallMs) {

@@ -144,7 +144,7 @@ export function transition(state: StreamingTurnState, event: StreamingTurnEvent)
     case "session-switch":
       return idleStreamingTurnState;
     case "submit":
-      return state.tag === "active" ? state : active(event.requestId, "local-submit");
+      return active(event.requestId, "local-submit");
     case "restore":
       return state.tag === "active" ? state : active(event.requestId, "restored");
     case "server-resumable":

@@ -621,9 +621,11 @@
   // ── Composer derived ───────────────────────────────────────────────
   let remoteTurn = $state<SessionTurnState | null>(null);
   const composerLocked = $derived(
-    isComposerLocked(turnState)
-      || sessionTurnLocksComposer(remoteTurn)
-      || (wsState.status !== "idle" && wsState.status !== "done"),
+    !turnStallSurfaced && (
+      isComposerLocked(turnState)
+        || sessionTurnLocksComposer(remoteTurn)
+        || (wsState.status !== "idle" && wsState.status !== "done"),
+    ),
   );
 
   async function refreshRemoteTurn(sessionId = currentSessionId()) {
@@ -1099,7 +1101,7 @@
 
   function firstPendingTool(): { name: string; startedAt: number } | null {
     for (const message of messages) {
-      if (!message.streaming) continue;
+      if (!message.streaming || message.id !== streamingMsgId) continue;
       for (const part of message.parts) {
         if (part.kind === "tool" && part.tool.state === "pending") {
           return { name: part.tool.name, startedAt: part.tool.startedAt };
