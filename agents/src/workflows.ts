@@ -7,13 +7,16 @@ import {
 } from "./policy";
 import { runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
 import { runReview } from "./review";
+import { createImplementationModel } from "./model-implementation";
 
 export interface AgentsEnv {
   AGENTS_MODEL?: string;
   LLM_GATEWAY_URL?: string;
   LLM_GATEWAY_TOKEN?: string;
+  LLM_GATEWAY_AUTH_HEADER?: string;
   TERRARIUM_URL?: string;
   TERRARIUM_CONTROL_TOKEN?: string;
+  FACTORY_SUBMISSION_URL?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_TOKEN?: string;
   GITHUB_REPO?: string;
@@ -39,7 +42,7 @@ export async function executeTriageWorkflow(
 ) {
   requireGateway(env);
   const modelId = resolveAgentsModel(env);
-  return runTriage(input, { ...ports, model: { modelId } });
+  return runTriage(input, { ...ports, model: createImplementationModel(env, modelId) });
 }
 
 export async function executeAuditWorkflow(

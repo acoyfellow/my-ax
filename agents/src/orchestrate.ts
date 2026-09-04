@@ -1,4 +1,5 @@
 import { assertPublicText } from "./public-text";
+import { formatIssueTransferredToPr } from "./sweep";
 import {
   type AuditReceipt,
   type Classification,
@@ -25,25 +26,36 @@ export interface GithubPort {
   commitsBehindMain?(headSha: string): Promise<number>;
   hasBranch?(name: string): Promise<boolean>;
   hasOpenPrForHead?(head: string): Promise<boolean>;
+  findOpenPrForHead?(head: string): Promise<{ number: number; files: string[] } | null>;
+  findOpenPrForIssue?(number: number): Promise<{ number: number; files: string[] } | null>;
   createBranch?(name: string, seed?: { path: string; message: string; content: string }): Promise<void>;
+  createBranchFrom?(name: string, source: string): Promise<void>;
+  branchSha?(name: string): Promise<string>;
+  promoteBranch?(target: string, source: string): Promise<void>;
+  deleteBranch?(name: string): Promise<void>;
   putFile?(head: string, file: { path: string; message: string; content: string }): Promise<void>;
+  commitFiles?(head: string, input: { message: string; files: Array<{ path: string; content: string }> }): Promise<{ sha: string }>;
+  removeFiles?(head: string, input: { message: string; paths: string[] }): Promise<{ sha: string }>;
   listBranchFiles?(head: string): Promise<string[]>;
-  mergePr(number: number): Promise<void>;
-  approvePr(number: number): Promise<void>;
+  listRepositoryFiles?(): Promise<string[]>;
+  readRepositoryFile?(path: string): Promise<string>;
   closePr?(number: number): Promise<void>;
   requestChanges?(number: number, body: string): Promise<void>;
   listOpenIssues?(): Promise<Array<{ number: number; title: string; body: string; author: string; labels?: string[] }>>;
   closeIssue?(number: number, body?: string): Promise<void>;
+  reopenIssue?(number: number): Promise<void>;
 }
 
 export interface TerrariumPort {
   spawn(task: string, taskProof: string): Promise<{ runId: string; taskFingerprint: string; nonce: string; taskProof: string }>;
+  implement?(input: IssueInput & { head: string; submissionHead: string; submissionNonce: string }, taskProof: string): Promise<{ runId: string; taskFingerprint: string; nonce: string; taskProof: string }>;
   wait(runId: string): Promise<TerrariumReceipt>;
 }
 
 export interface ModelPort {
   modelId: string;
   classify?(input: IssueInput): Promise<Classification>;
+  implement?(input: IssueInput, repository: { paths: string[]; read(path: string): Promise<string> }): Promise<Array<{ path: string; content: string }>>;
 }
 
 export type TriageStep =
@@ -51,36 +63,15 @@ export type TriageStep =
   | { step: "label"; labels: string[] }
   | { step: "comment" }
   | { step: "pr"; number: number }
+  | { step: "issue-closed"; number: number }
   | { step: "branch"; head: string }
   | { step: "dig"; runId: string; verified: boolean }
+  | { step: "implementation"; runId: string; verified: boolean }
   | { step: "visual"; accepted: boolean }
   | { step: "stop"; reason: string };
 
 export function productFilesOnBranch(files: string[]): string[] {
-  return files.filter((file) => {
-    if (!file.length) return false;
-    if (file.startsWith(".factory/")) return false;
-    if (/^src\/factory\/issue-\d+\.md$/.test(file)) return false;
-    return file.startsWith("src/");
-  });
-}
-
-export function factoryReceiptPath(issueNumber: number): string {
-  return `src/factory/issue-${issueNumber}.md`;
-}
-
-export function formatFactoryReceipt(input: IssueInput, classification: Classification): string {
-  const issueNumber = input.number ?? 0;
-  return [
-    `# Issue ${issueNumber}`,
-    "",
-    `title: ${input.title}`,
-    `kind: ${classification.kind}`,
-    "",
-    "Agents wrote this file with GITHUB_TOKEN so the head is not a .factory seed.",
-    "Replace this receipt with the fix. Worker never merges.",
-    "",
-  ].join("\n");
+  return files.filter((file) => file.length > 0 && !file.startsWith(".factory/") && !file.startsWith("src/factory/"));
 }
 
 export function formatBranchSeed(input: IssueInput, classification: Classification): string {
@@ -112,26 +103,40 @@ export function formatLoopBoard(input: {
 }): string {
   const issue = `https://github.com/acoyfellow/my-ax/issues/${input.issueNumber}`;
   const head = `bot/issue-${input.issueNumber}`;
+  const decision = input.stage === "pr-opened"
+    ? "Review the product change."
+    : input.stage === "labeled" && !input.classification.draft
+      ? "A person must decide whether to start implementation."
+      : "Start or continue product implementation.";
+  const result = input.stage === "pr-opened"
+    ? `The factory opened pull request #${input.prNumber}.`
+    : input.stage === "blocked-missing-branch"
+      ? "The issue stays open because its work branch is missing."
+      : input.stage === "blocked-stamp"
+        ? "The issue stays open because no verified product change exists."
+        : input.stage === "pr-failed"
+          ? "The issue stays open because the pull request could not be opened."
+          : "The issue stays open. No pull request was opened.";
   const lines = [
-    "## loop board",
-    `issue: ${issue}`,
-    `stage: ${input.stage}`,
-    `kind: ${input.classification.kind}`,
-    `labels: ${input.classification.labels.join(", ") || "none"}`,
-    `head: ${head}`,
-    `model: ${input.modelId}`,
+    "## Factory status",
+    "",
+    "### Decision",
+    decision,
+    "",
+    "### Evidence",
+    `- Issue: ${issue}`,
+    `- Work branch: ${head}`,
+    `- Classification: ${input.classification.kind}`,
+    input.error ? `- Last error: ${input.error}` : "- No error was reported.",
+    "",
+    "### Result",
+    result,
+    "",
+    `<!-- stage: ${input.stage} -->`,
+    `<!-- model: ${input.modelId} -->`,
+    `<!-- labels: ${input.classification.labels.join(", ") || "none"} -->`,
   ];
-  if (input.prNumber) lines.push(`pr: https://github.com/acoyfellow/my-ax/pull/${input.prNumber}`);
-  if (input.stage === "blocked-missing-branch") {
-    lines.push(`blocked: missing ${head}. Sweep keeps the issue open until that head exists.`);
-  }
-  if (input.stage === "blocked-stamp") {
-    lines.push(`blocked: ${head} has no product files. A .factory seed is not a ready PR.`);
-  }
-  if (input.stage === "labeled" && !input.classification.draft) {
-    lines.push("next: a human opts this in. Add the draft label on a new comment. Worker never merges.");
-  }
-  if (input.error) lines.push(`error: ${input.error}`);
+  if (input.prNumber) lines.push(`<!-- pr: https://github.com/acoyfellow/my-ax/pull/${input.prNumber} -->`);
   return lines.join("\n");
 }
 
@@ -195,22 +200,91 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
     } else {
       let files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [];
       let product = productFilesOnBranch(files);
-      if (!product.length && ports.github.putFile) {
+      if (
+        !product.length
+        && ports.model.implement
+        && ports.github.listRepositoryFiles
+        && ports.github.readRepositoryFile
+        && ports.github.createBranchFrom
+        && ports.github.commitFiles
+        && ports.github.promoteBranch
+        && ports.github.deleteBranch
+      ) {
+        const submissionNonce = crypto.randomUUID().replace(/-/g, "");
+        const submissionHead = `factory/model-${issueNumber}-${submissionNonce}`;
         try {
-          await ports.github.putFile(head, {
-            path: factoryReceiptPath(issueNumber),
-            message: `fix: open work on issue #${issueNumber}`,
-            content: formatFactoryReceipt(input, classification),
+          const paths = await ports.github.listRepositoryFiles();
+          const generated = await ports.model.implement(input, {
+            paths,
+            read: (path) => ports.github.readRepositoryFile!(path),
           });
-          files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [factoryReceiptPath(issueNumber)];
-          product = productFilesOnBranch(files);
+          await ports.github.createBranchFrom(submissionHead, head);
+          await ports.github.commitFiles(submissionHead, {
+            message: `fix: implement issue #${issueNumber}`,
+            files: generated,
+          });
+          await ports.github.promoteBranch(head, submissionHead);
+          const seedPaths = files.filter((path) => path.startsWith(".factory/") || path.startsWith("src/factory/"));
+          if (seedPaths.length && ports.github.removeFiles) {
+            await ports.github.removeFiles(head, { message: `chore: remove factory seed for issue #${issueNumber}`, paths: seedPaths });
+          }
+          product = generated.map((file) => file.path);
         } catch (err) {
           error = err instanceof Error ? err.message : String(err);
+        } finally {
+          await ports.github.deleteBranch(submissionHead).catch(() => undefined);
+        }
+      }
+      if (
+        !product.length
+        && !error
+        && ports.terrarium.implement
+        && ports.github.createBranchFrom
+        && ports.github.branchSha
+        && ports.github.promoteBranch
+        && ports.github.deleteBranch
+        && ports.github.listBranchFiles
+      ) {
+        const submissionNonce = crypto.randomUUID().replace(/-/g, "");
+        const submissionHead = `factory/submission-${issueNumber}-${submissionNonce}`;
+        const submissionRefUrl = `https://api.github.com/repos/acoyfellow/my-ax/git/ref/heads/${submissionHead.replaceAll("/", "%2F")}`;
+        const targetRefUrl = `https://api.github.com/repos/acoyfellow/my-ax/git/ref/heads/${head.replaceAll("/", "%2F")}`;
+        const readSha = "/usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)[\"object\"][\"sha\"])'";
+        const taskProof = requireTaskProof(`test -f package.json && submitted="$(/usr/bin/curl -fsS ${submissionRefUrl} | ${readSha})" && target="$(/usr/bin/curl -fsS ${targetRefUrl} | ${readSha})" && test -n "$submitted" && test -n "$target" && test "$submitted" != "$target" && tests="$(git diff --name-only origin/main...HEAD -- 'src/*.test.ts' 'src/**/*.test.ts')" && test -n "$tests" && npx tsx --test $tests`);
+        let runId = "not-started";
+        let verified = false;
+        try {
+          await ports.github.createBranchFrom(submissionHead, head);
+          const initialSubmissionSha = await ports.github.branchSha(submissionHead);
+          const contract = await ports.terrarium.implement({ ...input, head, submissionHead, submissionNonce }, taskProof);
+          runId = contract.runId;
+          const receipt = await ports.terrarium.wait(contract.runId);
+          verified = verifyTerrariumReceipt({ ...contract, taskProof }, receipt);
+          if (verified) {
+            const submittedSha = await ports.github.branchSha(submissionHead);
+            if (submittedSha !== initialSubmissionSha) {
+              await ports.github.promoteBranch(head, submissionHead);
+              const seedPaths = files.filter((path) => path.startsWith(".factory/") || path.startsWith("src/factory/"));
+              if (seedPaths.length && ports.github.removeFiles) {
+                await ports.github.removeFiles(head, { message: `chore: remove factory seed for issue #${issueNumber}`, paths: seedPaths });
+              }
+              product = ["verified implementation submission"];
+            } else {
+              error = "implementation produced no product files";
+            }
+          } else {
+            error = "implementation proof failed";
+          }
+        } catch (err) {
+          error = err instanceof Error ? err.message : String(err);
+        } finally {
+          await ports.github.deleteBranch(submissionHead).catch(() => undefined);
+          steps.push({ step: "implementation", runId, verified });
         }
       }
       if (!product.length) {
         stage = "blocked-stamp";
-        error = error ?? "product files missing; a .factory seed is not a ready PR. Terrarium is not on this path.";
+        error = error ?? "implementation produced no product files";
         steps.push({ step: "stop", reason: error });
       } else {
         try {
@@ -222,6 +296,10 @@ export async function runTriage(input: IssueInput, ports: { github: GithubPort; 
           prNumber = pr.number;
           stage = "pr-opened";
           steps.push({ step: "pr", number: pr.number });
+          if (ports.github.closeIssue) {
+            await ports.github.closeIssue(issueNumber, formatIssueTransferredToPr(pr.number));
+            steps.push({ step: "issue-closed", number: issueNumber });
+          }
         } catch (err) {
           stage = "pr-failed";
           error = err instanceof Error ? err.message : String(err);
@@ -248,6 +326,8 @@ async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board
   if (commentsCount === 0) return false;
   if (!github.listComments) return false;
   const comments = await github.listComments(issueNumber);
+  const state = board.match(/^(?:<!--\s*)?stage:\s*([\w-]+)/m)?.[1];
+  if (state && comments.some((body) => body.match(/^(?:<!--\s*)?stage:\s*([\w-]+)/m)?.[1] === state)) return true;
   return comments.some((body) => body.trim() === board.trim());
 }
 

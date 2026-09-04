@@ -11,15 +11,17 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 
 | Workflow | Trigger | Does | Never |
 |---|---|---|---|
-| `TriageWorkflow` | `issues.opened` | classify, label, one loop board; create `bot/issue-<n>` with a seed commit and open a ready PR only when that head already has a product file | merge, comment twice, call a `.factory` seed ready, spawn Terrarium on draft |
-| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue open issues that have no PR (except `triage:needs-human`) | merge, comment storm |
+| `TriageWorkflow` | `issues.opened` | classify and label; create `bot/issue-<n>`; delegate implementation when the branch has only a seed; open one ready PR after proof passes | merge, approve, expose the GitHub token, or call a seed ready |
+| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates and queue open issues that have no PR | merge, close failed implementation work, or repeat the same status |
 | `DigWorkflow` | hard bug | spawn Terrarium with a host `taskProof`, wait, proceed only if the receipt and the proof both hold | trust a callback or a receipt without `taskProof` |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
 | `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: one proof receipt per step, verify the PR against its own live preview deploy, request changes when it can, or close flood | approve, merge, or touch foreign PRs |
 
-A titled `bug:` / `perf:` / `test:` issue, or a live error report, is an opt-in for a **ready** GitHub PR (`draft: false`). The method is `openReadyPr`. The head is `bot/issue-<n>`. Agents writes `src/factory/issue-<n>.md` with `GITHUB_TOKEN` so the head is not a `.factory` seed. Terrarium is not on the draft path. The body uses `Closes #<n>` and does not invent a file list.
+A titled `bug:` / `perf:` / `test:` issue, a `triage:draft` label, or a live error report starts implementation. The factory creates `bot/issue-<n>` and gives Terrarium a short-lived grant for a temporary branch. The grant accepts at most 20 files and 500 KB. It accepts only `src/` and `migrations/` paths. It cannot write the issue branch.
 
-Every triage comment is a **loop board**: `stage` is `labeled`, `pr-opened`, `pr-failed`, `blocked-missing-branch` when branch creation fails, or `blocked-stamp` when the head has no product files. Worker never merges.
+Terrarium clones the public repository, changes the code, adds tests, and sends full file contents to the temporary branch. The factory waits for the correlated receipt and runs the submitted tests through `taskProof`. It promotes the temporary branch only when the proof passes. It then deletes the temporary branch and opens one ready PR. Failed work stays open.
+
+Each issue gets a short **Factory status** with Decision, Evidence, and Result sections. The comment includes a hidden state marker for safe retries. The Worker never merges or approves.
 
 GitHub refuses a review on your own pull request. The review comment is the artifact; a rejected `requestChanges` is logged and does not fail the run. Each review action is a separate workflow step, so a retry never repeats the receipt comment.
 

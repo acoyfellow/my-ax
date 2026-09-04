@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractFingerprint, formatDuplicateClose, hasLoopBoard, isBlockedStamp, planSweep, SWEEP_MAX_CLOSES, SWEEP_MAX_QUEUES } from "./sweep";
+import { extractFingerprint, formatDuplicateClose, formatPlaceholderPrClose, formatRetryExhausted, hasLoopBoard, isBlockedStamp, isFactoryOnlyChange, loopBoardAttempts, planSweep, sweepLeaseId, SWEEP_MAX_ATTEMPTS, SWEEP_MAX_CLOSES, SWEEP_MAX_QUEUES } from "./sweep";
 
 test("same fingerprint keeps the lowest number and closes the rest", () => {
   const actions = planSweep([
@@ -12,13 +12,14 @@ test("same fingerprint keeps the lowest number and closes the rest", () => {
     { action: "keep", number: 67, fingerprint: "e8a37db7f3311f4b" },
     { action: "close-duplicate", number: 69, keep: 67, fingerprint: "e8a37db7f3311f4b" },
     { action: "close-duplicate", number: 68, keep: 67, fingerprint: "e8a37db7f3311f4b" },
+    { action: "close-human-boundary", number: 67 },
   ]);
 });
 
 test("issues without an open PR are queued even if boarded", () => {
   const actions = planSweep([
     { number: 74, title: "bug: race", body: "repro", author: "o", state: "open", comments: [] },
-    { number: 75, title: "bug: sweep", body: "repro", author: "o", state: "open", comments: ["## loop board\nstage: labeled"] },
+    { number: 75, title: "bug: sweep", body: "repro", author: "o", state: "open", comments: ["## loop board\nstage: labeled"], labels: ["triage:draft"] },
   ]);
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 74));
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 75));
@@ -43,12 +44,22 @@ test("a blocked-stamp board is re-queued so the factory can try again", () => {
 
 test("a boarded issue with a head but no PR is queued", () => {
   const actions = planSweep([
-    { number: 67, title: "bug: image", body: "fingerprint: `e8a37db7f3311f4b`", author: "o", state: "open", comments: ["## loop board"], hasHead: true },
+    { number: 67, title: "bug: image", body: "fingerprint: `e8a37db7f3311f4b`", author: "o", state: "open", comments: ["## loop board"], labels: ["triage:draft"], hasHead: true },
   ]);
   assert.ok(
     actions.some((row) => row.action === "queue" && row.number === 67),
     "speed to PR: boarded bugs with no open PR must be re-queued",
   );
+});
+
+test("a factory-only open PR is closed and routed to a human", () => {
+  const actions = planSweep([
+    { number: 153, title: "bug: stale", body: "repro", author: "o", state: "open", comments: [], hasOpenPr: true, openPr: { number: 165, files: [".factory/issue-153.md", "src/factory/issue-153.md"] } },
+  ]);
+  assert.deepEqual(actions, [{ action: "close-placeholder-pr", number: 153, prNumber: 165 }]);
+  assert.equal(isFactoryOnlyChange([".factory/a", "src/factory/b"]), true);
+  assert.equal(isFactoryOnlyChange([".factory/a", "src/index.tsx"]), false);
+  assert.match(formatPlaceholderPrClose(153), /closed without merge or approval/);
 });
 
 test("an issue with an open PR is never re-queued", () => {
@@ -65,11 +76,70 @@ test("an unboarded issue is still queued", () => {
   assert.ok(actions.some((row) => row.action === "queue" && row.number === 70));
 });
 
-test("needs-human issues are not queued", () => {
+test("an unexpired implementation lease keeps active work open", () => {
+  const actions = planSweep([
+    { number: 153, title: "bug", body: "repro", author: "o", state: "open", comments: ["## factory implementation lease\nrun: ter_1\nstate: active\nexpires: 2026-09-03T19:30:00Z"], labels: ["triage:needs-human"] },
+  ], Date.parse("2026-09-03T19:00:00Z"));
+  assert.deepEqual(actions, []);
+});
+
+test("an expired implementation lease returns to terminal triage", () => {
+  const actions = planSweep([
+    { number: 153, title: "bug", body: "repro", author: "o", state: "open", comments: ["## factory implementation lease\nrun: ter_1\nstate: active\nexpires: 2026-09-03T19:30:00Z"], labels: ["triage:needs-human"] },
+  ], Date.parse("2026-09-03T19:31:00Z"));
+  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 153 }]);
+});
+
+test("needs-human issues close as terminal boundaries instead of parking", () => {
   const actions = planSweep([
     { number: 146, title: "blocked: access", body: "needs zero trust", author: "o", state: "open", comments: [], labels: ["triage:needs-human"] },
   ]);
-  assert.ok(!actions.some((row) => row.action === "queue" && row.number === 146));
+  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 146 }]);
+});
+
+test("a real linked PR receives the work and closes the issue", () => {
+  const actions = planSweep([
+    { number: 155, title: "bug: sessions", body: "repro", author: "o", state: "open", comments: [], linkedPr: { number: 169, files: ["src/session-title.ts", "src/session-title.test.ts"] } },
+  ]);
+  assert.deepEqual(actions, [{ action: "close-issue-to-pr", number: 155, prNumber: 169 }]);
+});
+
+test("a boarded issue without draft opt-in closes as a terminal boundary", () => {
+  const actions = planSweep([
+    { number: 174, title: "Feature: notifications", body: "request", author: "o", state: "open", comments: ["## loop board\nstage: labeled"], labels: ["bug"] },
+  ]);
+  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 174 }]);
+});
+
+test("retry exhaustion routes an opted-in issue to a human", () => {
+  const comments = Array.from({ length: SWEEP_MAX_ATTEMPTS }, () => "## loop board\nstage: blocked-stamp");
+  const actions = planSweep([
+    { number: 175, title: "bug: exhausted", body: "repro", author: "o", state: "open", comments, labels: ["triage:draft"] },
+  ]);
+  assert.ok(actions.some((row) => row.action === "needs-human" && row.number === 175));
+  assert.equal(loopBoardAttempts(comments), SWEEP_MAX_ATTEMPTS);
+  assert.match(formatRetryExhausted(SWEEP_MAX_ATTEMPTS), /issue stays open/);
+});
+
+test("a failed implementation stays open after retry exhaustion", () => {
+  const actions = planSweep([
+    {
+      number: 184,
+      title: "bug: leading space",
+      body: "repro",
+      author: "owner",
+      state: "open",
+      comments: ["## loop board\nstage: retry-exhausted"],
+      labels: ["bug", "triage:draft", "triage:needs-human"],
+    },
+  ]);
+  assert.deepEqual(actions, []);
+});
+
+test("sweep workflow ids lease one issue per scheduled bucket", () => {
+  assert.equal(sweepLeaseId(42, 900_001), sweepLeaseId(42, 1_799_999));
+  assert.notEqual(sweepLeaseId(42, 899_999), sweepLeaseId(42, 900_001));
+  assert.notEqual(sweepLeaseId(42, 900_001), sweepLeaseId(43, 900_001));
 });
 
 test("sweep never parks", () => {

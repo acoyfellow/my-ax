@@ -43,6 +43,7 @@ export interface IssueInput {
   authorAssociation?: string;
   filesHint?: string[];
   commentsCount?: number;
+  labels?: string[];
 }
 
 export interface PullInput {
@@ -90,7 +91,7 @@ export function requireGateway(env: { LLM_GATEWAY_URL?: string; LLM_GATEWAY_TOKE
 }
 
 export function classifyIssue(input: IssueInput): Classification {
-  const text = `${input.title}\n${input.body}`;
+  const text = `${input.title}\n${input.body}\n${(input.labels ?? []).join(" ")}`;
   const spray = isSpray(input);
   if (spray) {
     return {
@@ -253,9 +254,9 @@ export function auditPull(input: PullInput, promptDigest: string): AuditReceipt 
   const stampOnly =
     Array.isArray(input.files) &&
     input.files.length > 0 &&
-    input.files.every((file) => file.startsWith(".factory/"));
+    input.files.every((file) => file.startsWith(".factory/") || file.startsWith("src/factory/"));
   if (stampOnly) {
-    findings.push("product files missing; a .factory seed is not a fix");
+    findings.push("product files missing; factory receipts are not a fix");
     return {
       headSha: input.headSha,
       promptDigest,
