@@ -620,6 +620,7 @@
 
   // ── Composer derived ───────────────────────────────────────────────
   let remoteTurn = $state<SessionTurnState | null>(null);
+  let remoteTurnEpoch = 0;
   const composerLocked = $derived(
     isComposerLocked(turnState)
       || sessionTurnLocksComposer(remoteTurn)
@@ -628,12 +629,13 @@
 
   async function refreshRemoteTurn(sessionId = currentSessionId()) {
     if (!sessionId || sessionId === "unknown") return;
+    const epoch = remoteTurnEpoch;
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/turn`, { credentials: "include" });
-      if (!response.ok) return;
+      if (!response.ok || epoch !== remoteTurnEpoch) return;
       const body = await response.json();
       const result = body?.result;
-      if (result && typeof result === "object") remoteTurn = result as SessionTurnState;
+      if (epoch === remoteTurnEpoch && result && typeof result === "object") remoteTurn = result as SessionTurnState;
     } catch {}
   }
   const wsDown = $derived(wsState.conn !== "live");
@@ -2168,7 +2170,7 @@
     if (window.confirm("Stop the agent?")) cancelAgent();
   }
   function cancelAgent() {
-    if (wsState.status === "idle" || wsState.status === "done") return;
+    if (!activeRequestId && (wsState.status === "idle" || wsState.status === "done")) return;
     if (ws && (ws as any).readyState === WebSocket.OPEN) {
       if (activeRequestId)
         (ws as any).send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId }));
@@ -2180,6 +2182,11 @@
     restoredActiveTurn = false;
     streamingMsgId = null;
     responseRecoveryPending = false;
+    // A turn lookup that started before cancellation may still resolve with the
+    // now-retired remote turn. Invalidate it and release that remote lock with
+    // the local cancellation state so recovery always returns the composer.
+    remoteTurnEpoch += 1;
+    remoteTurn = null;
     dispatchTurn({ type: "reset" });
     forgetActiveTurn();
     applyStatus("idle");
@@ -2314,14 +2321,9 @@
         (ws as any).send(JSON.stringify({ type: "my_ax_ping", at: Date.now() }));
       }
       if (responseRecoveryPending && age > 15_000) responseRecoveryPending = false;
-      // FR-2: silently-stalled turn. The socket is OPEN and recently active (so
-      // it's not a disconnect), the composer is locked on an active turn, but no
-      // turn frame has moved the FSM for TURN_STALL_MS. Surface a truthful,
-      // NON-destructive affordance: tell the owner the agent went quiet and
-      // unlock the composer so they can retry/steer. We do NOT cancel the turn —
-      // a genuinely-slow server turn can still land and reconcile via the normal
-      // frame/adopt path. Fire once per stall (turnStallSurfaced resets on the
-      // next real frame in dispatchTurn).
+      // FR-2: silently-stalled turn. A pending tool is explicitly exempt, but
+      // a frame-less active request must be retired through the same cancellation
+      // path as an owner stop so its server request and every composer lock clear.
       const verdict = evaluateTurnStall({
         now: Date.now(),
         composerLocked,
@@ -2333,6 +2335,7 @@
       if (verdict.kind === "stalled") {
         turnStallSurfaced = true;
         pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
+        cancelAgent();
       }
     }, 5_000);
 

@@ -45,12 +45,11 @@ test("an unlocked composer, a closed socket, or an already-surfaced stall stays 
   assert.equal(evaluateTurnStall({ ...base, alreadySurfaced: true }).kind, "quiet");
 });
 
-test("a stall reports elapsed time and a stable fingerprint", () => {
+test("a stall reports the recovery message and a stable fingerprint", () => {
   const verdict = evaluateTurnStall(base);
   assert.equal(verdict.kind, "stalled");
   if (verdict.kind !== "stalled") return;
-  assert.match(stallMessage(verdict), /65s/);
-  assert.match(stallMessage(verdict), /no tool is running/);
+  assert.equal(stallMessage(verdict), "No response from the agent, and no tool is running. The turn may have failed. Send another message to retry or steer.");
   assert.equal(stallFingerprint(verdict), stallFingerprint(verdict));
   assert.match(stallFingerprint(verdict), /^turn-stall:/);
 });
@@ -67,13 +66,25 @@ test("the watchdog does not fake a done frame; a live turn must not be marked fi
     "synthesizing a done frame ends a turn that is still running");
 });
 
-test("a genuine stall is reported as an error, not a system aside", () => {
+test("the wired Chat watchdog reports and cancels a genuine stall", () => {
   const block = watchdogBlock();
   assert.match(block, /pushError\(stallMessage/, "a stall is a failure and must be reported as one");
+  assert.match(block, /cancelAgent\(\)/, "the watchdog must retire the server request through Chat's cancellation path");
   assert.doesNotMatch(block, /pushSystem/, "a failed turn must not be a neutral aside");
 });
 
 test("the watchdog asks whether a tool is running before it judges", () => {
   assert.match(watchdogBlock(), /pendingTool:\s*firstPendingTool\(\)/,
     "without the pending-tool input the evaluator cannot tell work from silence");
+});
+
+test("the Chat cancellation path invalidates stale remote locks", () => {
+  const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
+  const cancel = chat.indexOf("function cancelAgent()");
+  assert.ok(cancel > 0, "Chat must retain its shared cancellation path");
+  const block = chat.slice(cancel, cancel + 1400);
+  assert.match(block, /remoteTurnEpoch \+= 1/);
+  assert.match(block, /remoteTurn = null/);
+  assert.match(chat, /const epoch = remoteTurnEpoch/);
+  assert.match(chat, /epoch !== remoteTurnEpoch/);
 });
