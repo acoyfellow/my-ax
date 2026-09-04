@@ -5,6 +5,7 @@
 // many.ts composes this with the real Think parent.
 //
 // Root cause this addresses (grounded in captured production metadata): the
+// delegate default model @cf/moonshotai/kimi-k2.7-code is route "workers-ai",
 // used via createWorkersAI({ binding }) which exposes NO custom fetch, so the
 // existing createRetryFetch wrapper cannot see its 3021s; and delegate-many
 // fired up to 2 children CONCURRENTLY (Promise.all). Two children hit the

@@ -21,7 +21,7 @@
 //   - BRIDGE_BASE_URL       # public origin of this deploy
 //
 // MODELS:
-//   - src/models.ts ships one curated list: Kimi K3, GLM 5.3,
+//   - src/models.ts ships one curated list: Kimi K2.7 Code, GLM 5.3,
 //     Opus 4.8, GPT-5.5, Kindle Alpha API, and Mercury Alpha. Routing stays hidden.
 //
 // CONNECTORS:

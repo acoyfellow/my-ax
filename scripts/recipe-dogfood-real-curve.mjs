@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 
 const base = process.env.MY_AX_BASE_URL ?? "http://127.0.0.1:8797";
 const outPath = resolve(process.argv[2] ?? `proof/recipe-dogfood-learning-curve-${new Date().toISOString().slice(0, 10)}.json`);
-const model = "@cf/moonshotai/kimi-k3";
+const model = "@cf/moonshotai/kimi-k2.7-code";
 
 const authCookie = process.env.MY_AX_COOKIE; // e.g. CF_Authorization=<access-jwt> for prod
 async function api(path, init) {
