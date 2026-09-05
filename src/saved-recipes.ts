@@ -49,7 +49,13 @@ export function savedRecipeExecutionCode(recipeCode: string, input: Record<strin
   return `async () => { const input = ${inputJson};\n${recipeCode}\n}`;
 }
 
-const CAPABILITY_PATTERN = /^(workspace|computer|machine|terrarium)\.[a-zA-Z0-9_.-]+$/;
+const CAPABILITY_PATTERN = /^(workspace|machine)\.[a-zA-Z0-9_.-]+$/;
+
+const RETIRED_CAPABILITY_PATTERN = /^(computer|terrarium|agentcast)\./;
+
+export function hasRetiredRecipeCapability(capabilities: string[]): boolean {
+  return capabilities.some((capability) => RETIRED_CAPABILITY_PATTERN.test(capability));
+}
 
 function assertObject(value: unknown, field: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new SavedRecipeError("InvalidInput", `${field} must be an object`);
@@ -179,7 +185,7 @@ export class SavedRecipeService {
 
   async list() {
     const { results = [] } = await this.env.DB.prepare("SELECT * FROM saved_recipes WHERE owner_email = ? ORDER BY updated_at DESC").bind(this.owner()).all<SavedRecipe>();
-    return results.map(publicRecipe);
+    return results.map(publicRecipe).filter((recipe) => !hasRetiredRecipeCapability(recipe.capabilities));
   }
 
   async get(id: string): Promise<SavedRecipe> {

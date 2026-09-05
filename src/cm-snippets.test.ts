@@ -199,6 +199,17 @@ test("listSnippetsDualRead does not advertise stale disabled projections", async
   assert.equal(await getSnippetDualRead(env, "owner@example.com", "stale_disabled"), null);
 });
 
+test("retired capability recipes neither backfill nor list", async () => {
+  const { env, tables } = makeEnv();
+  tables.saved_recipes.push(makeRecipe({
+    id: "r-retired",
+    name: "legacy_browser",
+    capabilities_json: JSON.stringify(["agentcast.open"]),
+  }));
+  assert.deepEqual(await backfillOwnerSnippets(env, "owner@example.com"), { projected: 0, refreshed: 0 });
+  assert.deepEqual(await listSnippetsDualRead(env, "owner@example.com"), []);
+});
+
 test("getSnippetDualRead looks up a single snippet by name through the same seam", async () => {
   const { env, tables } = makeEnv();
   tables.saved_recipes.push(makeRecipe({ id: "r-9", name: "lookup_me" }));

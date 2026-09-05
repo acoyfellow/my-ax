@@ -14,10 +14,10 @@ interface Props {
 // no-overclaim lenses.
 const DIFFERENTIATORS: Array<{ title: string; body: string }> = [
   { title: "It runs in your own account", body: "My AX is single-tenant and single-operator. You deploy it into your own Cloudflare account, behind your own Access login. One verified identity owns every conversation, record, and tool call. No shared service holds your data." },
-  { title: "One agent, six places, one tool surface", body: "work_search and work_code give the agent one way to act across a container workspace, a separate Computer preview filesystem, a machine you connect, bounded cloud runs, its own live browser UI, and a codemode namespace. The agent picks the place for each task. It does not need a separate integration per surface." },
+  { title: "One agent, one work surface", body: "work_search and work_code give the agent one way to act across its persistent Sandbox, a machine you connect, its live browser UI, and a codemode namespace. The agent picks the correct place for each task." },
   { title: "Inner runs cannot widen their authority", body: "When the agent runs a saved tool inside a turn, its capabilities are the intersection of the tool's declared needs and the caller's current grants. The set can only narrow, never widen. This is capability-based security, the same model as Sandstorm." },
   { title: "It builds instruments and then drives them", body: "The agent can build a UI with create_svelte_artifact, and that artifact can register its own tools. The agent then calls those tools to steer the artifact on a later turn. It builds an instrument once and operates it, instead of rebuilding it each time." },
-  { title: "Bounded actions return a verified receipt", body: "A cloud run returns a runId, a verified contract status, and an exit code. A recurring run and a reusable-tool run write start and terminal events. A bridged tool call writes an audit receipt. You read the receipt instead of trusting a claim." },
+  { title: "Bounded actions return a verified receipt", body: "A recurring run and a reusable-tool run write start and terminal events. A bridged tool call writes an audit receipt. You read the receipt instead of trusting a claim." },
   { title: "You leave; it reports back", body: "You give the agent a task and close the tab. It works while you are away. Check-in composes one view from Attention, jobs, and run receipts: what needs you, what is running, what finished or failed. You return to that view." },
 ];
 
@@ -33,15 +33,15 @@ const PATHS: Array<{ anchor: string; label: string; question: string }> = [
 // GUIDES: task-first. Goal, ordered steps, then the result you can read.
 const GUIDES: Array<{ anchor: string; goal: string; steps: string[]; result: string }> = [
   {
-    anchor: "guide-cloud-run",
-    goal: "Spawn a bounded cloud run",
+    anchor: "guide-sandbox",
+    goal: "Run a project in the Sandbox",
     steps: [
-      "Ask the agent to do a task that produces proof.",
-      "The agent calls terrarium.spawn to wait for the result, or terrarium.spawn_background to launch and keep working.",
-      "The run executes on a Terrarium container, not your laptop and not the worker.",
-      "The agent reads the receipt when the run finishes.",
+      "Ask the agent to inspect or change a project.",
+      "The agent uses workspace methods to read files, run commands, and start a preview.",
+      "My AX snapshots /home/user so that tools and command-line authentication survive container replacement.",
+      "The agent returns command output and file results as evidence.",
     ],
-    result: "A receipt with a runId, a contract status of verified, and an exit code.",
+    result: "A persistent project workspace with the exact command output and file results.",
   },
   {
     anchor: "guide-machine",
@@ -100,9 +100,7 @@ const GUIDES: Array<{ anchor: string; goal: string; steps: string[]; result: str
 
 const SURFACES: Array<{ ns: string; use: string; receipt: string }> = [
   { ns: "workspace.*", use: "Read, write, and run in a container-backed /home/user.", receipt: "files, command output" },
-  { ns: "computer.*", use: "Read, write, list, and search a separate preview SQLite /home/user. It has no execution backend and no automatic sync with Workspace.", receipt: "bounded file results" },
   { ns: "machine.*", use: "Run commands on your connected laptop.", receipt: "the command and its output" },
-  { ns: "terrarium.*", use: "Spawn a bounded cloud run: spawn waits, spawn_background returns a runId, status checks one.", receipt: "runId, contract status, exit code" },
   { ns: "page.*", use: "Drive the open chat tab: read sessions and health, switch sessions, open Settings.", receipt: "session list, health block" },
   { ns: "codemode.*", use: "Discover, describe, and run tools and reusable tools by name.", receipt: "tool output, an execution id" },
   { ns: "browser_open", use: "Open a public web page in a real headless browser.", receipt: "title, text, an rrweb replay" },
@@ -112,17 +110,14 @@ const LIMITS: Array<{ surface: string; bound: string }> = [
   { surface: "Delegation", bound: "At most 2 concurrent children, depth 1, 8 steps each, 120s timeout. Terminal snapshot, not live progress." },
   { surface: "Recurring jobs", bound: "At most 10 active per owner. Cadence 60s to 30 days. No automatic repair if state drifts." },
   { surface: "Work Code Mode", bound: "Source limited to 32,000 bytes. 60-second wall-clock. No ambient network." },
-  { surface: "Workspace", bound: "One shared /home/user per owner. Recent writes can be lost with the container." },
-  { surface: "Computer", bound: "Separate preview SQLite storage with bounded file operations, no execution backend, and no automatic sync with Workspace." },
+  { surface: "Workspace", bound: "One persistent /home/user per owner. Recycle fails closed if a snapshot cannot be published." },
   { surface: "Machine", bound: "Runs as the companion's OS account. Terminal-equivalent. No privilege separation added." },
-  { surface: "Terrarium", bound: "Runs in Terrarium's own containers under its authority. My AX holds a bearer control token." },
   { surface: "Page (live UI)", bound: "Works only while a chat tab is connected. Artifact tools are capped and schema-validated." },
 ];
 
 const ENDPOINTS: Array<{ path: string; use: string }> = [
   { path: "GET /api/check-in", use: "One response: what needs you, what is running, what finished or failed." },
   { path: "GET /api/health", use: "Routing and bindings check. Returns ok: true when the worker is healthy." },
-  { path: "GET /api/system/computer-workspace", use: "Owner-scoped Computer preview filesystem health and quota limits." },
   { path: "GET /api/attention", use: "Owner-scoped unread items with source links." },
   { path: "GET /api/runs", use: "Run status summaries and receipt hrefs." },
   { path: "GET /api/jobs", use: "Recurring job status and history hrefs." },
@@ -131,8 +126,8 @@ const ENDPOINTS: Array<{ path: string; use: string }> = [
 
 const CONCEPTS: Array<{ title: string; body: string }> = [
   { title: "You leave; the agent keeps working", body: "You give the agent a task and close the tab. It works while you are away. Check-in reports what needs you, what is running, and what finished. You read the receipt and decide the next step. The product is built so you can leave." },
-  { title: "The agent has more than one computer", body: "The agent picks the place for each task. It uses the workspace for files tied to the conversation and Computer for a separate file-only preview with no automatic sync. It uses your laptop for local and authenticated state. It uses Terrarium for cloud runs that do not need you present. It uses its own browser for public pages. One tool surface covers all of them." },
-  { title: "Every action leaves a receipt", body: "A cloud run returns a runId and a verified contract status. A recurring run writes start and terminal events. A reusable-tool run records an execution id. The receipt is the proof. Do not trust a claim; read the receipt." },
+  { title: "The agent uses the correct computer", body: "The persistent Sandbox is the canonical computer for project files, tools, command-line authentication, processes, and previews. The agent uses your connected laptop only for local state that you explicitly expose. It uses Browser Run for web pages. One tool surface covers these places." },
+  { title: "Every action leaves a receipt", body: "A recurring run writes start and terminal events. A reusable-tool run records an execution id. The receipt is the proof. Do not trust a claim; read the receipt." },
   { title: "The owner authorizes the agent", body: "My AX is single-operator. One verified Cloudflare Access identity owns every conversation, record, and tool call. The agent acts with the authority the owner already holds. It is not a remote-access tool and takes no inbound connection to a machine the owner connects. The owner configures each path, gates it with Access, and can stop it." },
   { title: "Confinement does not grant authority", body: "Generated code runs in a bounded sandbox with no direct database, secret, or network access. It calls allowlisted server-side handlers. A handler keeps its normal authority; the sandbox does not add or remove it." },
   { title: "Who owns what", body: "The Agents SDK owns durable identity, sockets, schedules, and child runs. Think owns model turns, history, and recovery. My AX owns authorization, the UI, jobs, Attention, receipts, and the work providers. Think is authoritative for a conversation; D1 is a derived index." },
@@ -184,7 +179,7 @@ export const DocsPage: FC<Props> = (props) => {
           </div>
 
           <h1 class="mt-6 text-3xl font-semibold leading-tight text-balance text-fg sm:text-4xl">What is My AX?</h1>
-          <p class="mt-4 max-w-2xl text-lg leading-relaxed text-fg text-pretty">My AX is a personal AI agent you run in your own Cloudflare account. You give it a task and leave. It works in a container, on a machine you connect, in bounded cloud runs, and in a headless browser, then reports back what needs you.</p>
+          <p class="mt-4 max-w-2xl text-lg leading-relaxed text-fg text-pretty">My AX is a personal AI agent you run in your own Cloudflare account. You give it a task and leave. It works in its persistent Sandbox, on a machine you connect, and in a headless browser, then reports back what needs you.</p>
           <p class="mt-4 max-w-2xl text-base leading-relaxed text-fg-mut text-pretty">One verified Access identity owns it. You authorize every action. It is not a remote-access tool and takes no inbound connection. Every action writes a receipt you can read. See the <a class="text-brand hover:underline" href="/docs/security">security posture</a>.</p>
 
           <div class="mt-8 rounded-xl border border-line bg-bg-alt p-5">
@@ -232,7 +227,7 @@ export const DocsPage: FC<Props> = (props) => {
             "Confirm anonymous access is rejected and authenticated GET /api/health returns ok: true.",
             "Open the hostname through Access and send one model turn.",
           ]} />
-          <p class="mt-6 rounded-lg border border-line bg-surface-1 px-4 py-3 text-sm leading-relaxed text-fg-mut">A connected laptop and a Terrarium service are optional; the workspace and MCP connectors work without them. See the <a class="text-brand hover:underline" href="/docs/deploy">deploy guide</a> for the exact variables and the persistence proof.</p>
+          <p class="mt-6 rounded-lg border border-line bg-surface-1 px-4 py-3 text-sm leading-relaxed text-fg-mut">A connected laptop is optional. The Sandbox and MCP connectors work without it. See the <a class="text-brand hover:underline" href="/docs/deploy">deploy guide</a> for the exact variables and the persistence proof.</p>
         </Section>
 
         <Section id="guides" title="Guides" lede="One task at a time. Each guide names the goal, the steps, and the result you can read back.">

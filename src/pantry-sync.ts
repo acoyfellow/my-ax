@@ -1,33 +1,3 @@
-// my-ax -> pantry bridge.
-//
-// Pushes my-ax's enabled saved_recipes — projected to the codemode-native
-// snippet shape — to a live pantry (https://pantry.coey.dev by default) so
-// a recipe authored in my-ax becomes reusable from a terrarium / Pi session
-// through the pantry tool.
-//
-// Round 02 objection #3 — "pantry-sync.ts still maps D1 saved_recipes rows
-// only; it does not publish snippets or snippet provenance" — is fixed
-// by:
-//   * reading from the cm_snippets projection (dual-read with saved_recipes
-//     fallback so a fresh deploy that has not yet backfilled still
-//     publishes), so each push carries the codemode-native shape
-//     (name/description/code/inputSchema/connectors/savedAt) alongside the
-//     authoritative capabilities tag list from saved_recipes;
-//   * including snippet provenance fields (`codemodeExecutionId`,
-//     `sourceRecipeId`, `provenance`) so the consumer (pantry) can tell
-//     apart projected/transition data from native CodemodeRuntime
-//     promotions without re-deriving;
-//   * keeping the legacy `mapRecipeToPantryBody` export for callers that
-//     still operate on raw saved_recipes rows.
-//
-// Design rules (so this never hurts my-ax):
-//   - Additive. Nothing here is wired into a request path; callers opt in.
-//   - Env-gated. Reads PANTRY_URL (default https://pantry.coey.dev) and
-//     PANTRY_TOKEN. With no token it is a clear-logged no-op.
-//   - Fail-soft. A network error, a rejected recipe, or a bad row is logged and
-//     skipped; this function NEVER throws into a my-ax flow.
-//   - The token is sent only in the Authorization header. It is never logged.
-
 import type { Env } from "./types";
 import { SavedRecipeService, type SavedRecipe } from "./saved-recipes";
 import {

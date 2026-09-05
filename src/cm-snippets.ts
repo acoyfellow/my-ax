@@ -24,7 +24,7 @@
 // native one without guessing.
 
 import type { Env } from "./types";
-import type { SavedRecipe } from "./saved-recipes";
+import { hasRetiredRecipeCapability, type SavedRecipe } from "./saved-recipes";
 import type { Snippet } from "@cloudflare/codemode";
 
 export type SnippetProvenance = "projected" | "native";
@@ -179,6 +179,12 @@ export async function backfillOwnerSnippets(env: Env, ownerEmail: string): Promi
   let projected = 0;
   let refreshed = 0;
   for (const recipe of results) {
+    let capabilities: string[] = [];
+    try {
+      const parsed = JSON.parse(recipe.capabilities_json);
+      if (Array.isArray(parsed)) capabilities = parsed.filter((capability): capability is string => typeof capability === "string");
+    } catch {}
+    if (hasRetiredRecipeCapability(capabilities)) continue;
     const existing = await env.DB.prepare(
       "SELECT id FROM cm_snippets WHERE owner_email = ? AND name = ? LIMIT 1",
     ).bind(owner, recipe.name).first<{ id: string }>();
@@ -203,7 +209,8 @@ export async function listSnippetsDualRead(env: Env, ownerEmail: string): Promis
      WHERE c.owner_email = ? AND r.status = 'enabled'
      ORDER BY c.saved_at DESC`,
   ).bind(owner).all<SnippetRow>();
-  if (results.length) return results.map(rowToSnippet);
+  const projected = results.map(rowToSnippet).filter((snippet) => !hasRetiredRecipeCapability(snippet.capabilities));
+  if (projected.length) return projected;
   // Transition fallback: derive an ephemeral projection from saved_recipes
   // without writing. Receipts call backfillOwnerSnippets explicitly when
   // they want the projection persisted.
@@ -232,7 +239,7 @@ export async function listSnippetsDualRead(env: Env, ownerEmail: string): Promis
       provenance: "projected" as const,
       capabilities,
     };
-  });
+  }).filter((snippet) => !hasRetiredRecipeCapability(snippet.capabilities));
 }
 
 /**

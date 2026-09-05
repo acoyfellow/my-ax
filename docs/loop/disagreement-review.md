@@ -16,7 +16,7 @@ Each role is read-only by default. Each child must return evidence, missing proo
 
 The parent must not vote or count children. It may accept only claims that cite one of:
 
-- an attributable Terrarium run ID;
+- an attributable external review run ID;
 - a local path or URL;
 - an explicit missing proof.
 

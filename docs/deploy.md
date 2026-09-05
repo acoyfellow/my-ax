@@ -118,31 +118,13 @@ The exact gateway contract is deployment-specific and should be injected outside
 
 It connects outbound to My AX and publishes a live capability catalog. Configure and run it only on a computer whose local authority you intend to expose. My Machine is terminal-equivalent authority, not a sandbox.
 
-### Terrarium
-
-A compatible Terrarium deployment adds bounded cloud agent runs (with verified receipts) to Work Code Mode. Configure the URL as a var:
-
-```jsonc
-"vars": {
-  "TERRARIUM_URL": "https://your-terrarium.example.com"
-}
-```
-
-Then set the shared deployment control token secret:
-
-```bash
-npx wrangler secret put TERRARIUM_CONTROL_TOKEN
-```
-
-The same token must be accepted by Terrarium (`Authorization: Bearer <TERRARIUM_CONTROL_TOKEN>`; the server binds the principal). Integration methods are `terrarium.spawn` (waits for the receipt), `terrarium.spawn_background` (returns a run id), and `terrarium.status` (checks a run). Terrarium is optional; My AX Workspace and connected MCPs work without it. It replaces the retired `cloudbox` connector.
-
 ### Page connector (live UI)
 
 The `page.*` connector needs no configuration or secret. It resolves over the owner chat WebSocket, so it is available automatically whenever an owner chat tab is connected, and every verb errors `page_unavailable` otherwise. It lets the agent drive the owner's own browser session and invoke tools that artifacts self-register. There is nothing to deploy or provision for it.
 
 ### Pantry Bridge
 
-The pantry bridge (`src/pantry-sync.ts`) pushes the owner's enabled `saved_recipes` to a live pantry so a recipe authored in My AX becomes reusable from a Terrarium or Pi session through the pantry tool. It is additive: nothing in the request path calls it, so callers opt in explicitly.
+The pantry bridge (`src/pantry-sync.ts`) pushes the owner's enabled `saved_recipes` to a live pantry so a recipe authored in My AX becomes reusable from an external agent session through the pantry tool. It is additive: nothing in the request path calls it, so callers opt in explicitly.
 
 The bridge is env-gated, enabled-only, and fail-soft. It reads two values:
 

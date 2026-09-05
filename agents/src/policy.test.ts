@@ -29,8 +29,7 @@ function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } 
     async hasBranch(name) { actions.push(`hasBranch:${name}`); return name === "bot/issue-40"; },
     async listBranchFiles(head) { actions.push(`listBranchFiles:${head}`); return [".factory/issue-40.md"]; },
     async putFile(head, file) { actions.push(`putFile:${file.path}`); },
-    async mergePr() { actions.push("merge"); },
-    async approvePr() { actions.push("approve"); },
+    async closeIssue(number, body) { actions.push(`closeIssue:${number}`); comments.push(body ?? ""); },
   };
 }
 
@@ -82,6 +81,17 @@ test("an auto error report opens a ready PR without triage:draft", () => {
     title: "bug: The image data you provided does not represent a valid image.",
     body: "## Auto error report\n\nfingerprint: `e8a37db7f3311f4b`\norigin: client",
     author: "acoyfellow",
+  });
+  assert.equal(classified.draft, true);
+  assert.equal(shouldOpenDraft(classified), true);
+});
+
+test("a triage draft label opts in a feature issue", () => {
+  const classified = classifyIssue({
+    title: "Feature: expose notifications",
+    body: "Add a bounded owner-scoped read.",
+    author: "owner",
+    labels: ["bug", "triage:draft"],
   });
   assert.equal(classified.draft, true);
   assert.equal(shouldOpenDraft(classified), true);
@@ -156,24 +166,21 @@ test("an opted-in draft does not open a ready PR when putFile is missing and the
     { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
-  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
+  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("implementation produced no product files")));
   assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
 });
 
-test("an opted-in draft does not open a ready PR when putFile only writes a factory receipt", async () => {
+test("an opted-in draft never converts a factory receipt into a ready PR", async () => {
   const github = memoryGithub();
-  const files = [".factory/issue-40.md"];
   github.hasBranch = async () => true;
-  github.listBranchFiles = async () => files;
-  github.putFile = async (_head, file) => { files.push(file.path); github.actions.push(`putFile:${file.path}`); };
+  github.listBranchFiles = async () => [".factory/issue-40.md", "src/factory/issue-40.md"];
   const steps = await runTriage(
     { number: 40, title: "bug: desk href", body: "triage:draft\nrepro", author: "owner" },
     { github, terrarium: memoryTerrarium(true), model: { modelId: "grok-4.6" } },
   );
-  assert.ok(github.actions.some((action) => action.startsWith("putFile:src/factory/issue-40.md")));
-  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("product files missing")));
+  assert.ok(steps.some((s) => s.step === "stop" && String(s.reason).includes("implementation produced no product files")));
+  assert.ok(!github.actions.some((action) => action.startsWith("putFile:")));
   assert.ok(!github.actions.some((action) => action.startsWith("pr:")));
-  assert.ok(!github.actions.some((action) => action.includes("terrarium")));
 });
 
 test("an opted-in draft opens a ready PR when the head already has a product file", async () => {
@@ -186,10 +193,12 @@ test("an opted-in draft opens a ready PR when the head already has a product fil
   );
   assert.ok(!steps.some((s) => s.step === "dig"));
   assert.ok(steps.some((s) => s.step === "pr" && s.number === 7));
+  assert.ok(steps.some((s) => s.step === "issue-closed" && s.number === 40));
   assert.ok(github.actions.some((action) => action.startsWith("pr:")));
+  assert.ok(github.actions.includes("closeIssue:40"));
 });
 
-test("auditPull does not recommend merge when the only files are factory seeds", () => {
+test("auditPull does not recommend merge when the only files are factory receipts", () => {
   const stamp = auditPull(
     {
       title: "fix: terminal",
@@ -197,7 +206,7 @@ test("auditPull does not recommend merge when the only files are factory seeds",
       author: "acoyfellow",
       draft: false,
       headSha: "abc",
-      files: [".factory/issue-158.md"],
+      files: [".factory/issue-158.md", "src/factory/issue-158.md"],
       behindMain: 0,
     },
     "d",
@@ -266,7 +275,7 @@ test("a second identical loop board is not posted", async () => {
   const input = { number: 64, title: "bug: Invalid URL string.", body: "triage:draft", author: "owner" };
   const ports = { github, terrarium: memoryTerrarium(), model: { modelId: "grok-4.6" } };
   const first = await runTriage(input, ports);
-  const second = await runTriage(input, ports);
+  const second = await runTriage(input, { ...ports, model: { modelId: "replacement-model" } });
   assert.ok(first.some((s) => s.step === "comment"));
   assert.ok(second.some((s) => s.step === "stop" && s.reason === "board already posted"));
   assert.equal(github.comments.length, 1);

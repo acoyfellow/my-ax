@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { savedRecipeExecutionCode, validateRecipeRunInput, validateSavedRecipeInput, validateSavedRecipePatch } from "./saved-recipes";
+import { hasRetiredRecipeCapability, savedRecipeExecutionCode, validateRecipeRunInput, validateSavedRecipeInput, validateSavedRecipePatch } from "./saved-recipes";
 
 test("saved recipe validation keeps promoted work_code bounded and explicit", () => {
   const recipe = validateSavedRecipeInput({
@@ -23,15 +23,18 @@ test("saved recipe validation rejects generic extension-shaped power", () => {
   assert.throws(() => validateSavedRecipeInput({ name: "secret", description: "Secret", inputSchema: { type: "object" }, code: "return env.SECRET", capabilities: [] }), /capabilities must list/);
 });
 
-test("saved recipe validation admits a Computer capability for owner-approved save", () => {
-  const recipe = validateSavedRecipeInput({
-    name: "read_preview_file",
-    description: "Read one file from the Computer preview workspace.",
-    inputSchema: { type: "object", properties: { path: { type: "string" } } },
-    code: "return await computer.read({ path: input.path });",
-    capabilities: ["computer.read"],
-  });
-  assert.deepEqual(recipe.capabilities, ["computer.read"]);
+test("saved recipes reject retired capability namespaces", () => {
+  for (const capability of ["computer.read", "terrarium.spawn", "agentcast.open"]) {
+    assert.throws(() => validateSavedRecipeInput({
+      name: "retired_tool",
+      description: "A recipe from a retired capability namespace.",
+      inputSchema: { type: "object" },
+      code: "return null;",
+      capabilities: [capability],
+    }), /invalid capabilities/);
+    assert.equal(hasRetiredRecipeCapability([capability]), true);
+  }
+  assert.equal(hasRetiredRecipeCapability(["workspace.read"]), false);
 });
 
 test("saved recipe run input enforces the declared object schema subset", () => {

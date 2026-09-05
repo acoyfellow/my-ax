@@ -2,9 +2,20 @@ import { getSandbox, type PtyOptions, type Sandbox } from "@cloudflare/sandbox";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { isWebSocketUpgrade, terminalDimensions } from "../terminal-protocol";
-import { getUserWorkspace, invalidateUserWorkspace } from "../workspace";
+import { getUserWorkspace, invalidateUserWorkspace, snapshotUserWorkspace } from "../workspace";
+import { persistBeforeWorkspaceDestroy } from "../workspace-recycle";
 
 export function registerTerminalRoutes(app: Hono<AppEnv>) {
+  app.post("/api/workspace/snapshot", async (c) => {
+    const identity = c.get("identity");
+    try {
+      const backup = await snapshotUserWorkspace(c.env, identity, "terminal");
+      return c.json({ ok: true, command: c.req.path, result: { backupId: backup.id }, next_actions: [] });
+    } catch (error) {
+      return c.json({ ok: false, command: c.req.path, error: { code: "WORKSPACE_SNAPSHOT_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 502);
+    }
+  });
+
   app.post("/api/workspace/recycle", async (c) => {
     const identity = c.get("identity");
     const namespace = (c.env as unknown as { SANDBOX: DurableObjectNamespace<Sandbox> }).SANDBOX;
@@ -15,10 +26,15 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
       transport: "rpc",
     });
     try {
-      await (stub as unknown as { destroy: () => Promise<void> }).destroy();
+      const snapshotAt = Date.now();
+      await persistBeforeWorkspaceDestroy(
+        () => snapshotUserWorkspace(c.env, identity, "recycle"),
+        () => (stub as unknown as { destroy: () => Promise<void> }).destroy(),
+      );
+      steps.snapshotMs = Date.now() - snapshotAt;
       steps.destroyed = true;
     } catch (error) {
-      steps.destroyThrew = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      return c.json({ ok: false, command: c.req.path, error: { code: "WORKSPACE_RECYCLE_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 502);
     }
     steps.destroyMs = Date.now() - started;
     const recheckAt = Date.now();

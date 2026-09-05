@@ -72,8 +72,14 @@
     attachWhenWide(Number(term?.cols ?? 0), Number(term?.rows ?? 0));
   }
 
-  function hide() {
+  async function persistWorkspace() {
+    const response = await fetch("/api/workspace/snapshot", { method: "POST", credentials: "include", keepalive: true });
+    if (!response.ok) detail = "workspace changes could not be saved";
+  }
+
+  async function hide() {
     socket?.close();
+    await persistWorkspace();
     onClose?.();
   }
 
@@ -81,6 +87,7 @@
     void start();
     return () => {
       socket?.close();
+      void persistWorkspace();
       term?.destroy?.();
     };
   });

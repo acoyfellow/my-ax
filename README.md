@@ -17,9 +17,9 @@ The agent acts with the authority you already hold. You approve the work. You di
 
 > **Security posture.** My AX is single-operator. One verified Access identity owns every conversation, record, and tool call. The machine companion connects outbound only. It checks every caller at the Worker boundary. It runs as an OS account you choose. See the [security posture](./SECURITY.md) for the trust model, the identity and network boundaries, and what My AX does not do.
 
-[![Demo: the agent writes a workspace file, runs a command on a connected machine, and reads a remote run](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
+[![Demo: the agent writes a workspace file and runs a command on a connected machine](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
-In this 3.4s clip the agent writes a workspace file. It runs a command on a connected machine. It reads a remote agent run. This is one configured path. It is not proof of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
+In this 3.4s clip the agent writes a workspace file and runs a command on a connected machine. This is one configured path. It is not proof of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
 
 > **Verify before you trust.** `npm run check` covers the local build, the types, and the unit tests only. The [deployment proof](./proof/README.md) proves Access, containers, models, voice, push, and workspace restoration. A green local run does not prove them.
 
@@ -29,15 +29,13 @@ The agent uses more than one place. It picks the place for each task. Each place
 
 | Place | Mechanism | Authority | What you can read back |
 |---|---|---|---|
-| Container workspace | container-backed `/home/user`, snapshotted to R2 | isolated per owner | files, command output |
-| Computer preview filesystem | separate owner-scoped SQLite `/home/user` | bounded file-only access with a 4 MiB live logical-file quota and separate 8 MiB cumulative retained-write budget; no execution backend or automatic sync | bounded file results |
+| Persistent Sandbox | container-backed `/home/user`, snapshotted to R2 | isolated per owner | files, command output, process state |
 | A machine you connect | `machine.*` over an outbound companion ([machinectl](https://github.com/acoyfellow/machinectl)) | the companion's OS account, which you choose | the exact command, its output |
-| A bounded cloud run | `terrarium.spawn` returns a verified receipt | Terrarium's own container | `runId`, contract status, exit code |
 | A public web page | `browser_open` in a headless browser | no local cookies; public URLs only | rendered title, text, an rrweb replay |
 | Your own live UI | `page.*` over the chat WebSocket | only while your chat tab is open | session list, health, transcript tail |
 | An artifact it builds | `create_svelte_artifact` + tools the artifact registers | sandboxed iframe, no same-origin access | the artifact, driven in place |
 
-A cloud run does not need you or your machine present. The agent starts it. The run returns a receipt when it finishes. The receipt holds a `runId` and a contract status. The machine companion is the highest-authority path. It runs as a real OS account. Give it a dedicated account with least privilege. See the [security posture](./SECURITY.md) for the boundary on each place.
+The Sandbox does not need you or your machine present. The machine companion is the highest-authority path. It runs as a real OS account. Give it a dedicated account with least privilege. See the [security posture](./SECURITY.md) for the boundary on each place.
 
 The [feature tour](./docs/feature-tour.md) shows each capability with a real transcript or receipt.
 
@@ -69,10 +67,8 @@ The hard bounds, so you know what the agent cannot do.
 | Delegation | At most 2 children, run one after the other (not at the same time), depth 1, 8 model or tool steps each, 120s timeout. Children make model-provider calls and create records that stay. The UI shows a final snapshot. It does not show live progress and has no cancel. |
 | Recurring jobs | At most 10 active jobs per owner. Cadence 60 seconds to 30 days. Names 200 characters, prompts 4,000. D1 drives the UI. The native scheduler drives execution. The two can disagree. There is no automatic repair. If the state drifts, pause, delete, and create the job again. |
 | Work Code Mode | The generated source has a limit of 32,000 bytes. Each run has a 60-second wall-clock limit and no ambient network. The limit does not reduce the authority of an allowlisted callback. |
-| Workspace | All conversations for one owner share `/home/user`. My AX tries an R2 snapshot after a change. Recent writes can be lost with the container. Two conversations can edit the same files with no merge. |
-| Computer | A separate preview SQLite `/home/user` with bounded file methods, a 4 MiB live logical-file quota, and a distinct 8 MiB cumulative retained-write budget. Each valid write reserves the full 32 KiB write allowance before the VFS write, including a later VFS failure. This limits known historical-blob retention in `@cloudflare/computer@0.1.1`; it does not claim upstream garbage collection. It has no execution backend, does not copy Workspace data, and has no automatic sync. |
+| Workspace | All conversations for one owner share `/home/user`. My AX snapshots it to R2 and refuses a requested recycle if snapshot publication fails. Two conversations can edit the same files with no merge. |
 | Machine | Commands run as the OS account that hosts the companion, with that account's permissions. My AX adds no privilege separation. |
-| Terrarium | The agent starts bounded cloud runs and reads verified receipts. Runs execute in Terrarium's own containers under its authority. My AX holds a bearer control token and adds no privilege separation. |
 | Page (live UI) | Works only while an owner chat tab is connected. Each verb returns `page_unavailable` at other times. Artifact-registered tools are per-artifact and capped. They are bound to the source window. They are checked against their schema. |
 | Browser | `browser_open` accepts HTTP(S) URLs that pass public-address checks. It receives no local browser cookies. Authenticated local browsing works only when a connected machine gives access to it. |
 | Voice and push | Need explicit browser permission and provider availability. A failed push does not remove its Attention record. |
@@ -131,7 +127,6 @@ My AX checks connector URLs for embedded credentials and disallowed destinations
 Optional providers:
 
 - **My Machine** runs [`machinectl`](https://github.com/acoyfellow/machinectl). This gives terminal-equivalent access as the companion's OS user. Use a dedicated account with least privilege.
-- **Terrarium** needs `TERRARIUM_URL` and a dedicated `TERRARIUM_CONTROL_TOKEN`. Share the token only between this deployment and its Terrarium service. The agent starts bounded cloud runs and reads back verified receipts.
 - **Web Push** needs VAPID keys and browser notification permission.
 - **Pantry bridge** needs `PANTRY_TOKEN` to push enabled reusable tools to a pantry. Other agents can then reuse them. You can also set `PANTRY_URL`; the default is `https://pantry.coey.dev`. The bridge is additive and enabled-only. It fails soft. It does nothing without the token.
 
@@ -155,8 +150,7 @@ src/jobs.ts              native recurring schedules
 src/job-service.ts       owner-scoped job CRUD and evidence
 src/saved-recipes.ts     owner-approved reusable work_code tools
 src/delegate-many.ts     bounded agents-as-tools delegation
-src/work-tools.ts        workspace, machine, terrarium, page, and codemode catalog
-src/terrarium-tools.ts   bounded cloud agent runs with verified receipts
+src/work-tools.ts        workspace, machine, page, and codemode catalog
 src/routes/              authenticated HTTP adapters
 src/ui/            product UI and allowlisted result widgets
 migrations/              D1 application and projection schemas

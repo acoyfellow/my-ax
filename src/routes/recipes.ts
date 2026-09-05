@@ -84,13 +84,9 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
         }
       }
       if (!existing) {
-        // A card can only be missing its saved row if promotion refused to
-        // persist it. The dominant cause is host-bound machine/terrarium code,
-        // which is inline-only by policy. Give the owner an actionable reason
-        // instead of a bare "not found" they cannot resolve by retrying.
         throw new SavedRecipeError(
           "NotFound",
-          "This reusable tool was not saved and cannot be enabled. Machine- or Terrarium-bound tools run inline only and are never persisted as reusable tools.",
+          "This reusable tool was not saved and cannot be enabled. Machine-bound tools run inline only and are never persisted as reusable tools.",
         );
       }
       if (existing.code.trim() !== sourceCode) {

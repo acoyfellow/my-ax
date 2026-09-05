@@ -32,13 +32,6 @@ test("non-portable machine recipes stay inline instead of creating attention noi
   assert.equal(shouldPersistSuggestedRecipe(decision), false);
 });
 
-test("terrarium recipes are also treated as high-authority inline-only prompts", () => {
-  assert.deepEqual(recipeApprovalDecision({ autoTrust: false, capabilities: ["terrarium.spawn"], portable: false }), {
-    notify: false,
-    reason: "high_authority_inline_only",
-  });
-});
-
 test("portable owner-reviewed recipes are still persisted for review", () => {
   const decision = recipeApprovalDecision({ autoTrust: false, capabilities: ["workspace.read"], portable: true });
   assert.equal(shouldPersistSuggestedRecipe(decision), true);

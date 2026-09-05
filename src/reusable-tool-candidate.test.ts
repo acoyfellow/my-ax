@@ -217,7 +217,6 @@ async (ctx) => {
 
 test("isHighAuthorityInlineOnly: machine-bound code is inline-only", () => {
   assert.equal(isHighAuthorityInlineOnly(["machine.shell"]), true);
-  assert.equal(isHighAuthorityInlineOnly(["terrarium.spawn"]), true);
 });
 
 test("isHighAuthorityInlineOnly: portable and workspace-only code is NOT inline-only", () => {

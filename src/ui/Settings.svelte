@@ -45,6 +45,9 @@
   let artifactsLoading = $state(false);
   let artifactStatus = $state("");
   let settingsQuery = $state("");
+  let ownerInstructions = $state("");
+  let ownerInstructionsStatus = $state("");
+  let ownerInstructionsRevision = 0;
   let activeSection = $state<"general" | "capabilities" | "artifacts" | "recipes" | "jobs" | "starters" | "connections">("general");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
@@ -62,8 +65,7 @@
       title: "Can work here",
       summary: "Available in a normal chat.",
       items: [
-        { name: "Workspace", tools: "work_search · work_code", description: "Read files, search, edit, and run bounded commands in your workspace." },
-        { name: "Computer preview", tools: "computer.* through work_code", description: "Use bounded file methods in a separate preview SQLite workspace. It has no execution backend or automatic sync." },
+        { name: "Workspace", tools: "work_search · work_code", description: "Read files, search, edit, and run bounded commands in your persistent Sandbox workspace." },
         { name: "Reusable tools", tools: "codemode.search · codemode.run", description: "Run owner-approved Code Mode shortcuts from work_code." },
         { name: "Recurring work", tools: "manage_jobs", description: "Create and inspect scheduled prompts." },
       ],
@@ -92,7 +94,6 @@
       items: [
         { name: "MCP servers", tools: "server tools · mcp_code_mode", description: "Use tools from servers you add. Credentials stay server-side." },
         { name: "Workspace container", tools: "machine.* through work_code", description: "Use methods from the connected runtime with that runtime’s account." },
-        { name: "Terrarium", tools: "terrarium.* through work_code", description: "Spawn bounded cloud agent runs and read back verified receipts." },
         { name: "Push notifications", tools: "browser subscription", description: "Send Attention updates to subscribed browsers." },
       ],
     },
@@ -123,6 +124,7 @@
     void refreshDeskApp();
     void refreshStarters();
     void refreshRecipePreferences();
+    void refreshOwnerInstructions();
     void refreshRecipes().then(async () => {
       if (!requestedRecipeName) return;
       const match = recipes.find((recipe) => recipe.name === requestedRecipeName);
@@ -226,6 +228,42 @@
     const body = await response.json();
     if (!response.ok) { artifactStatus = body?.error?.message || "Delete failed"; return; }
     artifacts = artifacts.filter((item) => item.id !== artifact.id); artifactStatus = "Artifact deleted.";
+  }
+
+  async function refreshOwnerInstructions() {
+    const revision = ownerInstructionsRevision;
+    ownerInstructionsStatus = "Loading instructions…";
+    try {
+      const response = await fetch("/api/instructions", { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error?.message || "Could not load instructions");
+      if (revision === ownerInstructionsRevision) ownerInstructions = body.result.instructions;
+      ownerInstructionsStatus = "";
+    } catch (error) {
+      ownerInstructionsStatus = error instanceof Error ? error.message : String(error);
+    }
+  }
+  async function saveOwnerInstructions() {
+    ownerInstructionsStatus = "Saving…";
+    const response = await fetch("/api/instructions", {
+      method: "PUT",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instructions: ownerInstructions }),
+    });
+    const body = await response.json();
+    if (!response.ok) { ownerInstructionsStatus = body?.error?.message || "Could not save instructions"; return; }
+    ownerInstructions = body.result.instructions;
+    ownerInstructionsStatus = "Saved. Existing and new conversations use these instructions on their next reply.";
+  }
+  async function resetOwnerInstructions() {
+    ownerInstructionsStatus = "Resetting…";
+    const response = await fetch("/api/instructions/reset", { method: "POST", credentials: "include" });
+    const body = await response.json();
+    if (!response.ok) { ownerInstructionsStatus = body?.error?.message || "Could not reset instructions"; return; }
+    ownerInstructions = body.result.instructions;
+    ownerInstructionsRevision += 1;
+    ownerInstructionsStatus = "Reset to the shipped default.";
   }
 
   // ── PWA install ─────────────────────────────────────────────────────
@@ -900,12 +938,6 @@
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────
-  // Relocate Health + Connectors mounts into the modal. ChatPage.tsx renders
-  // them as siblings in <div id="settings-drawer-extra-mounts">; here we move
-  // them into <div id="settings-extras-slot">. The mounts hydrate normally
-  // on their original DOM nodes —
-  // moving the node post-hydrate is harmless because Svelte tracks the
-  // reactive root via the mount element identity, not its parent.
   function relocateExtras() {
     const slot = document.getElementById("settings-extras-slot");
     const source = document.getElementById("settings-drawer-extra-mounts");
@@ -1069,6 +1101,24 @@
         </div>
       </div>
     {/if}
+
+    <section class="rounded-md border border-line bg-bg px-3 py-3">
+      <label for="owner-instructions" class="block text-xs font-medium text-fg-mut mb-1.5">Default instructions</label>
+      <textarea
+        id="owner-instructions"
+        maxlength="4000"
+        rows="6"
+        bind:value={ownerInstructions}
+        oninput={() => { ownerInstructionsRevision += 1; ownerInstructionsStatus = "Not saved"; }}
+        class="w-full resize-y rounded-md bg-bg border border-line text-fg text-sm px-3 py-2.5 focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40"
+      ></textarea>
+      <p class="mt-2 text-xs text-fg-mut">These instructions apply to existing and new conversations on their next reply. Protected policy, authorization, tool limits, and verification rules cannot be changed here.</p>
+      <div class="mt-3 flex gap-2">
+        <button type="button" onclick={saveOwnerInstructions} class="rounded-md bg-brand text-white text-sm font-medium px-3 py-2 hover:bg-brand/90">Save instructions</button>
+        <button type="button" onclick={resetOwnerInstructions} class="rounded-md border border-line text-sm px-3 py-2 hover:border-brand/60">Reset to default</button>
+      </div>
+      {#if ownerInstructionsStatus}<p class="mt-2 text-xs text-fg-mut" aria-live="polite">{ownerInstructionsStatus}</p>{/if}
+    </section>
 
     {#if showInstall}
       <section class="rounded-md border border-line bg-bg px-3 py-3">

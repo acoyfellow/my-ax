@@ -49,3 +49,8 @@ src/*.bak-*
 
 # Internal terraloop / campaign state (never ship in the public engine)
 .context/
+.pi/fresh-session-handoff/
+.factory/
+wrangler.preview-d1.json
+proof/recipe-dogfood-learning-curve*.json
+proof/experiments/

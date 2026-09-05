@@ -80,6 +80,7 @@ test("syncRecipesToPantry pushes only enabled recipes and maps fields correctly"
   const rows = [
     makeRow({ id: "a", name: "enabled_one", status: "enabled" }),
     makeRow({ id: "b", name: "disabled_one", status: "disabled" }),
+    makeRow({ id: "c", name: "legacy_one", status: "enabled", capabilities_json: JSON.stringify(["agentcast.open"]) }),
   ];
   const env = makeEnv(rows, { PANTRY_TOKEN: "secret-xyz", PANTRY_URL: "https://pantry.coey.dev" } as Partial<Env>);
   const bodies: { url: string; init: RequestInit }[] = [];
@@ -101,6 +102,7 @@ test("syncRecipesToPantry pushes only enabled recipes and maps fields correctly"
 
   // Exactly one network call (the enabled one), correct endpoint + mapping.
   assert.equal(bodies.length, 1);
+  assert.doesNotMatch(JSON.stringify(bodies), /legacy_one|agentcast\.open/);
   assert.equal(bodies[0].url, "https://pantry.coey.dev/recipes");
   assert.equal((bodies[0].init as { method: string }).method, "POST");
   const sent = JSON.parse((bodies[0].init.body as string));

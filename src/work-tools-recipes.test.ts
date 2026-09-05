@@ -29,7 +29,8 @@ test("work_search catalog no longer emits recipe.list / recipe.run:* methods", (
   assert.doesNotMatch(source, /method:\s*"recipe\.list"/);
   assert.doesNotMatch(source, /method:\s*`recipe\.run:/);
   assert.match(source, /CODEMODE_METHODS/, "codemode runtime methods must be declared");
-  assert.match(source, /List or filter codemode tools across Workspace, Computer, My Machine, Terrarium, AgentCast, My AX Page, and reusable tools\./);
+  assert.match(source, /List or filter codemode tools across My AX Workspace, My Machine, My AX Page, and reusable tools\./);
+  assert.doesNotMatch(source, /Computer, My Machine, Terrarium, AgentCast/);
   assert.match(source, /method:\s*`codemode:\$\{snippet\.name\}`/, "snippets must be advertised under codemode:");
 });
 
@@ -39,7 +40,8 @@ test("work_code sandbox prelude no longer exposes a top-level recipe namespace",
 });
 
 test("work_code invokes submitted async arrow with ctx while preserving globals", () => {
-  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,computer:globalThis\.computer,machine:globalThis\.machine,terrarium:globalThis\.terrarium,agentcast:globalThis\.agentcast,page:globalThis\.page,codemode:globalThis\.codemode\}/);
+  assert.match(source, /globalThis\.ctx=\{workspace:globalThis\.workspace,machine:globalThis\.machine,page:globalThis\.page,codemode:globalThis\.codemode\}/);
+  assert.doesNotMatch(source, /globalThis\.ctx=\{[^}]*computer:|globalThis\.ctx=\{[^}]*terrarium:|globalThis\.ctx=\{[^}]*agentcast:/);
   assert.match(source, /const executableCode = `async \(\) => await \(\$\{submittedCode\}\)\(globalThis\.ctx\)`/);
   assert.match(source, /executor\.execute\(executableCode,/);
 });
@@ -80,8 +82,7 @@ test("native CodemodeRuntime seam is held (round 04): runNativeCodemode is avail
     /^export \{ CodemodeRuntime \} from "\.\/code-mode-runtime\.worker"/m,
     "src/index.tsx must not actively export CodemodeRuntime until the binding and call site land together",
   );
-  assert.match(indexSource, /HELD:/);
-  assert.match(indexSource, /code-mode-runtime\.worker/);
+  assert.doesNotMatch(indexSource, /^export const CODEMODE_RUNTIME_HOLD/m);
 });
 
 test("wrangler.jsonc holds CODEMODE_RUNTIME until a real runNativeCodemode call site exists", () => {
@@ -204,24 +205,6 @@ test("codemode.run dispatches connector tools and snippet by name through the ho
 test("codemode.run on an unknown name without a snippet hook surfaces a clear error", async () => {
   const wr = createCodemodeWorkRuntime([makeSource("workspace", [{ name: "read", description: "Read a file." }])], undefined);
   await assert.rejects(() => wr.namespace.run("nope"), /codemode\.run: unknown tool/);
-});
-
-test("owner-approved Computer saved recipes replay through the codemode snippet path", async () => {
-  const computer = makeSource("computer", [{ name: "read", description: "Read a Computer preview file." }]);
-  let replayInput: Record<string, unknown> | undefined;
-  const snippetHook: CodemodeSnippetHook = {
-    async list() {
-      return [{ id: "computer-recipe", name: "read_preview_file", description: "Read a Computer preview file.", inputSchema: { type: "object", properties: { path: { type: "string" } } }, capabilities: ["computer.read"] }];
-    },
-    async run(input) {
-      replayInput = input.input;
-      return computer.fns.read(input.input ?? {});
-    },
-  };
-  const runtime = createCodemodeWorkRuntime([computer], snippetHook);
-  const result = await runtime.namespace.run("read_preview_file", { path: "/home/user/note.txt" });
-  assert.deepEqual(replayInput, { path: "/home/user/note.txt" });
-  assert.deepEqual(result, { ran: "computer.read", input: { path: "/home/user/note.txt" }, result: null });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

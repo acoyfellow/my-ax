@@ -8,11 +8,7 @@ export function recipeApprovalDecision(input: {
   capabilities: string[];
   portable?: boolean;
 }): RecipeApprovalDecision {
-  const highAuthority = input.capabilities.some((capability) =>
-    capability.startsWith("machine.") || capability.startsWith("terrarium."),
-  );
-  // Auto-enable is an owner convenience, not a way to persist host-bound
-  // machine code or paid terrarium spawns. Keep that conservative boundary.
+  const highAuthority = input.capabilities.some((capability) => capability.startsWith("machine."));
   if (highAuthority && input.portable === false) {
     return { notify: false, reason: "high_authority_inline_only" };
   }
