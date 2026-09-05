@@ -19,6 +19,7 @@ const runtimeBoundaries = new Set([
   "src/gateway-retry-fetch.ts",
   "src/oauth-store.ts",
   "src/user-agent.ts",
+  "src/web-search.ts",
   "agents/src/hook.ts",
   "agents/src/worker.ts",
   "agents/src/workflow-entry.ts",
