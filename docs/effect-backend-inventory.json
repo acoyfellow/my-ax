@@ -5,15 +5,15 @@
     "total": 488,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 82,
+      "effect-program": 81,
       "plain-typescript": 100,
-      "runtime-adapter": 48,
+      "runtime-adapter": 49,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 406,
+      "accepted": 407,
       "migrated": 25,
-      "pending": 57
+      "pending": 56
     }
   },
   "entries": [
@@ -1279,9 +1279,9 @@
     },
     {
       "path": "src/grant-crypto.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/index.tsx",
