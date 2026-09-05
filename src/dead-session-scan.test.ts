@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runDeadSessionScan, DEAD_SESSION_STALL_MS, type DeadSessionDeps, type DeadSessionDb } from "./dead-session-detector";
+import { Effect } from "effect";
+import { DEAD_SESSION_STALL_MS } from "./dead-session-detector";
+import { runDeadSessionScan as runDeadSessionScanEffect, type DeadSessionDeps, type DeadSessionDb } from "./dead-session-program";
+
+const runDeadSessionScan = (...args: Parameters<typeof runDeadSessionScanEffect>) => Effect.runPromise(runDeadSessionScanEffect(...args));
 
 type Session = { id: string; owner_email: string; updated_at: string; status: string };
 type Entry = { id: number; session_id: string; owner_email: string; role: string; content: string | null; ts: string; meta_json: string | null };
