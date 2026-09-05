@@ -1,0 +1,31 @@
+docs/effect-backend-inventory.json
+  s_99b55ecf7d26fa::t_ade2b6eaf80fc9 5,10,14-16,1492-1497,1499-1500
+src/routes/mcp.ts
+  s_a22615f23a4e42::t_9932eb1b41d71a 17-18,198,215
+src/routes/recipes.ts
+  s_a22615f23a4e42::t_c85f641d68eb88 14,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ade82d119831dfa78f6628fa41a5fb32ef2b4780",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_a22615f23a4e42": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04e55-f85f-7675-a279-2b25f324188f",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
