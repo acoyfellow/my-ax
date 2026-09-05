@@ -27,6 +27,6 @@ test("the README does not claim triage needs a pre-existing branch", () => {
 
 test("the README describes the sweep queue rule that is in the code", () => {
   const sweep = readFileSync(join(root, "agents", "src", "sweep.ts"), "utf8");
-  assert.match(sweep, /if \(issue\.hasOpenPr\) continue;/, "the sweep must skip issues with an open PR");
+  assert.match(sweep, /if \(issue\.hasOpenPr \|\| issue\.openPr\) continue;/, "the sweep must skip issues with an open PR");
   assert.match(readme, /no PR/, "the README must say the sweep skips issues that already have a PR");
 });
