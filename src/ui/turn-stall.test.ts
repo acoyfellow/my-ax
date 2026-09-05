@@ -77,3 +77,11 @@ test("the watchdog asks whether a tool is running before it judges", () => {
   assert.match(watchdogBlock(), /pendingTool:\s*firstPendingTool\(\)/,
     "without the pending-tool input the evaluator cannot tell work from silence");
 });
+
+test("a surfaced stall retires only the local turn latch so the composer can retry", () => {
+  const block = watchdogBlock();
+  assert.match(block, /finalizeStreaming\(\)/);
+  assert.match(block, /activeRequestId\s*=\s*null/);
+  assert.match(block, /forgetActiveTurn\(\)/);
+  assert.match(block, /applyStatus\("idle"\)/);
+});

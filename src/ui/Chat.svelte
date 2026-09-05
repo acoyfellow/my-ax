@@ -2332,6 +2332,14 @@
       });
       if (verdict.kind === "stalled") {
         turnStallSurfaced = true;
+        finalizeStreaming();
+        responseRecoveryPending = false;
+        activeRequestId = null;
+        streamingMsgId = null;
+        restoredActiveTurn = false;
+        dispatchTurn({ type: "reset" });
+        forgetActiveTurn();
+        applyStatus("idle");
         pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
       }
     }, 5_000);
