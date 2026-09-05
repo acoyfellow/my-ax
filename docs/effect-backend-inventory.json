@@ -4,16 +4,16 @@
   "summary": {
     "total": 479,
     "classifications": {
-      "static-evidence": 188,
-      "effect-program": 90,
+      "static-evidence": 192,
+      "effect-program": 85,
       "plain-typescript": 95,
       "runtime-adapter": 41,
-      "frontend-generated": 65
+      "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 389,
+      "accepted": 394,
       "migrated": 15,
-      "pending": 75
+      "pending": 70
     }
   },
   "entries": [
@@ -439,9 +439,9 @@
     },
     {
       "path": "scripts/cloudflare-workers-test-stub.cjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "scripts/deploy-remote.mjs",
@@ -559,21 +559,21 @@
     },
     {
       "path": "scripts/test-public-url.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "scripts/test-run-receipts.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "scripts/test-session-entries.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "scripts/trigger-deploy.mjs",
@@ -649,9 +649,9 @@
     },
     {
       "path": "src/artifact-runtime.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
     },
     {
       "path": "src/artifact-theme.test.ts",
