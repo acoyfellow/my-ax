@@ -5,15 +5,15 @@
     "total": 489,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 80,
+      "effect-program": 77,
       "plain-typescript": 101,
-      "runtime-adapter": 50,
+      "runtime-adapter": 53,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 409,
+      "accepted": 412,
       "migrated": 26,
-      "pending": 54
+      "pending": 51
     }
   },
   "entries": [
@@ -619,9 +619,9 @@
     },
     {
       "path": "src/agent.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "Effect workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/agentcast-tools.test.ts",
@@ -1447,9 +1447,9 @@
     },
     {
       "path": "src/notify.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "Effect workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/oauth-store.ts",
@@ -2053,9 +2053,9 @@
     },
     {
       "path": "src/tools.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "Effect workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/turn-visible-receipt.test.ts",
