@@ -14,9 +14,15 @@ import {
   usableIssueLabels,
   verifyTerrariumReceipt,
 } from "./policy";
-import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, type GithubPort, type ModelPort, type TerrariumPort } from "./orchestrate";
 import { auditGithubLayer, runAuditEffect } from "./audit-effect";
+import { runTriageEffect, triageLayer } from "./triage-effect";
 import { executeTriageWorkflow } from "./workflows";
+
+const runTriage = (
+  input: Parameters<typeof runTriageEffect>[0],
+  ports: { github: GithubPort; terrarium: TerrariumPort; model: ModelPort },
+) => Effect.runPromise(runTriageEffect(input).pipe(Effect.provide(triageLayer(ports))));
 
 function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } {
   const actions: string[] = [];
