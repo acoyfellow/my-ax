@@ -16,6 +16,7 @@ const runtimeBoundaries = new Set([
   "src/agent-stub.ts",
   "src/code-mode-runtime.worker.ts",
   "src/computer-workspace.ts",
+  "src/gateway-retry-fetch.ts",
   "src/oauth-store.ts",
   "src/user-agent.ts",
   "agents/src/hook.ts",
@@ -118,6 +119,7 @@ function classify(path, source) {
   if (pureFiles.has(path) || buildScripts.has(path)) return ["plain-typescript", "reviewed pure or build-time module"];
   if (path.startsWith("proof/")) return ["effect-program", "active live proof workflow"];
   if (path.startsWith("scripts/") && /(?:deploy|dev-access|proxy|prove|trigger|test-|recipe-)/.test(path)) return ["effect-program", "operational workflow"];
+  if (/from\s+["']effect["']/.test(source)) return ["effect-program", "Effect workflow"];
   if (sideEffectPattern.test(source) || /\basync\s+(?:function|\w+\s*\()/.test(source)) return ["effect-program", "external, concurrent, timed, or fallible workflow"];
   return ["plain-typescript", "no managed side effects detected"];
 }

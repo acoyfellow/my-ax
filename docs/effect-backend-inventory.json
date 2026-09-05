@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 459,
+    "total": 460,
     "classifications": {
       "static-evidence": 182,
-      "plain-typescript": 93,
-      "runtime-adapter": 33,
-      "effect-program": 86,
+      "plain-typescript": 92,
+      "runtime-adapter": 34,
+      "effect-program": 87,
       "frontend-generated": 65
     },
     "statuses": {
       "accepted": 373,
       "pending": 85,
-      "migrated": 1
+      "migrated": 2
     }
   },
   "entries": [
@@ -1135,9 +1135,15 @@
     },
     {
       "path": "src/gateway-retry-fetch.ts",
-      "classification": "plain-typescript",
+      "classification": "runtime-adapter",
       "status": "accepted",
-      "reason": "no managed side effects detected"
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/gateway-retry.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
     },
     {
       "path": "src/grant-crypto.test.ts",
@@ -1251,7 +1257,7 @@
       "path": "src/mcp-probe.ts",
       "classification": "effect-program",
       "status": "migrated",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "reason": "Effect workflow"
     },
     {
       "path": "src/memory-block.test.ts",
@@ -1317,7 +1323,7 @@
       "path": "src/notify.ts",
       "classification": "effect-program",
       "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "reason": "Effect workflow"
     },
     {
       "path": "src/oauth-store.ts",
