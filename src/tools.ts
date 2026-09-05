@@ -1,4 +1,5 @@
 import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
+import { Effect } from "effect";
 import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
 import { createDecision } from "./routes/decisions";
@@ -10,7 +11,8 @@ import { createMachineWorkProvider } from "./routes/machinectl";
 import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { limitModelToolOutput } from "./tool-output-limit";
-import { getConversationStarters, setConversationStarters } from "./conversation-starters";
+import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
+import { databaseLayer } from "./effect/database";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
 import { createCmuxObserveTool, type CmuxReader } from "./cmux-observer";
 
@@ -316,10 +318,14 @@ export const TOOLS: ToolDef[] = [
     execute: async (args, ctx) => {
       const email = ctx.identity.email;
       if (args.action === "set") {
-        const starters = await setConversationStarters(ctx.env, email, args.starters);
+        const starters = await Effect.runPromise(
+          setConversationStarters(email, args.starters).pipe(Effect.provide(databaseLayer(ctx.env.DB))),
+        );
         return JSON.stringify({ ok: true, action: "set", starters });
       }
-      const starters = await getConversationStarters(ctx.env, email);
+      const starters = await Effect.runPromise(
+        getConversationStarters(email).pipe(Effect.provide(databaseLayer(ctx.env.DB))),
+      );
       return JSON.stringify({ ok: true, action: "list", starters });
     },
   },

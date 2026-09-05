@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 462,
+    "total": 464,
     "classifications": {
       "static-evidence": 182,
-      "plain-typescript": 92,
+      "plain-typescript": 93,
       "runtime-adapter": 36,
-      "effect-program": 87,
+      "effect-program": 88,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 375,
-      "pending": 83,
-      "migrated": 4
+      "accepted": 376,
+      "pending": 82,
+      "migrated": 6
     }
   },
   "entries": [
@@ -882,6 +882,12 @@
       "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
+      "path": "src/conversation-starters-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/conversation-starters.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -889,9 +895,9 @@
     },
     {
       "path": "src/conversation-starters.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/cycle-costs.test.ts",
@@ -1078,6 +1084,12 @@
       "classification": "effect-program",
       "status": "pending",
       "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/effect/database.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
     },
     {
       "path": "src/error-issue.test.ts",
@@ -1911,7 +1923,7 @@
       "path": "src/tools.ts",
       "classification": "effect-program",
       "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "reason": "Effect workflow"
     },
     {
       "path": "src/turn-visible-receipt.test.ts",
