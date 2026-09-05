@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 460,
+    "total": 461,
     "classifications": {
       "static-evidence": 182,
       "plain-typescript": 92,
-      "runtime-adapter": 34,
+      "runtime-adapter": 35,
       "effect-program": 87,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 373,
-      "pending": 85,
-      "migrated": 2
+      "accepted": 374,
+      "pending": 84,
+      "migrated": 3
     }
   },
   "entries": [
@@ -2670,6 +2670,12 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/web-search-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/web-search.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2677,9 +2683,9 @@
     },
     {
       "path": "src/web-search.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/work-code-call-collector.test.ts",
