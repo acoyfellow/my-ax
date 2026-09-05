@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 481,
+    "total": 482,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 84,
-      "plain-typescript": 96,
+      "plain-typescript": 97,
       "runtime-adapter": 43,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 397,
-      "migrated": 17,
-      "pending": 67
+      "accepted": 398,
+      "migrated": 18,
+      "pending": 66
     }
   },
   "entries": [
@@ -2844,6 +2844,12 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/workspace-mcp-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/workspace-mcp.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2851,9 +2857,9 @@
     },
     {
       "path": "src/workspace-mcp.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/workspace-path.ts",

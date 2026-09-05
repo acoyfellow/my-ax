@@ -1,6 +1,3 @@
-import { readBoundedWorkspaceFile } from "./workspace-read";
-import { assertSeedablePath } from "./workspace-path";
-
 const WORKSPACE_HOME = "/home/user";
 
 export const WORKSPACE_ALIAS_ROOT = "/workspace";
@@ -37,70 +34,12 @@ export function publicWorkspacePath(abs: string): string {
   return abs;
 }
 
-export async function listWorkspace(sandbox: WorkspaceExec, path?: string, limit = 80): Promise<{ path: string; entries: WorkspaceListEntry[]; truncated: boolean }> {
-  const abs = resolveWorkspacePath(path);
-  const cap = Math.max(1, Math.min(Number(limit) || 80, WORKSPACE_LIST_MAX_ENTRIES));
-  const result = await sandbox.exec(
-    `find ${shellQuote(abs)} -mindepth 1 -maxdepth 2 \\( -type d -printf 'd %p\\n' -o -type f -printf 'f %p\\n' \\) 2>/dev/null | head -n ${cap + 1}`,
-    { cwd: WORKSPACE_HOME, timeout: 15_000 },
-  );
-  if (result.exitCode !== 0 && !(result.stdout ?? "").trim()) {
-    throw new Error(result.stderr?.trim() || "workspace list failed");
-  }
-  const lines = (result.stdout ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
-  const truncated = lines.length > cap;
-  const entries: WorkspaceListEntry[] = lines.slice(0, cap).map((line) => {
-    const kind = line.startsWith("d ") ? "dir" : "file";
-    const absPath = line.startsWith("d ") || line.startsWith("f ") ? line.slice(2) : line;
-    const name = absPath.slice(absPath.lastIndexOf("/") + 1);
-    return { path: publicWorkspacePath(absPath), name, kind };
-  });
-  return { path: publicWorkspacePath(abs), entries, truncated };
-}
-
 export const WORKSPACE_WRITE_MAX_BYTES = 32_000;
 
 export type WorkspaceWriteExec = WorkspaceExec & {
   writeFile?: (path: string, content: string) => Promise<unknown>;
 };
 
-export async function writeWorkspace(
-  sandbox: WorkspaceWriteExec,
-  path: string,
-  content: string,
-): Promise<{ path: string; bytesWritten: number }> {
-  if (typeof content !== "string") throw new Error("content is required");
-  if (content.length > WORKSPACE_WRITE_MAX_BYTES) {
-    throw new Error(`content exceeds ${WORKSPACE_WRITE_MAX_BYTES} bytes`);
-  }
-  const abs = resolveWorkspacePath(path);
-  if (abs === WORKSPACE_HOME) throw new Error("write requires a file path");
-  assertSeedablePath(abs);
-  const parent = abs.slice(0, abs.lastIndexOf("/")) || WORKSPACE_HOME;
-  if (typeof sandbox.writeFile === "function") {
-    const mkdir = await sandbox.exec(`mkdir -p ${shellQuote(parent)}`, { cwd: WORKSPACE_HOME, timeout: 15_000 });
-    if (mkdir.exitCode !== 0) throw new Error(mkdir.stderr?.trim() || "workspace mkdir failed");
-    await sandbox.writeFile(abs, content);
-    return { path: publicWorkspacePath(abs), bytesWritten: content.length };
-  }
-  const result = await sandbox.exec(
-    `mkdir -p ${shellQuote(parent)} && printf '%s' ${shellQuote(content)} > ${shellQuote(abs)}`,
-    { cwd: WORKSPACE_HOME, timeout: 15_000 },
-  );
-  if (result.exitCode !== 0) throw new Error(result.stderr?.trim() || "workspace write failed");
-  return { path: publicWorkspacePath(abs), bytesWritten: content.length };
-}
-
-export async function readWorkspace(sandbox: WorkspaceExec, path: string, maxBytes = 8_000): Promise<{ path: string; content: string; truncated: boolean }> {
-  const abs = resolveWorkspacePath(path);
-  if (abs === WORKSPACE_HOME) throw new Error("read requires a file path");
-  const cap = Math.max(1, Math.min(Number(maxBytes) || 8_000, WORKSPACE_READ_MAX_BYTES));
-  const content = await readBoundedWorkspaceFile(sandbox, abs, cap + 1);
-  if (content === null) throw new Error("file not found or not readable");
-  const truncated = content.length > cap;
-  return { path: publicWorkspacePath(abs), content: truncated ? content.slice(0, cap) : content, truncated };
-}
-
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\"'\"'")}'`;
 }
