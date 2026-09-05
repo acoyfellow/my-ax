@@ -6,7 +6,6 @@ import {
   type IssueInput,
   type PullInput,
   type TerrariumReceipt,
-  auditPull,
   acceptVisualProof,
   classifyIssue,
   requireTaskProof,
@@ -219,12 +218,6 @@ async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board
   if (!github.listComments) return false;
   const comments = await github.listComments(issueNumber);
   return comments.some((body) => body.trim() === board.trim());
-}
-
-export async function runAudit(input: PullInput, ports: { github: GithubPort; promptDigest: string }): Promise<AuditReceipt> {
-  const receipt = auditPull(input, ports.promptDigest);
-  await ports.github.comment(input.number ?? 0, formatAuditComment(receipt));
-  return receipt;
 }
 
 export function formatReadyPrTitle(input: IssueInput): string {

@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import {
   DEFAULT_AGENTS_MODEL,
   type IssueInput,
@@ -5,8 +6,9 @@ import {
   requireGateway,
   resolveAgentsModel,
 } from "./policy";
-import { runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
 import { runReview } from "./review";
+import { auditGithubLayer, runAuditEffect } from "./audit-effect";
 
 export interface AgentsEnv {
   AGENTS_MODEL?: string;
@@ -49,7 +51,9 @@ export async function executeAuditWorkflow(
 ) {
   requireGateway(env);
   resolveAgentsModel(env);
-  return runAudit(input, ports);
+  return Effect.runPromise(
+    runAuditEffect(input, ports.promptDigest).pipe(Effect.provide(auditGithubLayer(ports.github))),
+  );
 }
 
 export async function executeReviewWorkflow(
