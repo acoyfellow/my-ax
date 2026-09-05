@@ -5,15 +5,15 @@
     "total": 488,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 83,
+      "effect-program": 82,
       "plain-typescript": 100,
-      "runtime-adapter": 47,
+      "runtime-adapter": 48,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 405,
+      "accepted": 406,
       "migrated": 25,
-      "pending": 58
+      "pending": 57
     }
   },
   "entries": [
@@ -739,9 +739,9 @@
     },
     {
       "path": "src/auth.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/auto-trust.test.ts",

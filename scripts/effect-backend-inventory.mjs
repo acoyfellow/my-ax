@@ -25,6 +25,7 @@ const frontendGeneratedFiles = new Set([
 const runtimeBoundaries = new Set([
   "src/index.tsx",
   "src/agent-stub.ts",
+  "src/auth.ts",
   "src/code-mode-runtime.worker.ts",
   "src/computer-workspace.ts",
   "src/code-mode-runtime.ts",
