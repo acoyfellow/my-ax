@@ -34,6 +34,7 @@ const runtimeBoundaries = new Set([
   "src/think-workspace.ts",
   "src/user-agent.ts",
   "src/web-search.ts",
+  "src/workspace-read.ts",
   "agents/src/hook.ts",
   "agents/src/ports.ts",
   "agents/src/worker.ts",
