@@ -1,7 +1,10 @@
 import { getSandbox, type DirectoryBackup, type Sandbox } from "@cloudflare/sandbox";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
-import { publishWorkspaceSnapshot, verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
+import { Effect } from "effect";
+import { databaseLayer } from "./effect/database";
+import { publishWorkspaceSnapshot } from "./workspace-snapshot-program";
+import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
 export { WORKSPACE_HOME, assertSeedablePath };
@@ -94,7 +97,9 @@ export async function snapshotUserWorkspace(env: Env, identity: AccessIdentity, 
     compression: { format: "zstd" },
     multipart: true,
   });
-  await publishWorkspaceSnapshot(env.DB, key(identity), backup);
+  await Effect.runPromise(
+    publishWorkspaceSnapshot(key(identity), backup).pipe(Effect.provide(databaseLayer(env.DB))),
+  );
   return backup;
 }
 
