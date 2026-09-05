@@ -12,8 +12,8 @@
     },
     "statuses": {
       "accepted": 379,
-      "migrated": 9,
-      "pending": 81
+      "migrated": 10,
+      "pending": 80
     }
   },
   "entries": [
@@ -182,7 +182,7 @@
     {
       "path": "agents/src/workflows.ts",
       "classification": "effect-program",
-      "status": "pending",
+      "status": "migrated",
       "reason": "Effect workflow"
     },
     {

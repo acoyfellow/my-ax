@@ -17,8 +17,9 @@ import {
 import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, type GithubPort, type ModelPort, type TerrariumPort } from "./orchestrate";
 import { auditGithubLayer, runAuditEffect } from "./audit-effect";
 import { runTriageEffect, triageLayer } from "./triage-effect";
-import { executeTriageWorkflow } from "./workflows";
+import { executeTriageWorkflow as executeTriageWorkflowEffect } from "./workflows";
 
+const executeTriageWorkflow = (...args: Parameters<typeof executeTriageWorkflowEffect>) => Effect.runPromise(executeTriageWorkflowEffect(...args));
 const runTriage = (
   input: Parameters<typeof runTriageEffect>[0],
   ports: { github: GithubPort; terrarium: TerrariumPort; model: ModelPort },
