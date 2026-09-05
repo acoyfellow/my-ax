@@ -2,16 +2,16 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 471,
+    "total": 472,
     "classifications": {
       "static-evidence": 185,
       "effect-program": 89,
-      "plain-typescript": 94,
+      "plain-typescript": 95,
       "runtime-adapter": 38,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 382,
+      "accepted": 383,
       "migrated": 11,
       "pending": 78
     }
@@ -544,6 +544,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "scripts/verify-effect-architecture.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "scripts/verify-legacy-surface.mjs",
