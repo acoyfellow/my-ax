@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 464,
+    "total": 466,
     "classifications": {
-      "static-evidence": 182,
+      "static-evidence": 183,
+      "effect-program": 89,
       "plain-typescript": 93,
       "runtime-adapter": 36,
-      "effect-program": 88,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 376,
-      "pending": 82,
-      "migrated": 6
+      "accepted": 377,
+      "migrated": 7,
+      "pending": 82
     }
   },
   "entries": [
@@ -28,6 +28,18 @@
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "documentation, configuration, or receipt"
+    },
+    {
+      "path": "agents/src/audit-effect.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "agents/src/audit-effect.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
     },
     {
       "path": "agents/src/docs-drift.test.ts",
@@ -153,7 +165,7 @@
       "path": "agents/src/workflows.ts",
       "classification": "effect-program",
       "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "reason": "Effect workflow"
     },
     {
       "path": "proof/2026-06-29-recipe-learning-curve-gateway-pending.json",

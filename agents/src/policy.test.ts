@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Effect } from "effect";
 import {
   DEFAULT_AGENTS_MODEL,
   acceptVisualProof,
@@ -13,7 +14,8 @@ import {
   usableIssueLabels,
   verifyTerrariumReceipt,
 } from "./policy";
-import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { PROOF_COMMAND, formatLoopBoard, formatReadyPrBody, formatReadyPrTitle, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { auditGithubLayer, runAuditEffect } from "./audit-effect";
 import { executeTriageWorkflow } from "./workflows";
 
 function memoryGithub(): GithubPort & { actions: string[]; comments: string[] } {
@@ -230,9 +232,11 @@ test("auditPull treats empty files and unknown behindMain as unknown, not clean"
 
 test("audit never approves or merges", async () => {
   const github = memoryGithub();
-  const receipt = await runAudit(
-    { title: "feat(push)", body: "ok", author: "maintainer", draft: false, headSha: "abc", files: ["src/notify.ts"], behindMain: 0 },
-    { github, promptDigest: "digest-1" },
+  const receipt = await Effect.runPromise(
+    runAuditEffect(
+      { title: "feat(push)", body: "ok", author: "maintainer", draft: false, headSha: "abc", files: ["src/notify.ts"], behindMain: 0 },
+      "digest-1",
+    ).pipe(Effect.provide(auditGithubLayer(github))),
   );
   assert.equal(receipt.neverApprove, true);
   assert.equal(receipt.neverMerge, true);
