@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 479,
+    "total": 481,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 85,
-      "plain-typescript": 95,
+      "effect-program": 86,
+      "plain-typescript": 96,
       "runtime-adapter": 41,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 394,
-      "migrated": 15,
-      "pending": 70
+      "accepted": 395,
+      "migrated": 17,
+      "pending": 69
     }
   },
   "entries": [
@@ -621,7 +621,7 @@
       "path": "src/agent.ts",
       "classification": "effect-program",
       "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "reason": "Effect workflow"
     },
     {
       "path": "src/agentcast-tools.test.ts",
@@ -990,6 +990,12 @@
       "reason": "no managed side effects detected"
     },
     {
+      "path": "src/cycle-costs-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/cycle-costs.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -997,9 +1003,9 @@
     },
     {
       "path": "src/cycle-costs.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/dead-session-detector.ts",
@@ -1177,6 +1183,12 @@
     },
     {
       "path": "src/effect/database.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
+      "path": "src/effect/id-generator.ts",
       "classification": "effect-program",
       "status": "migrated",
       "reason": "Effect workflow"
