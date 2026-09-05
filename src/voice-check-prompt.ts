@@ -1,4 +1,6 @@
+import { Effect } from "effect";
 import type { Env } from "./types";
+import { checkVoicePromptEffect } from "./voice-check-prompt-program";
 
 export const VOICE_PROMPT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";
 export const VOICE_PROMPT_GUARD_TIMEOUT_MS = 10_000;
@@ -66,25 +68,10 @@ function responseText(response: unknown): string {
   return value;
 }
 
-export async function checkVoicePrompt(
+export function checkVoicePrompt(
   env: Pick<Env, "AI">,
   text: string,
   runner: VoicePromptAIRunner = env.AI,
 ): Promise<VoicePromptCheck> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("LlamaGuard timeout")), VOICE_PROMPT_GUARD_TIMEOUT_MS);
-  });
-
-  try {
-    const response = await Promise.race([
-      runner.run(VOICE_PROMPT_GUARD_MODEL, {
-        messages: [{ role: "user", content: text }],
-      }),
-      timeout,
-    ]);
-    return parseVoicePromptGuardOutput(responseText(response));
-  } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
-  }
+  return Effect.runPromise(checkVoicePromptEffect(text, runner));
 }

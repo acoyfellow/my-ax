@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 486,
+    "total": 487,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 83,
       "plain-typescript": 100,
-      "runtime-adapter": 45,
+      "runtime-adapter": 46,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 403,
-      "migrated": 23,
-      "pending": 60
+      "accepted": 404,
+      "migrated": 24,
+      "pending": 59
     }
   },
   "entries": [
@@ -2742,6 +2742,12 @@
       "reason": "no managed side effects detected"
     },
     {
+      "path": "src/voice-check-prompt-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/voice-check-prompt.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2749,9 +2755,9 @@
     },
     {
       "path": "src/voice-check-prompt.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/voice-docs-tool.test.ts",
