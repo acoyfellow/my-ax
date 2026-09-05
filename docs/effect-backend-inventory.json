@@ -2,17 +2,17 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 468,
+    "total": 469,
     "classifications": {
       "static-evidence": 184,
-      "effect-program": 89,
+      "effect-program": 90,
       "plain-typescript": 94,
       "runtime-adapter": 36,
       "frontend-generated": 65
     },
     "statuses": {
       "accepted": 379,
-      "migrated": 8,
+      "migrated": 9,
       "pending": 81
     }
   },
@@ -120,6 +120,12 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "agents/src/review-effect.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "agents/src/review.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -129,7 +135,7 @@
       "path": "agents/src/review.ts",
       "classification": "plain-typescript",
       "status": "accepted",
-      "reason": "reviewed pure or build-time module"
+      "reason": "no managed side effects detected"
     },
     {
       "path": "agents/src/sweep.test.ts",

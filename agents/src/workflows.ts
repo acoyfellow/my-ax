@@ -7,8 +7,8 @@ import {
   resolveAgentsModel,
 } from "./policy";
 import { type GithubPort, type TerrariumPort } from "./orchestrate";
-import { runReview } from "./review";
 import { auditGithubLayer, runAuditEffect } from "./audit-effect";
+import { reviewGithubLayer, runReviewEffect } from "./review-effect";
 import { runTriageEffect, triageLayer } from "./triage-effect";
 
 export interface AgentsEnv {
@@ -65,7 +65,9 @@ export async function executeReviewWorkflow(
   ports: { github: GithubPort },
 ) {
   requireGateway(env);
-  return runReview(input, ports);
+  return Effect.runPromise(
+    runReviewEffect(input).pipe(Effect.provide(reviewGithubLayer(ports.github))),
+  );
 }
 
 export async function executeDigWorkflow(

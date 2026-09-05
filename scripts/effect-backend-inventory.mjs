@@ -31,7 +31,6 @@ const pureFiles = new Set([
   "agents/src/policy.ts",
   "agents/src/preview-check.ts",
   "agents/src/public-text.ts",
-  "agents/src/review.ts",
   "agents/src/sweep.ts",
   "src/app-env.ts",
   "src/artifact-theme.ts",
