@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 461,
+    "total": 462,
     "classifications": {
       "static-evidence": 182,
       "plain-typescript": 92,
-      "runtime-adapter": 35,
+      "runtime-adapter": 36,
       "effect-program": 87,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 374,
-      "pending": 84,
-      "migrated": 3
+      "accepted": 375,
+      "pending": 83,
+      "migrated": 4
     }
   },
   "entries": [
@@ -907,9 +907,15 @@
     },
     {
       "path": "src/dead-session-detector.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/dead-session-program.ts",
       "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "status": "migrated",
+      "reason": "Effect workflow"
     },
     {
       "path": "src/dead-session-scan.test.ts",
@@ -925,9 +931,9 @@
     },
     {
       "path": "src/dead-session.ts",
-      "classification": "plain-typescript",
+      "classification": "runtime-adapter",
       "status": "accepted",
-      "reason": "reviewed pure or build-time module"
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/decision-response.test.ts",
