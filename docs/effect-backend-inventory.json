@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 487,
+    "total": 488,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 83,
       "plain-typescript": 100,
-      "runtime-adapter": 46,
+      "runtime-adapter": 47,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 404,
-      "migrated": 24,
-      "pending": 59
+      "accepted": 405,
+      "migrated": 25,
+      "pending": 58
     }
   },
   "entries": [
@@ -1830,10 +1830,16 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
-      "path": "src/run-receipts.ts",
+      "path": "src/run-receipts-program.ts",
       "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
+      "path": "src/run-receipts.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/saved-recipe-execution-budget.test.ts",
