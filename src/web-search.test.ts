@@ -1,5 +1,6 @@
+import assert from "node:assert/strict";
+import test from "node:test";
 import { Effect } from "effect";
-import { expect, test } from "vitest";
 import { createPublicWebSearchTool, performWebSearch } from "./web-search";
 
 const runSearch = (...args: Parameters<typeof performWebSearch>) => Effect.runPromise(performWebSearch(...args));
@@ -20,8 +21,8 @@ test("normalizes Cloudflare Web Search results and sends only the query upstream
     },
   });
 
-  expect(requests).toEqual(["Cloudflare Workers"]);
-  expect(result).toEqual({
+  assert.deepEqual(requests, ["Cloudflare Workers"]);
+  assert.deepEqual(result, {
     results: [{
       title: "Cloudflare Workers",
       url: "https://developers.cloudflare.com/workers/",
@@ -43,13 +44,13 @@ test("caps public web results and marks the response truncated", async () => {
     }),
   });
 
-  expect(result.results).toHaveLength(3);
-  expect(result.results.map((item) => item.url)).toEqual([
+  assert.equal(result.results.length, 3);
+  assert.deepEqual(result.results.map((item) => item.url), [
     "https://example.com/1",
     "https://example.com/2",
     "https://example.com/3",
   ]);
-  expect(result.truncated).toBe(true);
+  assert.equal(result.truncated, true);
 });
 
 test("drops result URLs that are not absolute http or https citations", async () => {
@@ -64,7 +65,7 @@ test("drops result URLs that are not absolute http or https citations", async ()
     }),
   });
 
-  expect(result).toEqual({
+  assert.deepEqual(result, {
     results: [{ title: "Citation", url: "http://example.com/article", snippet: "A citation" }],
     truncated: false,
   });
@@ -79,11 +80,11 @@ test("returns safe errors without exposing upstream credentials", async () => {
   });
   const unavailable = await runSearch("missing", {});
   const tool = createPublicWebSearchTool();
-  const toolResult = await tool.execute({ query: "missing binding" }, { env: {} } as any);
+  const toolResult = await tool.execute({ query: "missing binding" }, { env: {} } as never);
 
-  expect(failed).toEqual({ results: [], truncated: false, error: "web_search_failed" });
-  expect(unavailable).toEqual({ results: [], truncated: false, error: "web_search_unavailable" });
-  expect(toolResult).toBe(JSON.stringify(unavailable));
-  expect(JSON.stringify({ failed, unavailable, toolResult })).not.toContain(secret);
-  expect(JSON.stringify({ failed, unavailable, toolResult })).not.toContain("Authorization");
+  assert.deepEqual(failed, { results: [], truncated: false, error: "web_search_failed" });
+  assert.deepEqual(unavailable, { results: [], truncated: false, error: "web_search_unavailable" });
+  assert.equal(toolResult, JSON.stringify(unavailable));
+  assert.doesNotMatch(JSON.stringify({ failed, unavailable, toolResult }), new RegExp(secret));
+  assert.doesNotMatch(JSON.stringify({ failed, unavailable, toolResult }), /Authorization/);
 });
