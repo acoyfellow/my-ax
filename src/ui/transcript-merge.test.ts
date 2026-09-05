@@ -227,3 +227,13 @@ test("boundToSession drops rows from another conversation", () => {
   ];
   assert.deepEqual(boundToSession(mixed, "oracle").map((m) => m.id), ["a", "c"]);
 });
+
+test("helpers accept transcript rows with optional roles and preserve inferred fields", () => {
+  const rows: Array<{ id: string; role?: string; sessionId?: string; content?: string }> = [
+    { id: "one", role: "user", sessionId: "oracle", content: "hello" },
+    { id: "two", sessionId: "other" },
+  ];
+  const scoped = boundToSession(rows, "oracle");
+  assert.deepEqual(scoped.map((row) => row.id), ["one"]);
+  assert.deepEqual(dropHomelessThinkTurns(scoped, scoped).map((row) => row.id), ["one"]);
+});
