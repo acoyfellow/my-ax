@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { publicWorkspacePath, resolveWorkspacePath, listWorkspace, readWorkspace, writeWorkspace } from "./workspace-mcp";
+import { Effect } from "effect";
+import { publicWorkspacePath, resolveWorkspacePath, type WorkspaceWriteExec } from "./workspace-mcp";
+import {
+  listWorkspace as listWorkspaceEffect,
+  readWorkspace as readWorkspaceEffect,
+  workspaceSandboxLayer,
+  writeWorkspace as writeWorkspaceEffect,
+} from "./workspace-mcp-program";
+
+const listWorkspace = (sandbox: WorkspaceWriteExec, path?: string, limit?: number) => Effect.runPromise(
+  listWorkspaceEffect(path, limit).pipe(Effect.provide(workspaceSandboxLayer(sandbox))),
+);
+const readWorkspace = (sandbox: WorkspaceWriteExec, path: string, maxBytes?: number) => Effect.runPromise(
+  readWorkspaceEffect(path, maxBytes).pipe(Effect.provide(workspaceSandboxLayer(sandbox))),
+);
+const writeWorkspace = (sandbox: WorkspaceWriteExec, path: string, content: string) => Effect.runPromise(
+  writeWorkspaceEffect(path, content).pipe(Effect.provide(workspaceSandboxLayer(sandbox))),
+);
 
 test("resolveWorkspacePath aliases /workspace to /home/user", () => {
   assert.equal(resolveWorkspacePath("/workspace"), "/home/user");
