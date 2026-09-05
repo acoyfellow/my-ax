@@ -47,7 +47,7 @@ export function visibleAssistantContent(input: { status: string; content: string
 }
 
 export function visibleCompletionNotificationBody(content: string): string {
-  return content.trim() || "The agent turn completed without a visible response.";
+  return stripReasoningArtifacts(content) || "The agent turn completed without a visible response.";
 }
 
 export function shouldSendCompletionNotification(input: { status: string; hasVisibleChat: boolean; ownerNotified: boolean; automaticRecovery?: boolean; recurringJobRun?: boolean }): boolean {

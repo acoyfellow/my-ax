@@ -82,3 +82,10 @@ test("an error status with a blank/null error still yields a visible fallback", 
     "The agent turn failed without a visible error message.",
   );
 });
+
+test("completion notifications turn hidden-only content into a visible fallback", () => {
+  assert.equal(
+    visibleCompletionNotificationBody("<think>I need to inspect the result before replying</think>"),
+    "The agent turn completed without a visible response.",
+  );
+});
