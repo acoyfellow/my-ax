@@ -5,15 +5,15 @@
     "total": 489,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 47,
+      "effect-program": 30,
       "plain-typescript": 97,
-      "runtime-adapter": 87,
+      "runtime-adapter": 104,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 442,
+      "accepted": 459,
       "migrated": 26,
-      "pending": 21
+      "pending": 4
     }
   },
   "entries": [
@@ -631,9 +631,9 @@
     },
     {
       "path": "src/agentcast-tools.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/app-env.ts",
@@ -673,9 +673,9 @@
     },
     {
       "path": "src/artifacts.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/assistant-backfill.test.ts",
@@ -727,9 +727,9 @@
     },
     {
       "path": "src/audio-messages.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/auth.test.ts",
@@ -775,15 +775,15 @@
     },
     {
       "path": "src/bridge.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/browser-tools.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/capability-intersect.test.ts",
@@ -841,9 +841,9 @@
     },
     {
       "path": "src/cm-snippets.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/cmux-observer.test.ts",
@@ -853,9 +853,9 @@
     },
     {
       "path": "src/cmux-observer.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/code-diff-read.ts",
@@ -907,9 +907,9 @@
     },
     {
       "path": "src/computer-filesystem.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/computer-owner.ts",
@@ -967,9 +967,9 @@
     },
     {
       "path": "src/conversation-log.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/conversation-starters-program.ts",
@@ -1333,9 +1333,9 @@
     },
     {
       "path": "src/machinectl-host.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/machinectl-output.test.ts",
@@ -1507,9 +1507,9 @@
     },
     {
       "path": "src/pantry-sync.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/preview-isolation.test.ts",
@@ -1537,9 +1537,9 @@
     },
     {
       "path": "src/push.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/recipe-approval-policy.test.ts",
@@ -1861,9 +1861,9 @@
     },
     {
       "path": "src/saved-recipes.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/sequence-integrity.test.ts",
@@ -2005,9 +2005,9 @@
     },
     {
       "path": "src/terrarium-tools.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/think-workspace.ts",
@@ -2677,9 +2677,9 @@
     },
     {
       "path": "src/uploads.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/upstream-rate-limit.test.ts",
@@ -2815,9 +2815,9 @@
     },
     {
       "path": "src/voice-think-agent.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/voice-think-config.ts",
@@ -2869,9 +2869,9 @@
     },
     {
       "path": "src/work-tools.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/workspace-durability.test.ts",
