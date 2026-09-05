@@ -1,9 +1,7 @@
 import { Effect } from "effect";
 import WebSocket from "ws";
-import {
-  runTerminalGhProbe,
-  terminalSocketLayer,
-} from "./terminal-gh-probe-program.mjs";
+import { runTerminalGhProbe } from "./terminal-gh-probe-program.mjs";
+import { terminalSocketLayer } from "./terminal-socket.mjs";
 
 const host = process.env.MYAX_HOST;
 const token = process.env.MYAX_TOKEN;
