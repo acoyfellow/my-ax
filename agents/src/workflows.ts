@@ -8,7 +8,6 @@ import {
 } from "./policy";
 import { type GithubPort, type TerrariumPort } from "./orchestrate";
 import { auditGithubLayer, runAuditEffect } from "./audit-effect";
-import { reviewGithubLayer, runReviewEffect } from "./review-effect";
 import { runTriageEffect, triageLayer } from "./triage-effect";
 
 export interface AgentsEnv {
@@ -35,47 +34,37 @@ export function workflowBindings(): typeof WORKFLOW_NAMES {
   return WORKFLOW_NAMES;
 }
 
-export async function executeTriageWorkflow(
+export function executeTriageWorkflow(
   env: AgentsEnv,
   input: IssueInput,
   ports: { github: GithubPort; terrarium: TerrariumPort },
 ) {
-  requireGateway(env);
-  const modelId = resolveAgentsModel(env);
-  return Effect.runPromise(
-    runTriageEffect(input).pipe(Effect.provide(triageLayer({ ...ports, model: { modelId } }))),
+  return Effect.sync(() => {
+    requireGateway(env);
+    return resolveAgentsModel(env);
+  }).pipe(
+    Effect.flatMap((modelId) => runTriageEffect(input).pipe(Effect.provide(triageLayer({ ...ports, model: { modelId } })))),
   );
 }
 
-export async function executeAuditWorkflow(
+export function executeAuditWorkflow(
   env: AgentsEnv,
   input: PullInput,
   ports: { github: GithubPort; promptDigest: string },
 ) {
-  requireGateway(env);
-  resolveAgentsModel(env);
-  return Effect.runPromise(
-    runAuditEffect(input, ports.promptDigest).pipe(Effect.provide(auditGithubLayer(ports.github))),
+  return Effect.sync(() => {
+    requireGateway(env);
+    resolveAgentsModel(env);
+  }).pipe(
+    Effect.flatMap(() => runAuditEffect(input, ports.promptDigest).pipe(Effect.provide(auditGithubLayer(ports.github)))),
   );
 }
 
-export async function executeReviewWorkflow(
-  env: AgentsEnv,
-  input: PullInput & { head?: string; proofExit?: number; proofLog?: string },
-  ports: { github: GithubPort },
-) {
-  requireGateway(env);
-  return Effect.runPromise(
-    runReviewEffect(input).pipe(Effect.provide(reviewGithubLayer(ports.github))),
-  );
-}
-
-export async function executeDigWorkflow(
+export function executeDigWorkflow(
   env: AgentsEnv,
   input: IssueInput,
   ports: { github: GithubPort; terrarium: TerrariumPort },
 ) {
-  requireGateway(env);
   return executeTriageWorkflow(env, { ...input, body: `${input.body}\n\nneeds a cell / terrarium` }, ports);
 }
 
