@@ -10,7 +10,9 @@ import { isSandboxMutationWorkCodeCall } from "./workspace-snapshot-classificati
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
-import { reusableToolApprovalMode as resolveReusableToolApprovalMode } from "./reusable-tool-preferences";
+import { Effect } from "effect";
+import { databaseLayer } from "./effect/database";
+import { reusableToolApprovalMode } from "./reusable-tool-preferences-program";
 import { coerceToolArguments } from "./tool-arguments";
 
 const WORKSPACE_METHODS = [
@@ -318,7 +320,9 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     inferredCapabilities,
     suggestedRecipe,
   });
-  const reusableToolApprovalMode = await resolveReusableToolApprovalMode(ctx.env, ctx.identity.email);
+  const reusableToolApprovalModeValue = await Effect.runPromise(
+    reusableToolApprovalMode(ctx.identity.email, "review").pipe(Effect.provide(databaseLayer(ctx.env.DB))),
+  );
   return {
     ok: !execution.error,
     result: serializedResult,
@@ -334,7 +338,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     portable,
     suggestedRecipe,
     reusableToolCandidate,
-    reusableToolApprovalMode,
+    reusableToolApprovalMode: reusableToolApprovalModeValue,
   };
 }
 

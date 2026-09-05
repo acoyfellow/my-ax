@@ -5,15 +5,14 @@
     "total": 489,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 30,
+      "effect-program": 26,
       "plain-typescript": 97,
-      "runtime-adapter": 104,
+      "runtime-adapter": 108,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 459,
-      "migrated": 26,
-      "pending": 4
+      "accepted": 463,
+      "migrated": 26
     }
   },
   "entries": [
@@ -1207,9 +1206,9 @@
     },
     {
       "path": "src/error-issue.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/error-meta.test.ts",
@@ -1297,9 +1296,9 @@
     },
     {
       "path": "src/job-service.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/job-state-transition.test.ts",
@@ -1315,9 +1314,9 @@
     },
     {
       "path": "src/jobs.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/llm.test.ts",
@@ -1603,9 +1602,9 @@
     },
     {
       "path": "src/recurring-job-run.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/recurring-job-semantics.test.ts",
