@@ -2,6 +2,7 @@ import { Think } from "@cloudflare/think";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
+import { Effect } from "effect";
 import { createCompactFunction } from "agents/experimental/memory/utils";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
@@ -19,7 +20,8 @@ import { notifyOwner } from "./notify";
 import { completeRecurringJobRun, recurringJobClientMessage, recurringJobIdFromClientMessageId } from "./recurring-job-run";
 import { claimRecurringJobRun, computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
 import { deriveSessionTitle } from "./session-title";
-import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
+import type { CycleCostUsage } from "./cycle-costs";
+import { cycleCostLayer, nextCycleIndex, recordCycleCost } from "./cycle-costs-program";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { shouldSendCompletionNotification, visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
 import { createMyAxBrowserTools } from "./browser-tools";
@@ -1263,16 +1265,21 @@ export class MyAgent extends Think<Env> {
           basis: "ai_sdk_step_usage",
         }
       : { inputTokens: null, outputTokens: null, totalTokens: null, basis: "unavailable" };
-    await recordCycleCost(this.env, {
-      ownerEmail: identity.email,
-      sessionOrRunId: this.name,
-      cycleIndex: await nextCycleIndex(this.env, identity.email, this.name),
-      model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env),
-      finishReason: steps.at(-1)?.finishReason ?? result.status,
-      usage,
-      recipesUsed,
-      recipesSaved,
-    });
+    const sessionOrRunId = this.name;
+    const model = this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env);
+    await Effect.runPromise(Effect.gen(function* () {
+      const cycleIndex = yield* nextCycleIndex(identity.email, sessionOrRunId);
+      return yield* recordCycleCost({
+        ownerEmail: identity.email,
+        sessionOrRunId,
+        cycleIndex,
+        model,
+        finishReason: steps.at(-1)?.finishReason ?? result.status,
+        usage,
+        recipesUsed,
+        recipesSaved,
+      });
+    }).pipe(Effect.provide(cycleCostLayer(this.env.DB))));
   }
 
   private async promoteSuggestedRecipe(result: ChatResponseResult): Promise<void> {
