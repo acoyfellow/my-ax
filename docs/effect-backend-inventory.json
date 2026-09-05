@@ -5,15 +5,15 @@
     "total": 489,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 81,
+      "effect-program": 80,
       "plain-typescript": 101,
-      "runtime-adapter": 49,
+      "runtime-adapter": 50,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 408,
+      "accepted": 409,
       "migrated": 26,
-      "pending": 55
+      "pending": 54
     }
   },
   "entries": [
@@ -2947,9 +2947,9 @@
     },
     {
       "path": "src/workspace.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "Effect workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     }
   ]
 }

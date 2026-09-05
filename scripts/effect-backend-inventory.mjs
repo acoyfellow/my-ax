@@ -40,6 +40,7 @@ const runtimeBoundaries = new Set([
   "src/voice-check-prompt.ts",
   "src/web-search.ts",
   "src/workspace-read.ts",
+  "src/workspace.ts",
   "agents/src/hook.ts",
   "agents/src/ports.ts",
   "agents/src/worker.ts",
