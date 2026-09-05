@@ -26,6 +26,7 @@ const runtimeBoundaries = new Set([
   "agents/src/worker.ts",
   "agents/src/workflow-entry.ts",
   "proof/plan.ts",
+  "proof/terminal-gh-probe.mjs",
 ]);
 
 const pureFiles = new Set([
