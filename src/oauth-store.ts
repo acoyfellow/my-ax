@@ -30,7 +30,7 @@ import {
   shouldAutoDcr,
   dcrRegistrationEndpoint,
 } from "./connectors";
-import { Effect, Schedule, Duration } from "effect";
+import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
 import { encryptToken, decryptToken, looksEncrypted } from "./grant-crypto";
 import { requirePublicHttpsUrl } from "./public-url";
@@ -39,12 +39,20 @@ import { requirePublicHttpsUrl } from "./public-url";
 // single blip forces an unnecessary full re-authorization. Retry only on a
 // thrown network error (an HTTP response is a real answer), and bound it with
 // a timeout. No token/crypto logic runs here — this is purely the transport.
+class TokenNetworkError extends Data.TaggedError("TokenNetworkError")<{ cause: unknown }> {}
+
+const tokenRetry = {
+  schedule: Schedule.exponential("200 millis").pipe(Schedule.jittered),
+  times: 2,
+  while: (error: TokenNetworkError | Cause.TimeoutError) => error instanceof TokenNetworkError || Cause.isTimeoutError(error),
+} as const;
+
 function resilientTokenFetch(input: string, init: RequestInit): Promise<Response | null> {
   return Effect.runPromise(
-    Effect.tryPromise({ try: () => fetch(input, init), catch: (cause) => cause })
+    Effect.tryPromise({ try: () => fetch(input, init), catch: (cause) => new TokenNetworkError({ cause }) })
       .pipe(
-        Effect.timeout(Duration.seconds(10)),
-        Effect.retry(Schedule.intersect(Schedule.exponential(Duration.millis(200), 2).pipe(Schedule.jittered), Schedule.recurs(2))),
+        Effect.timeout("10 seconds"),
+        Effect.retry(tokenRetry),
         Effect.orElseSucceed(() => null),
       ),
   );

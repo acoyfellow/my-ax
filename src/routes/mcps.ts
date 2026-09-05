@@ -5,6 +5,7 @@
 //   POST   /api/mcps         add an MCP (server re-probes the URL)
 //   DELETE /api/mcps/:id     remove an MCP + clear its tokens
 
+import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { oauthStoreFor } from "../oauth-store";
@@ -42,7 +43,7 @@ export function registerMcpsCrudRoutes(app: Hono<AppEnv>) {
         400,
       );
     }
-    const result = await probeMcp(body.url);
+    const result = await Effect.runPromise(probeMcp(body.url));
     if (!result.ok) {
       return c.json<ApiResponse>(
         {
@@ -123,7 +124,7 @@ export function registerMcpsCrudRoutes(app: Hono<AppEnv>) {
         400,
       );
     }
-    const probe = await probeMcp(body.url);
+    const probe = await Effect.runPromise(probeMcp(body.url));
     if (!probe.ok) {
       return c.json<ApiResponse>(
         {

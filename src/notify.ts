@@ -1,14 +1,15 @@
-import { Effect, Schedule, Duration, Data } from "effect";
+import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
 import { sendPush, type PushSubscription } from "./push";
 
 // Network failures talking to a push provider are transient; a returned HTTP
 // status (even an error one) is a real provider decision, not transient.
 class PushNetworkError extends Data.TaggedError("PushNetworkError")<{ cause: unknown }> {}
-const pushRetry = Schedule.intersect(
-  Schedule.exponential(Duration.millis(150), 2).pipe(Schedule.jittered),
-  Schedule.recurs(2),
-).pipe(Schedule.whileInput((e: unknown) => e instanceof PushNetworkError));
+const pushRetry = {
+  schedule: Schedule.exponential("150 millis").pipe(Schedule.jittered),
+  times: 2,
+  while: (error: PushNetworkError | Cause.TimeoutError) => error instanceof PushNetworkError || Cause.isTimeoutError(error),
+} as const;
 
 type DeliveryOutcome =
   | { kind: "delivered" }
@@ -318,7 +319,7 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
       const response = yield* Effect.tryPromise({
         try: () => sendPush(env, subscription, payload, 300),
         catch: (cause) => new PushNetworkError({ cause }),
-      }).pipe(Effect.timeout(Duration.seconds(25)), Effect.retry(pushRetry));
+      }).pipe(Effect.timeout("25 seconds"), Effect.retry(pushRetry));
       if (response.ok) return { kind: "delivered" } as DeliveryOutcome;
       const reason = yield* Effect.promise(() => rejectedReason(response));
       const relinkRequired = /VapidPkHashMismatch|VAPID credentials.*do not correspond/i.test(reason);
@@ -331,7 +332,7 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
       console.warn("push_notify_rejected", { ownerEmail: email, kind: notification.kind, host, status: response.status, reason });
       return { kind: "failed", failure: { host, status: response.status, reason } } as DeliveryOutcome;
     }).pipe(
-      Effect.catchAll((error) => {
+      Effect.catch((error) => {
         const nested = error instanceof PushNetworkError ? error.cause : undefined;
         const reason = (nested instanceof Error ? nested.message : nested ? String(nested) : "") || (error instanceof Error ? error.message : String(error)) || (typeof error === "object" && error && "_tag" in error ? String((error as { _tag: unknown })._tag) : "Push delivery timed out or failed");
         console.error("push_notify_failed", { ownerEmail: email, kind: notification.kind, host: endpointHost(row.endpoint), err: reason });
