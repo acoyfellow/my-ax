@@ -15,7 +15,7 @@
     "effect:inventory": "node scripts/effect-backend-inventory.mjs",
     "effect:inventory:write": "node scripts/effect-backend-inventory.mjs --write",
     "test:effect-backend": "tsx --test src/mcp-probe.test.ts src/notify.test.ts && npm run test:lifecycle-agents",
-    "build:effect-workers": "npm run build:assets && wrangler deploy --dry-run --outdir .wrangler/effect-main && wrangler deploy --dry-run --config agents/wrangler.jsonc --outdir .wrangler/effect-factory && wrangler deploy --dry-run --config agents/wrangler.hook.jsonc --outdir .wrangler/effect-factory-hook",
+    "build:effect-workers": "npm run build:assets && wrangler deploy --dry-run --env= --outdir .wrangler/effect-main && wrangler deploy --dry-run --env= --config agents/wrangler.jsonc --outdir .wrangler/effect-factory && wrangler deploy --dry-run --env= --config agents/wrangler.hook.jsonc --outdir .wrangler/effect-factory-hook",
     "verify:effect-backend": "npm run effect:inventory && npm run test:effect-backend && npm run build:effect-workers && npm run verify:public",
     "check": "npm run build:assets && npm run typecheck && npm run test:unit && npm run test:lifecycle-agents",
     "cf-typegen": "wrangler types",

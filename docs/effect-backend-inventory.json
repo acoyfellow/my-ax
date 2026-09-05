@@ -5,14 +5,14 @@
     "total": 459,
     "classifications": {
       "static-evidence": 182,
-      "plain-typescript": 92,
+      "plain-typescript": 93,
       "runtime-adapter": 33,
-      "effect-program": 87,
+      "effect-program": 86,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 372,
-      "pending": 86,
+      "accepted": 373,
+      "pending": 85,
       "migrated": 1
     }
   },
@@ -1135,9 +1135,9 @@
     },
     {
       "path": "src/gateway-retry-fetch.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/grant-crypto.test.ts",
