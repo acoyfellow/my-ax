@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 484,
+    "total": 485,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 83,
-      "plain-typescript": 99,
+      "plain-typescript": 100,
       "runtime-adapter": 44,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 401,
-      "migrated": 20,
-      "pending": 63
+      "accepted": 402,
+      "migrated": 21,
+      "pending": 62
     }
   },
   "entries": [
@@ -1038,6 +1038,12 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/decision-response-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/decision-response.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1045,9 +1051,9 @@
     },
     {
       "path": "src/decision-response.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/delegate-many.test.ts",
