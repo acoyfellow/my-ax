@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { publishWorkspaceSnapshot, type WorkspaceSnapshotPointer } from "./workspace-snapshot";
+import { Effect } from "effect";
+import { databaseLayer } from "./effect/database";
+import { publishWorkspaceSnapshot as publishWorkspaceSnapshotEffect } from "./workspace-snapshot-program";
+import { type WorkspaceSnapshotPointer } from "./workspace-snapshot";
+
+const publishWorkspaceSnapshot = (db: D1Database, owner: string, backup: WorkspaceSnapshotPointer) => Effect.runPromise(
+  publishWorkspaceSnapshotEffect(owner, backup).pipe(Effect.provide(databaseLayer(db))),
+);
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
