@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 import { Effect } from "effect";
-import { runTerminalGhProbe, terminalSocketLayer } from "./terminal-gh-probe-program.mjs";
+import { runTerminalGhProbe } from "./terminal-gh-probe-program.mjs";
+import { terminalSocketLayer } from "./terminal-socket.mjs";
 
 class FakeSocket extends EventEmitter {
   constructor(output) {

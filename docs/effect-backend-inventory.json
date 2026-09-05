@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 474,
+    "total": 477,
     "classifications": {
-      "static-evidence": 186,
-      "effect-program": 89,
+      "static-evidence": 187,
+      "effect-program": 90,
       "plain-typescript": 95,
-      "runtime-adapter": 39,
+      "runtime-adapter": 40,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 385,
-      "migrated": 12,
-      "pending": 77
+      "accepted": 387,
+      "migrated": 14,
+      "pending": 76
     }
   },
   "entries": [
@@ -366,10 +366,28 @@
       "reason": "active live proof workflow"
     },
     {
-      "path": "proof/terminal-upgrade-probe.mjs",
+      "path": "proof/terminal-socket.mjs",
       "classification": "effect-program",
-      "status": "pending",
+      "status": "migrated",
       "reason": "active live proof workflow"
+    },
+    {
+      "path": "proof/terminal-upgrade-probe-program.mjs",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "active live proof workflow"
+    },
+    {
+      "path": "proof/terminal-upgrade-probe-program.test.mjs",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "proof/terminal-upgrade-probe.mjs",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "proof/transcript-parity.sh",

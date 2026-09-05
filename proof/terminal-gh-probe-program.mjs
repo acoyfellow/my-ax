@@ -1,12 +1,7 @@
-import { Context, Data, Effect, Layer } from "effect";
+import { Data, Effect } from "effect";
+import { TerminalSocketFactory } from "./terminal-socket.mjs";
 
 export class TerminalProbeError extends Data.TaggedError("TerminalProbeError") {}
-
-export class TerminalSocketFactory extends Context.Service()("my-ax/proof/TerminalSocketFactory") {}
-
-export function terminalSocketLayer(connect) {
-  return Layer.succeed(TerminalSocketFactory, TerminalSocketFactory.of({ connect }));
-}
 
 function cleanTranscript(value) {
   return value.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, "");
