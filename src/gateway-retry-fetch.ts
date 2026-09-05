@@ -12,6 +12,7 @@
 // inspected: a gateway 429 is returned before any stream begins, so retrying
 // the fetch is safe and never interrupts an in-flight stream.
 
+import { Effect } from "effect";
 import { isTransientRateLimit } from "./upstream-rate-limit";
 
 export type RetryFetchDeps = {
@@ -61,32 +62,33 @@ function isRateLimitResponse(res: Response): boolean {
 /** Wrap a fetch so transient gateway rate limits are retried with bounded
  *  backoff. Non-rate-limit responses (and network errors) pass through
  *  unchanged on the first attempt's result. */
-export function createRetryFetch(deps: RetryFetchDeps): typeof fetch {
+export function retryFetchEffect(deps: RetryFetchDeps, input: RequestInfo | URL, init?: RequestInit): Effect.Effect<Response> {
   const doFetch = deps.fetch;
   const maxAttempts = Math.max(1, deps.maxAttempts ?? 3);
   const baseMs = deps.baseMs ?? 500;
   const capMs = deps.capMs ?? 8000;
   const totalCapMs = deps.totalCapMs ?? 15000;
   const now = deps.now ?? Date.now;
-  const sleep = deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const random = deps.random ?? Math.random;
 
-  const wrapped = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  return Effect.gen(function* () {
     let waited = 0;
     let last: Response | null = null;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const res = await doFetch(input as Parameters<typeof fetch>[0], init);
-      if (!isRateLimitResponse(res)) return res;
-      last = res;
-      if (attempt === maxAttempts - 1) break; // out of attempts
-      const retryAfter = parseRetryAfterMs(res.headers.get("retry-after"), now(), capMs);
+      const response = yield* Effect.promise(() => doFetch(input as Parameters<typeof fetch>[0], init));
+      if (!isRateLimitResponse(response)) return response;
+      last = response;
+      if (attempt === maxAttempts - 1) break;
+      const retryAfter = parseRetryAfterMs(response.headers.get("retry-after"), now(), capMs);
       const wait = retryAfter ?? nextBackoffMs(attempt, baseMs, capMs, random);
-      if (waited + wait > totalCapMs) break; // don't exceed the total wait budget
+      if (waited + wait > totalCapMs) break;
       waited += wait;
-      await sleep(wait);
+      yield* deps.sleep ? Effect.promise(() => deps.sleep!(wait)) : Effect.sleep(wait);
     }
     return last!;
-  }) as typeof fetch;
+  });
+}
 
-  return wrapped;
+export function createRetryFetch(deps: RetryFetchDeps): typeof fetch {
+  return ((input: RequestInfo | URL, init?: RequestInit) => Effect.runPromise(retryFetchEffect(deps, input, init))) as typeof fetch;
 }
