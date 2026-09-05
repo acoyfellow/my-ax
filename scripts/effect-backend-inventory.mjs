@@ -144,6 +144,8 @@ function classify(path, source) {
   if (frontendGeneratedFiles.has(path) || /^(?:src\/ui\/|src\/views\/|src\/styles\/)/.test(path) || /(?:generated|\.svelte)/.test(path)) return ["frontend-generated", "frontend or generated"];
   if (/\.(?:md|json)$/.test(path) || /wrangler(?:\.hook)?\.jsonc$/.test(path)) return ["static-evidence", "documentation, configuration, or receipt"];
   if (path.startsWith("src/routes/") || runtimeBoundaries.has(path)) return ["runtime-adapter", "Cloudflare or HTTP runtime edge"];
+  if (path.startsWith("proof/") && (/\.sh$/.test(path) || /(?:browser-e2e|terminal-paste-proof|terminal-render-proof)\.mjs$/.test(path))) return ["runtime-adapter", "shell or live-proof execution boundary"];
+  if (path.startsWith("scripts/") && /(?:deploy|dev-access|proxy|prove|trigger|test-|recipe-)/.test(path)) return ["runtime-adapter", "CLI or operational execution boundary"];
   if (pureFiles.has(path) || buildScripts.has(path)) return ["plain-typescript", "reviewed pure or build-time module"];
   if (path.startsWith("proof/")) return ["effect-program", "active live proof workflow"];
   if (path.startsWith("scripts/") && /(?:deploy|dev-access|proxy|prove|trigger|test-|recipe-)/.test(path)) return ["effect-program", "operational workflow"];
