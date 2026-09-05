@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { ApiResponse } from "../types";
 import type { AppEnv } from "../app-env";
@@ -11,7 +12,9 @@ import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
-import { PinLimitError, reorderPinnedSession, setSessionPinned } from "../session-pinning";
+import { databaseLayer } from "../effect/database";
+import { PinLimitError } from "../session-pinning";
+import { reorderPinnedSession, setSessionPinned } from "../session-pinning-program";
 import { buildSessionTurnState } from "../session-turn";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
@@ -167,7 +170,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "pinned must be a boolean" }, next_actions: [] }, 400);
     }
     try {
-      const result = await setSessionPinned(c.env, c.get("identity").email, id, body.pinned);
+      const result = await Effect.runPromise(
+        setSessionPinned(c.get("identity").email, id, body.pinned).pipe(Effect.provide(databaseLayer(c.env.DB))),
+      );
       if (!result) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
       return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
     } catch (err) {
@@ -188,7 +193,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const body = (await c.req.json<{ beforeId?: unknown }>().catch(() => ({}))) as { beforeId?: unknown };
     const beforeId = typeof body.beforeId === "string" && body.beforeId.trim() ? body.beforeId : null;
     try {
-      const result = await reorderPinnedSession(c.env, c.get("identity").email, id, beforeId);
+      const result = await Effect.runPromise(
+        reorderPinnedSession(c.get("identity").email, id, beforeId).pipe(Effect.provide(databaseLayer(c.env.DB))),
+      );
       if (!result) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "pinned session not found or not owned" }, next_actions: [] }, 404);
       return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] });
     } catch (err) {
