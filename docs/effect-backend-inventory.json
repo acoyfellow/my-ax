@@ -5,15 +5,15 @@
     "total": 481,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 86,
+      "effect-program": 84,
       "plain-typescript": 96,
-      "runtime-adapter": 41,
+      "runtime-adapter": 43,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 395,
+      "accepted": 397,
       "migrated": 17,
-      "pending": 69
+      "pending": 67
     }
   },
   "entries": [
@@ -883,9 +883,9 @@
     },
     {
       "path": "src/code-mode-runtime.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/code-mode-runtime.worker.ts",
@@ -1981,9 +1981,9 @@
     },
     {
       "path": "src/think-workspace.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "src/tool-arguments.ts",
