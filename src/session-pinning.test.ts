@@ -1,16 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Effect } from "effect";
 import type { Env } from "./types";
+import { databaseLayer } from "./effect/database";
 import { isValidRank } from "./fractional-index";
 import {
   computeMoveRank,
   rankForNewPin,
-  setSessionPinned,
-  reorderPinnedSession,
   MAX_PINNED,
   PinLimitError,
   type PinnedRow,
 } from "./session-pinning";
+import {
+  reorderPinnedSession as reorderPinnedSessionEffect,
+  setSessionPinned as setSessionPinnedEffect,
+} from "./session-pinning-program";
+
+const setSessionPinned = (env: Env, email: string, id: string, pinned: boolean) => Effect.runPromise(
+  setSessionPinnedEffect(email, id, pinned).pipe(Effect.provide(databaseLayer(env.DB))),
+);
+const reorderPinnedSession = (env: Env, email: string, id: string, beforeId: string | null) => Effect.runPromise(
+  reorderPinnedSessionEffect(email, id, beforeId).pipe(Effect.provide(databaseLayer(env.DB))),
+);
 
 // ── Pure ordering ───────────────────────────────────────────────────────────
 

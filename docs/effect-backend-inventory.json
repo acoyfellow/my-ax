@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 483,
+    "total": 484,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 83,
-      "plain-typescript": 98,
+      "plain-typescript": 99,
       "runtime-adapter": 44,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 400,
-      "migrated": 19,
-      "pending": 64
+      "accepted": 401,
+      "migrated": 20,
+      "pending": 63
     }
   },
   "entries": [
@@ -1884,6 +1884,12 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/session-pinning-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/session-pinning.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1891,9 +1897,9 @@
     },
     {
       "path": "src/session-pinning.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/session-title.test.ts",
