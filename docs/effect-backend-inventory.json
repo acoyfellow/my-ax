@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 485,
+    "total": 486,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 83,
       "plain-typescript": 100,
-      "runtime-adapter": 44,
+      "runtime-adapter": 45,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 402,
-      "migrated": 22,
-      "pending": 61
+      "accepted": 403,
+      "migrated": 23,
+      "pending": 60
     }
   },
   "entries": [
@@ -1489,9 +1489,15 @@
     },
     {
       "path": "src/pantry-client.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/pantry-program.ts",
       "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "status": "migrated",
+      "reason": "Effect workflow"
     },
     {
       "path": "src/pantry-sync.test.ts",

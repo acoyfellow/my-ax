@@ -11,6 +11,7 @@ import { databaseLayer } from "../effect/database";
 import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences-program";
 import { requireOwnedSession } from "../session-ownership";
 import { syncRecipesToPantry } from "../pantry-sync";
+import { listPantryRecipes } from "../pantry-program";
 
 function body(c: Context<AppEnv>): Promise<Record<string, unknown>> {
   return c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
@@ -38,8 +39,7 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const recipes = await service(c).list();
       let pantry: unknown[] = [];
       try {
-        const { listPantryRecipes } = await import("../pantry-client");
-        pantry = await listPantryRecipes(c.env);
+        pantry = await Effect.runPromise(listPantryRecipes(c.env));
       } catch { pantry = []; }
       return ok(c, command, { recipes, pantry });
     }

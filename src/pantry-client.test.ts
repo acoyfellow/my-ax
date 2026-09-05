@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getPantryRecipe, listPantryRecipes, pantryConfig, pantryRecipeExecutionCode } from "./pantry-client";
+import { Effect } from "effect";
+import { pantryConfig, pantryRecipeExecutionCode } from "./pantry-client";
+import { getPantryRecipe as getPantryRecipeEffect, listPantryRecipes as listPantryRecipesEffect } from "./pantry-program";
+
+const listPantryRecipes = (env: Env) => Effect.runPromise(listPantryRecipesEffect(env));
+const getPantryRecipe = (env: Env, name: string) => Effect.runPromise(getPantryRecipeEffect(env, name));
 import type { Env } from "./types";
 
 test("pantryConfig defaults to the public pantry host", () => {

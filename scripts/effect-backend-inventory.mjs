@@ -31,6 +31,7 @@ const runtimeBoundaries = new Set([
   "src/dead-session.ts",
   "src/gateway-retry-fetch.ts",
   "src/oauth-store.ts",
+  "src/pantry-client.ts",
   "src/think-workspace.ts",
   "src/user-agent.ts",
   "src/web-search.ts",
