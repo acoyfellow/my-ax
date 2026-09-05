@@ -1,7 +1,6 @@
-import { assertNoMergeAction, type PullInput } from "./policy";
+import type { PullInput } from "./policy";
 import { assertPublicText } from "./public-text";
 import { previewFindings, DEFAULT_PREVIEW_HOST_SUFFIX, type PreviewCheck } from "./preview-check";
-import type { GithubPort } from "./orchestrate";
 
 export const OWNER_LOGINS = ["acoyfellow"] as const;
 export const OWNER_HEAD = /^bot\/issue-\d+$/;
@@ -83,27 +82,4 @@ export function formatReviewComment(receipt: ReviewReceipt): string {
     "neverMerge: true",
     ...receipt.findings.filter(Boolean).map((line) => `- ${line}`),
   ].join("\n"));
-}
-
-export async function runReview(
-  input: ReviewInput,
-  ports: { github: GithubPort },
-): Promise<ReviewReceipt> {
-  const receipt = reviewPull(input);
-  if (receipt.decision === "ignore") return receipt;
-  assertNoMergeAction("comment");
-  await ports.github.comment(input.number ?? 0, formatReviewComment(receipt));
-  if (receipt.decision === "close") {
-    if (!ports.github.closePr) throw new Error("closePr missing");
-    await ports.github.closePr(input.number ?? 0);
-  }
-  if (receipt.decision === "request-changes" && ports.github.requestChanges) {
-    await ports.github.requestChanges(input.number ?? 0, formatReviewComment(receipt)).catch((error) => {
-      console.warn("review_request_changes_skipped", {
-        number: input.number,
-        err: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }
-  return receipt;
 }
