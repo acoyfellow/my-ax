@@ -11,6 +11,17 @@ const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclud
   .filter((path) => /\.(?:ts|tsx|mjs|cjs|sh|json|md)$/.test(path))
   .sort();
 
+const staticEvidenceFiles = new Set([
+  "scripts/cloudflare-workers-test-stub.cjs",
+  "scripts/test-public-url.mjs",
+  "scripts/test-run-receipts.mjs",
+  "scripts/test-session-entries.mjs",
+]);
+
+const frontendGeneratedFiles = new Set([
+  "src/artifact-runtime.ts",
+]);
+
 const runtimeBoundaries = new Set([
   "src/index.tsx",
   "src/agent-stub.ts",
@@ -117,8 +128,8 @@ const buildScripts = new Set([
 const sideEffectPattern = /\b(?:fetch|setTimeout|setInterval)\s*\(|\bnew\s+Promise\b|\bPromise\.(?:all|race|allSettled)\s*\(|\.prepare\s*\(|\.exec\s*\(|\.startProcess\s*\(|\.runCode\s*\(|\bcrypto\.subtle\b|\bWorkflowEntrypoint\b|\bDurableObject\b/;
 
 function classify(path, source) {
-  if (/\.test\.(?:ts|mjs|cjs)$/.test(path) || /(?:^|\/)fixtures?(?:\/|$)/.test(path)) return ["static-evidence", "test or fixture"];
-  if (/^(?:src\/ui\/|src\/views\/|src\/styles\/)/.test(path) || /(?:generated|\.svelte)/.test(path)) return ["frontend-generated", "frontend or generated"];
+  if (staticEvidenceFiles.has(path) || /\.test\.(?:ts|mjs|cjs)$/.test(path) || /(?:^|\/)fixtures?(?:\/|$)/.test(path)) return ["static-evidence", "test or fixture"];
+  if (frontendGeneratedFiles.has(path) || /^(?:src\/ui\/|src\/views\/|src\/styles\/)/.test(path) || /(?:generated|\.svelte)/.test(path)) return ["frontend-generated", "frontend or generated"];
   if (/\.(?:md|json)$/.test(path) || /wrangler(?:\.hook)?\.jsonc$/.test(path)) return ["static-evidence", "documentation, configuration, or receipt"];
   if (path.startsWith("src/routes/") || runtimeBoundaries.has(path)) return ["runtime-adapter", "Cloudflare or HTTP runtime edge"];
   if (pureFiles.has(path) || buildScripts.has(path)) return ["plain-typescript", "reviewed pure or build-time module"];
