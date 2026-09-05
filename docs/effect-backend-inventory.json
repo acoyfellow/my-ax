@@ -5,15 +5,15 @@
     "total": 489,
     "classifications": {
       "static-evidence": 192,
-      "effect-program": 77,
-      "plain-typescript": 101,
-      "runtime-adapter": 53,
+      "effect-program": 47,
+      "plain-typescript": 97,
+      "runtime-adapter": 87,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 412,
+      "accepted": 442,
       "migrated": 26,
-      "pending": 51
+      "pending": 21
     }
   },
   "entries": [
@@ -205,33 +205,33 @@
     },
     {
       "path": "proof/agentcast-live.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/browser-e2e.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/desk-app.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/desk-live.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/error-queue-drained.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/experiments/overhead-attribution-2026-06-30.json",
@@ -241,27 +241,27 @@
     },
     {
       "path": "proof/factory-canary.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/factory-implements.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/factory-no-loop.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/image-attachment.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/plan-program.test.ts",
@@ -283,9 +283,9 @@
     },
     {
       "path": "proof/preview-per-pr.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/recipe-dogfood-learning-curve-2026-06-29-reuse.json",
@@ -301,9 +301,9 @@
     },
     {
       "path": "proof/session-heal.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-gh-probe-program.mjs",
@@ -325,9 +325,9 @@
     },
     {
       "path": "proof/terminal-inline.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-live-client-program.mjs",
@@ -349,33 +349,33 @@
     },
     {
       "path": "proof/terminal-live.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-on-demand.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-paste-proof.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-remainders.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-render-proof.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "proof/terminal-socket.mjs",
@@ -403,9 +403,9 @@
     },
     {
       "path": "proof/transcript-parity.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "active live proof workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
     },
     {
       "path": "scripts/build-brand.mjs",
@@ -427,15 +427,15 @@
     },
     {
       "path": "scripts/cloudflare-test-loader-hooks.mjs",
-      "classification": "plain-typescript",
+      "classification": "runtime-adapter",
       "status": "accepted",
-      "reason": "reviewed pure or build-time module"
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/cloudflare-test-loader.mjs",
-      "classification": "plain-typescript",
+      "classification": "runtime-adapter",
       "status": "accepted",
-      "reason": "reviewed pure or build-time module"
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/cloudflare-workers-test-stub.cjs",
@@ -445,15 +445,15 @@
     },
     {
       "path": "scripts/deploy-remote.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/dev-access.sh",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/effect-backend-inventory.mjs",
@@ -475,15 +475,15 @@
     },
     {
       "path": "scripts/my-ax-mcp-proxy.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/native-proxy/build.sh",
-      "classification": "plain-typescript",
+      "classification": "runtime-adapter",
       "status": "accepted",
-      "reason": "reviewed pure or build-time module"
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/native-proxy/package-lock.json",
@@ -499,9 +499,9 @@
     },
     {
       "path": "scripts/native-proxy/proxy.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/native-proxy/tsconfig.json",
@@ -511,39 +511,39 @@
     },
     {
       "path": "scripts/prove-all-models-http.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/prove-artifacts.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/prove-resume.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/recipe-dogfood-loop.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/recipe-dogfood-real-curve.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/recipe-overhead-attribution.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/setup.sh",
@@ -553,9 +553,9 @@
     },
     {
       "path": "scripts/test-computer-integration.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/test-public-url.mjs",
@@ -577,15 +577,15 @@
     },
     {
       "path": "scripts/trigger-deploy.mjs",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "operational workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/verify-deployable-config.mjs",
-      "classification": "plain-typescript",
+      "classification": "runtime-adapter",
       "status": "accepted",
-      "reason": "reviewed pure or build-time module"
+      "reason": "CLI or operational execution boundary"
     },
     {
       "path": "scripts/verify-effect-architecture.mjs",
