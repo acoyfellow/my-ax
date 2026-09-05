@@ -5,15 +5,15 @@
     "total": 469,
     "classifications": {
       "static-evidence": 184,
-      "effect-program": 90,
+      "effect-program": 89,
       "plain-typescript": 94,
-      "runtime-adapter": 36,
+      "runtime-adapter": 37,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 379,
+      "accepted": 380,
       "migrated": 10,
-      "pending": 80
+      "pending": 79
     }
   },
   "entries": [
@@ -91,9 +91,9 @@
     },
     {
       "path": "agents/src/ports.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "agents/src/preview-check.test.ts",

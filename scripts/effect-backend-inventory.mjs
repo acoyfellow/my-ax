@@ -22,6 +22,7 @@ const runtimeBoundaries = new Set([
   "src/user-agent.ts",
   "src/web-search.ts",
   "agents/src/hook.ts",
+  "agents/src/ports.ts",
   "agents/src/worker.ts",
   "agents/src/workflow-entry.ts",
 ]);
