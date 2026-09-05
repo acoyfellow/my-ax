@@ -12,8 +12,8 @@
     },
     "statuses": {
       "accepted": 402,
-      "migrated": 21,
-      "pending": 62
+      "migrated": 22,
+      "pending": 61
     }
   },
   "entries": [
@@ -1184,8 +1184,8 @@
     {
       "path": "src/desk-write.ts",
       "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "status": "migrated",
+      "reason": "Effect workflow"
     },
     {
       "path": "src/effect/database.ts",
