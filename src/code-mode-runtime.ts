@@ -1,9 +1,3 @@
-// Codemode runtime adapter for My AX.
-//
-// This module wires the workspace / machine / terrarium / saved-snippet
-// surfaces behind the @cloudflare/codemode runtime contract. There are
-// three layers, kept deliberately separate:
-//
 //   1. Type re-exports of the canonical CodemodeRuntime + snippet types
 //      so the rest of My AX never imports @cloudflare/codemode directly.
 //      A future native cutover changes only this module's wiring.
@@ -46,13 +40,6 @@ export type {
   PendingAction,
 } from "@cloudflare/codemode";
 
-// Lightweight in-process descriptor of a codemode connector. The @cloudflare
-// /codemode `CodemodeConnector` base class is a `WorkerEntrypoint` — useful
-// when each connector is its own Worker, but heavy for the in-process
-// workspace/machine/terrarium trio. We mirror only the public connector shape
-// (describe + tools) so model code calling `codemode.search/describe/run`
-// has the same surface, and so an eventual swap to the real connector base
-// class is a structural refactor, not an API change.
 export interface CodemodeWorkTool {
   name: string;
   description: string;
@@ -134,7 +121,7 @@ function parseQualified(name: string): { connector: string; tool: string } | nul
 /**
  * Build the in-process codemode-shaped runtime exposed to work_code.
  *
- * Accepts the three native namespaces (workspace/machine/terrarium) plus an
+ * Accepts the native workspace and machine namespaces plus an
  * optional snippet hook backed by saved_recipes. Returns the `codemode`
  * namespace (search/describe/run), the per-tool bridge functions, and the
  * sandbox prelude that wires `globalThis.codemode` to those bridge calls.
@@ -252,7 +239,7 @@ export function createCodemodeWorkRuntime(
 /**
  * Options for `runNativeCodemode` (defined in
  * `code-mode-runtime.worker.ts`). The native execution path wires the
- * workspace/machine/terrarium connectors as `CodemodeConnector` workers
+ * workspace/machine connectors as `CodemodeConnector` workers
  * and uses `createCodemodeRuntime` to give callers the canonical
  * tool/approve/reject/rollback/snippet API. Used only from worker-
  * runtime entry points that have a DurableObjectState handle; unit

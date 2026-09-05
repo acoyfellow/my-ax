@@ -9,59 +9,20 @@ fields (owner email, machine name, region, session and surface ids, project
 names) are redacted or replaced with placeholders. Model output varies between
 runs; the mechanism and the receipt shape do not.
 
-## Spawn A Bounded Cloud Run
+## Use The Persistent Sandbox
 
-The agent hands a whole task to a cloud machine and waits for a signed result.
-`terrarium.spawn` blocks until the run finishes; `terrarium.spawn_background`
-returns immediately with a run id the agent can poll.
+The Sandbox is the canonical computer for project files, installed tools,
+command-line authentication, processes, tests, and previews. All conversations
+for one owner share `/home/user`.
 
-Prompt (the tool was not named; the agent chose it):
+My AX snapshots `/home/user` to R2. A requested recycle publishes a snapshot
+before it destroys the current container. If snapshot publication fails, My AX
+keeps the live container and returns an error. A replacement container restores
+the latest published snapshot before it accepts work.
 
-```text
-I need proof, not just a claim: verify that python3 -c "print(6*7)" outputs 42,
-in an isolated environment, and give me a verifiable receipt of the run.
-```
-
-The agent chose `terrarium.spawn_background`, got a contract, then polled
-`terrarium.status` until the run finished. Terminal receipt:
-
-```json
-{
-  "runId": "ter_mrvh0clm_f7e03656250d",
-  "status": "done",
-  "outcome": "confirmed",
-  "exitCode": 0,
-  "taskContractStatus": "verified",
-  "taskResultSummary": "stdout: 42",
-  "reason": "verified-receipt",
-  "contract": {
-    "taskFingerprint": "af6a39480392ef7c5cd515b9",
-    "nonce": "1ab133a5-d353-43e7-9b9b-3a410634267b"
-  }
-}
-```
-
-The run happened on Terrarium's own container, not the laptop and not the worker.
-The `runId`, `taskFingerprint`, and `nonce` are what make the result auditable
-after the fact.
-
-### Confirmed Versus Uncertain
-
-Every `terrarium.spawn`, `terrarium.spawn_background`, and `terrarium.status`
-result includes a normalized `outcome`. A completed terminal receipt with
-`terminal.ok: true` is `confirmed`; a background launch, a running status, or a
-poll timeout is `uncertain`; failed, cancelled, and inconclusive terminal
-receipts are `not-confirmed`. The trusted outcome-record seam is
-`status.terminal`: the connector derives the normalized value from that
-Terrarium-owned record rather than treating a run id or a request success as
-proof.
-
-```json
-{ "outcome": "uncertain", "status": "running", "background": true }
-```
-
-Poll with `terrarium.status` and proceed as confirmed only after it returns the
-terminal receipt with `"outcome": "confirmed"`.
+A persistence receipt must prove the full sequence: install or authenticate a
+tool, publish a snapshot, replace the container, and run the authenticated tool
+again. It must not include credentials.
 
 ## Drive Your Own Live UI
 

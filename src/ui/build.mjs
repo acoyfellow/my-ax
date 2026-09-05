@@ -41,7 +41,6 @@ const result = await buildHonoSvelte({
   workerEntry: here("route.ts"),
   outDir: here("build"),
   components: {
-    health: here("ComputerHealth.svelte"),
     connectors: here("Connectors.svelte"),
     sessions: here("Sessions.svelte"),
     settings: here("Settings.svelte"),
@@ -93,7 +92,7 @@ console.log(`    pierre-diffs  ${(pierreJs.length / 1024).toFixed(1)} KB JS lazy
 // ── 2. Pre-compiled <Name>.ssr.mjs modules for each component, imported ──
 // Wrangler's bundler doesn't know how to load .svelte files; we hand it a
 // plain .mjs that imports svelte/server.
-for (const name of ["ComputerHealth", "Connectors", "Sessions", "Settings", "AppShell", "CheckIn", "Chat", "BetaApp"]) {
+for (const name of ["Connectors", "Sessions", "Settings", "AppShell", "CheckIn", "Chat", "BetaApp"]) {
   await build({
     entryPoints: [here(`${name}.svelte`)],
     bundle: true,

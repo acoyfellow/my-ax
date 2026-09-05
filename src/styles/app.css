@@ -930,7 +930,9 @@ html {
     background: rgba(74, 222, 128, 0.06);
     border: 1px solid rgba(74, 222, 128, 0.18);
     border-radius: 10px; padding: 10px 14px;
+    white-space: normal;
   }
+  .msg-user-content { white-space: pre-wrap; }
   .connector-banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 14px;
     margin: 8px 12px 0; border-radius: 10px; font-size: 13px; color: var(--fg);

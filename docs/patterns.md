@@ -38,14 +38,13 @@ connected MCP tools
 `work_search` and `work_code` present several locations without publishing every underlying operation as an eager model tool.
 
 ```text
-workspace.*  snapshot-backed /home/user
+workspace.*  persistent, snapshot-backed /home/user
 machine.*    outbound-connected physical machine
-terrarium.*  bounded cloud agent run (verified receipts)
 page.*       live browser UI (only while a chat tab is connected)
 codemode.*   discover/describe/run tools + owner-approved reusable tools
 ```
 
-The distinction follows state, not geography. My AX Workspace and Terrarium both run on Cloudflare. My Machine matters because it contains current local checkouts, desktop state, and authentication that do not exist in either remote environment. The Page connector is different again: it resolves over the owner chat WebSocket to steer the owner's own browser session, so it works only while a chat tab is open.
+The distinction follows state, not geography. The persistent Sandbox is the canonical project computer. My Machine matters because it contains current local checkouts, desktop state, and authentication that you explicitly expose. The Page connector resolves over the owner chat WebSocket to steer the owner's own browser session, so it works only while a chat tab is open.
 
 The Dynamic Worker receives a generated bridge containing only the methods selected by the host. It has no ambient network access. That isolation does not reduce the authority of a method such as `machine.shell`; the host callback still runs with the connected user's terminal permissions.
 
@@ -54,7 +53,6 @@ Relevant code:
 ```text
 src/work-tools.ts
 src/routes/machinectl.ts
-src/terrarium-tools.ts
 src/ui/page-registry.ts
 src/ui/artifact-tools.ts
 ```

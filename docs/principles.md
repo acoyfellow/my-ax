@@ -7,7 +7,6 @@ These are the theories that drive My AX. Each one is a design rule, not a slogan
 This is the rule over all the other rules. My AX does not report that work happened. It reports evidence that work happened.
 
 - Every saved-recipe run and every recurring job run appends a start event and a terminal event to an owner-scoped ledger. See `src/run-receipts.ts`.
-- A Terrarium cloud run returns a receipt with a run id, a task fingerprint, and a nonce. The caller checks the receipt. See `src/terrarium-tools.ts`.
 - The public tree passes a leak gate before release. See `npm run verify:public`.
 - The feature status page marks each capability with evidence, or it marks the gap. See `docs/feature-matrix.md`.
 
@@ -29,7 +28,6 @@ Current limit: there is no declared SLO or dashboard yet. Structured console eve
 
 The default posture is to fan work out, not to block on one long step.
 
-- `terrarium.spawn_background` starts a bounded cloud run and returns a run id at once. The owner polls with `terrarium.status`. Work continues in parallel. See `src/terrarium-tools.ts`.
 - `delegate_many` fans out to independent read-only analysis children.
 
 Honest limit: `delegate_many` runs its children serially today, not concurrently. Two concurrent children hit the shared Workers AI per-minute inference cap (error 3021) and both failed. The policy now runs children one at a time, and marks any not-yet-started child "deferred" rather than failing it. See `src/delegate-serial.ts`.
@@ -43,7 +41,7 @@ A recipe is a procedure the agent learned once and can run again. Recipes are ho
 - The agent proposes a reusable tool only for successful code that carries an explicit marker. Review-first is the default. The owner approves and enables it, or turns on automatic enablement. See `src/work-tools.ts` and `src/saved-recipes.ts`.
 - Reuse runs the exact saved code. It does not regenerate it. This is the mechanism behind principle 2.
 
-Pantry is the store that lets a recipe leave My AX. Pantry is a capability-scoped recipe store on Workers and D1. It stores scripts and hands them back. It never runs them. `src/pantry-sync.ts` pushes My AX's enabled recipes, projected to the codemode snippet shape, to a live pantry (`pantry.coey.dev` by default). A recipe authored in My AX then becomes reusable from a Terrarium run or a Pi session through the pantry tool.
+Pantry is the store that lets a recipe leave My AX. Pantry is a capability-scoped recipe store on Workers and D1. It stores scripts and hands them back. It never runs them. `src/pantry-sync.ts` pushes My AX's enabled recipes, projected to the codemode snippet shape, to a live pantry (`pantry.coey.dev` by default). A recipe authored in My AX then becomes reusable from an external agent session through the pantry tool.
 
 The sync is additive, env-gated, and fail-soft. With no token it is a clear no-op. A network error is logged and skipped. It never throws into a My AX flow. See the design rules at the top of `src/pantry-sync.ts`.
 
@@ -61,7 +59,6 @@ On top of those primitives, My AX also uses tools built in this same workspace:
 | `@cloudflare/think` | Durable conversation and turn engine | `src/agent.ts` |
 | `@cloudflare/voice` | Voice turns into the canonical conversation | `src/voice-think-agent.ts` |
 | `@cloudflare/sandbox` | The `/home/user` container workspace | `src/workspace.ts` |
-| Terrarium | Bounded cloud agent runs with receipts | `src/terrarium-tools.ts` |
 | Pantry | Capability-scoped recipe store | `src/pantry-sync.ts` |
 | Machinectl | Owner's own machine over an authenticated relay | `src/routes/machinectl.ts` |
 | Promotion Atom | Deterministic evidence-to-promotion decision kernel | recipe promotion policy |

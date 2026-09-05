@@ -316,34 +316,20 @@ test("Computer grep host traversal caps matches and prechecks file sizes", async
   );
 });
 
-test("Computer work methods are cataloged, capability-instrumented, budgeted, and bound into code mode", () => {
+test("legacy Computer storage is absent from model and settings surfaces", () => {
   const source = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
-  const workspace = readFileSync(new URL("./computer-workspace.ts", import.meta.url), "utf8");
   const settings = readFileSync(new URL("./ui/Settings.svelte", import.meta.url), "utf8");
-  assert.match(source, /COMPUTER_WORK_METHODS\.map\(\(method\) => catalogEntry\("computer"/);
-  assert.match(source, /applyComputerWorkBudget\(checkedComputerProvider\(ctx\), executionState\)/);
-  assert.match(source, /resolveWorkCodeExecutionState\(ctx\.workCodeExecutionState\)/);
-  assert.match(source, /instrument\("computer", restrictByCapabilities\("computer"/);
-  assert.match(source, /namespace\("computer", Object\.keys\(computerFns\)\)/);
-  assert.match(source, /computer:globalThis\.computer/);
-  assert.match(settings, /Computer preview/);
-  assert.match(settings, /automatic sync/);
-  assert.doesNotMatch(workspace, /blockConcurrencyWhile/);
-  assert.match(workspace, /#writeTail: Promise<void> = Promise\.resolve\(\)/);
-  assert.match(workspace, /this\.serializeWrite\(async \(\) =>/);
-  assert.match(workspace, /withReservedComputerRetainedWrite\(this\.ctx\.storage, COMPUTER_RETAINED_WRITE_RESERVATION_BYTES/);
-  assert.ok(workspace.indexOf("withReservedComputerRetainedWrite") < workspace.indexOf("writeComputerFileFromWorkspace(workspace, input)"));
-  assert.match(workspace, /this\.#writeTail = next\.then\(\(\) => undefined, \(\) => undefined\)/);
-  assert.match(workspace, /write: \(input: unknown\) => computer\.write\(input\)/);
+  assert.doesNotMatch(source, /COMPUTER_WORK_METHODS|globalThis\.computer|where: "computer"/);
+  assert.doesNotMatch(settings, /Computer preview|computer-workspace/);
 });
 
-test("Computer-only work code does not classify as a Sandbox snapshot mutation", () => {
-  assert.equal(shouldSnapshotSandboxForToolCall("work_code", JSON.stringify({ calls: [{ where: "computer", method: "write", status: "ok" }] })), false);
+test("non-workspace work code does not classify as a Sandbox snapshot mutation", () => {
+  assert.equal(shouldSnapshotSandboxForToolCall("work_code", JSON.stringify({ calls: [{ where: "page", method: "readHealth", status: "ok" }] })), false);
   assert.equal(shouldSnapshotSandboxForToolCall("work_code", JSON.stringify({ calls: [{ where: "workspace", method: "write", status: "ok" }] })), true);
   assert.equal(shouldSnapshotSandboxForToolCall("work_code", "not-json"), true);
 });
 
-test("Computer binding, package pin, and append-only migration exist in every deployed environment", () => {
+test("legacy Computer storage stays bound but has no product API", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(packageJson.dependencies["@cloudflare/computer"], "0.1.1");
   const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
@@ -356,6 +342,5 @@ test("Computer binding, package pin, and append-only migration exist in every de
   const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
   assert.match(index, /export \{ ComputerWorkspace \} from "\.\/computer-workspace"/);
   const systemRoutes = readFileSync(new URL("./routes/system.ts", import.meta.url), "utf8");
-  assert.match(systemRoutes, /app\.get\("\/api\/system\/computer-workspace"/);
-  assert.match(systemRoutes, /getComputerHealth\(c\.env, c\.get\("identity"\)\)/);
+  assert.doesNotMatch(systemRoutes, /computer-workspace/);
 });

@@ -13,29 +13,10 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { seedUserWorkspaceFile } from "../workspace";
-import { getComputerHealth } from "../computer-workspace";
 import type { ApiResponse } from "../types";
 import { recordRecoveryExhaustion } from "../recovery-exhaustion";
 
 export function registerSystemRoutes(app: Hono<AppEnv>) {
-  app.get("/api/system/computer-workspace", async (c) => {
-    try {
-      return c.json<ApiResponse>({
-        ok: true,
-        command: c.req.path,
-        result: await getComputerHealth(c.env, c.get("identity")),
-        next_actions: [],
-      });
-    } catch (error) {
-      return c.json<ApiResponse>({
-        ok: false,
-        command: c.req.path,
-        error: { code: "COMPUTER_HEALTH_UNAVAILABLE", message: error instanceof Error ? error.message : String(error) },
-        next_actions: [],
-      }, 503);
-    }
-  });
-
   app.post("/api/system/recovery-exhaustion-probe", async (c) => {
     const identity = c.get("identity");
     const sessionId = `recovery-proof-${crypto.randomUUID()}`;

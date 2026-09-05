@@ -109,6 +109,13 @@ test("the panel sends what cloudterm gives it and paints what the socket returns
   assert.doesNotMatch(source, /\/api\/errors/, "terminal bytes must never be posted to the error queue");
 });
 
+test("closing the terminal persists owner workspace changes", () => {
+  const source = readFileSync(new URL("./Terminal.svelte", import.meta.url), "utf8");
+  assert.match(source, /fetch\("\/api\/workspace\/snapshot"/);
+  assert.match(source, /async function hide\(\)[\s\S]*await persistWorkspace\(\)/);
+  assert.match(source, /return \(\) => \{[\s\S]*void persistWorkspace\(\)/);
+});
+
 test("chat mounts the terminal only after an explicit open and the shell has no top-bar control", () => {
   const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
   const shell = readFileSync(new URL("./AppShell.svelte", import.meta.url), "utf8");

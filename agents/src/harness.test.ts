@@ -66,6 +66,70 @@ test("an auto error issue creates its head branch and opens a ready PR", async (
   );
 });
 
+test("a seed-only issue delegates implementation before it opens a PR", async () => {
+  const p = ports();
+  let implemented = false;
+  let opened = 0;
+  let proof = "";
+  let removedSeeds: string[] = [];
+  p.github.hasBranch = async () => true;
+  p.github.createBranchFrom = async () => {};
+  p.github.branchSha = async () => implemented ? "submitted-sha" : "seed-sha";
+  p.github.promoteBranch = async () => {};
+  p.github.deleteBranch = async () => {};
+  p.github.removeFiles = async (_head, input) => { removedSeeds = input.paths; return { sha: "clean-sha" }; };
+  p.github.listBranchFiles = async () => implemented ? [".factory/issue-184.md", "src/ui/message.test.ts", "src/ui/message.ts"] : [".factory/issue-184.md"];
+  p.github.openReadyPr = async () => { opened += 1; return { number: 184 }; };
+  p.terrarium.implement = async (_input, taskProof) => {
+    implemented = true;
+    proof = taskProof;
+    return { runId: "implementation-184", taskFingerprint: "fp-184", nonce: "nonce-184", taskProof };
+  };
+  p.terrarium.wait = async () => ({
+    runId: "implementation-184",
+    taskFingerprint: "fp-184",
+    nonce: "nonce-184",
+    ok: true,
+    taskContractStatus: "proven",
+  });
+  const steps = await executeTriageWorkflow(env, {
+    number: 184,
+    title: "bug: leading space",
+    body: "The rendered text starts with a space.",
+    author: "owner",
+  }, p);
+  assert.equal(opened, 1);
+  assert.deepEqual(removedSeeds, [".factory/issue-184.md"]);
+  assert.match(proof, /\/usr\/bin\/curl -fsS https:\/\/api\.github\.com\/repos\/acoyfellow\/my-ax\/git\/ref\/heads\/factory%2Fsubmission-184-/);
+  assert.match(proof, /test "\$submitted" != "\$target"/);
+  assert.doesNotMatch(proof, /factory-submission-accepted/);
+  assert.ok(steps.some((step) => step.step === "implementation" && step.verified));
+  assert.ok(steps.some((step) => step.step === "pr" && step.number === 184));
+});
+
+test("a failed implementation never promotes its temporary branch", async () => {
+  const p = ports();
+  let promoted = false;
+  let deleted = false;
+  p.github.hasBranch = async () => true;
+  p.github.createBranchFrom = async () => {};
+  p.github.branchSha = async () => "seed-sha";
+  p.github.promoteBranch = async () => { promoted = true; };
+  p.github.deleteBranch = async () => { deleted = true; };
+  p.github.listBranchFiles = async () => [".factory/issue-184.md"];
+  p.terrarium.implement = async (_input, taskProof) => ({ runId: "failed-184", taskFingerprint: "fp-184", nonce: "nonce-184", taskProof });
+  p.terrarium.wait = async () => ({ runId: "failed-184", taskFingerprint: "fp-184", nonce: "nonce-184", ok: false, taskContractStatus: "unproven" });
+  const steps = await executeTriageWorkflow(env, {
+    number: 184,
+    title: "bug: leading space",
+    body: "The rendered text starts with a space.",
+    author: "owner",
+  }, p);
+  assert.equal(promoted, false);
+  assert.equal(deleted, true);
+  assert.ok(steps.some((step) => step.step === "stop" && step.reason === "implementation proof failed"));
+});
+
 test("harness issue→label", async () => {
   const p = ports();
   const steps = await executeTriageWorkflow(env, { title: "screenshot fails", body: "bug: could not create image", author: "owner" }, p);

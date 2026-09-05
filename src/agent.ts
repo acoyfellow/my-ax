@@ -6,6 +6,7 @@ import { createCompactFunction } from "agents/experimental/memory/utils";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
+import { composeOwnerSystemPrompt, DEFAULT_OWNER_INSTRUCTIONS, getOwnerInstructions } from "./owner-instructions";
 import { DEFAULT_MODEL_ID, defaultModelId, findModel } from "./models";
 import { gatewayAuthenticationFailure } from "./model-auth";
 import type { AccessIdentity } from "./auth";
@@ -41,7 +42,7 @@ import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
 import { selectLivePageConnection, type PageConnectionState } from "./page-connection";
 import { delegateCompletionNotification } from "./delegate-receipt";
-import { SavedRecipeError, SavedRecipeService, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
+import { SavedRecipeError, SavedRecipeService, hasRetiredRecipeCapability, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
 import { RecipeUsageCollector } from "./recipe-usage-collector";
@@ -66,23 +67,15 @@ const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistan
 ## Tools
 
 Computer work is exposed through two tools:
-- work_search discovers capabilities and helps choose the right place: workspace.* is the canonical Sandbox-backed My AX Workspace for shell commands, processes, and previews; computer.* is a separate preview owner-scoped SQLite filesystem with bounded file-only methods and no execution backend; machine.* is the user's connected physical machine and authenticated local state; terrarium.* spawns bounded cloud agent runs with verified receipts; and agentcast.* drives logged-in browsers on api.agentcast.dev over ordinary HTTPS.
-- work_code executes one bounded async JavaScript function over those exact namespaces. The function receives ctx with { workspace, computer, machine, terrarium, agentcast, page, codemode }, and the same namespaces are also available as globals. Computer paths stay under /home/user, but Computer does not replace workspace.*, does not offer shell/process/preview methods, and does not copy data to or from Sandbox. Prefer My AX Workspace for conversation-adjacent transforms that need shell/process/preview support, Computer only for its isolated bounded file-only preview slice, My Machine for current local checkouts/authenticated state/cmux, Terrarium for bounded cloud agent runs that produce verified receipts, and AgentCast for a logged-in remote browser. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input). Treat enabled reusable tools as the owner's operational Pantry: for multi-step, recurring, stateful, or easy-to-half-complete work, search codemode before inventing an ad-hoc procedure; describe a strong match when its contract is unclear; run it by default when it safely satisfies the request. Do not force a weak match or search for ordinary conversation and trivial one-step work. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner controls whether marked candidates wait as Pending or are enabled automatically in Settings → Reusable tools; unmarked runs stay inline forever. When no strong match exists and you must write a genuinely reusable operational procedure, mark that implementation so it can become a future Pantry tool; do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
-
-## When to use Terrarium (bounded cloud agent runs)
-
-Terrarium (terrarium.spawn / spawn_background / status) runs a whole bounded agent task on a cloud machine and returns a VERIFIED RECEIPT (runId + contract status). Reach for it by default — do not do the work inline — when a task is: (a) heavy, long-running, or would otherwise block this conversation; (b) parallelizable into independent units (fan several out with spawn_background, then poll status); (c) something the owner wants PROOF of, not just a claim (the receipt is the proof); or (d) work that should run without tying up the laptop or the local machine. Use terrarium.spawn when you need the receipt before continuing; use terrarium.spawn_background + terrarium.status to launch and keep working. Do NOT use it for trivial one-step work, conversation, or anything needing the user's local/authenticated state (that is machine.*). When you deploy-and-verify, self-check, or produce evidence, prefer a Terrarium run so the outcome carries a real receipt instead of an unverified assertion.
-
-## When to use AgentCast (logged-in remote browser)
-
-AgentCast (agentcast.open / instruct / status / record / stop) talks to https://api.agentcast.dev over ordinary HTTPS. Use it when the owner needs a real logged-in browser session, a viewer ticket, or a redacted network receipt. Do not use it for public-page snapshots (that is Browser Run) or for driving this chat UI (that is page.*). Viewer and CDP stay on a separate WebSocket; do not invent an SSE control path.
+- work_search discovers capabilities and helps choose the right place: workspace.* is the canonical persistent My AX Sandbox for files, shell commands, processes, and previews; machine.* is the user's connected physical machine and authenticated local state.
+- work_code executes one bounded async JavaScript function over { workspace, machine, page, codemode }. The same namespaces are available as globals. Prefer My AX Workspace for persistent cloud work and My Machine only for current local checkouts or authenticated state that has not moved into My AX. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input). Treat enabled reusable tools as the owner's operational Pantry: for multi-step, recurring, stateful, or easy-to-half-complete work, search codemode before inventing an ad-hoc procedure; describe a strong match when its contract is unclear; run it by default when it safely satisfies the request. Do not force a weak match or search for ordinary conversation and trivial one-step work. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. No publication authority is available inside work_code. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner controls whether marked candidates wait as Pending or are enabled automatically in Settings → Reusable tools; unmarked runs stay inline forever. When no strong match exists and you must write a genuinely reusable operational procedure, mark that implementation so it can become a future Pantry tool; do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
 
 ## Operational completion
 
 For actions that change external or interactive state, distinguish intent, attempted delivery, and verified completion. Never claim success merely because text is visible, a command was issued, or a tool returned an acknowledgement. After acting, inspect the relevant state and require a task-specific postcondition (for example, a CMUX prompt is submitted only when the live agent begins working or produces new output). If the postcondition is absent or ambiguous, report the action as unverified and either retry safely or ask for direction. Recurring monitors must not mistake typed-but-unsubmitted input for agent inactivity.
 
 Other product tools:
-- Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, My Machine, or Terrarium are needed.
+- Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, or My Machine are needed.
 - show_diff renders a read-only code review from two owner-authorized real-file reads. Call it with old and new source/path descriptors using workspace or machine; it reads both values server-side through the My AX Workspace or connected My Machine. Do not pass file text or source claims. path and title are safe display-only labels. Never use show_diff to write, apply, edit, open a URL, or access browser filesystem APIs.
 - browser_open opens a public web page in a real headless browser session with replay recording. Use it for public websites and rendered UI checks; do not claim authenticated browser access.
 - search_artifacts searches the owner’s reusable artifact library. Before creating an artifact, search for the intended purpose and reuse a strong match instead of generating another variant.
@@ -309,6 +302,9 @@ export class MyAgent extends Think<Env> {
     // its own grant set, use the intersection; otherwise the recipe's
     // declared capabilities apply unchanged.
     const declaredCapabilities = JSON.parse(recipe.capabilities_json) as string[];
+    if (hasRetiredRecipeCapability(declaredCapabilities)) {
+      throw new Error("saved recipe is disabled because it uses a retired capability namespace");
+    }
     const effectiveCapabilities = intersectCapabilities(body.callerCapabilities, declaredCapabilities);
     // The synthetic-or-real codemode execution id for receipts. See
     // cm-snippets.ts for the projection/dual-read seam.
@@ -1026,18 +1022,20 @@ export class MyAgent extends Think<Env> {
         // list is advisory metadata for the model only.
         const recipes = await new SavedRecipeService(env, identity.email).list();
         const recipeByName = new Map(recipes.filter((r) => r.status === "enabled").map((r) => [r.name, r] as const));
-        return snippets.map((snippet) => {
+        return snippets.flatMap((snippet) => {
           const recipe = recipeByName.get(snippet.name);
-          return {
+          const capabilities = recipe?.capabilities ?? snippet.capabilities;
+          if (hasRetiredRecipeCapability(capabilities)) return [];
+          return [{
             id: snippet.sourceRecipeId ?? snippet.id,
             name: snippet.name,
             description: snippet.description,
             inputSchema: snippet.inputSchema,
-            capabilities: recipe?.capabilities ?? snippet.capabilities,
+            capabilities,
             codemodeExecutionId: snippet.codemodeExecutionId,
             sourceRecipeId: snippet.sourceRecipeId,
             provenance: snippet.provenance,
-          };
+          }];
         });
       },
       runSavedRecipe: async (input) => {
@@ -1101,7 +1099,7 @@ export class MyAgent extends Think<Env> {
     });
   }
 
-  async beforeTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
+  async beforeTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[]; system?: string }) {
     try {
       return await this.prepareTurn(ctx);
     } catch (error) {
@@ -1110,7 +1108,7 @@ export class MyAgent extends Think<Env> {
     }
   }
 
-  private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[] }) {
+  private async prepareTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[]; system?: string }) {
     const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
     healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin ?? "");
     await this.ensureNativeMcp();
@@ -1183,8 +1181,15 @@ export class MyAgent extends Think<Env> {
       console.warn("tool_call_id_sanitized", { sessionId: this.name, before: idBefore, after: idAfter }),
     ));
     const dogfoodNoToolTurn = safeMessages.some((message) => message.role === "user" && typeof message.content === "string" && message.content.includes("MY_AX_RECIPE_CURVE_NO_TOOLS"));
+    const ownerInstructions = identity
+      ? await getOwnerInstructions(this.env, identity.email).catch((error) => {
+          console.error("owner_instructions_load_failed", { err: error instanceof Error ? error.message : String(error) });
+          return DEFAULT_OWNER_INSTRUCTIONS;
+        })
+      : DEFAULT_OWNER_INSTRUCTIONS;
     return {
       model: resolved.model,
+      instructions: composeOwnerSystemPrompt(PUBLIC_SYSTEM, ctx.system, ownerInstructions),
       messages: safeMessages,
       ...(dogfoodNoToolTurn ? { activeTools: [] } : {}),
       // Native MCP and Code Mode tools bypass createThinkTools, so bound their
@@ -1318,9 +1323,6 @@ export class MyAgent extends Think<Env> {
       if (!candidate || !candidate.eligible) continue;
       const raw = parsed.suggestedRecipe as Record<string, unknown>;
       const capabilities = Array.isArray(raw.capabilities) ? raw.capabilities.map(String) : [];
-      // High-authority machine./terrarium. code with portable=false stays
-      // inline. This is the same rule recipeApprovalDecision has always
-      // enforced; the marker gate is additive, not a replacement.
       const decision = recipeApprovalDecision({
         autoTrust: autoEnable,
         capabilities,

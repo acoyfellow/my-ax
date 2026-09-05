@@ -19,8 +19,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/saved-recipes.ts` + `src/routes/recipes.ts` | Owner-approved saved `work_code` recipes. They run only against an owned session, reuse the normal Work Code Mode bridge, and append start/terminal Run Receipt events. |
 | `src/llm.ts` + `src/models.ts` | Model/provider routing helpers and the operator-controlled catalog used by Think agents. |
 | `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
-| `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, Terrarium, the live-UI Page connector, and a codemode namespace, with location-tagged call receipts. |
-| `src/terrarium-tools.ts` | Bounded Terrarium cloud-agent-run adapter used behind `terrarium.*` (`spawn`/`spawn_background`/`status`), returning verified receipts. |
+| `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, the live-UI Page connector, and a codemode namespace, with location-tagged call receipts. |
 | `src/ui/page-registry.ts` + `src/ui/artifact-tools.ts` | Live-UI Page connector verbs (`page.*`, resolved over the chat WebSocket) plus the artifact self-registration registry that lets a created artifact propose scoped tools the agent then invokes. |
 | `src/jobs.ts` + `src/job-service.ts` + `src/recurring-job-run.ts` + `src/routes/jobs.ts` | Native recurring-prompt scheduling, shared owner-scoped CRUD/evidence service, and one terminalization path for scheduled/manual runs and owner-visible receipts. |
 | `src/run-receipts.ts` + `src/routes/runs.tsx` | Shared owner-scoped Run Receipt event append primitive, v0 CRUD/events, and read-only board; events are explicitly appended, not automatically captured. |
@@ -28,7 +27,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/oauth-store.ts` | `OAuthClientDO` — per-user encrypted-at-rest OAuth token storage with proactive refresh. |
 | `src/bridge.ts` | Mints scoped per-call tickets, attaches upstream auth, writes audit receipts. |
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
-| `src/computer-workspace.ts` | Preview owner-scoped Computer SQLite filesystem with bounded file-only methods under `/home/user`, a 4 MiB live logical-file quota, and a separate 8 MiB cumulative retained-write budget; it is separate from Sandbox, has no execution backend, and has no automatic sync. |
+| `src/computer-workspace.ts` | Legacy owner-scoped Durable Object storage class. The binding and class export remain only to preserve stored data until an explicit migration removes them. It is not exposed to the model or product API. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `BetaPage` (the single-root app served at `/` and `/beta`), `CapabilitiesPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. The legacy multi-mount `ChatPage` is retired. |
 | `src/ui/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results group into at most two compact child snapshots, each with status, summary, attempts, and bounded details. Agents 0.17.0 supports detached child runs and official progress frames. This custom Svelte socket does not yet expose the EventTarget that `useAgentToolEvents` needs. The UI therefore labels and renders retained raw tool output instead of claiming live progress. Reconnect and transcript replay reuse that output. Cancellation and child drill-in are absent because the current parent route exposes no safe official action surface. |
 | `migrations/` | D1 schema migrations. |
@@ -47,15 +46,12 @@ Browser
   |     `-> MyAgent facets       -- per-session Think chat, recovery, submissions, memory
   |            |
   |            |-> OAuthClientDO  -- per-user encrypted OAuth bearers used to register native Agent.mcp tools
-  |            |-> Sandbox DO     -- per-user My AX Workspace
+  |            |-> Sandbox DO     -- per-user persistent My AX Workspace
   |            |      `- /home/user -> container-local workspace restored from R2 snapshots
-  |            |-> ComputerWorkspace DO -- per-user preview SQLite filesystem
-  |            |      `- /home/user -> isolated file-only VFS, no execution backend
+  |            |-> ComputerWorkspace DO -- legacy storage binding retained for migration safety only
   |            |-> Worker Loader  -- bounded Work Code Mode dispatcher
   |            |      |- workspace.* -> My AX Workspace
-  |            |      |- computer.*  -> isolated Computer filesystem
   |            |      |- machine.*   -> outbound Machinectl relay
-  |            |      |- terrarium.* -> bounded Terrarium cloud agent runs
   |            |      `- page.*      -> live browser UI (over the chat WS)
   |            |-> D1 `my-ax-db` -- session registry, Think-turn mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
   |            |-> R2 uploads     -- owner-scoped image attachments + screenshot/Svelte artifact objects
@@ -77,7 +73,7 @@ Wrangler bindings (see `wrangler.jsonc`):
 | `OAUTH_CLIENT` | Durable Object (`OAuthClientDO`) | One instance per user — encrypted bearer vault feeding native `Agent.mcp` registrations |
 | `MACHINE_HOST` | Durable Object (`MachineHost`) | One outbound-connected physical laptop relay per user |
 | `SANDBOX` | Durable Object (`Sandbox` from @cloudflare/sandbox) | One container per user; canonical shell/process/preview workspace |
-| `COMPUTER` | Durable Object (`ComputerWorkspace`) | One owner-scoped preview SQLite filesystem; bounded file-only `/home/user`, 4 MiB live logical-file quota, separate 8 MiB cumulative retained-write budget, no execution backend, no automatic sync |
+| `COMPUTER` | Durable Object (`ComputerWorkspace`) | Legacy binding retained to prevent orphaning owner data before an explicit storage migration. It has no model or product API surface. |
 | `BACKUP_BUCKET` | R2 | Sandbox workspace backup archives |
 | `DB` | D1 | Session registry, Think-turn mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
 | `AUDIT_KV` | KV | 90-day audit receipts written by `bridge.ts` |
@@ -89,27 +85,21 @@ Wrangler bindings (see `wrangler.jsonc`):
 `work_code` accepts at most `32 KiB` of generated source and gives the Dynamic
 Worker a `60s` timeout with global outbound networking disabled. Host methods
 can reach their configured providers; for example, `machine.shell` reaches the
-connected laptop and `terrarium.spawn` reaches the Terrarium service. The
+connected laptop. The
 `page.*` verbs are not Worker Loader outbound calls: they resolve over the owner
 chat WebSocket and only work while a chat tab is connected.
 
 ## Storage Layout
 
-**R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh sandbox. **ComputerWorkspace DO storage** separately holds a preview SQLite `/home/user` VFS. Its live logical-file quota is 4 MiB. A separate per-owner 8 MiB cumulative retained-write reservation is persisted and charges the full 32 KiB write allowance before each valid package write because `@cloudflare/computer@0.1.1` retains historical VFS blobs on overwrite. A package-write failure can leave that bounded reservation charged; this is deliberate fail-closed accounting, not a claim that the upstream VFS garbage-collects blobs. It has no execution backend, no shared files, no migration/copy path from Sandbox, no automatic sync, and does not participate in Sandbox snapshots.
+**R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh Sandbox. A requested recycle must publish a snapshot before it destroys the current container. The legacy `ComputerWorkspace` Durable Object binding and class export remain only to prevent data loss until an explicit storage migration is complete. No model tool or product API can reach that legacy storage.
 
 **Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). Owner/API injection and native recurring alarms both submit durable turns through Think's unified `runTurn({ mode: "submit" })` path. **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, Attention, recurring jobs and job evidence, saved recipes, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
 
 **KV `AUDIT_KV`** stores `bridge.ts` call receipts for 90 days. Each stored record includes caller, target, method, and timestamp; Work Code Mode calls use their own response envelope.
 
-## Workspace Replacement Matrix
+## Workspace Persistence
 
-| Need | Current canonical surface | Computer preview status |
-|---|---|---|
-| Bounded file reads/writes/listing/search | Sandbox `workspace.*` remains canonical for existing data | `computer.read/write/list/grep` is a separate SQLite-only dogfood slice with a 4 MiB live logical-file quota, 8 MiB cumulative retained-write budget, and no automatic sync |
-| Shell commands, processes, code execution, previews | Sandbox `workspace.*` | Not provided; no execution backend |
-| Durable file storage | Sandbox plus R2 snapshots | Durable Object SQLite only |
-| Data continuity | Existing Sandbox restore/snapshot flow | No data copy, no automatic sync, and no replacement path |
-| Snapshot behavior | Sandbox mutations can trigger an R2 snapshot at turn end | Computer-only calls never trigger Sandbox snapshots |
+The Sandbox is the canonical computer for files, installed tools, command-line authentication, processes, tests, and previews. R2 snapshots preserve `/home/user` across container replacement. Recycle fails closed if snapshot publication fails. The legacy `ComputerWorkspace` binding has no product surface and remains only until a separate migration can preserve its retained data.
 
 ## Identity Flow
 
@@ -153,7 +143,7 @@ my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configure
 - **Trusted inline widget registry** — `src/ui/tool-result-widgets.ts` classifies tool output into an explicit allowlisted Svelte renderer. It never accepts arbitrary component names, HTML, or iframe URLs from model-adjacent output. Unknown payloads fall back to inert raw text. For Svelte artifacts it accepts only same-origin `/api/artifacts/:uuid/preview` URLs and mounts them in an `allow-scripts` sandboxed iframe.
 - **`create_svelte_artifact`** — a native Think tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
 - **`browser_open`** — a native Think tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
-- **`work_search` / `work_code`** — the model-facing computer surface. One catalog and one bounded program span the canonical Sandbox My AX Workspace, the separate preview Computer SQLite filesystem, the connected physical machine, bounded Terrarium cloud agent runs, the live-UI Page connector, and a codemode namespace. `computer.*` is bounded to quota-limited file operations under `/home/user`, has no execution backend, neither replaces nor copies My AX Workspace data, and has no automatic sync. Child calls carry location, method, status, and duration metadata.
+- **`work_search` / `work_code`** — the model-facing work surface. One catalog and one bounded program span the canonical persistent Sandbox, the connected physical machine, the live-UI Page connector, and a codemode namespace. Child calls carry location, method, status, and duration metadata.
 - **Recurring jobs** — `JobService` is the sole business boundary for list/create/update/pause/resume/run/delete/history. Every adapter supplies the verified owner; all reads and mutations scope SQL by that owner. Active updates create the replacement native schedule before persistence, cancel it if persistence fails, and retire the old schedule only after the new row is durable. `job_events` retains mutation/run evidence and idempotency keys bound repeated create/run requests.
 - **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration, immediate one-off `notify_owner` Web Push delivery, and explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 

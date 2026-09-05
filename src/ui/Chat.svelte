@@ -2695,7 +2695,7 @@
                       {/each}
                     </div>
                   {/if}
-                  {m.content}
+                  <div class="msg-user-content">{m.content}</div>
                 </div>
               {:else if m.role === "assistant"}
                 {#if m.parts.length === 0 && !m.streaming}

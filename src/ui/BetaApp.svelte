@@ -7,16 +7,10 @@
   //
   // Served at /beta (additive, behind the same Access). Prod / is untouched.
   //
-  // NOTE (L1 scaffold): ComputerHealth + Connectors still render as sibling
-  // nodes that Settings relocates into its Connections tab (the existing
-  // mechanism), kept identical here for 1:1 behavior. Converting that to a
-  // Svelte snippet slot is a bounded follow-up (L3) that removes the last
-  // DOM-move; not required for single-root parity of the main tree.
   import AppShell from "./AppShell.svelte";
   import Chat from "./Chat.svelte";
   import Sessions from "./Sessions.svelte";
   import Settings from "./Settings.svelte";
-  import ComputerHealth from "./ComputerHealth.svelte";
   import Connectors from "./Connectors.svelte";
 
   interface Props {
@@ -95,6 +89,5 @@
 
 <!-- Panels Settings relocates into its Connections tab (same mechanism as prod). -->
 <div id="settings-drawer-extra-mounts" class="hidden" aria-hidden="true">
-  <ComputerHealth />
   <Connectors />
 </div>
