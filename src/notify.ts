@@ -37,6 +37,7 @@ export function isActionableNotificationKind(kind: string | null | undefined): b
 
 export interface OwnerNotification {
   kind: NotificationKind;
+  stableName?: string;
   sessionId?: string;
   title: string;
   body: string;
@@ -257,9 +258,23 @@ export function dedupedReceipt(): NotificationReceipt {
   return { delivered: 0, expired: 0, failed: 0, devices: 0 };
 }
 
+async function ensureNotificationSession(env: Env, email: string, stableName: string): Promise<string | undefined> {
+  const normalized = stableName.replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!normalized) return undefined;
+  const existing = await env.DB.prepare("SELECT id FROM sessions WHERE owner_email = ? AND stable_name = ? LIMIT 1").bind(email, normalized).first<{ id: string }>().catch(() => null);
+  if (existing?.id) return existing.id;
+  const id = crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO sessions (id, name, stable_name, status, owner_email, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now'))").bind(id, normalized, normalized, email).run().catch(() => undefined);
+  return id;
+}
+
 /** Deliver a same-owner agent notification to every subscribed installed app. */
 export async function notifyOwner(env: Env, ownerEmail: string, notification: OwnerNotification): Promise<NotificationReceipt> {
   const email = ownerEmail.toLowerCase();
+  if (!notification.sessionId && notification.stableName) {
+    const sessionId = await ensureNotificationSession(env, email, notification.stableName);
+    if (sessionId) notification = { ...notification, sessionId };
+  }
   const taggedProgress = progressTag(notification.progressTag);
   const terminalProgress = taggedProgress !== undefined && notification.progressTerminal === true;
   const intermediateProgress = taggedProgress !== undefined && !terminalProgress;
