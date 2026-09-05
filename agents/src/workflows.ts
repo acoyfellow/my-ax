@@ -6,9 +6,10 @@ import {
   requireGateway,
   resolveAgentsModel,
 } from "./policy";
-import { runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
+import { type GithubPort, type TerrariumPort } from "./orchestrate";
 import { runReview } from "./review";
 import { auditGithubLayer, runAuditEffect } from "./audit-effect";
+import { runTriageEffect, triageLayer } from "./triage-effect";
 
 export interface AgentsEnv {
   AGENTS_MODEL?: string;
@@ -41,7 +42,9 @@ export async function executeTriageWorkflow(
 ) {
   requireGateway(env);
   const modelId = resolveAgentsModel(env);
-  return runTriage(input, { ...ports, model: { modelId } });
+  return Effect.runPromise(
+    runTriageEffect(input).pipe(Effect.provide(triageLayer({ ...ports, model: { modelId } }))),
+  );
 }
 
 export async function executeAuditWorkflow(

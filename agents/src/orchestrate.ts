@@ -1,17 +1,10 @@
 import { assertPublicText } from "./public-text";
-import { formatIssueTransferredToPr } from "./sweep";
 import {
   type AuditReceipt,
   type Classification,
   type IssueInput,
   type PullInput,
   type TerrariumReceipt,
-  acceptVisualProof,
-  classifyIssue,
-  requireTaskProof,
-  shouldOpenDraft,
-  shouldSpawnDig,
-  verifyTerrariumReceipt,
 } from "./policy";
 
 export const PROOF_COMMAND = "npx tsx --test src/desk-board.test.ts agents/src/policy.test.ts agents/src/harness.test.ts agents/src/github-hmac.test.ts";
@@ -111,113 +104,6 @@ export function formatLoopBoard(input: {
   }
   if (input.error) lines.push(`error: ${input.error}`);
   return lines.join("\n");
-}
-
-export async function runTriage(input: IssueInput, ports: { github: GithubPort; terrarium: TerrariumPort; model: ModelPort }): Promise<TriageStep[]> {
-  const classification = ports.model.classify ? await ports.model.classify(input) : classifyIssue(input);
-  const steps: TriageStep[] = [{ step: "classify", classification }];
-  const issueNumber = input.number ?? 0;
-  let stage: "labeled" | "blocked-missing-branch" | "blocked-stamp" | "pr-opened" | "pr-failed" = "labeled";
-  let prNumber: number | undefined;
-  let error: string | undefined;
-  try {
-    await ports.github.labelIssue(issueNumber, classification.labels);
-    steps.push({ step: "label", labels: classification.labels });
-  } catch {
-    steps.push({ step: "stop", reason: "label failed" });
-    error = "label failed";
-  }
-  if (shouldSpawnDig(classification)) {
-    const taskProof = requireTaskProof("test -f package.json");
-    const contract = await ports.terrarium.spawn(`Hard issue: ${input.title}\n${input.body}`, taskProof);
-    const receipt = await ports.terrarium.wait(contract.runId);
-    const verified = verifyTerrariumReceipt({ ...contract, taskProof }, receipt);
-    steps.push({ step: "dig", runId: contract.runId, verified });
-    if (!verified) {
-      steps.push({ step: "stop", reason: "terrarium receipt unproven" });
-      await ports.github.comment(issueNumber, formatLoopBoard({
-        issueNumber, classification, modelId: ports.model.modelId, stage: "labeled", error: "terrarium receipt unproven",
-      }));
-      steps.push({ step: "comment" });
-      return steps;
-    }
-    const visualOk = acceptVisualProof(classification.visual, receipt.visual);
-    steps.push({ step: "visual", accepted: visualOk });
-    if (!visualOk) {
-      steps.push({ step: "stop", reason: "visual proof missing" });
-      await ports.github.comment(issueNumber, formatLoopBoard({
-        issueNumber, classification, modelId: ports.model.modelId, stage: "labeled", error: "visual proof missing",
-      }));
-      steps.push({ step: "comment" });
-      return steps;
-    }
-  } else if (shouldOpenDraft(classification) && issueNumber) {
-    const head = `bot/issue-${issueNumber}`;
-    let exists = ports.github.hasBranch ? await ports.github.hasBranch(head) : true;
-    if (!exists && ports.github.createBranch) {
-      try {
-        await ports.github.createBranch(head, {
-          path: `.factory/issue-${issueNumber}.md`,
-          message: `chore: open work branch for issue #${issueNumber}`,
-          content: formatBranchSeed(input, classification),
-        });
-        exists = true;
-        steps.push({ step: "branch", head });
-      } catch (err) {
-        error = err instanceof Error ? err.message : String(err);
-      }
-    }
-    if (!exists) {
-      stage = "blocked-missing-branch";
-      steps.push({ step: "stop", reason: `missing ${head}` });
-    } else {
-      const files = ports.github.listBranchFiles ? await ports.github.listBranchFiles(head) : [];
-      const product = productFilesOnBranch(files);
-      if (!product.length) {
-        stage = "blocked-stamp";
-        error = error ?? "product files missing; a .factory seed is not a ready PR. Terrarium is not on this path.";
-        steps.push({ step: "stop", reason: error });
-      } else {
-        try {
-          const pr = await ports.github.openReadyPr({
-            title: formatReadyPrTitle(input),
-            body: formatReadyPrBody(input, classification),
-            head,
-          });
-          prNumber = pr.number;
-          stage = "pr-opened";
-          steps.push({ step: "pr", number: pr.number });
-          if (ports.github.closeIssue) {
-            await ports.github.closeIssue(issueNumber, formatIssueTransferredToPr(pr.number));
-            steps.push({ step: "issue-closed", number: issueNumber });
-          }
-        } catch (err) {
-          stage = "pr-failed";
-          error = err instanceof Error ? err.message : String(err);
-          steps.push({ step: "stop", reason: error });
-        }
-      }
-    }
-  } else {
-    steps.push({ step: "stop", reason: classification.spray ? "spray" : "no-draft" });
-  }
-  const board = formatLoopBoard({
-    issueNumber, classification, modelId: ports.model.modelId, stage, prNumber, error,
-  });
-  if (await alreadyPostedBoard(ports.github, issueNumber, board, input.commentsCount)) {
-    steps.push({ step: "stop", reason: "board already posted" });
-    return steps;
-  }
-  await ports.github.comment(issueNumber, board);
-  steps.push({ step: "comment" });
-  return steps;
-}
-
-async function alreadyPostedBoard(github: GithubPort, issueNumber: number, board: string, commentsCount?: number): Promise<boolean> {
-  if (commentsCount === 0) return false;
-  if (!github.listComments) return false;
-  const comments = await github.listComments(issueNumber);
-  return comments.some((body) => body.trim() === board.trim());
 }
 
 export function formatReadyPrTitle(input: IssueInput): string {
