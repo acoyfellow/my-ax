@@ -48,43 +48,6 @@ function authHeaders(token: string): HeadersInit {
   return { authorization: `Bearer ${token}`, "content-type": "application/json" };
 }
 
-export async function listPantryRecipes(env: Env): Promise<PantryListEntry[]> {
-  const { url, token } = pantryConfig(env);
-  if (!token) return [];
-  const res = await pantryFetch(env)(`${url}/recipes`, { headers: authHeaders(token) });
-  if (!res.ok) throw new Error(`pantry list failed: ${res.status}`);
-  const body = (await res.json()) as { recipes?: Array<Record<string, unknown>> };
-  return (body.recipes ?? []).map((recipe) => ({
-    name: String(recipe.name ?? ""),
-    description: String(recipe.description ?? ""),
-    capabilities: Array.isArray(recipe.capabilities) ? recipe.capabilities.filter((c): c is string => typeof c === "string") : [],
-    status: String(recipe.status ?? ""),
-    version: typeof recipe.version === "number" ? recipe.version : undefined,
-    source: "pantry" as const,
-  })).filter((recipe) => recipe.name);
-}
-
-export async function getPantryRecipe(env: Env, name: string): Promise<PantryFullRecipe | null> {
-  const { url, token } = pantryConfig(env);
-  if (!token || !name) return null;
-  const res = await pantryFetch(env)(`${url}/recipe/${encodeURIComponent(name)}`, { headers: authHeaders(token) });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`pantry get failed: ${res.status}`);
-  const recipe = (await res.json()) as Record<string, unknown>;
-  if (typeof recipe.code !== "string" || typeof recipe.name !== "string") return null;
-  return {
-    name: recipe.name,
-    description: String(recipe.description ?? ""),
-    inputSchema: recipe.inputSchema && typeof recipe.inputSchema === "object" && !Array.isArray(recipe.inputSchema)
-      ? recipe.inputSchema as Record<string, unknown>
-      : { type: "object", properties: {} },
-    code: recipe.code,
-    capabilities: Array.isArray(recipe.capabilities) ? recipe.capabilities.filter((c): c is string => typeof c === "string") : [],
-    status: String(recipe.status ?? ""),
-    version: typeof recipe.version === "number" ? recipe.version : undefined,
-  };
-}
-
 export function pantryRecipeExecutionCode(recipeCode: string): string {
   const trimmed = recipeCode.trim().replace(/;+$/, "");
   const callable = /^(async\s*)?(\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(trimmed)

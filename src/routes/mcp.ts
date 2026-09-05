@@ -14,7 +14,8 @@ import { getUserWorkspace } from "../workspace";
 import { listWorkspace, readWorkspace, workspaceSandboxLayer, writeWorkspace } from "../workspace-mcp-program";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
-import { getPantryRecipe, listPantryRecipes, pantryRecipeExecutionCode } from "../pantry-client";
+import { pantryRecipeExecutionCode } from "../pantry-client";
+import { getPantryRecipe, listPantryRecipes } from "../pantry-program";
 
 const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_clear", "deployment"] as const;
 type Method = typeof METHODS[number];
@@ -194,7 +195,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   if (method === "recipes_list") {
     const recipes = await new SavedRecipeService(c.env, email).list();
     let pantry: unknown[] = [];
-    try { pantry = await listPantryRecipes(c.env); } catch { pantry = []; }
+    try { pantry = await Effect.runPromise(listPantryRecipes(c.env)); } catch { pantry = []; }
     return { recipes, pantry };
   }
   if (method === "recipes_delete") {
@@ -211,7 +212,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     const callerCapabilities = Array.isArray(args.callerCapabilities) ? args.callerCapabilities.filter((capability): capability is string => typeof capability === "string") : undefined;
     const stub = await getSessionAgent(c.env, email, sessionId);
     await stub.seedIdentity(c.get("identity"));
-    const pantryRecipe = await getPantryRecipe(c.env, recipeId).catch(() => null);
+    const pantryRecipe = await Effect.runPromise(getPantryRecipe(c.env, recipeId)).catch(() => null);
     if (pantryRecipe && pantryRecipe.status === "enabled") {
       const recipes = new SavedRecipeService(c.env, email);
       let localId = recipeId;
