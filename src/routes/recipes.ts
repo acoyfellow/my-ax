@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../app-env";
@@ -5,7 +6,9 @@ import type { ApiResponse } from "../types";
 import { getSessionAgent } from "../agent-stub";
 import { publicRecipe, SavedRecipeError, SavedRecipeService, validateRecipeRunInput } from "../saved-recipes";
 import { projectSavedRecipe } from "../cm-snippets";
-import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences";
+import { autoTrustMode } from "../auto-trust";
+import { databaseLayer } from "../effect/database";
+import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences-program";
 import { requireOwnedSession } from "../session-ownership";
 import { syncRecipesToPantry } from "../pantry-sync";
 
@@ -52,7 +55,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
   app.get("/api/recipes/preferences", async (c) => {
     const command = "GET /api/recipes/preferences";
     try {
-      return ok(c, command, { approvalMode: await reusableToolApprovalMode(c.env, c.get("identity").email) });
+      const fallback = autoTrustMode(c.env) === "auto" ? "auto" : "review";
+      const approvalMode = await Effect.runPromise(
+        reusableToolApprovalMode(c.get("identity").email, fallback).pipe(Effect.provide(databaseLayer(c.env.DB))),
+      );
+      return ok(c, command, { approvalMode });
     } catch (error) { return failure(c, command, error); }
   });
 
@@ -64,7 +71,9 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
         throw new SavedRecipeError("InvalidInput", "approvalMode must be review or auto");
       }
       return ok(c, command, {
-        approvalMode: await setReusableToolApprovalMode(c.env, c.get("identity").email, request.approvalMode),
+        approvalMode: await Effect.runPromise(
+          setReusableToolApprovalMode(c.get("identity").email, request.approvalMode).pipe(Effect.provide(databaseLayer(c.env.DB))),
+        ),
       });
     } catch (error) { return failure(c, command, error); }
   });

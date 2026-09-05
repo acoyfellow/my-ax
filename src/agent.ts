@@ -48,8 +48,10 @@ import { executeWorkCode } from "./work-tools";
 import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
 import { RecipeUsageCollector } from "./recipe-usage-collector";
 import { resolveBridgeOrigin } from "./bridge-origin";
+import { autoTrustMode } from "./auto-trust";
+import { databaseLayer } from "./effect/database";
 import { safePublicHttpUrl } from "./public-url";
-import { reusableToolApprovalMode } from "./reusable-tool-preferences";
+import { reusableToolApprovalMode } from "./reusable-tool-preferences-program";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
@@ -1303,7 +1305,10 @@ export class MyAgent extends Think<Env> {
     // The owner chooses whether qualifying reusable tools wait for review or
     // become enabled immediately. The stored owner preference wins; the legacy
     // deploy variable remains a migration-safe fallback when no choice exists.
-    const trustMode = await reusableToolApprovalMode(this.env, identity.email);
+    const fallback = autoTrustMode(this.env) === "auto" ? "auto" : "review";
+    const trustMode = await Effect.runPromise(
+      reusableToolApprovalMode(identity.email, fallback).pipe(Effect.provide(databaseLayer(this.env.DB))),
+    );
     const autoEnable = trustMode === "auto";
     for (const output of workCodeOutputs) {
       const text = typeof output === "string" ? output : JSON.stringify(output);

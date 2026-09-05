@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 482,
+    "total": 483,
     "classifications": {
       "static-evidence": 192,
       "effect-program": 83,
-      "plain-typescript": 97,
+      "plain-typescript": 98,
       "runtime-adapter": 44,
       "frontend-generated": 66
     },
     "statuses": {
-      "accepted": 399,
-      "migrated": 18,
-      "pending": 65
+      "accepted": 400,
+      "migrated": 19,
+      "pending": 64
     }
   },
   "entries": [
@@ -1626,6 +1626,12 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/reusable-tool-preferences-program.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
       "path": "src/reusable-tool-preferences.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1633,9 +1639,9 @@
     },
     {
       "path": "src/reusable-tool-preferences.ts",
-      "classification": "effect-program",
-      "status": "pending",
-      "reason": "external, concurrent, timed, or fallible workflow"
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/reusable-tool-promotion.test.ts",
