@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 477,
+    "total": 479,
     "classifications": {
-      "static-evidence": 187,
+      "static-evidence": 188,
       "effect-program": 90,
       "plain-typescript": 95,
-      "runtime-adapter": 40,
+      "runtime-adapter": 41,
       "frontend-generated": 65
     },
     "statuses": {
-      "accepted": 387,
-      "migrated": 14,
-      "pending": 76
+      "accepted": 389,
+      "migrated": 15,
+      "pending": 75
     }
   },
   "entries": [
@@ -330,10 +330,22 @@
       "reason": "active live proof workflow"
     },
     {
-      "path": "proof/terminal-live-client.mjs",
+      "path": "proof/terminal-live-client-program.mjs",
       "classification": "effect-program",
-      "status": "pending",
+      "status": "migrated",
       "reason": "active live proof workflow"
+    },
+    {
+      "path": "proof/terminal-live-client-program.test.mjs",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "proof/terminal-live-client.mjs",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
     },
     {
       "path": "proof/terminal-live.sh",
