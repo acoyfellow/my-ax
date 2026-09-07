@@ -90,6 +90,8 @@ declare global {
       LLM_GATEWAY_AUTH_HEADER?: string;
       LLM_GATEWAY_SERVICE_TOKEN_ID?: string;
       LLM_GATEWAY_SERVICE_TOKEN_SECRET?: string;
+      LLM_SPECIAL_GATEWAY_URL?: string;
+      LLM_SPECIAL_GATEWAY_TOKEN?: string;
 
       GITHUB_TOKEN?: string;
       GITHUB_REPO?: string;

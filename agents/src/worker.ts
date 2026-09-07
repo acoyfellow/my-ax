@@ -2,7 +2,7 @@ import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows
 import { verifyGithubSignature } from "./github-hmac";
 import { liveGithubPort } from "./ports";
 import { acceptImplementationSubmission } from "./implementation-handler";
-import { formatDuplicateClose, formatHumanBoundaryClose, formatIssueTransferredToPr, formatPlaceholderPrClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
+import { formatDuplicateClose, formatIssueTransferredToPr, formatPlaceholderPrClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -15,6 +15,7 @@ export interface WorkerEnv extends AgentsEnv {
   AUDIT: WorkflowBinding;
   DIG: WorkflowBinding;
   REVIEW: WorkflowBinding;
+  FACTORY_GIT_SHA?: string;
 }
 
 async function queueTriage(env: WorkerEnv, deliveryId: string, issue: { number: number; title?: string; body?: string; user?: { login?: string }; comments?: number; labels?: Array<{ name?: string }> | string[] }) {
@@ -46,6 +47,16 @@ export default {
         workflows: workflowBindings(),
         model: env.AGENTS_MODEL || "grok-4.6",
       });
+    }
+    if (request.method === "POST" && url.pathname === "/factory/sweep") {
+      if (!forwardedFromHook(request, env)) return new Response("unauthorized", { status: 401 });
+      const raw = await request.text();
+      if (!await verifyGithubSignature(env.GITHUB_WEBHOOK_SECRET || "", raw, request.headers.get("x-hub-signature-256") || "")) return new Response("unauthorized", { status: 401 });
+      let input: { issue?: number };
+      try { input = JSON.parse(raw); } catch { return new Response("invalid JSON", { status: 400 }); }
+      if (!Number.isInteger(input?.issue) || input.issue! <= 0) return new Response("positive issue number required", { status: 400 });
+      const result = await runIssueSweep(env, Date.now(), input.issue);
+      return Response.json({ ok: true, gitSha: env.FACTORY_GIT_SHA ?? null, ...result });
     }
     if (request.method === "POST" && url.pathname === "/factory/submissions") {
       if (!forwardedFromHook(request, env)) return new Response("unauthorized", { status: 401 });
@@ -129,12 +140,13 @@ export default {
   },
 };
 
-export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()): Promise<{ closed: number; queued: number; needsHuman: number }> {
+export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now(), onlyIssue?: number) {
   const github = liveGithubPort(env);
-  if (!github.listOpenIssues || !github.listComments) return { closed: 0, queued: 0, needsHuman: 0 };
+  if (!github.listOpenIssues || !github.listComments) throw new Error("Sweep requires issue and comment reads");
   const open = await github.listOpenIssues();
   const issues: SweepIssue[] = [];
   for (const issue of open) {
+    if (onlyIssue !== undefined && issue.number !== onlyIssue) continue;
     const comments = await github.listComments(issue.number);
     const head = `bot/issue-${issue.number}`;
     const hasHead = github.hasBranch ? await github.hasBranch(head) : false;
@@ -158,17 +170,11 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
       await github.closeIssue(action.number, formatIssueTransferredToPr(action.prNumber));
       closed += 1;
     }
-    if (action.action === "close-human-boundary" && github.closeIssue) {
-      await github.closeIssue(action.number, formatHumanBoundaryClose());
-      closed += 1;
-      needsHuman += 1;
-    }
-    if (action.action === "close-placeholder-pr" && github.closePr && github.closeIssue) {
+    if (action.action === "close-placeholder-pr" && github.closePr) {
       await github.comment(action.prNumber, formatPlaceholderPrClose(action.number));
       await github.closePr(action.prNumber);
       await github.labelIssue(action.number, ["triage:needs-human"]);
-      await github.closeIssue(action.number, formatPlaceholderPrClose(action.number));
-      closed += 2;
+      closed += 1;
       needsHuman += 1;
     }
     if (action.action === "needs-human") {
@@ -189,5 +195,5 @@ export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now()):
       if (response.ok) queued += 1;
     }
   }
-  return { closed, queued, needsHuman };
+  return { closed, queued, needsHuman, inspected: issues.map((issue) => issue.number), actions };
 }
