@@ -20,8 +20,8 @@
   import { myAxDeepLinkIntent, parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
-  import { d1EntryToTranscriptMessage } from "./d1-transcript";
-  import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, keepDurableTurn, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
+  import { d1EntriesToTranscriptMessages } from "./d1-transcript";
+  import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
@@ -60,14 +60,6 @@
     isTitleEpochCurrent,
   } from "@my-ax/store";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
-
-  if (typeof document !== "undefined" && toastBus.pending.length === 0) {
-    const root = document.querySelector('[data-svelte-hono-mount="beta"]');
-    const renderedErrors = root ? [...root.querySelectorAll<HTMLElement>(".msg-error .msg-body")].map((node) => node.textContent?.trim()).filter((text): text is string => Boolean(text)) : [];
-    if (renderedErrors.length > 0) {
-      toastBus.pending = renderedErrors.map((text, index) => ({ id: `hydrated-error-${index}`, kind: "error" as const, text }));
-    }
-  }
 
   // Markdown ships in the application bundle so the first streamed token can
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
@@ -1235,6 +1227,7 @@
     dispatchTurn({ type: "session-switch" });
     messages = [];
     thinkMessages = [];
+    toastBus.pending = [];
     applyStatus("idle");
     onboardingHidden = true;
     resumingExistingSession = true;
@@ -1691,11 +1684,6 @@
     return;
   }
 
-  function d1EntryToMessage(entry: any, sessionId = currentSessionId()): MessageView {
-    const message = d1EntryToTranscriptMessage(entry, renderMarkdown);
-    return { ...message, id: entry.meta?.uiMessageId || message.id, sessionId };
-  }
-
   async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
     if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
     // P1 Stage 2: render ONE newest-first bounded page immediately instead of
@@ -1703,10 +1691,10 @@
     // history pages in on scroll-up via loadOlderHistory.
     const result = await loadNewestEntries(expected, 200);
     if (result.outcome === "stale") return "stale";
-    const restored: Message[] = result.entries.map(d1EntryToMessage);
+    const restored = d1EntriesToTranscriptMessages(result.entries, { sessionId: expected.sessionId, renderMarkdown });
     if (!sessionWorkIsCurrent(expected)) return "stale";
     if (!restored.length) return "empty";
-    messages = restored;
+    messages = mergeTranscript(messages, restored, { preferIncoming: false }) as MessageView[];
     olderHistoryCursor = result.hasOlder ? (result.olderCursor ?? "") : "";
     onboardingHidden = true;
     // The eager fast-path load is a normal resume, not a recovery — stay quiet.
@@ -1729,17 +1717,9 @@
       const body = await res.json();
       if (!sessionWorkIsCurrent(expected)) return;
       const r = body?.result ?? {};
-      // Drop synthetic d1- tool rows from paged-older history: Think renders tool
-      // calls as inline assistant parts, so a standalone d1- system row would
-      // duplicate an inline tool once the assistant turn is also shown. Keep only
-      // genuine turns (real ui id) that aren't already in the view.
-      // #3 idempotent: never re-add an id already rendered. Drop synthetic d1- tool
-      // rows (Think renders those inline) AND anything already present, so repeated
-      // scroll-up paging can't duplicate the boundary rows.
       const present = new Set(messages.map((m) => m.id));
-      const older: Message[] = (r.entries ?? [])
-        .map(d1EntryToMessage)
-        .filter((m: Message) => !m.id.startsWith("d1-") && !present.has(m.id));
+      const older = d1EntriesToTranscriptMessages(r.entries ?? [], { sessionId: expected.sessionId, renderMarkdown })
+        .filter((m) => !present.has(m.id));
       if (older.length) messages = mergeTranscript(older as any, messages as any) as typeof messages;
       olderHistoryCursor = r.hasOlder ? (r.olderCursor ?? "") : "";
     } catch {
@@ -1870,10 +1850,6 @@
     // Merge Think's replay into whatever the D1 eager restore already rendered.
     // Think wins on id collision (authoritative), D1-only messages survive. When
     // Think replayed nothing, this preserves the D1 transcript unchanged.
-    // keepExistingOnlyIf: retain a D1 message Think omitted ONLY if it is a genuine
-    // turn (real ui id). D1 tool rows are synthetic `d1-<n>` system messages that
-    // Think re-renders as inline assistant parts, so dropping them here avoids
-    // duplicated tool output.
     // #4 preserve scroll: capture whether the user was pinned at the bottom AND the
     // pre-merge geometry BEFORE mutating `messages`, so the Think replay reconcile
     // never yanks the viewport. If they were at the bottom we settle at the bottom;
@@ -1889,7 +1865,7 @@
     }
     const ownedThink = dropHomelessThinkTurns(priorMessages, thinkViews);
     const merged = ownedThink.length > 0
-      ? mergeTranscript(priorMessages, ownedThink, { keepExistingOnlyIf: keepDurableTurn })
+      ? mergeTranscript(priorMessages, ownedThink)
       : priorMessages;
     messages = boundToSession(merged, sessionId);
     void hydrateHistoryTimestamps();
