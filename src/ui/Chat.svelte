@@ -61,6 +61,14 @@
   } from "@my-ax/store";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
 
+  if (typeof document !== "undefined" && toastBus.pending.length === 0) {
+    const root = document.querySelector('[data-svelte-hono-mount="beta"]');
+    const renderedErrors = root ? [...root.querySelectorAll<HTMLElement>(".msg-error .msg-body")].map((node) => node.textContent?.trim()).filter((text): text is string => Boolean(text)) : [];
+    if (renderedErrors.length > 0) {
+      toastBus.pending = renderedErrors.map((text, index) => ({ id: `hydrated-error-${index}`, kind: "error" as const, text }));
+    }
+  }
+
   // Markdown ships in the application bundle so the first streamed token can
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
   marked.setOptions({ gfm: true, breaks: true });
@@ -1227,7 +1235,6 @@
     dispatchTurn({ type: "session-switch" });
     messages = [];
     thinkMessages = [];
-    toastBus.pending = []; // don't carry a prior session's notices into this one
     applyStatus("idle");
     onboardingHidden = true;
     resumingExistingSession = true;
