@@ -27,7 +27,6 @@ export type SweepAction =
   | { action: "close-duplicate"; number: number; keep: number; fingerprint: string }
   | { action: "close-placeholder-pr"; number: number; prNumber: number }
   | { action: "close-issue-to-pr"; number: number; prNumber: number }
-  | { action: "close-human-boundary"; number: number }
   | { action: "queue"; number: number }
   | { action: "needs-human"; number: number; attempts: number };
 
@@ -108,18 +107,11 @@ export function planSweep(issues: SweepIssue[], now = Date.now()): SweepAction[]
     }
     if (issue.hasOpenPr || issue.openPr) continue;
     if (hasActiveImplementationLease(issue.comments, now)) continue;
-    if ((issue.labels ?? []).includes("triage:needs-human")) {
-      if (isRetryExhausted(issue.comments)) continue;
-      actions.push({ action: "close-human-boundary", number: issue.number });
-      continue;
-    }
+    if ((issue.labels ?? []).includes("triage:needs-human")) continue;
     const attempts = loopBoardAttempts(issue.comments);
     const optedIn = (issue.labels ?? []).includes("triage:draft");
     const retryable = optedIn || isBlockedStamp(issue.comments) || !hasLoopBoard(issue.comments);
-    if (!retryable) {
-      actions.push({ action: "close-human-boundary", number: issue.number });
-      continue;
-    }
+    if (!retryable) continue;
     if (attempts >= SWEEP_MAX_ATTEMPTS) {
       actions.push({ action: "needs-human", number: issue.number, attempts });
       continue;
@@ -142,22 +134,12 @@ export function formatIssueTransferredToPr(prNumber: number): string {
   ].join("\n");
 }
 
-export function formatHumanBoundaryClose(): string {
-  return [
-    "## factory triage",
-    "truth: blocked by an external human or security boundary",
-    "result: issue closed instead of parked",
-    "reopen only with the missing authority or evidence attached",
-    "Worker never merges and never approves.",
-  ].join("\n");
-}
-
 export function formatPlaceholderPrClose(issueNumber: number): string {
   return [
     "## factory cleanup",
     `issue: #${issueNumber}`,
     "reason: the pull request contains only factory receipt files and no product change",
-    "result: closed without merge or approval",
+    "result: placeholder PR closed without merge or approval; issue stays open",
     "next: triage:needs-human",
   ].join("\n");
 }
