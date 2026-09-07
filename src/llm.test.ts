@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { gatewayConfig, modelGatewayConfig, resolveMyAxModel } from "./llm";
 import { findModel } from "./models";
+import { generateText } from "ai";
 import type { Env } from "./types";
 
 describe("special model routing", () => {
@@ -18,6 +19,23 @@ describe("special model routing", () => {
       assert.equal(resolveMyAxModel(env, id).model.modelId, upstream);
       assert.throws(() => modelGatewayConfig({ ...env, LLM_SPECIAL_GATEWAY_TOKEN: "" }, meta), /special gateway/);
       assert.throws(() => modelGatewayConfig({ ...env, LLM_SPECIAL_GATEWAY_URL: "http://special.example" }, meta), /HTTPS origin/);
+    });
+    it(`sends ${id} to the special provider rather than the normal gateway`, async () => {
+      const original = globalThis.fetch;
+      let called = false;
+      globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+        called = true;
+        assert.equal(String(url), `https://special.example${path}${path === "/anthropic" ? "/messages" : "/responses"}`);
+        const headers = new Headers(init?.headers);
+        assert.equal(headers.get("cf-access-token"), "special-token");
+        assert.equal(headers.get(path === "/anthropic" ? "x-api-key" : "authorization"), path === "/anthropic" ? "special-token" : "Bearer special-token");
+        assert.equal(JSON.parse(String(init?.body)).model, upstream);
+        throw new Error("wire verified");
+      }) as typeof fetch;
+      try {
+        await assert.rejects(generateText({ model: resolveMyAxModel(env, id).model, prompt: "hello", maxRetries: 0 }), /wire verified/);
+        assert.equal(called, true);
+      } finally { globalThis.fetch = original; }
     });
   }
 });

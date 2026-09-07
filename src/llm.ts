@@ -88,7 +88,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
     const gateway = modelGatewayConfig(env, meta);
     model = createAnthropic({
       baseURL: gateway.baseURL,
-      apiKey: "",
+      apiKey: meta.gateway === "special" ? env.LLM_SPECIAL_GATEWAY_TOKEN! : "",
       headers: gateway.headers,
       // Transparently retry transient gateway rate limits (3021 / 429) with
       // bounded backoff so a per-minute cap blip self-heals instead of failing
@@ -100,7 +100,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
     // The curated OpenAI/custom gateway models use the Responses protocol.
     model = createOpenAI({
       baseURL: gateway.baseURL,
-      apiKey: "",
+      apiKey: meta.gateway === "special" ? env.LLM_SPECIAL_GATEWAY_TOKEN! : "",
       headers: gateway.headers,
       fetch: createRetryFetch({ fetch: globalThis.fetch }),
     }).responses(meta.upstreamId ?? modelId);
