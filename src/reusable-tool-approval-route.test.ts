@@ -20,6 +20,6 @@ test("direct chat approval is owner-scoped and source-bound", () => {
 });
 
 test("approval preference endpoints use the authenticated identity", () => {
-  assert.match(routes, /reusableToolApprovalMode\(c\.env, c\.get\("identity"\)\.email\)/);
-  assert.match(routes, /setReusableToolApprovalMode\(c\.env, c\.get\("identity"\)\.email, request\.approvalMode\)/);
+  assert.match(routes, /reusableToolApprovalMode\(c\.get\("identity"\)\.email, fallback\)\.pipe\(Effect\.provide\(databaseLayer\(c\.env\.DB\)\)\)/);
+  assert.match(routes, /setReusableToolApprovalMode\(c\.get\("identity"\)\.email, request\.approvalMode\)\.pipe\(Effect\.provide\(databaseLayer\(c\.env\.DB\)\)\)/);
 });

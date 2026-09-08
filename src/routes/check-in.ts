@@ -34,14 +34,14 @@ export async function readOwnerCheckIn(env: AppEnv["Bindings"], ownerEmail: stri
     env.DB.prepare("SELECT id, name, status, next_run_at, last_error FROM jobs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT 20").bind(owner).all<CheckInSources["jobs"][number]>(),
     env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status IN ('open', 'running') ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
     env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status = 'completed' ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
-    env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status = 'failed' ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
+    env.DB.prepare("SELECT id, title, task_summary, status, updated_at FROM runs WHERE owner_email = ? AND status = 'failed' AND updated_at >= datetime('now', '-14 days') ORDER BY updated_at DESC LIMIT 10").bind(owner).all<CheckInSources["runs"][number]>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(owner).first<{ count: number }>(),
     env.DB.prepare(actionableTotalSql).bind(owner, ...ACTIONABLE_KIND_BINDS).first<{ count: number }>(),
     env.DB.prepare(informationalTotalSql).bind(owner, ...ACTIONABLE_KIND_BINDS).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM jobs WHERE owner_email = ? AND status = 'active'").bind(owner).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status IN ('open', 'running')").bind(owner).first<{ count: number }>(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status = 'completed'").bind(owner).first<{ count: number }>(),
-    env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status = 'failed'").bind(owner).first<{ count: number }>(),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM runs WHERE owner_email = ? AND status = 'failed' AND updated_at >= datetime('now', '-14 days')").bind(owner).first<{ count: number }>(),
   ]);
   return composeOwnerCheckIn({
     attention: actionableSample.results ?? [],

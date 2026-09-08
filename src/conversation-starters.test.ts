@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Env } from "./types";
+import { Effect, type Layer } from "effect";
 import {
   DEFAULT_STARTERS,
   MAX_STARTERS,
   normalizeStarters,
-  getConversationStarters,
-  setConversationStarters,
 } from "./conversation-starters";
+import {
+  getConversationStarters as getConversationStartersEffect,
+  setConversationStarters as setConversationStartersEffect,
+} from "./conversation-starters-program";
+import { Database, databaseLayer } from "./effect/database";
+
+const getConversationStarters = (layer: Layer.Layer<Database>, email: string) => Effect.runPromise(
+  getConversationStartersEffect(email).pipe(Effect.provide(layer)),
+);
+const setConversationStarters = (layer: Layer.Layer<Database>, email: string, input: unknown) => Effect.runPromise(
+  setConversationStartersEffect(email, input).pipe(Effect.provide(layer)),
+);
 
 test("normalizeStarters keeps valid entries and drops incomplete ones", () => {
   const out = normalizeStarters([
@@ -63,7 +73,7 @@ function makeEnv() {
       return stmt;
     },
   };
-  return { env: { DB: db } as unknown as Env, rows };
+  return { env: databaseLayer(db as never), rows };
 }
 
 const OWNER = "Owner@Example.com";

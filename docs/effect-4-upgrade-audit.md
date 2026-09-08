@@ -1,79 +1,131 @@
-# Effect 3.x → 4.0 upgrade audit
+# Effect v4 backend architecture
 
-Scope of Effect in this repo is small and shallow. The upgrade is low risk and
-can be done in one bounded pass. This audit lists the exact surface, the known
-4.0 breaking-change classes to check against it, and the concrete steps.
+My AX is moving from isolated Effect 3 helpers to an Effect v4 backend architecture. This document is the rule for that migration. It covers the main Worker, the factory Workers, and active live proof programs. It does not require frontend, generated code, pure data transforms, or static evidence to use Effect.
 
-## Current footprint
+## Version decision
 
-- Pinned: `effect@3.21.3` (`package.json`).
-- Importers: three files only.
-  - `src/notify.ts` — web-push delivery with retry.
-  - `src/oauth-store.ts` — token-endpoint fetch with retry.
-  - `src/mcp-probe.ts` — MCP probe with retry/timeout.
-- Symbols used: `Effect`, `Schedule`, `Duration`, `Data` (`Data.TaggedError`),
-  and small `Schema` / `Stream` / `pipe` usage.
-- Concrete patterns in use:
-  - `Effect.gen`, `Effect.try`, `Effect.tryPromise`, `Effect.promise`,
-    `Effect.timeout`, `Effect.retry`, `Effect.catchAll`, `Effect.succeed`,
-    `Effect.orElseSucceed`, `Effect.forEach({ concurrency })`,
-    `Effect.runPromise`.
-  - `Schedule.exponential`, `Schedule.jittered`, `Schedule.recurs`,
-    `Schedule.intersect`, `Schedule.whileInput`.
-  - `Duration.millis`, `Duration.seconds`.
-  - `Data.TaggedError("Name")<{ ... }>`.
+The public Effect documentation currently labels v4 as a release candidate. npm publishes:
 
-No use of `Layer`, `Context`, `Runtime`, `Ref`, `Config`, `Match`, or
-`Effect.Service`, so the largest 4.0 migration areas do not apply here.
+- stable: `effect@3.22.1`
+- v4 release candidate: `effect@4.0.0-rc.112`
 
-## What to verify against 4.0 breaking changes
+My AX will pin the exact reviewed v4 release-candidate version while the migration is in progress. An unreviewed floating `rc` or prerelease range is not acceptable. Updating the pin requires rerunning the complete Effect backend verification.
 
-1. Package + module shape. Confirm 4.0 is still a single `effect` package with
-   the same submodule import style (`import { Effect, Schedule } from "effect"`).
-   If 4.0 splits or renames entrypoints, update the three import lines.
-2. `Effect.gen` adapter. 3.x `Effect.gen(function* () { ... yield* ... })` is
-   already the adapterless form, which is the direction 4.0 wants; verify the
-   generator signature did not change and that `yield*` on an `Effect` still
-   works without the old `(_)=>` adapter.
-3. `Effect.tryPromise` / `Effect.try` option shape. Confirm the
-   `{ try, catch }` object form is still accepted (vs a positional form).
-4. `Effect.timeout` semantics. In some versions `timeout` returns an `Option`
-   or fails with a `TimeoutException`. Verify the failure/`Option` behavior our
-   `.pipe(Effect.timeout(...), Effect.retry(...))` chains rely on is unchanged,
-   because the retry schedule downstream depends on it surfacing as a failure.
-5. `Schedule` combinators. Confirm `intersect`, `jittered`, `recurs`,
-   `exponential`, and `whileInput` keep the same names and argument order.
-6. `Duration` constructors. Confirm `Duration.millis` / `Duration.seconds`
-   are unchanged (these are stable, low risk).
-7. `Data.TaggedError`. Confirm the `Data.TaggedError("Tag")<{...}>` class
-   factory and the `_tag` discriminant are unchanged; our `catchAll` and
-   `whileInput` branch on `instanceof PushNetworkError`.
-8. `Effect.forEach` concurrency option. Confirm `{ concurrency: n }` is still
-   the option name and that numeric concurrency is still accepted.
-9. `runPromise`. Confirm `Effect.runPromise` signature is unchanged and still
-   rejects on defect vs. returning an exit (we rely on a rejected promise being
-   caught by the surrounding `try`/handler where present).
+## Official guidance reviewed
 
-## Steps
+- [Onboarding](https://effect.website/docs/v4/onboarding)
+- [Creating Effects](https://effect.website/docs/v4/getting-started/creating-effects)
+- [Running Effects](https://effect.website/docs/v4/getting-started/running-effects)
+- [Expected Errors](https://effect.website/docs/v4/error-management/expected-errors)
+- [Unexpected Errors](https://effect.website/docs/v4/error-management/unexpected-errors)
+- [Retrying](https://effect.website/docs/v4/error-management/retrying)
+- [Timing Out](https://effect.website/docs/v4/error-management/timing-out)
+- [Managing Services](https://effect.website/docs/v4/requirements-management/services)
+- [Managing Layers](https://effect.website/docs/v4/requirements-management/layers)
+- [Basic Concurrency](https://effect.website/docs/v4/concurrency/basic-concurrency)
+- [Resource Management](https://effect.website/docs/v4/resource-management/introduction)
+- [Scope](https://effect.website/docs/v4/resource-management/scope)
+- [Schema](https://effect.website/docs/v4/schema/getting-started)
+- [Code Style](https://effect.website/docs/v4/code-style/guidelines)
 
-1. Read the official Effect 4.0 release notes and migration guide; map each
-   item above to a keep/change decision.
-2. Bump `effect` to `^4.0` in `package.json`, then `npm install`.
-3. `npm run typecheck`. The type system surfaces most renames and signature
-   changes directly in the three importer files.
-4. Fix any changed imports/signatures in `src/notify.ts`, `src/oauth-store.ts`,
-   `src/mcp-probe.ts` only.
-5. Run the targeted tests for those paths (notify, mcp probe, and any
-   oauth/token tests) plus `npm run test`.
-6. Manually exercise one retry path (e.g. force a transient push failure) to
-   confirm the retry/timeout behavior is unchanged at runtime, since types
-   alone do not prove the `timeout`-as-failure semantics in step 4 above.
-7. Deploy through the employee wrapper and confirm the worker builds and a
-   push/oauth path still works in production.
+## Backend classification
 
-## Risk
+Every backend file must be assigned one of these classes before the migration is complete.
 
-Low. The dependency is used in three isolated helpers with retry/timeout and a
-tagged error, no service/layer graph. The main runtime-behavior risk is the
-`Effect.timeout` failure semantics (step 4); everything else is a
-compile-time-visible rename at most.
+| Class | Meaning | Effect rule |
+|---|---|---|
+| Effect program | Business workflow with external work or meaningful failure, timing, concurrency, or cleanup semantics | Write the workflow as `Effect` values |
+| Effect service | GitHub, model, database, Sandbox, Browser, Pantry, OAuth, MCP, Workflow, clock, or telemetry capability | Define with `Context.Service`; construct with `Layer` |
+| Runtime adapter | Cloudflare `fetch`, scheduled, Workflow, Durable Object, or RPC entrypoint | Parse input, provide Layers, run one program, translate the exit |
+| Pure TypeScript | Classification, formatting, policy, immutable data transforms, constants | Keep plain TypeScript |
+| Frontend or generated | Svelte, browser-only helpers, styles, generated bundles and documentation | Do not migrate |
+| Static evidence | Tests, fixtures, historical receipts, and documentation | Keep as evidence; only executable live workflows need Effect |
+| Obsolete | Unused compatibility or retired product surface | Delete instead of migrating |
+
+A filename or directory does not decide the class. Behavior does.
+
+## Required design
+
+### Services
+
+External capabilities use `Context.Service`. Service operations return Effects whose requirements are `never`; construction dependencies belong in their Layers instead of leaking through service interfaces.
+
+Live implementations use named `Layer` values. Tests provide small deterministic Layers. Business programs do not receive broad environment bags or Promise-based port objects.
+
+### Errors
+
+Expected failures use named `Data.TaggedError` values and remain in the typed error channel. Programs recover with `Effect.catchTag` or `Effect.catchTags` where the business rule explicitly permits recovery.
+
+Invalid input, denied authorization, provider rejection, capacity, timeout, conflict, and unproven receipts are expected failures. Broken invariants and programmer errors are defects. Defects are not converted into friendly domain failures merely to make a handler return a response.
+
+Runtime adapters may inspect the full exit or cause to map typed failures to HTTP or Workflow outcomes. They must keep defects distinguishable.
+
+### Retries and timeouts
+
+`Effect.retry` uses an explicit bounded `Schedule`. A source Effect runs once before the retry schedule applies. Retries are allowed only for operations proven safe to repeat:
+
+- reads;
+- writes with a stable idempotency key and verified provider semantics;
+- operations whose service contract explicitly guarantees idempotency.
+
+GitHub branch, comment, review, issue, pull-request, and deployment mutations are not retried by default.
+
+`Effect.timeout` produces a typed `Cause.TimeoutError` in v4. Workflows may instead use `Effect.timeoutOption` or `Effect.timeoutOrElse` when absence or a domain-specific timeout is the intended contract. Timeout errors must not be accidentally fed into a schedule that only understands transport errors.
+
+### Concurrency
+
+Use structured concurrency. `Effect.all` and `Effect.forEach` are sequential unless an explicit concurrency value is supplied. Every parallel operation must have a reviewed bound. `"unbounded"` is forbidden in My AX backend code.
+
+Races must state what happens to losers and preserve the existing factory quorum or receipt rules. Serial delegation remains serial when that is part of rate-limit or ordering safety.
+
+### Resources and cleanup
+
+Use `Effect.acquireUseRelease`, `Effect.ensuring`, `Effect.addFinalizer`, and `Effect.scoped` for resources with a lifetime. Cleanup runs for success, typed failure, defect, and interruption.
+
+Cleanup must not hide the primary failure. Sandbox snapshots still complete before destructive recycle. Cloudflare Workflow durability, Durable Object state, and D1 transactions remain platform boundaries; an Effect Scope is not a replacement for durable execution.
+
+### Validation
+
+External JSON, webhook payloads, environment configuration, stored JSON, and model-produced structured output use Effect Schema where validation or transformation is meaningful. Internal constants and already typed pure values do not need ceremonial schemas.
+
+### Runtime edges
+
+`Effect.runPromise` or `Effect.runPromiseExit` appears only in runtime adapters and test runners. Helpers and services return Effects instead of starting nested runtimes. Each Cloudflare entrypoint runs one provided program.
+
+## Migration order
+
+1. Rebase this worktree on the completed cleanup so retired surfaces are not migrated.
+2. Build the architecture inventory and enforcement test.
+3. Migrate factory configuration, GitHub, Terrarium, model, and clock services.
+4. Migrate factory triage, review, audit, sweep, and implementation workflows.
+5. Convert active factory and deployment proof workflows; classify historical evidence and delete obsolete gates.
+6. Migrate shared external clients: OAuth, Pantry, MCP, Browser, web search, gateway, and notifications.
+7. Migrate Sandbox lifecycle, jobs, schedules, receipts, and database repositories.
+8. Split the main agent runtime into services and migrate it last.
+9. Run independent architecture and behavior review.
+
+## Factory invariants
+
+The rewrite must preserve these rules:
+
+- The Worker never merges or approves.
+- Children never receive GitHub credentials.
+- An unverified Terrarium receipt cannot advance work.
+- A factory seed is not a product change.
+- An unresolved issue remains unresolved when a carrier PR or branch fails.
+- External mutations are idempotent or single-attempt with explicit evidence.
+- Cloudflare Workflow step boundaries remain durable boundaries.
+
+## Verification contract
+
+`npm run verify:effect-backend` must:
+
+1. verify the inventory has no unclassified backend files;
+2. run an architecture check for unmanaged backend effects;
+3. run factory, proof, and affected product tests;
+4. typecheck the reviewed Effect surface;
+5. build the main Worker, factory Worker, and factory hook Worker with Wrangler dry runs;
+6. verify public-source safety;
+7. record bundle size so the migration cannot silently worsen the known isolate-memory risk.
+
+The migration is incomplete until that command exists and passes from a clean checkout.

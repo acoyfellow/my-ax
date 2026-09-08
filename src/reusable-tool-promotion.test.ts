@@ -54,7 +54,7 @@ test("promotion loop only persists candidates whose reusableToolCandidate.eligib
 
 test("promotion loop uses the owner-scoped approval preference", () => {
   const slice = promotionSlice(agent);
-  assert.match(slice, /reusableToolApprovalMode\(this\.env, identity\.email\)/, "promotion must read the owner setting");
+  assert.match(slice, /reusableToolApprovalMode\(identity\.email, fallback\)\.pipe\(Effect\.provide\(databaseLayer\(this\.env\.DB\)\)\)/, "promotion must read the owner setting through its database layer");
   assert.match(slice, /autoEnable\s*\?\s*"enabled"[\s\S]*?:\s*"pending"/, "review mode stays pending while auto mode enables");
   assert.match(slice, /autoTrust:\s*autoEnable/, "approval policy must receive the selected mode");
 });
@@ -101,8 +101,9 @@ test("promotion loop catches SavedRecipeError inside each iteration so a duplica
 // ---------------------------------------------------------------------------
 
 test("agent delegates approval-mode resolution to the owner preference service", () => {
-  assert.match(agent, /import \{ reusableToolApprovalMode \} from "\.\/reusable-tool-preferences"/);
-  assert.doesNotMatch(promotionSlice(agent), /autoTrustMode\(this\.env\)/);
+  assert.match(agent, /import \{ reusableToolApprovalMode \} from "\.\/reusable-tool-preferences-program"/);
+  assert.match(promotionSlice(agent), /const trustMode = await Effect\.runPromise\(\s*reusableToolApprovalMode\(identity\.email, fallback\)/);
+  assert.doesNotMatch(promotionSlice(agent), /const (?:trustMode|autoEnable) = autoTrustMode\(this\.env\)/);
 });
 
 // ---------------------------------------------------------------------------
@@ -114,7 +115,7 @@ test("agent delegates approval-mode resolution to the owner preference service",
 test("executeWorkCode now returns a reusableToolCandidate alongside suggestedRecipe (compat preserved)", () => {
   assert.match(workTools, /suggestedRecipe,/, "suggestedRecipe compatibility field must remain");
   assert.match(workTools, /reusableToolCandidate,/, "reusableToolCandidate must be added");
-  assert.match(workTools, /reusableToolApprovalMode,/, "owner approval mode must be included for truthful card actions");
+  assert.match(workTools, /reusableToolApprovalMode: reusableToolApprovalModeValue,/, "owner approval mode must be included for truthful card actions");
   assert.match(workTools, /evaluateReusableToolCandidate\(/);
   assert.match(workTools, /reusableToolNameFromMarker\(code,/, "marker name must win over the fallback heuristic");
 });

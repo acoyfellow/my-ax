@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nextCycleIndex, readCycleCostSeries, recordCycleCost } from "./cycle-costs";
+import { Effect } from "effect";
+import {
+  cycleCostLayer,
+  nextCycleIndex as nextCycleIndexEffect,
+  readCycleCostSeries as readCycleCostSeriesEffect,
+  recordCycleCost as recordCycleCostEffect,
+} from "./cycle-costs-program";
+
+const nextCycleIndex = (env: ReturnType<typeof memoryEnv>, owner: string, session: string) => Effect.runPromise(
+  nextCycleIndexEffect(owner, session).pipe(Effect.provide(cycleCostLayer(env.DB))),
+);
+const recordCycleCost = (env: ReturnType<typeof memoryEnv>, input: Parameters<typeof recordCycleCostEffect>[0]) => Effect.runPromise(
+  recordCycleCostEffect(input).pipe(Effect.provide(cycleCostLayer(env.DB))),
+);
+const readCycleCostSeries = (env: ReturnType<typeof memoryEnv>, owner: string, session: string) => Effect.runPromise(
+  readCycleCostSeriesEffect(owner, session).pipe(Effect.provide(cycleCostLayer(env.DB))),
+);
 
 function memoryEnv() {
   const rows: any[] = [];

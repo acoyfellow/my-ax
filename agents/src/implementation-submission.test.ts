@@ -18,6 +18,7 @@ test("an implementation grant is limited to one issue branch and expiry", async 
   assert.equal(grant.submissionHead, "factory/submission-184-1234567890abcdef");
   await assert.rejects(() => verifyImplementationGrant(secret, token, 2_001), /expired/);
   await assert.rejects(() => verifyImplementationGrant("wrong-secret", token, 1_000), /invalid implementation grant/);
+  await assert.rejects(() => verifyImplementationGrant("", token, 1_000), /secret is required/);
 });
 
 test("implementation files are bounded to product and migration paths", () => {

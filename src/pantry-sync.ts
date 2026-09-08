@@ -5,8 +5,7 @@ import {
   type PublicSnippet,
   type SnippetProvenance,
 } from "./cm-snippets";
-
-const DEFAULT_PANTRY_URL = "https://pantry.coey.dev";
+import { pantryConfig, pantryFetch } from "./pantry-client";
 
 // The body pantry's POST /recipes accepts. Now carries codemode-native
 // snippet provenance so a downstream consumer can distinguish projected
@@ -41,17 +40,7 @@ export type SyncResult = {
   attempted: boolean;
 };
 
-type PantryEnv = {
-  PANTRY_URL?: string;
-  PANTRY_TOKEN?: string;
-};
 
-function pantryConfig(env: Env): { url: string; token: string | undefined } {
-  const raw = env as unknown as PantryEnv;
-  const url = (raw.PANTRY_URL || DEFAULT_PANTRY_URL).replace(/\/$/, "");
-  const token = raw.PANTRY_TOKEN || undefined;
-  return { url, token };
-}
 
 // Map one stored SavedRecipe row to a pantry POST body. Retained for
 // callers that still want raw-row mapping; new code paths use
@@ -162,7 +151,7 @@ export async function pushRecipe(
     console.warn("pantry_sync_skip", { recipe: recipe.name, reason });
     return { status: "skipped", name: recipe.name, reason };
   }
-  return postRecipeBody(url, token, body, fetchImpl);
+  return postRecipeBody(url, token, body, fetchImpl, env);
 }
 
 /**
@@ -191,12 +180,13 @@ export async function pushSnippet(
     console.warn("pantry_sync_skip", { recipe: snippet.name, reason });
     return { status: "skipped", name: snippet.name, reason };
   }
-  return postRecipeBody(url, token, body, fetchImpl);
+  return postRecipeBody(url, token, body, fetchImpl, env);
 }
 
-async function postRecipeBody(url: string, token: string, body: PantryRecipeBody, fetchImpl: typeof fetch): Promise<PushResult> {
+async function postRecipeBody(url: string, token: string, body: PantryRecipeBody, fetchImpl: typeof fetch, env?: Env): Promise<PushResult> {
   try {
-    const res = await fetchImpl(`${url}/recipes`, {
+    const transport = fetchImpl !== fetch ? fetchImpl : env ? pantryFetch(env) : fetch;
+    const res = await transport(`${url}/recipes`, {
       method: "POST",
       headers: {
         // Token ONLY here; never logged.
