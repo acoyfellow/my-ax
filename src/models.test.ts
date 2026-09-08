@@ -22,8 +22,9 @@ describe("model catalog", () => {
   });
   it("keeps Workers AI and AI Gateway rows in the full catalog", () => {
     assert.ok(findModel("@cf/moonshotai/kimi-k2.7-code"));
-    assert.ok(findModel("@cf/zai-org/glm-5.2"));
-    assert.equal(findModel("gpt-5.5")?.route, "gateway-openai");
+    assert.equal(findModel("@cf/zai-org/glm-5.3")?.context, 1_310_720);
+    assert.equal(findModel("@cf/zai-org/glm-5.2"), undefined);
+    assert.equal(findModel("gpt-5.5"), undefined);
     assert.equal(findModel("gpt-5.6-luna")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-sol")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-terra")?.route, "gateway-openai");
@@ -33,9 +34,16 @@ describe("model catalog", () => {
   });
 
   it("shows gateway rows only when the installation has gateway config", () => {
-    assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2"]);
-    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "claude-opus-5", "claude-opus-4-8", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "claude-opus-5", "claude-opus-4-8", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
     assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
+  });
+
+  it("migrates saved GLM 5.2 selections to GLM 5.3", () => {
+    assert.equal(resolveModelId("@cf/zai-org/glm-5.2"), "@cf/zai-org/glm-5.3");
+    for (const env of [minimalEnv, gatewayEnv, serviceGatewayEnv]) {
+      assert.equal(resolveAvailableModelId(env, "@cf/zai-org/glm-5.2"), "@cf/zai-org/glm-5.3");
+    }
   });
 
   it("removes alpha rows while healing stale alpha ids", () => {
@@ -47,7 +55,7 @@ describe("model catalog", () => {
   it("uses a visible default and preserves valid gateway ids", () => {
     assert.ok(findModel(DEFAULT_MODEL_ID));
     assert.equal(resolveModelId(undefined), DEFAULT_MODEL_ID);
-    assert.equal(resolveModelId("gpt-5.5"), "gpt-5.5");
+    assert.equal(resolveModelId("gpt-5.5"), DEFAULT_MODEL_ID);
     assert.equal(resolveModelId("gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveModelId("gpt-5.6-sol"), "gpt-5.6-sol");
     assert.equal(resolveModelId("gpt-5.6-terra"), "gpt-5.6-terra");
@@ -62,7 +70,7 @@ describe("model catalog", () => {
     assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-5"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-4-8"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(gatewayEnv, "claude-opus-5"), "claude-opus-5");
-    assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), "gpt-5.5");
+    assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), DEFAULT_GATEWAY_MODEL_ID);
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-luna"), "gpt-5.6-luna");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-sol"), "gpt-5.6-sol");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-terra"), "gpt-5.6-terra");
