@@ -25,8 +25,6 @@ function github(): GithubPort & { actions: string[] } {
     async labelIssue() {},
     async comment(_n, body) { actions.push(`comment:${body.split("\n")[0]}`); },
     async openReadyPr() { return { number: 1 }; },
-    async mergePr() { throw new Error("forbidden GitHub action: merge"); },
-    async approvePr() { throw new Error("forbidden GitHub action: approve"); },
     async closePr() { actions.push("close"); },
     async requestChanges() { actions.push("request-changes"); },
   };

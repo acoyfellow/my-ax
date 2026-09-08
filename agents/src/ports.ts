@@ -213,12 +213,6 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
       });
       return { number: Number((json as { number?: number }).number) };
     },
-    async mergePr() {
-      assertNoMergeAction("merge");
-    },
-    async approvePr() {
-      assertNoMergeAction("approve");
-    },
     async closePr(number) {
       assertNoMergeAction("closePr");
       await gh(`/pulls/${number}`, { method: "PATCH", body: JSON.stringify({ state: "closed" }) });
