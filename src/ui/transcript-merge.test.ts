@@ -9,7 +9,7 @@ const msg = (
   role: string,
   timestamp?: number,
   extra: Record<string, unknown> = {},
-): { id: string; role: string; timestamp?: number; content?: string; [k: string]: unknown } =>
+): { id: string; role: string; timestamp?: number; content?: string; sessionId?: string; [k: string]: unknown } =>
   ({ id, role, timestamp, ...extra });
 
 // #1/#3 regression: the D1 REST read and the server Think replay now key the SAME
