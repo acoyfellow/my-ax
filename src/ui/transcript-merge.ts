@@ -30,7 +30,7 @@ export type MergeableMessage = {
   [key: string]: unknown;
 };
 
-const keyOf = (msg: MergeableMessage): string => msg.sourceId ?? msg.id;
+const keyOf = (msg: { id: string; sourceId?: string }): string => msg.sourceId ?? msg.id;
 
 export function keepDurableTurn(message: MergeableMessage): boolean {
   if (message.role === "user" || message.role === "assistant" || message.role === "error") return true;
