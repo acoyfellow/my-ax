@@ -11,7 +11,7 @@ export default {
     const url = new URL(request.url);
     if (request.method !== "POST") return new Response("not found", { status: 404 });
     const raw = await request.text();
-    if (url.pathname === "/webhooks/github") {
+    if (url.pathname === "/webhooks/github" || url.pathname === "/factory/sweep") {
       const sig = request.headers.get("x-hub-signature-256") || "";
       if (!await verifyGithubSignature(env.GITHUB_WEBHOOK_SECRET || "", raw, sig)) {
         return new Response("unauthorized", { status: 401 });

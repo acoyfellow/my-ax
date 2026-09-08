@@ -12,7 +12,6 @@ test("same fingerprint keeps the lowest number and closes the rest", () => {
     { action: "keep", number: 67, fingerprint: "e8a37db7f3311f4b" },
     { action: "close-duplicate", number: 69, keep: 67, fingerprint: "e8a37db7f3311f4b" },
     { action: "close-duplicate", number: 68, keep: 67, fingerprint: "e8a37db7f3311f4b" },
-    { action: "close-human-boundary", number: 67 },
   ]);
 });
 
@@ -83,18 +82,18 @@ test("an unexpired implementation lease keeps active work open", () => {
   assert.deepEqual(actions, []);
 });
 
-test("an expired implementation lease returns to terminal triage", () => {
+test("an expired implementation lease does not close an unresolved issue", () => {
   const actions = planSweep([
     { number: 153, title: "bug", body: "repro", author: "o", state: "open", comments: ["## factory implementation lease\nrun: ter_1\nstate: active\nexpires: 2026-09-03T19:30:00Z"], labels: ["triage:needs-human"] },
   ], Date.parse("2026-09-03T19:31:00Z"));
-  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 153 }]);
+  assert.deepEqual(actions, []);
 });
 
-test("needs-human issues close as terminal boundaries instead of parking", () => {
+test("needs-human issues remain open without repeat comments or retries", () => {
   const actions = planSweep([
     { number: 146, title: "blocked: access", body: "needs zero trust", author: "o", state: "open", comments: [], labels: ["triage:needs-human"] },
   ]);
-  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 146 }]);
+  assert.deepEqual(actions, []);
 });
 
 test("a real linked PR receives the work and closes the issue", () => {
@@ -104,11 +103,24 @@ test("a real linked PR receives the work and closes the issue", () => {
   assert.deepEqual(actions, [{ action: "close-issue-to-pr", number: 155, prNumber: 169 }]);
 });
 
-test("a boarded issue without draft opt-in closes as a terminal boundary", () => {
+test("a boarded issue without draft opt-in stays open", () => {
   const actions = planSweep([
     { number: 174, title: "Feature: notifications", body: "request", author: "o", state: "open", comments: ["## loop board\nstage: labeled"], labels: ["bug"] },
   ]);
-  assert.deepEqual(actions, [{ action: "close-human-boundary", number: 174 }]);
+  assert.deepEqual(actions, []);
+});
+
+test("issue 213 stays open across repeated sweeps until implementation is opted in", () => {
+  const issue = {
+    number: 213, title: "Voice agent does not release mic for the next turn",
+    body: "The assistant completes a reply. Listening is shown but microphone capture never resumes.",
+    author: "acoyfellow", state: "open" as const, labels: ["bug"],
+    comments: ["## Factory status\nA person must decide whether to start implementation.\n<!-- stage: labeled -->"],
+  };
+  for (let tick = 0; tick < 4; tick++) {
+    assert.deepEqual(planSweep([issue], tick * 900_000), []);
+  }
+  assert.deepEqual(planSweep([{ ...issue, labels: ["bug", "triage:draft"] }]), [{ action: "queue", number: 213 }]);
 });
 
 test("retry exhaustion routes an opted-in issue to a human", () => {

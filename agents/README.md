@@ -12,7 +12,7 @@ GitHub cannot do Access. Do not put the gateway Worker on `workers.dev` and do n
 | Workflow | Trigger | Does | Never |
 |---|---|---|---|
 | `TriageWorkflow` | `issues.opened` | classify, label, one loop board; create `bot/issue-<n>` with a seed commit and open a ready PR only when that head already has a product file | merge, comment twice, call a `.factory` seed ready, spawn Terrarium on draft |
-| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue open issues that have no PR (except `triage:needs-human`) | merge, comment storm |
+| Sweep (cron `*/15`) | scheduled | close same-fingerprint duplicates; queue eligible open issues with no PR; missing opt-in or `triage:needs-human` leaves the issue open without repeat comments | merge, comment storm |
 | `DigWorkflow` | hard bug | spawn Terrarium with a host `taskProof`, wait, proceed only if the receipt and the proof both hold | trust a callback or a receipt without `taskProof` |
 | `AuditWorkflow` | `pull_request.opened/synchronize` | receipt comment with files and behind-main when GitHub returns them | approve or merge |
 | `ReviewWorkflow` | same PR events | owner/`bot/issue-*` only: one proof receipt per step, verify the PR against its own live preview deploy, request changes when it can, or close flood | approve, merge, or touch foreign PRs |

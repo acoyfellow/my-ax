@@ -38,6 +38,7 @@ const PAGE_WORK_METHODS = [
   { name: "openSettings", description: "Open the settings dialog in the owner's UI, optionally to {section}." },
   { name: "openAttention", description: "Open the notifications/attention panel in the owner's UI." },
   { name: "openSessions", description: "Open the conversations sidebar in the owner's UI." },
+  { name: "openTerminal", description: "Show the existing on-demand terminal card in this conversation." },
   { name: "notify", description: "Show a transient in-app toast to the owner in the live UI. Input: {text, kind?}." },
   { name: "reload", description: "Hard-reload the owner's live UI including iOS PWA (skipWaiting + cache-bust)." },
   { name: "navigate", description: "Navigate the owner's UI to an in-app deep link (/?session=<id>, /?action=attention|settings, /runs/<id>). Input: {target}." },

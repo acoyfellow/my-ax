@@ -1,4 +1,5 @@
-import type { IssueInput, ModelPort } from "./orchestrate";
+import type { ModelPort } from "./orchestrate";
+import type { IssueInput } from "./policy";
 import { validateImplementationFiles } from "./implementation-submission";
 import type { AgentsEnv } from "./workflows";
 
