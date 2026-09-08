@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Effect } from "effect";
 import test from "node:test";
 import { applyModelEdits, createImplementationModel, jsonObject, validateModelImplementation } from "./model-implementation";
 
@@ -87,7 +88,7 @@ test("the implementation model selects context and returns bounded source with t
       ? JSON.stringify({ paths: ["src/ui/message.ts", "src/ui/message.test.ts", ".github/workflows/deploy.yml"] })
       : JSON.stringify({ edits: [
           { path: "src/ui/message.ts", replacements: [{ oldText: "content of src/ui/message.ts", newText: "export const text = 'hello';\n" }] },
-          { path: "src/ui/message.test.ts", replacements: [{ oldText: "content of src/ui/message.test.ts", newText: "export {};\n" }] },
+          { path: "src/ui/message.test.ts", replacements: [{ oldText: "content of src/ui/message.test.ts", newText: "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { text } from './message';\ntest('text', () => assert.equal(text, 'hello'));\n" }] },
         ] });
     return Response.json({ output: [{ content: [{ type: "output_text", text }] }] });
   }) as typeof fetch;
@@ -97,7 +98,7 @@ test("the implementation model selects context and returns bounded source with t
       LLM_GATEWAY_TOKEN: "token",
       LLM_GATEWAY_AUTH_HEADER: "cf-access-token",
     }, "gpt-5.6-terra");
-    const files = await model.implement!({
+    const files = await Effect.runPromise(model.implement!({
       number: 184,
       title: "bug: leading space",
       body: "hello renders with one leading space",
@@ -105,7 +106,7 @@ test("the implementation model selects context and returns bounded source with t
     }, {
       paths: ["src/ui/message.ts", "src/ui/message.test.ts", ".github/workflows/deploy.yml"],
       async read(path) { return `content of ${path}`; },
-    });
+    }));
     assert.deepEqual(files.map((file) => file.path), ["src/ui/message.ts", "src/ui/message.test.ts"]);
     assert.equal(prompts.length, 2);
     assert.doesNotMatch(prompts[1]!, /\.github\/workflows\/deploy\.yml/);

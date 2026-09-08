@@ -77,9 +77,44 @@ function boundedValue(value: unknown, budget: Budget, depth = 0): unknown {
   }
 }
 
+export function summarizeCmuxInventory(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  const workspaces = record.workspaces;
+  if (!Array.isArray(workspaces) || workspaces.length === 0) return value;
+  const rows = workspaces.filter((row) => row && typeof row === "object" && !Array.isArray(row)) as Array<Record<string, unknown>>;
+  if (!rows.length || !("id" in rows[0] || "title" in rows[0])) return value;
+  const compact = rows.map((row) => {
+    const sessions = Array.isArray(row.piSessions) ? row.piSessions : [];
+    const dispatchable = sessions.filter((session) => session && typeof session === "object" && (session as { dispatchable?: unknown }).dispatchable === true).length;
+    return {
+      id: row.id ?? null,
+      title: row.title ?? null,
+      surfaces: Array.isArray(row.surfaces) ? row.surfaces.length : 0,
+      piSessions: sessions.length,
+      dispatchable,
+    };
+  });
+  return {
+    workspaceCount: compact.length,
+    dispatchableCount: compact.reduce((sum, row) => sum + row.dispatchable, 0),
+    titles: compact.map((row) => row.title).filter((title) => typeof title === "string").slice(0, 16),
+    workspaces: compact,
+    truncated: true,
+    reason: "cmux_inventory_summary",
+  };
+}
+
 export function capWorkCodeValue(value: unknown, maxBytes: number): unknown {
+  const summarized = summarizeCmuxInventory(value);
+  try {
+    const summarizedJson = JSON.stringify(summarized);
+    if (summarized !== value && byteLength(summarizedJson) <= maxBytes) return summarized;
+  } catch {
+    void 0;
+  }
   const budget: Budget = { remaining: Math.max(0, Math.floor(maxBytes / 4)), seen: new Set() };
-  const bounded = boundedValue(value, budget);
+  const bounded = boundedValue(summarized, budget);
   let serialized: string;
   try {
     serialized = JSON.stringify(bounded);

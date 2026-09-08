@@ -7,7 +7,9 @@ import { isSandboxMutationWorkCodeCall } from "./workspace-snapshot-classificati
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
 import { evaluateReusableToolCandidate, reusableToolNameFromMarker } from "./reusable-tool-candidate";
-import { reusableToolApprovalMode as resolveReusableToolApprovalMode } from "./reusable-tool-preferences";
+import { Effect } from "effect";
+import { databaseLayer } from "./effect/database";
+import { reusableToolApprovalMode } from "./reusable-tool-preferences-program";
 import { coerceToolArguments } from "./tool-arguments";
 
 const WORKSPACE_METHODS = [
@@ -29,6 +31,7 @@ const WORKSPACE_METHODS = [
 // PAGE_VERBS. Each verb marshals over the chat WS to the live browser client.
 const PAGE_WORK_METHODS = [
   { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
+  { name: "listNotifications", description: "Read up to 20 owner-scoped notification items and unread summaries. Optional {limit,kind,sessionId}. Read-only." },
   { name: "readHealth", description: "Read workspace container health for the live session: {diskPct,files,version,region,...}. Prefer page.readVersion for deploy freshness." },
   { name: "readVersion", description: "Read live client vs Worker deploy: {clientId,deployedId,fresh,stale}. Fast; no sandbox." },
   { name: "readTranscriptTail", description: "Read the last N entries of the active conversation as rendered: [{role,text,ts}]. Optional {n}." },
@@ -272,7 +275,9 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     inferredCapabilities,
     suggestedRecipe,
   });
-  const reusableToolApprovalMode = await resolveReusableToolApprovalMode(ctx.env, ctx.identity.email);
+  const reusableToolApprovalModeValue = await Effect.runPromise(
+    reusableToolApprovalMode(ctx.identity.email, "review").pipe(Effect.provide(databaseLayer(ctx.env.DB))),
+  );
   return {
     ok: !execution.error,
     result: serializedResult,
@@ -288,7 +293,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     portable,
     suggestedRecipe,
     reusableToolCandidate,
-    reusableToolApprovalMode,
+    reusableToolApprovalMode: reusableToolApprovalModeValue,
   };
 }
 

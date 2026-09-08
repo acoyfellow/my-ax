@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../app-env";
@@ -5,8 +6,12 @@ import type { ApiResponse } from "../types";
 import { getSessionAgent } from "../agent-stub";
 import { publicRecipe, SavedRecipeError, SavedRecipeService, validateRecipeRunInput } from "../saved-recipes";
 import { projectSavedRecipe } from "../cm-snippets";
-import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences";
+import { autoTrustMode } from "../auto-trust";
+import { databaseLayer } from "../effect/database";
+import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences-program";
 import { requireOwnedSession } from "../session-ownership";
+import { syncRecipesToPantry } from "../pantry-sync";
+import { listPantryRecipes } from "../pantry-program";
 
 function body(c: Context<AppEnv>): Promise<Record<string, unknown>> {
   return c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
@@ -30,7 +35,14 @@ function ok(c: Context<AppEnv>, command: string, result: unknown, status: Conten
 export function registerRecipeRoutes(app: Hono<AppEnv>) {
   app.get("/api/recipes", async (c) => {
     const command = "GET /api/recipes";
-    try { return ok(c, command, { recipes: await service(c).list() }); }
+    try {
+      const recipes = await service(c).list();
+      let pantry: unknown[] = [];
+      try {
+        pantry = await Effect.runPromise(listPantryRecipes(c.env));
+      } catch { pantry = []; }
+      return ok(c, command, { recipes, pantry });
+    }
     catch (error) { return failure(c, command, error); }
   });
 
@@ -43,7 +55,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
   app.get("/api/recipes/preferences", async (c) => {
     const command = "GET /api/recipes/preferences";
     try {
-      return ok(c, command, { approvalMode: await reusableToolApprovalMode(c.env, c.get("identity").email) });
+      const fallback = autoTrustMode(c.env) === "auto" ? "auto" : "review";
+      const approvalMode = await Effect.runPromise(
+        reusableToolApprovalMode(c.get("identity").email, fallback).pipe(Effect.provide(databaseLayer(c.env.DB))),
+      );
+      return ok(c, command, { approvalMode });
     } catch (error) { return failure(c, command, error); }
   });
 
@@ -55,7 +71,9 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
         throw new SavedRecipeError("InvalidInput", "approvalMode must be review or auto");
       }
       return ok(c, command, {
-        approvalMode: await setReusableToolApprovalMode(c.env, c.get("identity").email, request.approvalMode),
+        approvalMode: await Effect.runPromise(
+          setReusableToolApprovalMode(c.get("identity").email, request.approvalMode).pipe(Effect.provide(databaseLayer(c.env.DB))),
+        ),
       });
     } catch (error) { return failure(c, command, error); }
   });
@@ -93,7 +111,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
         throw new SavedRecipeError("Conflict", "This card no longer matches the saved reusable tool. Open Reusable tools to review the current version.");
       }
       const recipe = await service(c).update(existing.id, { status: action === "approve" ? "enabled" : "disabled" });
-      if (action === "approve") await projectSavedRecipe(c.env, await service(c).get(existing.id));
+      if (action === "approve") {
+        const row = await service(c).get(existing.id);
+        await projectSavedRecipe(c.env, row);
+        c.executionCtx.waitUntil(syncRecipesToPantry(c.env, c.get("identity").email).then(() => undefined));
+      }
       return ok(c, command, { recipe, action });
     } catch (error) { return failure(c, command, error); }
   });
@@ -123,7 +145,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const action = request.action === "reject" ? "reject" : request.action === "approve" ? "approve" : "";
       if (!action) throw new SavedRecipeError("InvalidInput", "action must be approve or reject");
       const recipe = await service(c).update(c.req.param("id"), { status: action === "approve" ? "enabled" : "disabled" });
-      if (action === "approve") await projectSavedRecipe(c.env, await service(c).get(c.req.param("id")));
+      if (action === "approve") {
+        const row = await service(c).get(c.req.param("id"));
+        await projectSavedRecipe(c.env, row);
+        c.executionCtx.waitUntil(syncRecipesToPantry(c.env, c.get("identity").email).then(() => undefined));
+      }
       return ok(c, command, { recipe, action });
     }
     catch (error) { return failure(c, command, error); }

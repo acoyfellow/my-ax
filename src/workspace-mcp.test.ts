@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { publicWorkspacePath, resolveWorkspacePath, listWorkspace, readWorkspace, writeWorkspace } from "./workspace-mcp";
+import { Effect } from "effect";
+import { publicWorkspacePath, resolveWorkspacePath, type WorkspaceWriteExec } from "./workspace-mcp";
+import {
+  listWorkspace as listWorkspaceEffect,
+  readWorkspace as readWorkspaceEffect,
+  workspaceSandboxLayer,
+  writeWorkspace as writeWorkspaceEffect,
+} from "./workspace-mcp-program";
+
+const listWorkspace = (sandbox: WorkspaceWriteExec, path?: string, limit?: number) => Effect.runPromise(
+  listWorkspaceEffect(path, limit).pipe(Effect.provide(workspaceSandboxLayer(sandbox))),
+);
+const readWorkspace = (sandbox: WorkspaceWriteExec, path: string, maxBytes?: number) => Effect.runPromise(
+  readWorkspaceEffect(path, maxBytes).pipe(Effect.provide(workspaceSandboxLayer(sandbox))),
+);
+const writeWorkspace = (sandbox: WorkspaceWriteExec, path: string, content: string) => Effect.runPromise(
+  writeWorkspaceEffect(path, content).pipe(Effect.provide(workspaceSandboxLayer(sandbox))),
+);
 
 test("resolveWorkspacePath aliases /workspace to /home/user", () => {
   assert.equal(resolveWorkspacePath("/workspace"), "/home/user");
@@ -10,6 +27,7 @@ test("resolveWorkspacePath aliases /workspace to /home/user", () => {
 
 test("resolveWorkspacePath rejects escape", () => {
   assert.throws(() => resolveWorkspacePath("/etc/passwd"), /must be inside/);
+  assert.throws(() => resolveWorkspacePath("/"), /must be inside/);
   assert.throws(() => resolveWorkspacePath("/home/user/../etc/passwd"), /must not contain/);
 });
 
@@ -22,13 +40,15 @@ test("listWorkspace returns public paths and truncated", async () => {
   const sandbox = {
     exec: async () => ({
       exitCode: 0,
-      stdout: "/home/user/feature-requests\n/home/user/feature-requests/session-hygiene-and-cleanup.md\n/home/user/extra\n",
+      stdout: "d /home/user/feature-requests\nf /home/user/feature-requests/session-hygiene-and-cleanup.md\nd /home/user/extra\n",
     }),
   };
   const listed = await listWorkspace(sandbox, "/workspace", 2);
   assert.equal(listed.path, "/workspace");
   assert.equal(listed.truncated, true);
   assert.equal(listed.entries.length, 2);
+  assert.equal(listed.entries[0]?.kind, "dir");
+  assert.equal(listed.entries[1]?.kind, "file");
   assert.equal(listed.entries[1]?.path, "/workspace/feature-requests/session-hygiene-and-cleanup.md");
 });
 

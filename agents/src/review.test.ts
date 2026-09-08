@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Effect } from "effect";
 import { assertNoMergeAction } from "./policy";
-import { formatReviewComment, isOwnerPr, reviewPull, runReview } from "./review";
+import { formatReviewComment, isOwnerPr, reviewPull, type ReviewInput } from "./review";
+import { reviewGithubLayer, runReviewEffect } from "./review-effect";
 import { assertPublicText } from "./public-text";
 import type { GithubPort } from "./orchestrate";
+
+const runReview = (input: ReviewInput, ports: { github: GithubPort }) => Effect.runPromise(
+  runReviewEffect(input).pipe(Effect.provide(reviewGithubLayer(ports.github))),
+);
 
 function pull(extra: Record<string, unknown> = {}) {
   return {
@@ -36,6 +42,21 @@ test("foreign PRs are ignored", () => {
   assert.equal(isOwnerPr({ author: "kale-stew" }), false);
   assert.equal(isOwnerPr({ author: "acoyfellow" }), true);
   assert.equal(isOwnerPr({ author: "bot", head: "bot/issue-61" }), true);
+});
+
+test("review Effect stays lazy and fails when its required comment is rejected", async () => {
+  let comments = 0;
+  const port = github();
+  port.comment = async () => {
+    comments += 1;
+    throw new Error("comment failed");
+  };
+  const program = runReviewEffect(pull({ number: 99, proofExit: 1, proofLog: "not ok" })).pipe(
+    Effect.provide(reviewGithubLayer(port)),
+  );
+  assert.equal(comments, 0);
+  await assert.rejects(() => Effect.runPromise(program), /ReviewOperationError|comment failed/);
+  assert.equal(comments, 1);
 });
 
 test("auto-error flood PRs are closed", async () => {

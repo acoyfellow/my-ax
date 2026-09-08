@@ -6,11 +6,13 @@
 // server-side, records a receipt event, and injects the decision back into the
 // originating Think session so the agent resumes.
 
+import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { getSessionAgent } from "../agent-stub";
-import { recordDecisionResponse, type DecisionResponseStore } from "../decision-response";
+import type { DecisionResponseStore } from "../decision-response";
+import { decisionResponseLiveLayer, recordDecisionResponse } from "../decision-response-program";
 
 const ID_RE = /^run-decision-[0-9a-f-]{36}$/i;
 
@@ -115,12 +117,17 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
       },
     };
     try {
-      const recorded = await recordDecisionResponse(store, { id, email, question: bounds.question, choice }, async () => {
+      const resume = async () => {
         const stub = await getSessionAgent(c.env, email, bounds.sessionId);
         await stub.seedIdentity(c.get("identity"));
         await stub.injectUserMessage({ content: `[decision] In response to "${bounds.question}", I chose: ${choice}`, clientMsgId: `decision:${id}` });
         await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(bounds.sessionId, email).run();
-      });
+      };
+      const recorded = await Effect.runPromise(
+        recordDecisionResponse({ id, email, question: bounds.question, choice }).pipe(
+          Effect.provide(decisionResponseLiveLayer(store, resume)),
+        ),
+      );
       if (!recorded) {
         return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
       }

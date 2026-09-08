@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { persistBeforeWorkspaceDestroy } from "./workspace-recycle";
+import { Effect } from "effect";
+import { persistBeforeWorkspaceDestroy as persistBeforeWorkspaceDestroyEffect } from "./workspace-recycle";
+
+const persistBeforeWorkspaceDestroy = (snapshot: () => Promise<unknown>, destroy: () => Promise<void>) => Effect.runPromise(persistBeforeWorkspaceDestroyEffect(snapshot, destroy));
 
 test("workspace recycle publishes a snapshot before destroying the container", async () => {
   const calls: string[] = [];
