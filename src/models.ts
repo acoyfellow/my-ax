@@ -10,6 +10,8 @@ export type ModelRoute = "workers-ai" | "gateway-openai" | "gateway-anthropic";
 export interface ModelEntry {
   id: string;
   route: ModelRoute;
+  gateway?: "special";
+  upstreamId?: string;
   owned_by: string;
   context: number;
   reasoning: boolean;
@@ -19,6 +21,30 @@ export interface ModelEntry {
 }
 
 export const MODELS: ModelEntry[] = [
+  {
+    id: "openai-special/gpt-6-astra",
+    upstreamId: "gpt-6-astra",
+    gateway: "special",
+    route: "gateway-openai",
+    owned_by: "openai",
+    context: 1_050_000,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "gpt-6-astra",
+  },
+  {
+    id: "anthropic-fable/claude-fable-5-1",
+    upstreamId: "claude-fable-5-1",
+    gateway: "special",
+    route: "gateway-anthropic",
+    owned_by: "anthropic",
+    context: 1_000_000,
+    reasoning: false,
+    tools: true,
+    vision: true,
+    label: "fable",
+  },
   {
     id: "@cf/moonshotai/kimi-k2.7-code",
     route: "workers-ai",
@@ -125,7 +151,11 @@ export function hasModelGateway(env: Env): boolean {
 // the public engine; gateway rows are visible only when the deployment supplied
 // the private gateway URL and token needed to run them.
 export function availableModels(env: Env): ModelEntry[] {
-  return hasModelGateway(env) ? MODELS : MODELS.filter((model) => model.route === "workers-ai");
+  return MODELS.filter((model) => {
+    if (model.route === "workers-ai") return true;
+    if (model.gateway === "special") return Boolean(env.LLM_SPECIAL_GATEWAY_URL?.trim() && env.LLM_SPECIAL_GATEWAY_TOKEN?.trim());
+    return hasModelGateway(env);
+  });
 }
 
 // The effective default for THIS installation: the gateway model when the

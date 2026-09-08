@@ -8,6 +8,18 @@ const gatewayEnv = { LLM_GATEWAY_URL: "https://gateway.example/openai", LLM_GATE
 const serviceGatewayEnv = { LLM_GATEWAY_URL: "https://gateway.example/openai", LLM_GATEWAY_SERVICE_TOKEN_ID: "id", LLM_GATEWAY_SERVICE_TOKEN_SECRET: "secret" } as Env;
 
 describe("model catalog", () => {
+  it("exposes special models only with their own gateway credentials", () => {
+    const special = { LLM_SPECIAL_GATEWAY_URL: "https://special.example", LLM_SPECIAL_GATEWAY_TOKEN: "token" } as Env;
+    for (const [id, label] of [["openai-special/gpt-6-astra", "gpt-6-astra"], ["anthropic-fable/claude-fable-5-1", "fable"]]) {
+      assert.equal(findModel(id)?.label, label);
+      assert.ok(availableModels(special).some((m) => m.id === id));
+      assert.ok(!availableModels(gatewayEnv).some((m) => m.id === id));
+      assert.ok(!availableModels({ ...special, LLM_SPECIAL_GATEWAY_TOKEN: "" }).some((m) => m.id === id));
+      assert.equal(resolveAvailableModelId(special, id), id);
+    }
+    assert.equal(findModel("anthropic-fable/claude-fable-5-1")?.reasoning, false);
+    assert.equal(findModel("openai-special/gpt-6-astra")?.reasoning, true);
+  });
   it("keeps Workers AI and AI Gateway rows in the full catalog", () => {
     assert.ok(findModel("@cf/moonshotai/kimi-k2.7-code"));
     assert.ok(findModel("@cf/zai-org/glm-5.2"));
