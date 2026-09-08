@@ -168,6 +168,30 @@ export function mergeTranscript<T extends MergeableMessage>(
     chosen.set(id, mergeVersions(preferred, fallback));
   }
 
+  const durableTools = new Map<string, { state: string; result: unknown; isError: boolean }>();
+  for (const message of chosen.values()) {
+    if (typeof message.durableToolCallId !== "string" || !Array.isArray(message.parts)) continue;
+    const part = message.parts.find((part) => part?.kind === "tool" && part.tool?.id === message.durableToolCallId);
+    if (part && (part.tool.state === "done" || part.tool.state === "error")) durableTools.set(message.durableToolCallId, part.tool);
+  }
+  const embeddedToolIds = new Set<string>();
+  for (const [id, message] of chosen) {
+    if (typeof message.durableToolCallId === "string" || !Array.isArray(message.parts)) continue;
+    let changed = false;
+    const parts = message.parts.map((part) => {
+      if (part?.kind !== "tool" || typeof part.tool?.id !== "string") return part;
+      embeddedToolIds.add(part.tool.id);
+      const durable = durableTools.get(part.tool.id);
+      if (!durable) return part;
+      changed = true;
+      return { ...part, tool: { ...part.tool, state: durable.state, result: durable.result, isError: durable.isError } };
+    });
+    if (changed) chosen.set(id, { ...message, parts } as T);
+  }
+  for (const [id, message] of chosen) {
+    if (typeof message.durableToolCallId === "string" && embeddedToolIds.has(message.durableToolCallId)) chosen.delete(id);
+  }
+
   const firstSeen = new Map<string, number>();
   let seen = 0;
   for (const message of existing) {

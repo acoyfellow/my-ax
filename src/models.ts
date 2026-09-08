@@ -56,14 +56,14 @@ export const MODELS: ModelEntry[] = [
     label: "Kimi K2.7 Code",
   },
   {
-    id: "@cf/zai-org/glm-5.2",
+    id: "@cf/zai-org/glm-5.3",
     route: "workers-ai",
     owned_by: "zai",
-    context: 262_144,
+    context: 1_310_720,
     reasoning: true,
     tools: true,
     vision: false,
-    label: "GLM 5.2",
+    label: "GLM 5.3",
   },
   {
     id: "claude-opus-5",
@@ -84,16 +84,6 @@ export const MODELS: ModelEntry[] = [
     tools: true,
     vision: true,
     label: "Opus 4.8",
-  },
-  {
-    id: "gpt-5.5",
-    route: "gateway-openai",
-    owned_by: "openai",
-    context: 400_000,
-    reasoning: true,
-    tools: true,
-    vision: true,
-    label: "GPT-5.5",
   },
   {
     id: "gpt-5.6-luna",
@@ -177,8 +167,13 @@ export function findModel(id: string): ModelEntry | undefined {
 /** Resolve a requested model id to a usable catalog entry. A stale or removed
  * id (e.g. a churned alpha model still pinned in a session/Settings) heals to
  * the default instead of hard-failing every turn with model_not_found. */
+function currentModelId(id: string | undefined): string | undefined {
+  return id === "@cf/zai-org/glm-5.2" ? "@cf/zai-org/glm-5.3" : id;
+}
+
 export function resolveModelId(id: string | undefined): string {
-  return id && findModel(id) ? id : DEFAULT_MODEL_ID;
+  const current = currentModelId(id);
+  return current && findModel(current) ? current : DEFAULT_MODEL_ID;
 }
 
 /** Resolve a model id against the models this installation can actually run.
@@ -186,7 +181,8 @@ export function resolveModelId(id: string | undefined): string {
  * otherwise every turn fails with a provider configuration error even though
  * the visible catalog correctly hides that model. */
 export function resolveAvailableModelId(env: Env, id: string | undefined): string {
-  const requested = id && findModel(id);
+  const current = currentModelId(id);
+  const requested = current && findModel(current);
   if (!requested) return defaultModelId(env);
   return availableModels(env).some((model) => model.id === requested.id) ? requested.id : defaultModelId(env);
 }
