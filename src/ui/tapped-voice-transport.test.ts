@@ -82,6 +82,55 @@ test("tapped transport forwards messages unchanged and meters agent PCM output",
   assert.ok(transport.getOutputLevel() > 0.45);
 });
 
+test("a muted reply keeps recognition fed with silence and resumes real input", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { inner, transport } = activeTransport();
+  transport.setInputSuppressed(true);
+  transport.setInputSuppressed(true);
+  t.mock.timers.tick(12_000);
+  assert.equal(inner.sentBinary.length, 120);
+  for (const frame of inner.sentBinary) {
+    assert.equal(frame.byteLength, 3200);
+    assert.ok(new Uint8Array(frame).every((sample) => sample === 0));
+  }
+  transport.setInputSuppressed(false);
+  t.mock.timers.tick(1000);
+  assert.equal(inner.sentBinary.length, 120);
+  const secondTurn = pcm16Frame(12_000);
+  transport.sendBinary(secondTurn);
+  assert.equal(inner.sentBinary.at(-1), secondTurn);
+  transport.disconnect();
+});
+
+test("suppression never forwards microphone content and stops on end or disconnect", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  for (const end of ["end_call", "disconnect"]) {
+    const { inner, transport } = activeTransport();
+    transport.setInputSuppressed(true);
+    transport.sendBinary(pcm16Frame(25_000));
+    assert.ok(new Uint8Array(inner.sentBinary[0]!).every((sample) => sample === 0));
+    if (end === "end_call") transport.sendJSON({ type: "end_call" });
+    else transport.disconnect();
+    const count = inner.sentBinary.length;
+    t.mock.timers.tick(2000);
+    assert.equal(inner.sentBinary.length, count);
+  }
+});
+
+test("silence is not sent on a disconnected or inactive transport", (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const inner = new FakeTransport();
+  const transport = new TappedVoiceTransport({ agent: "voice-think-agent" }, inner);
+  transport.setInputSuppressed(true);
+  t.mock.timers.tick(1000);
+  assert.equal(inner.sentBinary.length, 0);
+  transport.sendJSON({ type: "start_call" });
+  inner.connected = false;
+  t.mock.timers.tick(1000);
+  assert.equal(inner.sentBinary.length, 0);
+  transport.disconnect();
+});
+
 test("tapped transport reports silence as near-zero output", async () => {
   const { inner, transport } = activeTransport();
   inner.receive(pcm16Frame(0));

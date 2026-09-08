@@ -284,7 +284,6 @@
   // the STT pipeline, then re-arm after a short debounce once playback ends.
   // See ./voice-half-duplex.ts for the pure state machine.
   let voiceGate = initialVoiceGateState();
-  let voiceMicSuppressed = false; // mirrors VoiceClient's internal mute flag
   let voiceRearmTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearVoiceRearmTimer() {
@@ -294,9 +293,8 @@
   // the desired suppression state differs from the client's actual mute state.
   function setVoiceMicSuppressed(suppressed: boolean) {
     if (!voiceClient) return;
-    if (voiceMicSuppressed === suppressed) return;
-    voiceClient.toggleMute();
-    voiceMicSuppressed = suppressed;
+    voiceTransport?.setInputSuppressed(suppressed);
+    if (voiceClient.isMuted !== suppressed) voiceClient.toggleMute();
   }
   // Fail-closed backstop: never accept a transcript that arrives while the
   // agent is speaking or in the re-arm tail (assistant audio -> user input).
@@ -412,7 +410,6 @@
     voiceTransport = null;
     clearVoiceRearmTimer();
     voiceGate = initialVoiceGateState();
-    voiceMicSuppressed = false;
     prevChimeStatus = "idle";
     transcriptGuard = initialTranscriptGuard();
   }
