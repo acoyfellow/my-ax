@@ -46,6 +46,15 @@ function codeDiffResult(value: string, toolName: string, isError: boolean): unkn
   }
 }
 
+export function d1EntriesToTranscriptMessages(entries: D1Entry[], options: { sessionId: string; renderMarkdown: (text: string) => string }) {
+  if (typeof options.sessionId !== "string" || !options.sessionId) throw new Error("A conversation ID is required to restore messages");
+  return entries.map((entry) => {
+    const message = d1EntryToTranscriptMessage(entry, options.renderMarkdown);
+    const uiMessageId = objectValue(entry.meta).uiMessageId;
+    return { ...message, id: typeof uiMessageId === "string" && uiMessageId ? uiMessageId : message.id, sessionId: options.sessionId };
+  });
+}
+
 export function d1EntryToTranscriptMessage(entry: D1Entry, renderMarkdown: (text: string) => string) {
   const content = typeof entry.content === "string" ? entry.content : "";
   const id = `d1-${entry.id}`;
@@ -62,7 +71,7 @@ export function d1EntryToTranscriptMessage(entry: D1Entry, renderMarkdown: (text
   const toolPart: ToolPart = {
     kind: "tool",
     tool: {
-      id,
+      id: typeof meta.toolCallId === "string" && meta.toolCallId ? meta.toolCallId : id,
       name: toolName,
       arguments: meta.args ?? {},
       state: isError ? "error" : "done",
@@ -72,5 +81,5 @@ export function d1EntryToTranscriptMessage(entry: D1Entry, renderMarkdown: (text
       isError,
     },
   };
-  return { id, role: "assistant" as const, content: "", parts: [toolPart], timestamp: createdAt, streaming: false, pending: false };
+  return { id, role: "assistant" as const, content: "", parts: [toolPart], durableToolCallId: toolPart.tool.id, timestamp: createdAt, streaming: false, pending: false };
 }
