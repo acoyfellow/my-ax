@@ -18,6 +18,8 @@ type ScheduledEnvelope = AudioLevelEnvelope & { startsAt: number; endsAt: number
 const MAX_PENDING_MEASUREMENTS = 32;
 const MAX_OUTPUT_ENVELOPES = 2_048;
 const MAX_MIRRORED_PLAYBACK_MS = 60_000;
+const INPUT_SILENCE_INTERVAL_MS = 100;
+const INPUT_SILENCE_BYTES = 16_000 * 2 * INPUT_SILENCE_INTERVAL_MS / 1000;
 
 export class TappedVoiceTransport implements VoiceTransport {
   #inner: VoiceTransport;
@@ -31,6 +33,9 @@ export class TappedVoiceTransport implements VoiceTransport {
   #outputEnvelopes: ScheduledEnvelope[] = [];
   #outputEnvelopeIndex = 0;
   #outputCursor = 0;
+  #inputSuppressed = false;
+  #inputSilenceTimer: ReturnType<typeof setInterval> | null = null;
+  #inputSilenceFrame = new ArrayBuffer(INPUT_SILENCE_BYTES);
 
   constructor(options: TappedVoiceTransportOptions, inner?: VoiceTransport) {
     this.#inner = inner ?? new WebSocketVoiceTransport(options);
@@ -51,6 +56,7 @@ export class TappedVoiceTransport implements VoiceTransport {
     }
     if (data.type === "end_call") {
       this.#inCall = false;
+      this.setInputSuppressed(false);
       this.#resetOutputMeasurement();
     }
     if (data.type === "interrupt") this.#resetOutputMeasurement();
@@ -58,7 +64,20 @@ export class TappedVoiceTransport implements VoiceTransport {
   }
 
   sendBinary(data: ArrayBuffer): void {
-    this.#inner.sendBinary(data);
+    this.#inner.sendBinary(this.#inputSuppressed ? new ArrayBuffer(data.byteLength) : data);
+  }
+
+  setInputSuppressed(suppressed: boolean): void {
+    this.#inputSuppressed = suppressed;
+    if (!suppressed) {
+      if (this.#inputSilenceTimer !== null) clearInterval(this.#inputSilenceTimer);
+      this.#inputSilenceTimer = null;
+      return;
+    }
+    if (this.#inputSilenceTimer !== null) return;
+    this.#inputSilenceTimer = setInterval(() => {
+      if (this.#inCall && this.#inner.connected) this.#inner.sendBinary(this.#inputSilenceFrame);
+    }, INPUT_SILENCE_INTERVAL_MS);
   }
 
   connect(): void {
@@ -67,6 +86,7 @@ export class TappedVoiceTransport implements VoiceTransport {
 
   disconnect(): void {
     this.#inCall = false;
+    this.setInputSuppressed(false);
     this.#resetOutputMeasurement();
     this.#inner.disconnect();
   }
