@@ -1,5 +1,6 @@
 import { getSandbox, type PtyOptions, type Sandbox } from "@cloudflare/sandbox";
 import type { Hono } from "hono";
+import { Effect } from "effect";
 import type { AppEnv } from "../app-env";
 import { isWebSocketUpgrade, terminalDimensions } from "../terminal-protocol";
 import { getUserWorkspace, invalidateUserWorkspace, snapshotUserWorkspace } from "../workspace";
@@ -27,10 +28,10 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
     });
     try {
       const snapshotAt = Date.now();
-      await persistBeforeWorkspaceDestroy(
+      await Effect.runPromise(persistBeforeWorkspaceDestroy(
         () => snapshotUserWorkspace(c.env, identity, "recycle"),
         () => (stub as unknown as { destroy: () => Promise<void> }).destroy(),
-      );
+      ));
       steps.snapshotMs = Date.now() - snapshotAt;
       steps.destroyed = true;
     } catch (error) {

@@ -81,7 +81,12 @@ export function composeOwnerCheckIn(sources: CheckInSources): OwnerCheckIn {
   const jobs = sources.jobs.filter((job) => job.status === "active").slice(0, 10);
   const openRuns = sources.runs.filter((run) => run.status === "open" || run.status === "running").slice(0, 10);
   const completed = sources.runs.filter((run) => run.status === "completed").slice(0, 10);
-  const failed = sources.runs.filter((run) => run.status === "failed").slice(0, 10);
+  const failed = sources.runs.filter((run) => {
+    if (run.status !== "failed") return false;
+    const ts = Date.parse(String(run.updated_at).replace(" ", "T") + (String(run.updated_at).includes("Z") || String(run.updated_at).includes("+") ? "" : "Z"));
+    if (!Number.isFinite(ts)) return false;
+    return Date.now() - ts < 14 * 24 * 60 * 60 * 1000;
+  }).slice(0, 10);
 
   // Totals derivation. Capped samples must never make totals lie: we only use
   // sample lengths as fallbacks when no authoritative count was provided.

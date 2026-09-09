@@ -91,6 +91,24 @@ export const PAGE_VERBS: PageVerb[] = [
     },
   },
   {
+    name: "listNotifications",
+    description: "Read up to 20 owner-scoped notification items and unread summaries. Optional {limit,kind,sessionId}. Read-only.",
+    resolution: "receipt",
+    run: async (args) => {
+      const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 20);
+      const params = new URLSearchParams();
+      if (typeof args.kind === "string" && args.kind.trim()) params.set("kind", args.kind.trim());
+      if (typeof args.sessionId === "string" && args.sessionId.trim()) params.set("sessionId", args.sessionId.trim());
+      const suffix = params.toString();
+      const data = (await getJSON(`/api/attention${suffix ? `?${suffix}` : ""}`)) as {
+        result?: { unread?: unknown; items?: unknown[]; filter?: unknown; summary?: unknown };
+      };
+      const result = data?.result ?? {};
+      const items = Array.isArray(result.items) ? result.items.slice(0, limit) : [];
+      return { result: { unread: Number(result.unread ?? 0), items, filter: result.filter ?? null, summary: result.summary ?? null } };
+    },
+  },
+  {
     name: "readHealth",
     description: "Read workspace container health: {diskPct,files,version,region,...}. Prefer readVersion for deploy freshness; this path waits on the sandbox.",
     resolution: "receipt",

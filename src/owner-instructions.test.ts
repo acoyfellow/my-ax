@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Effect } from "effect";
 import {
   composeOwnerSystemPrompt,
   DEFAULT_OWNER_INSTRUCTIONS,
-  getOwnerInstructions,
+  getOwnerInstructions as getOwnerInstructionsEffect,
   MAX_OWNER_INSTRUCTIONS,
-  resetOwnerInstructions,
-  setOwnerInstructions,
+  resetOwnerInstructions as resetOwnerInstructionsEffect,
+  setOwnerInstructions as setOwnerInstructionsEffect,
   validateOwnerInstructions,
 } from "./owner-instructions";
 import type { Env } from "./types";
+
+const getOwnerInstructions = (env: Env, email: string) => Effect.runPromise(getOwnerInstructionsEffect(env, email));
+const resetOwnerInstructions = (env: Env, email: string) => Effect.runPromise(resetOwnerInstructionsEffect(env, email));
+const setOwnerInstructions = (env: Env, email: string, value: unknown) => Effect.runPromise(setOwnerInstructionsEffect(env, email, value));
 
 function fakeEnv() {
   const rows = new Map<string, string>();

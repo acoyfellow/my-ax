@@ -87,7 +87,9 @@ test("the live gate asserts the pty, the auth refusal, and the leak scan", () =>
 });
 
 test("the upgrade probe requires a 101 and real pty bytes, not just a reachable socket", () => {
-  const probe = readFileSync(new URL("../proof/terminal-upgrade-probe.mjs", import.meta.url), "utf8");
+  const entry = readFileSync(new URL("../proof/terminal-upgrade-probe.mjs", import.meta.url), "utf8");
+  assert.match(entry, /runTerminalUpgradeProbe\(\{ host, token \}\)/);
+  const probe = readFileSync(new URL("../proof/terminal-upgrade-probe-program.mjs", import.meta.url), "utf8");
   assert.match(probe, /statusCode === 101/, "the probe must require a protocol switch");
   assert.match(probe, /isBinary/, "the probe must require binary pty output");
   assert.match(probe, /without a 101 upgrade/, "binary bytes without an upgrade must fail");

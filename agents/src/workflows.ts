@@ -1,3 +1,4 @@
+import { Data, Effect } from "effect";
 import {
   DEFAULT_AGENTS_MODEL,
   type IssueInput,
@@ -5,9 +6,10 @@ import {
   requireGateway,
   resolveAgentsModel,
 } from "./policy";
-import { runAudit, runTriage, type GithubPort, type TerrariumPort } from "./orchestrate";
-import { runReview } from "./review";
+import { type GithubPort, type TerrariumPort } from "./orchestrate";
 import { createImplementationModel } from "./model-implementation";
+import { auditGithubLayer, runAuditEffect } from "./audit-effect";
+import { runTriageEffect, triageLayer } from "./triage-effect";
 
 export interface AgentsEnv {
   AGENTS_MODEL?: string;
@@ -35,41 +37,42 @@ export function workflowBindings(): typeof WORKFLOW_NAMES {
   return WORKFLOW_NAMES;
 }
 
-export async function executeTriageWorkflow(
+export class WorkflowConfigurationError extends Data.TaggedError("WorkflowConfigurationError")<{ cause: unknown }> {
+  get message() { return "LLM_GATEWAY configuration is required before running a workflow"; }
+}
+
+function configuredModel(env: AgentsEnv) {
+  return Effect.try({
+    try: () => { requireGateway(env); return resolveAgentsModel(env); },
+    catch: (cause) => new WorkflowConfigurationError({ cause }),
+  });
+}
+
+export function executeTriageWorkflow(
   env: AgentsEnv,
   input: IssueInput,
   ports: { github: GithubPort; terrarium: TerrariumPort },
 ) {
-  requireGateway(env);
-  const modelId = resolveAgentsModel(env);
-  return runTriage(input, { ...ports, model: createImplementationModel(env, modelId) });
+  return configuredModel(env).pipe(
+    Effect.flatMap((modelId) => runTriageEffect(input).pipe(Effect.provide(triageLayer({ ...ports, model: createImplementationModel(env, modelId) })))),
+  );
 }
 
-export async function executeAuditWorkflow(
+export function executeAuditWorkflow(
   env: AgentsEnv,
   input: PullInput,
   ports: { github: GithubPort; promptDigest: string },
 ) {
-  requireGateway(env);
-  resolveAgentsModel(env);
-  return runAudit(input, ports);
+  return configuredModel(env).pipe(
+    Effect.flatMap(() => runAuditEffect(input, ports.promptDigest).pipe(Effect.provide(auditGithubLayer(ports.github)))),
+  );
 }
 
-export async function executeReviewWorkflow(
-  env: AgentsEnv,
-  input: PullInput & { head?: string; proofExit?: number; proofLog?: string },
-  ports: { github: GithubPort },
-) {
-  requireGateway(env);
-  return runReview(input, ports);
-}
-
-export async function executeDigWorkflow(
+export function executeDigWorkflow(
   env: AgentsEnv,
   input: IssueInput,
   ports: { github: GithubPort; terrarium: TerrariumPort },
 ) {
-  requireGateway(env);
   return executeTriageWorkflow(env, { ...input, body: `${input.body}\n\nneeds a cell / terrarium` }, ports);
 }
 

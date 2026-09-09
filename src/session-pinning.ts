@@ -1,7 +1,6 @@
 // Server-side pin/rank operations for conversations. Pure ordering logic lives
 // here (testable without D1); the route wires it to the sessions table.
 
-import type { Env } from "./types";
 import { between, isValidRank, rankBefore } from "./fractional-index";
 
 export type PinnedRow = { id: string; pin_rank: string | null };
@@ -55,13 +54,6 @@ export function rankForNewPin(currentTopRank: string | null): string {
 
 // ── D1-backed operations ────────────────────────────────────────────────────
 
-async function currentPinned(env: Env, email: string): Promise<PinnedRow[]> {
-  const result = await env.DB.prepare(
-    "SELECT id, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 1 ORDER BY pin_rank ASC, updated_at DESC",
-  ).bind(email).all<PinnedRow>();
-  return result.results ?? [];
-}
-
 export type PinResult = { id: string; pinned: boolean; pin_rank: string | null };
 
 /** Upper bound on how many conversations one owner may pin. Keeps the pinned
@@ -78,37 +70,4 @@ export class PinLimitError extends Error {
     super(`You can pin at most ${MAX_PINNED} conversations. Unpin one to pin another.`);
     this.name = "PinLimitError";
   }
-}
-
-export async function setSessionPinned(env: Env, email: string, id: string, pinned: boolean): Promise<PinResult | null> {
-  const owned = await env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, email).first<{ id: string }>();
-  if (!owned) return null;
-  if (pinned) {
-    const existing = await currentPinned(env, email);
-    // Fail closed at the cap — but re-pinning something already pinned is a
-    // no-op-shaped success, so only a genuinely new pin can trip the limit.
-    if (existing.length >= MAX_PINNED && !existing.some((r) => r.id === id)) {
-      throw new PinLimitError();
-    }
-    const topRank = existing.length ? existing[0].pin_rank : null;
-    const rank = rankForNewPin(topRank);
-    await env.DB.prepare(
-      "UPDATE sessions SET pinned = 1, pin_rank = ?, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-    ).bind(rank, id, email).run();
-    return { id, pinned: true, pin_rank: rank };
-  }
-  await env.DB.prepare(
-    "UPDATE sessions SET pinned = 0, pin_rank = NULL, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-  ).bind(id, email).run();
-  return { id, pinned: false, pin_rank: null };
-}
-
-export async function reorderPinnedSession(env: Env, email: string, movedId: string, beforeId: string | null): Promise<PinResult | null> {
-  const ordered = await currentPinned(env, email);
-  if (!ordered.some((r) => r.id === movedId)) return null; // not pinned / not owned
-  const rank = computeMoveRank(ordered, movedId, beforeId);
-  await env.DB.prepare(
-    "UPDATE sessions SET pin_rank = ?, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND pinned = 1",
-  ).bind(rank, movedId, email).run();
-  return { id: movedId, pinned: true, pin_rank: rank };
 }

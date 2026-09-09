@@ -9,6 +9,7 @@
 // the worker gets a verified email/sub it keys per-user/per-session DOs off.
 // Everything downstream assumes identity was verified here.
 
+import { Effect } from "effect";
 import type { MiddlewareHandler } from "hono";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 
@@ -99,48 +100,29 @@ export function isLocalDevBypassAllowed(req: Request, env: AuthEnv): boolean {
   );
 }
 
-export async function verifyAccessRequest(
-  req: Request,
-  env: AuthEnv,
-): Promise<AccessIdentity> {
-  // Local dev bypass. It deliberately requires both dev env config and a local
-  // runtime/loopback signal, so a deployed worker misbound with ENVIRONMENT=dev
-  // and blank Access settings still fails closed instead of authenticating as a
-  // synthetic dev user.
+export function verifyAccessRequestEffect(req: Request, env: AuthEnv): Effect.Effect<AccessIdentity, AccessError> {
   if (isLocalDevBypassAllowed(req, env)) {
     const devUserEmail = env.DEV_USER_EMAIL ?? "";
-    return {
-      email: devUserEmail.toLowerCase(),
-      sub: `dev-${devUserEmail}`,
-      groups: env.DEV_USER_GROUPS?.split(",").map((s) => s.trim()),
-    };
+    return Effect.succeed({ email: devUserEmail.toLowerCase(), sub: `dev-${devUserEmail}`, groups: env.DEV_USER_GROUPS?.split(",").map((value) => value.trim()) });
   }
-
   const token = req.headers.get("Cf-Access-Jwt-Assertion");
-  if (!token) throw new AccessError("NoAccessJwt", "Missing Cf-Access-Jwt-Assertion header");
-
-  try {
-    const issuer = resolveAccessIssuerForTest(token, env.CF_ACCESS_ISS);
-    if (!issuer) throw new AccessError("InvalidAccessIssuer", "Cloudflare Access issuer is not configured and token issuer is invalid");
-    const { payload } = await jwtVerify(token, getJWKS(issuer), {
-      issuer,
-      audience: env.CF_ACCESS_AUD,
-    });
-    if (typeof payload.email !== "string" || !payload.email.trim()) throw new AccessError("NoEmailClaim", "JWT email claim must be a non-empty string");
-    if (typeof payload.sub !== "string" || !payload.sub.trim()) throw new AccessError("NoSubjectClaim", "JWT sub claim must be a non-empty string");
+  if (!token) return Effect.fail(new AccessError("NoAccessJwt", "Missing Cf-Access-Jwt-Assertion header"));
+  const issuer = resolveAccessIssuerForTest(token, env.CF_ACCESS_ISS);
+  if (!issuer) return Effect.fail(new AccessError("InvalidAccessIssuer", "Cloudflare Access issuer is not configured and token issuer is invalid"));
+  return Effect.tryPromise({
+    try: () => jwtVerify(token, getJWKS(issuer), { issuer, audience: env.CF_ACCESS_AUD }),
+    catch: (cause) => new AccessError("InvalidAccessJwt", `JWT verification failed: ${(cause as Error).message}`),
+  }).pipe(Effect.flatMap(({ payload }) => {
+    if (typeof payload.email !== "string" || !payload.email.trim()) return Effect.fail(new AccessError("NoEmailClaim", "JWT email claim must be a non-empty string"));
+    if (typeof payload.sub !== "string" || !payload.sub.trim()) return Effect.fail(new AccessError("NoSubjectClaim", "JWT sub claim must be a non-empty string"));
     const rawGroups = (payload as { groups?: unknown }).groups;
-    if (rawGroups !== undefined && (!Array.isArray(rawGroups) || rawGroups.some((group) => typeof group !== "string"))) {
-      throw new AccessError("InvalidGroupsClaim", "JWT groups claim must be an array of strings");
-    }
-    return {
-      email: payload.email.trim().toLowerCase(),
-      sub: payload.sub.trim(),
-      groups: rawGroups as string[] | undefined,
-    };
-  } catch (err) {
-    if (err instanceof AccessError) throw err;
-    throw new AccessError("InvalidAccessJwt", `JWT verification failed: ${(err as Error).message}`);
-  }
+    if (rawGroups !== undefined && (!Array.isArray(rawGroups) || rawGroups.some((group) => typeof group !== "string"))) return Effect.fail(new AccessError("InvalidGroupsClaim", "JWT groups claim must be an array of strings"));
+    return Effect.succeed({ email: payload.email.trim().toLowerCase(), sub: payload.sub.trim(), groups: rawGroups as string[] | undefined });
+  }));
+}
+
+export function verifyAccessRequest(req: Request, env: AuthEnv): Promise<AccessIdentity> {
+  return Effect.runPromise(verifyAccessRequestEffect(req, env));
 }
 
 export class AccessError extends Error {

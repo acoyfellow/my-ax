@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { reusableToolApprovalMode, setReusableToolApprovalMode } from "./reusable-tool-preferences";
+import { Effect } from "effect";
+import { autoTrustMode } from "./auto-trust";
+import { databaseLayer } from "./effect/database";
+import {
+  reusableToolApprovalMode as reusableToolApprovalModeEffect,
+  setReusableToolApprovalMode as setReusableToolApprovalModeEffect,
+} from "./reusable-tool-preferences-program";
+
+const reusableToolApprovalMode = (env: ReturnType<typeof envWith>["env"], email: string) => Effect.runPromise(
+  reusableToolApprovalModeEffect(email, autoTrustMode(env) === "auto" ? "auto" : "review").pipe(Effect.provide(databaseLayer(env.DB))),
+);
+const setReusableToolApprovalMode = (
+  env: ReturnType<typeof envWith>["env"],
+  email: string,
+  mode: "review" | "auto",
+) => Effect.runPromise(setReusableToolApprovalModeEffect(email, mode).pipe(Effect.provide(databaseLayer(env.DB))));
 
 function envWith(options: { stored?: string | null; missingTable?: boolean; legacyAuto?: boolean } = {}) {
   const writes: unknown[][] = [];

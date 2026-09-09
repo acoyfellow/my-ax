@@ -2,7 +2,8 @@ import { forwardedFromHook, workflowBindings, type AgentsEnv } from "./workflows
 import { verifyGithubSignature } from "./github-hmac";
 import { liveGithubPort } from "./ports";
 import { acceptImplementationSubmission } from "./implementation-handler";
-import { formatDuplicateClose, formatIssueTransferredToPr, formatPlaceholderPrClose, formatRetryExhausted, planSweep, sweepLeaseId, type SweepIssue } from "./sweep";
+import { Effect } from "effect";
+import { runIssueSweepEffect, sweepLayer } from "./sweep-effect";
 
 export { AuditWorkflow, DigWorkflow, ReviewWorkflow, TriageWorkflow } from "./workflow-entry";
 
@@ -141,59 +142,11 @@ export default {
 };
 
 export async function runIssueSweep(env: WorkerEnv, scheduledTime = Date.now(), onlyIssue?: number) {
-  const github = liveGithubPort(env);
-  if (!github.listOpenIssues || !github.listComments) throw new Error("Sweep requires issue and comment reads");
-  const open = await github.listOpenIssues();
-  const issues: SweepIssue[] = [];
-  for (const issue of open) {
-    if (onlyIssue !== undefined && issue.number !== onlyIssue) continue;
-    const comments = await github.listComments(issue.number);
-    const head = `bot/issue-${issue.number}`;
-    const hasHead = github.hasBranch ? await github.hasBranch(head) : false;
-    const [openPr, linkedPr] = await Promise.all([
-      github.findOpenPrForHead ? github.findOpenPrForHead(head) : Promise.resolve(null),
-      github.findOpenPrForIssue ? github.findOpenPrForIssue(issue.number) : Promise.resolve(null),
-    ]);
-    const hasOpenPr = openPr ? true : github.hasOpenPrForHead ? await github.hasOpenPrForHead(head) : false;
-    issues.push({ ...issue, state: "open", comments, hasHead, hasOpenPr, openPr, linkedPr });
-  }
-  const actions = planSweep(issues, scheduledTime);
-  let closed = 0;
-  let queued = 0;
-  let needsHuman = 0;
-  for (const action of actions) {
-    if (action.action === "close-duplicate" && github.closeIssue) {
-      await github.closeIssue(action.number, formatDuplicateClose(action.keep, action.fingerprint));
-      closed += 1;
-    }
-    if (action.action === "close-issue-to-pr" && github.closeIssue) {
-      await github.closeIssue(action.number, formatIssueTransferredToPr(action.prNumber));
-      closed += 1;
-    }
-    if (action.action === "close-placeholder-pr" && github.closePr) {
-      await github.comment(action.prNumber, formatPlaceholderPrClose(action.number));
-      await github.closePr(action.prNumber);
-      await github.labelIssue(action.number, ["triage:needs-human"]);
-      closed += 1;
-      needsHuman += 1;
-    }
-    if (action.action === "needs-human") {
-      await github.labelIssue(action.number, ["triage:needs-human"]);
-      await github.comment(action.number, formatRetryExhausted(action.attempts));
-      needsHuman += 1;
-    }
-    if (action.action === "queue") {
-      const issue = issues.find((row) => row.number === action.number);
-      if (!issue) continue;
-      const response = await queueTriage(env, sweepLeaseId(issue.number, scheduledTime), {
-        number: issue.number,
-        title: issue.title,
-        body: issue.body,
-        user: { login: issue.author },
-        labels: issue.labels,
-      });
-      if (response.ok) queued += 1;
-    }
-  }
-  return { closed, queued, needsHuman, inspected: issues.map((issue) => issue.number), actions };
+  return Effect.runPromise(runIssueSweepEffect(scheduledTime, onlyIssue).pipe(Effect.provide(sweepLayer({
+    github: liveGithubPort(env),
+    queue: (deliveryId, issue) => queueTriage(env, deliveryId, {
+      number: issue.number, title: issue.title, body: issue.body,
+      user: { login: issue.author }, labels: issue.labels,
+    }),
+  }))));
 }

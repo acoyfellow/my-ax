@@ -1,4 +1,8 @@
 import type { Env } from "./types";
+import { Data, Effect } from "effect";
+import { Database, databaseLayer } from "./effect/database";
+
+export class OwnerInstructionsInputError extends Data.TaggedError("OwnerInstructionsInputError")<{ cause: unknown; message: string }> {}
 
 export const OWNER_INSTRUCTIONS_KEY = "agent_instructions.v1";
 export const MAX_OWNER_INSTRUCTIONS = 4_000;
@@ -27,35 +31,48 @@ function storedInstructions(valueJson: string | null | undefined): string {
   }
 }
 
-export async function getOwnerInstructions(env: Env, email: string): Promise<string> {
-  try {
-    const row = await env.DB.prepare(
+export function getOwnerInstructions(env: Env, email: string) {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+    const row = yield* db.first<{ value_json: string }>(
       "SELECT value_json FROM owner_preferences WHERE owner_email = ? AND preference_key = ?",
-    ).bind(ownerEmail(email), OWNER_INSTRUCTIONS_KEY).first<{ value_json: string }>();
+      [ownerEmail(email), OWNER_INSTRUCTIONS_KEY],
+    );
     return storedInstructions(row?.value_json);
-  } catch (error) {
-    if (String(error).includes("no such table")) return DEFAULT_OWNER_INSTRUCTIONS;
-    throw error;
-  }
+  }).pipe(
+    Effect.catch((error) => String(error.cause).includes("no such table") ? Effect.succeed(DEFAULT_OWNER_INSTRUCTIONS) : Effect.fail(error)),
+    Effect.provide(databaseLayer(env.DB)),
+  );
 }
 
-export async function setOwnerInstructions(env: Env, email: string, value: unknown): Promise<string> {
-  const instructions = validateOwnerInstructions(value);
-  if (!instructions) return resetOwnerInstructions(env, email);
-  const now = new Date().toISOString();
-  await env.DB.prepare(
-    `INSERT INTO owner_preferences (owner_email, preference_key, value_json, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-  ).bind(ownerEmail(email), OWNER_INSTRUCTIONS_KEY, JSON.stringify({ instructions }), now, now).run();
-  return instructions;
+export function setOwnerInstructions(env: Env, email: string, value: unknown) {
+  return Effect.gen(function* () {
+    const instructions = yield* Effect.try({
+      try: () => validateOwnerInstructions(value),
+      catch: (cause) => new OwnerInstructionsInputError({ cause, message: cause instanceof Error ? cause.message : "Invalid owner instructions" }),
+    });
+    if (!instructions) return yield* resetOwnerInstructions(env, email);
+    const db = yield* Database;
+    const now = yield* Effect.sync(() => new Date().toISOString());
+    yield* db.run(
+      `INSERT INTO owner_preferences (owner_email, preference_key, value_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
+      [ownerEmail(email), OWNER_INSTRUCTIONS_KEY, JSON.stringify({ instructions }), now, now],
+    );
+    return instructions;
+  }).pipe(Effect.provide(databaseLayer(env.DB)));
 }
 
-export async function resetOwnerInstructions(env: Env, email: string): Promise<string> {
-  await env.DB.prepare(
-    "DELETE FROM owner_preferences WHERE owner_email = ? AND preference_key = ?",
-  ).bind(ownerEmail(email), OWNER_INSTRUCTIONS_KEY).run();
-  return DEFAULT_OWNER_INSTRUCTIONS;
+export function resetOwnerInstructions(env: Env, email: string) {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+    yield* db.run(
+      "DELETE FROM owner_preferences WHERE owner_email = ? AND preference_key = ?",
+      [ownerEmail(email), OWNER_INSTRUCTIONS_KEY],
+    );
+    return DEFAULT_OWNER_INSTRUCTIONS;
+  }).pipe(Effect.provide(databaseLayer(env.DB)));
 }
 
 export function composeOwnerSystemPrompt(protectedPolicy: string, cachedContext: string | undefined, ownerInstructions: string): string {
