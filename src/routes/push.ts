@@ -81,6 +81,7 @@ export function registerPushRoutes(app: Hono<AppEnv>) {
       body: body.body,
       href: typeof body.href === "string" ? body.href : "/",
       dedupeKey: typeof body.dedupeKey === "string" ? body.dedupeKey : undefined,
+      stableName: "Owner notifications",
     });
     return c.json<ApiResponse>({ ok: receipt.delivered > 0 && receipt.failed === 0, command: c.req.path, result: receipt, next_actions: [] }, receipt.delivered > 0 && receipt.failed === 0 ? 200 : 502);
   });
