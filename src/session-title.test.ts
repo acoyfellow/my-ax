@@ -4,8 +4,8 @@ import { deriveSessionTitle } from "./session-title";
 import { SCHEDULED_JOB_RUN_PREFIX } from "./jobs";
 
 test("scheduled job guard prefix is stripped from session and notification titles", () => {
-  const title = deriveSessionTitle(`${SCHEDULED_JOB_RUN_PREFIX}\n\nEvery 5 minutes, check on the Lee cmux PR exchange and ALWAYS notify.`);
-  assert.equal(title, "Every 5 minutes, check on the Lee cmux PR exchange and ALWAY");
+  const title = deriveSessionTitle(`${SCHEDULED_JOB_RUN_PREFIX}\n\nCheck the status.`);
+  assert.equal(title, "Check the status.");
 });
 
 test("normal title derivation still strips code blocks and compresses whitespace", () => {
@@ -13,14 +13,9 @@ test("normal title derivation still strips code blocks and compresses whitespace
   assert.equal(title, "Here is code: Then explain the result.");
 });
 
-test("a session name is never longer than 60 characters", () => {
-  const title = deriveSessionTitle("Look at the attached image. Name its single fill color in one word. Then keep going.");
-  assert.ok(title.length <= 60);
-  assert.equal(title, "Look at the attached image. Name its single fill color in on");
-});
-
-test("title truncation never splits a supplementary character into a lone surrogate", () => {
+test("title truncation stops at 60 Unicode code points without splitting a supplementary character", () => {
   const title = deriveSessionTitle("a".repeat(59) + "😀tail");
   assert.equal(title, "a".repeat(59) + "😀");
+  assert.equal(Array.from(title).length, 60);
   assert.equal(/[\uD800-\uDBFF]$/.test(title), false, "must not end on a dangling high surrogate");
 });

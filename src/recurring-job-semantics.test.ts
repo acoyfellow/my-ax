@@ -24,7 +24,7 @@ const row: JobRow = {
   updated_at: "2026-01-01T00:00:00.000Z",
 };
 
-test("recurring job input requires a target conversation and defaults new jobs to fresh conversations", () => {
+test("recurring job input requires a target conversation and defaults new jobs to the current conversation", () => {
   assert.deepEqual(validateJobInput({ name: "job", prompt: "run", cadenceSecs: 60 }), {
     tag: "InvalidInput",
     field: "sessionId",
@@ -36,7 +36,7 @@ test("recurring job input requires a target conversation and defaults new jobs t
     prompt: "run",
     cadenceSecs: 60,
     maxRuns: null,
-    threadMode: "new_session_per_run",
+    threadMode: "same_session",
   });
 });
 
@@ -137,17 +137,17 @@ test("same-session target resolver reuses the source conversation", async () => 
   });
 });
 
-test("new-session target resolver creates a fresh owned conversation", async () => {
+test("new-session target resolver creates a fresh owned conversation with a 60-code-point title", async () => {
   const inserts: unknown[][] = [];
   const env = { DB: { prepare(sql: string) { return { bind(...values: unknown[]) { inserts.push([sql, ...values]); return { async run() { return {}; } }; } }; } } } as unknown as Env;
-  const target = await resolveRecurringJobTargetSession(env, { ...row, thread_mode: "new_session_per_run" }, new Date("2026-01-01T00:00:00.000Z"));
+  const target = await resolveRecurringJobTargetSession(env, { ...row, name: "😀".repeat(61), thread_mode: "new_session_per_run" }, new Date("2026-01-01T00:00:00.000Z"));
   assert.equal(target.sourceSessionId, "session-existing");
   assert.equal(target.threadMode, "new_session_per_run");
   assert.equal(target.created, true);
   assert.notEqual(target.targetSessionId, "session-existing");
   assert.equal(inserts.length, 1);
   assert.match(String(inserts[0][0]), /INSERT INTO sessions/);
-  assert.equal(inserts[0][2], "Morning check · Jan 1, 12:00 AM UTC");
+  assert.equal(Array.from(String(inserts[0][2])).length, 60);
   assert.equal(inserts[0][3], "owner@example.com");
 });
 

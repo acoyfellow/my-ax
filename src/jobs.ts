@@ -6,6 +6,7 @@
 
 import type { Env } from "./types";
 import { completeRecurringJobRun } from "./recurring-job-run";
+import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS, truncateUnicodeCodePoints } from "./unicode-text";
 
 async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
   // Keep the Cloudflare-only agent stub out of module initialization so pure
@@ -16,7 +17,7 @@ async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
 
 function recurringRunSessionTitle(row: Pick<JobRow, "name">, now: Date): string {
   const stamp = now.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" });
-  return `${row.name} · ${stamp}`.slice(0, MAX_NAME_CHARS);
+  return truncateUnicodeCodePoints(`${row.name} · ${stamp}`, MAX_GENERATED_SESSION_TITLE_CODE_POINTS);
 }
 
 export async function resolveRecurringJobTargetSession(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "thread_mode" | "name">, now: Date): Promise<{ targetSessionId: string; sourceSessionId: string; threadMode: RecurringJobThreadMode; created: boolean }> {
@@ -100,7 +101,7 @@ export async function claimRecurringJobRun(env: Env, jobId: string, ownerEmail: 
 
 /** Validate + normalize JobInput. Returns a tagged error if invalid. */
 export function validateJobInput(input: Partial<JobInput>): ValidationError | JobInput {
-  const rawMode = typeof input.threadMode === "string" ? input.threadMode : "new_session_per_run";
+  const rawMode = typeof input.threadMode === "string" ? input.threadMode : "same_session";
   const isSpecific = rawMode === "specific_session";
   const sessionId = (input.sessionId ?? "").trim();
   // Give the actionable Specific-thread message instead of a bare "required"
@@ -119,7 +120,7 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
   const rawMaxRuns = input.maxRuns;
   const maxRuns = rawMaxRuns === undefined || rawMaxRuns === null ? null : Number(rawMaxRuns);
   if (maxRuns !== null && (!Number.isInteger(maxRuns) || maxRuns < 1)) return { tag: "InvalidInput", field: "maxRuns", message: "must be a positive integer or null" };
-  const rawThreadMode = typeof (input as Partial<JobInput>).threadMode === "string" ? (input as Partial<JobInput>).threadMode : "new_session_per_run";
+  const rawThreadMode = typeof (input as Partial<JobInput>).threadMode === "string" ? (input as Partial<JobInput>).threadMode : "same_session";
   const threadMode = RECURRING_JOB_THREAD_MODES.includes(rawThreadMode as RecurringJobThreadMode) ? rawThreadMode as RecurringJobThreadMode : null;
   if (!threadMode) return { tag: "InvalidInput", field: "threadMode", message: "must be same_session, new_session_per_run, or specific_session" };
   // "Specific thread" requires the owner to name the target thread id (enforced

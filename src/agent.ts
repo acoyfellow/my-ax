@@ -621,7 +621,7 @@ export class MyAgent extends Think<Env> {
     if (!latest || !insertedLatest) return;
     const first = users.length === 1;
     const statement = first
-      ? this.env.DB.prepare("UPDATE sessions SET name = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(deriveSessionTitle(textParts(latest)), this.name, identity.email)
+      ? this.env.DB.prepare("UPDATE sessions SET name = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND stable_name IS NULL").bind(deriveSessionTitle(textParts(latest)), this.name, identity.email)
       : this.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(this.name, identity.email);
     await statement.run().catch((error) => console.error("think_session_touch_failed", { err: String(error) }));
   }
