@@ -1,4 +1,5 @@
 import { getAgentByName } from "agents";
+import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
@@ -82,13 +83,13 @@ export async function ownerDeskPromote(
 export async function ownerDeskAppWrite(env: AppEnv["Bindings"], email: string, incoming: unknown, author?: string): Promise<DeskApp> {
   const owner = email.toLowerCase();
   applyDeskAppWrite(emptyDeskApp(), incoming, { author: author ?? null });
-  const written = await writeWithCompareAndSet<DeskApp>(
+  const written = await Effect.runPromise(writeWithCompareAndSet<DeskApp>(
     {
       read: () => readVersionedPreference(env, owner, DESK_APP_PREFERENCE_KEY, parseDeskApp, emptyDeskApp),
       compareAndSet: (next, expectedVersion) => compareAndSetPreference(env, owner, DESK_APP_PREFERENCE_KEY, next, expectedVersion),
     },
     (current) => applyDeskAppWrite(current, incoming, { author: author ?? null }),
-  );
+  ));
   await broadcastDeskApp(env, owner, written.value);
   return written.value;
 }
@@ -163,13 +164,13 @@ export async function ownerDeskGet(env: AppEnv["Bindings"], email: string): Prom
 export async function ownerDeskUpsert(env: AppEnv["Bindings"], email: string, card: unknown): Promise<DeskBoard> {
   const owner = email.toLowerCase();
   upsertDeskCard(emptyDeskBoard(), card);
-  const written = await writeWithCompareAndSet<DeskBoard>(
+  const written = await Effect.runPromise(writeWithCompareAndSet<DeskBoard>(
     {
       read: () => readVersionedBoard(env, owner),
       compareAndSet: (next, expectedVersion) => compareAndSetBoard(env, owner, next, expectedVersion),
     },
     (current) => upsertDeskCard(current, card),
-  );
+  ));
   await broadcastBoard(env, owner, written.value);
   return written.value;
 }
@@ -177,13 +178,13 @@ export async function ownerDeskUpsert(env: AppEnv["Bindings"], email: string, ca
 export async function ownerDeskRemove(env: AppEnv["Bindings"], email: string, cardId: unknown): Promise<DeskBoard> {
   const owner = email.toLowerCase();
   removeDeskCard(emptyDeskBoard(), cardId);
-  const written = await writeWithCompareAndSet<DeskBoard>(
+  const written = await Effect.runPromise(writeWithCompareAndSet<DeskBoard>(
     {
       read: () => readVersionedBoard(env, owner),
       compareAndSet: (next, expectedVersion) => compareAndSetBoard(env, owner, next, expectedVersion),
     },
     (current) => removeDeskCard(current, cardId),
-  );
+  ));
   await broadcastBoard(env, owner, written.value);
   return written.value;
 }

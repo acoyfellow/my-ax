@@ -1,4 +1,5 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
+import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { getSessionAgent } from "../agent-stub";
@@ -10,7 +11,7 @@ import { notifyOwner } from "../notify";
 import { createDecision } from "./decisions";
 import { ownerDeskClear, ownerDeskGet, ownerDeskRemove, ownerDeskUpsert } from "./desk";
 import { getUserWorkspace } from "../workspace";
-import { listWorkspace, readWorkspace, writeWorkspace } from "../workspace-mcp";
+import { listWorkspace, readWorkspace, workspaceSandboxLayer, writeWorkspace } from "../workspace-mcp-program";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
 
@@ -207,15 +208,16 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   if (method === "workspace_list" || method === "workspace_read" || method === "workspace_write") {
     try {
       const { sandbox } = await getUserWorkspace(c.env, c.get("identity"));
+      const layer = workspaceSandboxLayer(sandbox);
       if (method === "workspace_list") {
-        return await listWorkspace(sandbox, typeof args.path === "string" ? args.path : undefined, clamp(args.limit, 80, 200));
+        return await Effect.runPromise(listWorkspace(typeof args.path === "string" ? args.path : undefined, clamp(args.limit, 80, 200)).pipe(Effect.provide(layer)));
       }
       if (typeof args.path !== "string" || !args.path.trim()) throw new Error("path is required");
       if (method === "workspace_write") {
         if (typeof args.content !== "string") throw new Error("content is required");
-        return await writeWorkspace(sandbox, args.path, args.content);
+        return await Effect.runPromise(writeWorkspace(args.path, args.content).pipe(Effect.provide(layer)));
       }
-      return await readWorkspace(sandbox, args.path, clamp(args.maxBytes, 8000, 32000));
+      return await Effect.runPromise(readWorkspace(args.path, clamp(args.maxBytes, 8000, 32000)).pipe(Effect.provide(layer)));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { unavailable: true, error: message };

@@ -34,6 +34,6 @@ has(route, '"/api/starters"', "GET/PUT starters route exists");
 has(route, "getConversationStarters", "route reads via the shared store");
 has(route, "setConversationStarters", "route writes via the shared store");
 has(tools, 'name: "manage_starters"', "agent can manage starters (no-UI path)");
-has(tools, "setConversationStarters(ctx.env, email, args.starters)", "agent tool writes the same store");
+has(tools, "setConversationStarters(email, args.starters).pipe(Effect.provide(databaseLayer(ctx.env.DB)))", "agent tool writes the same store through the database layer");
 
 console.log("\u2713 starters UI smoke: chat consumes owner starters; Settings CRUD + agent tool share one server store");

@@ -152,8 +152,18 @@ test("check-in steers to filtered active recurring jobs when jobs are the main w
   assert.deepEqual(result.suggestedSteers, [{ label: "Review active recurring jobs", href: "/api/jobs?status=active" }]);
 });
 
+test("check-in hides failed runs older than 14 days from the sample", () => {
+  const result = composeOwnerCheckIn({
+    attention: [],
+    jobs: [],
+    runs: [{ ...run, id: "old", status: "failed", updated_at: "2026-06-27 15:37:34" }],
+  });
+  assert.equal(result.failed.length, 0);
+  assert.equal(result.totals.failedRuns, 0);
+});
+
 test("check-in surfaces failed terminal runs before ordinary active work", () => {
-  const failed = { ...run, id: "run-failed", status: "failed" };
+  const failed = { ...run, id: "run-failed", status: "failed", updated_at: new Date().toISOString() };
   const result = composeOwnerCheckIn({ attention: [], jobs: [job], runs: [failed, run] });
   assert.equal(result.summary, "1 failed run needs review; 2 active.");
   assert.equal(result.failed[0].id, "run-failed");
@@ -166,7 +176,7 @@ test("check-in surfaces failed terminal runs before ordinary active work", () =>
 });
 
 test("actionable unread attention still outranks failed run steering", () => {
-  const failed = { ...run, id: "run-failed", status: "failed" };
+  const failed = { ...run, id: "run-failed", status: "failed", updated_at: new Date().toISOString() };
   const result = composeOwnerCheckIn({
     attention: [{ id: "a", kind: "recipe.approval", title: "Choose", body: "Pick one", href: "/api/decisions/a", created_at: "2026-06-24" }],
     jobs: [],
@@ -255,7 +265,7 @@ test("check-in split totals never lie: authoritative counts survive capped mixed
 });
 
 test("check-in failed summary uses exact failed totals when the failed sample is capped", () => {
-  const failedRuns = Array.from({ length: 10 }, (_, i) => ({ ...run, id: `failed-${i}`, status: "failed" }));
+  const failedRuns = Array.from({ length: 10 }, (_, i) => ({ ...run, id: `failed-${i}`, status: "failed", updated_at: new Date().toISOString() }));
   const result = composeOwnerCheckIn({
     attention: [],
     jobs: [],
@@ -272,14 +282,14 @@ test("check-in keeps failed work visible ahead of informational updates", () => 
     attention: [],
     informationalAttention: [{ id: "update", kind: "session.update", title: "Done", body: "FYI", href: "/", created_at: "2026-06-24" }],
     jobs: [],
-    runs: [{ ...run, id: "failed", status: "failed" }],
+    runs: [{ ...run, id: "failed", status: "failed", updated_at: new Date().toISOString() }],
     totals: { attention: 8, attentionActionable: 0, attentionInformational: 8, failedRuns: 2, openRuns: 1 },
   });
   assert.equal(result.summary, "2 failed runs need review; 8 updates awaiting review; 1 active.");
 });
 
 test("check-in does not report non-zero run totals with empty status samples", () => {
-  const failed = { ...run, id: "failed-visible", status: "failed" };
+  const failed = { ...run, id: "failed-visible", status: "failed", updated_at: new Date().toISOString() };
   const open = { ...run, id: "open-visible", status: "open" };
   const result = composeOwnerCheckIn({
     attention: [],

@@ -2,6 +2,7 @@ import { Think } from "@cloudflare/think";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
+import { Effect } from "effect";
 import { createCompactFunction } from "agents/experimental/memory/utils";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
@@ -20,7 +21,8 @@ import { notifyOwner } from "./notify";
 import { completeRecurringJobRun, recurringJobClientMessage, recurringJobIdFromClientMessageId } from "./recurring-job-run";
 import { claimRecurringJobRun, computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
 import { deriveSessionTitle } from "./session-title";
-import { recordCycleCost, nextCycleIndex, type CycleCostUsage } from "./cycle-costs";
+import type { CycleCostUsage } from "./cycle-costs";
+import { cycleCostLayer, nextCycleIndex, recordCycleCost } from "./cycle-costs-program";
 import { recordRecoveryExhaustion } from "./recovery-exhaustion";
 import { shouldSendCompletionNotification, visibleAssistantContent, visibleCompletionNotificationBody } from "./turn-visible-receipt";
 import { createMyAxBrowserTools } from "./browser-tools";
@@ -47,8 +49,10 @@ import { executeWorkCode } from "./work-tools";
 import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
 import { RecipeUsageCollector } from "./recipe-usage-collector";
 import { resolveBridgeOrigin } from "./bridge-origin";
+import { autoTrustMode } from "./auto-trust";
+import { databaseLayer } from "./effect/database";
 import { safePublicHttpUrl } from "./public-url";
-import { reusableToolApprovalMode } from "./reusable-tool-preferences";
+import { reusableToolApprovalMode } from "./reusable-tool-preferences-program";
 import type { ReusableToolCandidate } from "./reusable-tool-candidate";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
@@ -1182,7 +1186,7 @@ export class MyAgent extends Think<Env> {
     ));
     const dogfoodNoToolTurn = safeMessages.some((message) => message.role === "user" && typeof message.content === "string" && message.content.includes("MY_AX_RECIPE_CURVE_NO_TOOLS"));
     const ownerInstructions = identity
-      ? await getOwnerInstructions(this.env, identity.email).catch((error) => {
+      ? await Effect.runPromise(getOwnerInstructions(this.env, identity.email)).catch((error) => {
           console.error("owner_instructions_load_failed", { err: error instanceof Error ? error.message : String(error) });
           return DEFAULT_OWNER_INSTRUCTIONS;
         })
@@ -1268,16 +1272,21 @@ export class MyAgent extends Think<Env> {
           basis: "ai_sdk_step_usage",
         }
       : { inputTokens: null, outputTokens: null, totalTokens: null, basis: "unavailable" };
-    await recordCycleCost(this.env, {
-      ownerEmail: identity.email,
-      sessionOrRunId: this.name,
-      cycleIndex: await nextCycleIndex(this.env, identity.email, this.name),
-      model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env),
-      finishReason: steps.at(-1)?.finishReason ?? result.status,
-      usage,
-      recipesUsed,
-      recipesSaved,
-    });
+    const sessionOrRunId = this.name;
+    const model = this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env);
+    await Effect.runPromise(Effect.gen(function* () {
+      const cycleIndex = yield* nextCycleIndex(identity.email, sessionOrRunId);
+      return yield* recordCycleCost({
+        ownerEmail: identity.email,
+        sessionOrRunId,
+        cycleIndex,
+        model,
+        finishReason: steps.at(-1)?.finishReason ?? result.status,
+        usage,
+        recipesUsed,
+        recipesSaved,
+      });
+    }).pipe(Effect.provide(cycleCostLayer(this.env.DB))));
   }
 
   private async promoteSuggestedRecipe(result: ChatResponseResult): Promise<void> {
@@ -1301,7 +1310,10 @@ export class MyAgent extends Think<Env> {
     // The owner chooses whether qualifying reusable tools wait for review or
     // become enabled immediately. The stored owner preference wins; the legacy
     // deploy variable remains a migration-safe fallback when no choice exists.
-    const trustMode = await reusableToolApprovalMode(this.env, identity.email);
+    const fallback = autoTrustMode(this.env) === "auto" ? "auto" : "review";
+    const trustMode = await Effect.runPromise(
+      reusableToolApprovalMode(identity.email, fallback).pipe(Effect.provide(databaseLayer(this.env.DB))),
+    );
     const autoEnable = trustMode === "auto";
     for (const output of workCodeOutputs) {
       const text = typeof output === "string" ? output : JSON.stringify(output);

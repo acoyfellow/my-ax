@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DeskWriteConflict, writeWithCompareAndSet } from "./desk-write";
+import { Effect } from "effect";
+import { DeskWriteConflict, writeWithCompareAndSet as writeWithCompareAndSetEffect } from "./desk-write";
+
+const writeWithCompareAndSet = <T>(...args: Parameters<typeof writeWithCompareAndSetEffect<T>>) => Effect.runPromise(writeWithCompareAndSetEffect(...args));
 
 type Board = { cards: string[] };
 

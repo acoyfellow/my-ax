@@ -256,7 +256,7 @@ export function auditPull(input: PullInput, promptDigest: string): AuditReceipt 
     input.files.length > 0 &&
     input.files.every((file) => file.startsWith(".factory/") || file.startsWith("src/factory/"));
   if (stampOnly) {
-    findings.push("product files missing; a .factory seed is not a fix");
+    findings.push("product files missing; factory receipts are not a fix");
     return {
       headSha: input.headSha,
       promptDigest,

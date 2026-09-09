@@ -34,7 +34,7 @@
 // in a separate POST /api/mcps call once the user accepts the probe
 // results.
 
-import { Effect, Schedule, Duration } from "effect";
+import { Cause, Data, Effect, Schedule } from "effect";
 import type { Connector, ConnectorAuth, ConnectorShape } from "./connectors";
 import { safePublicHttpUrl } from "./public-url";
 
@@ -42,16 +42,17 @@ import { safePublicHttpUrl } from "./public-url";
 // probe fetch with a timeout and retry only transient network failures (never
 // HTTP responses, which are real answers). SSRF guards live in safeHttpsUrl /
 // redirect:"manual" below.
-const PROBE_TIMEOUT = Duration.seconds(8);
-const probeRetry = Schedule.intersect(
-  Schedule.exponential(Duration.millis(200), 2).pipe(Schedule.jittered),
-  Schedule.recurs(1),
-);
-function probeFetch(input: string, init: RequestInit): Promise<Response | null> {
-  return Effect.runPromise(
-    Effect.tryPromise({ try: () => fetch(input, init), catch: (cause) => cause })
-      .pipe(Effect.timeout(PROBE_TIMEOUT), Effect.retry(probeRetry), Effect.orElseSucceed(() => null)),
-  );
+class ProbeNetworkError extends Data.TaggedError("ProbeNetworkError")<{ cause: unknown }> {}
+
+const probeRetry = {
+  schedule: Schedule.exponential("200 millis").pipe(Schedule.jittered),
+  times: 1,
+  while: (error: ProbeNetworkError | Cause.TimeoutError) => error instanceof ProbeNetworkError || Cause.isTimeoutError(error),
+} as const;
+
+function probeFetch(input: string, init: RequestInit) {
+  return Effect.tryPromise({ try: () => fetch(input, init), catch: (cause) => new ProbeNetworkError({ cause }) })
+    .pipe(Effect.timeout("8 seconds"), Effect.retry(probeRetry), Effect.orElseSucceed(() => null));
 }
 
 function safeHttpsUrl(raw: string): URL | null {
@@ -116,43 +117,32 @@ export function slugIdFromUrl(rawUrl: string): string {
  *  RFC 8414 specifies /.well-known/oauth-authorization-server. We also
  *  try the OIDC well-known path as a fallback because many MCP servers
  *  reuse an OIDC IdP. */
-async function fetchOAuthMetadata(
-  origin: string,
-): Promise<Record<string, unknown> | null> {
+function fetchOAuthMetadata(origin: string) {
   const candidates = [
     `${origin}/.well-known/oauth-authorization-server`,
     `${origin}/.well-known/openid-configuration`,
   ];
-  for (const url of candidates) {
-    try {
-      // Metadata redirects are rejected. Following them would let a public
-      // hostname launder a server-side request to a private destination.
-      const r = await probeFetch(url, { headers: { Accept: "application/json" }, redirect: "manual" });
-      if (!r || !r.ok) continue;
-      const ct = r.headers.get("content-type") || "";
-      if (!ct.includes("json")) continue;
-      const data = (await r.json()) as Record<string, unknown>;
-      // Sanity: must have at least authorization_endpoint + token_endpoint.
-      if (
-        typeof data.authorization_endpoint === "string" &&
-        typeof data.token_endpoint === "string"
-      ) {
-        return data;
-      }
-    } catch {
-      // ignore; try next candidate
+  return Effect.gen(function* () {
+    for (const url of candidates) {
+      const response = yield* probeFetch(url, { headers: { Accept: "application/json" }, redirect: "manual" });
+      if (!response?.ok || !(response.headers.get("content-type") || "").includes("json")) continue;
+      const data = yield* Effect.tryPromise({
+        try: () => response.json() as Promise<Record<string, unknown>>,
+        catch: (cause) => new ProbeNetworkError({ cause }),
+      }).pipe(Effect.orElseSucceed(() => null));
+      if (data && typeof data.authorization_endpoint === "string" && typeof data.token_endpoint === "string") return data;
     }
-  }
-  return null;
+    return null;
+  });
 }
 
 /** Best-effort MCP initialize call. Some MCP servers refuse unauth'd
  *  initialize entirely (returns 401/403); that's not an error from the
  *  probe's perspective — we just can't confirm MCP shape. Returns the
  *  server name on success, null on any failure. */
-async function tryInitialize(upstream: string): Promise<string | null> {
-  try {
-    const r = await probeFetch(upstream, {
+function tryInitialize(upstream: string) {
+  return Effect.gen(function* () {
+    const response = yield* probeFetch(upstream, {
       method: "POST",
       redirect: "manual",
       headers: {
@@ -170,28 +160,24 @@ async function tryInitialize(upstream: string): Promise<string | null> {
         },
       }),
     });
-    if (!r || !r.ok) return null;
-    const text = await r.text();
-    // Response might be SSE-framed (text/event-stream) — strip "data: " prefix.
-    let body = text.trim();
-    if (body.startsWith("event:") || body.includes("\ndata: ")) {
-      const dataLines = body
-        .split("\n")
-        .filter((l) => l.startsWith("data: "))
-        .map((l) => l.slice(6));
-      body = dataLines.join("");
-    }
-    const parsed = JSON.parse(body) as {
-      result?: { serverInfo?: { name?: string } };
-    };
-    return parsed.result?.serverInfo?.name ?? null;
-  } catch {
-    return null;
-  }
+    if (!response?.ok) return null;
+    return yield* Effect.tryPromise({
+      try: async () => {
+        let body = (await response.text()).trim();
+        if (body.startsWith("event:") || body.includes("\ndata: ")) {
+          body = body.split("\n").filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("");
+        }
+        const parsed = JSON.parse(body) as { result?: { serverInfo?: { name?: string } } };
+        return parsed.result?.serverInfo?.name ?? null;
+      },
+      catch: (cause) => new ProbeNetworkError({ cause }),
+    }).pipe(Effect.orElseSucceed(() => null));
+  });
 }
 
 /** Probe an MCP URL. See file-level comment for spec + failure modes. */
-export async function probeMcp(rawUrl: string): Promise<ProbeResult | ProbeError> {
+export function probeMcp(rawUrl: string): Effect.Effect<ProbeResult | ProbeError> {
+  return Effect.gen(function* () {
   // 1. URL hygiene.
   let upstream: URL;
   try {
@@ -210,7 +196,7 @@ export async function probeMcp(rawUrl: string): Promise<ProbeResult | ProbeError
   // 2. OAuth metadata discovery. The well-known docs live at the origin,
   //    not at the upstream path — so strip the path for discovery.
   const origin = `${upstream.protocol}//${upstream.host}`;
-  const metadata = await fetchOAuthMetadata(origin);
+  const metadata = yield* fetchOAuthMetadata(origin);
   if (!metadata) {
     return {
       ok: false,
@@ -232,7 +218,7 @@ export async function probeMcp(rawUrl: string): Promise<ProbeResult | ProbeError
   const resource = origin;
 
   // 3. MCP shape check (optional, best-effort).
-  const serverName = await tryInitialize(upstream.toString());
+  const serverName = yield* tryInitialize(upstream.toString());
 
   // 4. Build the Connector record. id is sluggable from the upstream.
   const id = slugIdFromUrl(rawUrl);
@@ -262,5 +248,6 @@ export async function probeMcp(rawUrl: string): Promise<ProbeResult | ProbeError
     dcrAvailable: !!registrationEndpoint,
     mcpConfirmed: !!serverName,
     serverName: serverName ?? undefined,
-  };
+  } satisfies ProbeResult;
+  });
 }

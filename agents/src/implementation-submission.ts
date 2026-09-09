@@ -53,6 +53,7 @@ export async function createImplementationGrant(secret: string, grant: Implement
 }
 
 export async function verifyImplementationGrant(secret: string, token: string, now = Date.now()): Promise<ImplementationGrant> {
+  if (!secret.trim()) throw new Error("implementation grant secret is required");
   const [payload, provided, extra] = token.split(".");
   if (!payload || !provided || extra || !equal(await signature(secret, payload), provided)) throw new Error("invalid implementation grant");
   const grant = JSON.parse(new TextDecoder().decode(decodeBase64Url(payload))) as ImplementationGrant;

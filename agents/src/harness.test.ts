@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executeAuditWorkflow, executeDigWorkflow, executeTriageWorkflow } from "./workflows";
+import { Effect } from "effect";
+import {
+  executeAuditWorkflow as executeAuditWorkflowEffect,
+  executeDigWorkflow as executeDigWorkflowEffect,
+  executeTriageWorkflow as executeTriageWorkflowEffect,
+} from "./workflows";
 import type { GithubPort, TerrariumPort } from "./orchestrate";
 
 const env = { LLM_GATEWAY_URL: "https://opencode.cloudflare.dev/openai", LLM_GATEWAY_TOKEN: "test", AGENTS_MODEL: "grok-4.6" };
+const executeAuditWorkflow = (...args: Parameters<typeof executeAuditWorkflowEffect>) => Effect.runPromise(executeAuditWorkflowEffect(...args));
+const executeDigWorkflow = (...args: Parameters<typeof executeDigWorkflowEffect>) => Effect.runPromise(executeDigWorkflowEffect(...args));
+const executeTriageWorkflow = (...args: Parameters<typeof executeTriageWorkflowEffect>) => Effect.runPromise(executeTriageWorkflowEffect(...args));
 
 function ports(ok = true): { github: GithubPort; terrarium: TerrariumPort; labels: string[] } {
   const labels: string[] = [];

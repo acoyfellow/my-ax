@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordDecisionResponse, type DecisionResponseStore } from "./decision-response";
+import { Effect } from "effect";
+import type { DecisionResponseStore } from "./decision-response";
+import {
+  decisionResponseLiveLayer,
+  recordDecisionResponse as recordDecisionResponseEffect,
+} from "./decision-response-program";
+
+const recordDecisionResponse = (
+  store: DecisionResponseStore,
+  input: Parameters<typeof recordDecisionResponseEffect>[0],
+  resume: () => Promise<void> = async () => undefined,
+) => Effect.runPromise(recordDecisionResponseEffect(input).pipe(Effect.provide(decisionResponseLiveLayer(store, resume))));
 
 function memoryStore(): DecisionResponseStore & { events: Array<{ eventId: string; choice: string }>; open: boolean } {
   return {
