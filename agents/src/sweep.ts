@@ -97,8 +97,10 @@ export function planSweep(issues: SweepIssue[], now = Date.now()): SweepAction[]
   const closing = new Set(actions.filter((row) => row.action === "close-duplicate").map((row) => row.number));
   for (const issue of open) {
     if (closing.has(issue.number)) continue;
-    if (issue.linkedPr && !isFactoryOnlyChange(issue.linkedPr.files)) {
-      actions.push({ action: "close-issue-to-pr", number: issue.number, prNumber: issue.linkedPr.number });
+    const liveProductPr = (issue.openPr && !isFactoryOnlyChange(issue.openPr.files) ? issue.openPr : null)
+      ?? (issue.linkedPr && issue.hasOpenPr && !isFactoryOnlyChange(issue.linkedPr.files) ? issue.linkedPr : null);
+    if (liveProductPr) {
+      actions.push({ action: "close-issue-to-pr", number: issue.number, prNumber: liveProductPr.number });
       continue;
     }
     if (issue.openPr && isFactoryOnlyChange(issue.openPr.files)) {

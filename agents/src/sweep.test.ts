@@ -96,11 +96,18 @@ test("needs-human issues remain open without repeat comments or retries", () => 
   assert.deepEqual(actions, []);
 });
 
-test("a real linked PR receives the work and closes the issue", () => {
+test("a real open product PR receives the work and closes the issue", () => {
   const actions = planSweep([
-    { number: 155, title: "bug: sessions", body: "repro", author: "o", state: "open", comments: [], linkedPr: { number: 169, files: ["src/session-title.ts", "src/session-title.test.ts"] } },
+    { number: 155, title: "bug: sessions", body: "repro", author: "o", state: "open", comments: [], hasOpenPr: true, openPr: { number: 169, files: ["src/session-title.ts", "src/session-title.test.ts"] } },
   ]);
   assert.deepEqual(actions, [{ action: "close-issue-to-pr", number: 155, prNumber: 169 }]);
+});
+
+test("a closed or parent-only linked PR does not close the issue", () => {
+  const actions = planSweep([
+    { number: 231, title: "bug: delegate", body: "repro", author: "o", state: "open", comments: [], labels: ["triage:draft"], linkedPr: { number: 235, files: ["src/delegate-many.ts"] } },
+  ]);
+  assert.deepEqual(actions, [{ action: "queue", number: 231 }]);
 });
 
 test("a boarded issue without draft opt-in stays open", () => {
