@@ -13,4 +13,5 @@
 - [Deployment Proof](../proof/README.md) — exact checks performed against a deployed Worker.
 - [Security Policy](../SECURITY.md) — reporting and deployment-owner responsibilities.
 - [Contributing](../CONTRIBUTING.md) — local checks, issue-then-PR flow, and repository invariants.
-- [Lifecycle agents](../agents/README.md) — GitHub issue classify, sweep, ready PR after human opt-in, review, audit. Hunt ticks: [HUNT.md](../agents/HUNT.md).
+- [Factory](./factory.md) — a recurring job that opens one conversation per issue. Not a Settings tab.
+- [Lifecycle agents](../agents/README.md) — sidecar GitHub workflows (webhook). Scheduled sweep cron is off; use the Factory job instead. Hunt ticks: [HUNT.md](../agents/HUNT.md).
