@@ -57,13 +57,13 @@
 </script>
 
 <header
-  class="safe-area-appbar relative z-30 flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-line bg-bg-alt/80 backdrop-blur text-fg min-h-[48px]"
+  class="safe-area-appbar relative z-30 flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-line bg-bg-alt text-fg min-h-[52px]"
   role="banner"
 >
     <button
       type="button"
       onclick={openSessions}
-      class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
+      class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3"
       aria-label="Open conversations sidebar"
       aria-haspopup="dialog"
       title="Conversations"
@@ -80,8 +80,8 @@
       <input bind:this={titleInput} bind:value={titleDraft} onkeydown={renameKeydown} onblur={saveRename} maxlength={200} class="w-full min-w-0 rounded border border-brand/40 bg-bg px-2 py-1 text-sm text-fg outline-none" aria-label="Rename active conversation" />
     {:else}
       <button type="button" onclick={beginRename} disabled={!sessionState.id} class="group block max-w-full min-w-0 text-left disabled:cursor-default" aria-label={sessionState.id ? "Rename active conversation" : "New conversation"} title={sessionState.id ? "Rename active conversation" : "New conversation"}>
-        <span class="flex items-center gap-1.5 min-w-0"><span class="block truncate text-[13px] font-medium text-fg">{sessionState.title}</span>{#if sessionState.id}<span class="hidden sm:inline text-[10px] text-fg-mut opacity-0 group-hover:opacity-70">✎</span>{/if}</span>
-        {#if sessionState.id}<span data-active-session-id={sessionState.id} class="block font-mono text-[9px] leading-tight text-fg-mut/70">{sessionState.id.slice(0, 8)}</span>{/if}
+        <span class="flex items-center gap-1.5 min-w-0"><span class="block truncate text-sm font-semibold text-fg">{sessionState.title}</span>{#if sessionState.id}<span class="hidden sm:inline text-sm text-fg-mut opacity-0 group-hover:opacity-70">✎</span>{/if}</span>
+        {#if sessionState.id}<span data-active-session-id={sessionState.id} class="block font-mono text-[0.8em] leading-tight text-fg-mut/70">{sessionState.id.slice(0, 8)}</span>{/if}
       </button>
     {/if}
   </div>
@@ -93,7 +93,7 @@
   <!-- Connection pill — reads from wsState.conn directly. -->
   <span
     data-state={wsState.conn}
-    class="flex-shrink-0 inline-flex items-center justify-center gap-0 sm:gap-1.5 rounded-full sm:rounded-md w-10 h-10 sm:w-auto sm:h-auto sm:px-2 sm:py-1 text-[11px] font-medium data-[state=live]:bg-good/10 data-[state=live]:text-good data-[state=reconnecting]:bg-warn/10 data-[state=reconnecting]:text-warn data-[state=offline]:bg-bad/10 data-[state=offline]:text-bad"
+    class="flex-shrink-0 inline-flex items-center justify-center gap-0 sm:gap-1.5 rounded-full sm:rounded-md w-10 h-10 sm:w-auto sm:h-auto sm:px-2.5 sm:py-1.5 text-sm font-medium data-[state=live]:bg-good/10 data-[state=live]:text-good data-[state=reconnecting]:bg-warn/10 data-[state=reconnecting]:text-warn data-[state=offline]:bg-bad/10 data-[state=offline]:text-bad"
     aria-live="polite"
     title="Connection status"
   >
@@ -110,7 +110,7 @@
     id="settings-button"
     type="button"
     onclick={openSettings}
-    class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
+    class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3"
     aria-label="Settings"
     aria-haspopup="dialog"
     title="Settings"
