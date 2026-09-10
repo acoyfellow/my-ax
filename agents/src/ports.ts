@@ -4,6 +4,13 @@ import type { GithubPort, TerrariumPort } from "./orchestrate";
 import type { AgentsEnv } from "./workflows";
 import { createImplementationGrant } from "./implementation-submission";
 
+export function prClosesIssue(issueNumber: number, title: string, body: string, headRef: string): boolean {
+  if (headRef.includes(`issue-${issueNumber}`)) return true;
+  const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const closes = new RegExp(`(?:^|\\n)\\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${escaped}\\b`, "i");
+  return closes.test(`${title}\n${body}`);
+}
+
 export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_REPO?: string }): GithubPort {
   const token = env.GITHUB_TOKEN?.trim();
   const repo = env.GITHUB_REPO?.trim() || "acoyfellow/my-ax";
@@ -121,11 +128,9 @@ export function liveGithubPort(env: AgentsEnv & { GITHUB_TOKEN?: string; GITHUB_
     async findOpenPrForIssue(issueNumber) {
       assertNoMergeAction("findOpenPrForIssue");
       const json = await gh("/pulls?state=open&per_page=100&sort=updated&direction=desc");
-      const escaped = String(issueNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const closes = new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${escaped}\\b`, "i");
       const row = (Array.isArray(json) ? json : []).find((candidate) => {
         const pr = candidate as { number?: number; title?: string; body?: string; head?: { ref?: string } };
-        return closes.test(String(pr.body || "")) || String(pr.head?.ref || "").includes(`issue-${issueNumber}`);
+        return prClosesIssue(issueNumber, String(pr.title || ""), String(pr.body || ""), String(pr.head?.ref || ""));
       }) as { number?: number } | undefined;
       const number = Number(row?.number);
       if (!Number.isInteger(number) || number <= 0) return null;
