@@ -1,0 +1,23 @@
+agents/src/ports.ts
+  s_2a77a1542d3982::t_76d4ba77ea8ac6 7-13,133
+agents/src/pr-closes-issue.test.ts
+  s_2a77a1542d3982::t_187ca42654a341 1-16
+package.json
+  s_2a77a1542d3982::t_b3cc407eaa175c 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e21a546338f7eb94416605c8513121586da257f9",
+  "prompts": {},
+  "sessions": {
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
