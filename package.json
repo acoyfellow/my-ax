@@ -6,6 +6,8 @@
   "description": "A personal AI agent operating environment you self-host on Cloudflare.",
   "scripts": {
     "dev": "npm run build:assets && wrangler dev --env dev",
+    "dev:e2e": "node scripts/dev-e2e.mjs",
+    "dev:e2e:keep": "node scripts/dev-e2e.mjs --keep",
     "dev:access": "bash scripts/dev-access.sh worker",
     "dev:access:tunnel": "bash scripts/dev-access.sh tunnel",
     "deploy": "npm run build:assets && wrangler deploy",
