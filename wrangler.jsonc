@@ -76,6 +76,7 @@
   // Workers AI binding. Account-level. The Worker's deployment identity
   // is the principal calling Workers AI — no per-user model key.
   "ai": { "binding": "AI" },
+  "web_search": { "binding": "WEBSEARCH" },
   // Browser Run: hosted headless Chrome sessions for visual tool calls.
   "browser": { "binding": "BROWSER" },
   // Dynamic Worker loader for native Think Agent Skills script execution.
