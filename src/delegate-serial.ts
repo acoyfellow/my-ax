@@ -177,3 +177,10 @@ export async function runDelegatesSerially(
   }
   return results;
 }
+
+const DELEGATE_FORBIDDEN = /\b(workspace\.|machine\.|page\.|web_search|browser_|mcp_|codemode\.|gh |git )/i;
+
+export function delegateTaskNeedsParentCapabilities(task: string): boolean {
+  return DELEGATE_FORBIDDEN.test(task);
+}
+

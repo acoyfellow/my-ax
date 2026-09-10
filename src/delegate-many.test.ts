@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AgentToolFailure } from "agents/agent-tools";
-import { delegateRunId, shouldRetryDelegate, taskFingerprint } from "./delegate-serial";
+import { delegateRunId, delegateTaskNeedsParentCapabilities, shouldRetryDelegate, taskFingerprint } from "./delegate-serial";
 
 // delegateManyInputSchema lives in delegate-many.ts (which imports Think and so
 // can't load under plain tsx); the input contract is re-validated indirectly by
@@ -29,4 +29,11 @@ test("only a stopped transient interruption receives one retry", () => {
   assert(error);
   assert.equal(error.retryable, false);
   assert.equal(shouldRetryDelegate(error, 1), false);
+});
+
+test("delegate tasks that need parent workspace or tools are refused before spawn", () => {
+  assert.equal(delegateTaskNeedsParentCapabilities("Summarize the two research notes."), false);
+  assert.equal(delegateTaskNeedsParentCapabilities("Read workspace.read /home/user/research/note.md"), true);
+  assert.equal(delegateTaskNeedsParentCapabilities("Use gh issue create for this bug"), true);
+  assert.equal(delegateTaskNeedsParentCapabilities("Call web_search for SPIFFE docs"), true);
 });

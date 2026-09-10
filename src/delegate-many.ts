@@ -9,6 +9,7 @@ import {
   delegateResultSchema,
   delegateRunId,
   runDelegatesSerially,
+  delegateTaskNeedsParentCapabilities,
   shouldRetryDelegate,
   taskFingerprint,
   type DelegateResult,
@@ -99,11 +100,15 @@ export function createDelegateManyTool(parent: DelegateParent) {
     // Runs the tasks SERIALLY (not concurrently): two child inferences hitting
     // the shared per-minute cap at once was the observed 3021 double-failure.
     // On 3021 the remaining task is deferred (backpressure), not retried.
-    description: "Delegate one or two independent read-only analysis tasks (run sequentially to respect shared inference limits). The parent must synthesize the retained child evidence.",
+    description: "Delegate one or two independent read-only analysis tasks (run sequentially). The child has no workspace, machine, page, MCP, browser, or web_search tools and does not share the parent Sandbox. Do not send file, shell, GitHub, or browser work here; do that in the parent. The parent must synthesize child evidence.",
     inputSchema: delegateManyInputSchema,
     outputSchema: delegateManyOutputSchema,
     execute: async (input, context) => {
       const parsed = delegateManyInputSchema.parse(input);
+      const blocked = parsed.tasks.find((row) => delegateTaskNeedsParentCapabilities(row.task));
+      if (blocked) {
+        throw new Error(`delegate_many cannot run parent-only work (workspace, machine, page, MCP, browser, web_search, git/gh). Do that in the parent. Blocked task: ${blocked.label ?? blocked.task.slice(0, 80)}`);
+      }
       const runIds = parsed.tasks.map(({ task }, index) => delegateRunId(parent.name, context.toolCallId, task, index));
       const results = await runDelegatesSerially(parsed.tasks, async (index) => {
         const { task } = parsed.tasks[index];
