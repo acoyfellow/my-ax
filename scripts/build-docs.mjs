@@ -24,6 +24,7 @@ const PAGES = [
   { slug: "deploy", file: "deploy.md", title: "Deploy", from: "docs" },
   { slug: "local-development", file: "local-development.md", title: "Local development", from: "docs" },
   { slug: "patterns", file: "patterns.md", title: "Implementation patterns", from: "docs" },
+  { slug: "factory", file: "factory.md", title: "Factory", from: "docs" },
 ];
 
 // Verify-don't-trust: turn every inline-code span that names a real repo file
