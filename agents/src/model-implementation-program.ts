@@ -20,6 +20,13 @@ export class ImplementationRepository extends Context.Service<ImplementationRepo
   read(path: string): Effect.Effect<string, ImplementationModelError>;
 }>()("my-ax/agents/ImplementationRepository") {}
 
+export function implementationResponsesUrl(gatewayUrl: string): string {
+  const base = gatewayUrl.replace(/\/+$/, "");
+  if (/\/v1$/.test(base)) return `${base}/responses`;
+  if (/\/openai$/.test(base)) return `${base}/v1/responses`;
+  return `${base}/v1/responses`;
+}
+
 export function implementationModelLayer(env: AgentsEnv, modelId: string, repository: { paths: string[]; read(path: string): Promise<string> }) {
   return Layer.mergeAll(
     Layer.succeed(ImplementationRepository, {
@@ -34,7 +41,7 @@ export function implementationModelLayer(env: AgentsEnv, modelId: string, reposi
         const authHeader = env.LLM_GATEWAY_AUTH_HEADER?.trim() || "authorization";
         return yield* Effect.tryPromise({
           try: async (signal) => {
-            const response = await fetch(`${base}/responses`, {
+            const response = await fetch(implementationResponsesUrl(base), {
               method: "POST", signal,
               headers: { "content-type": "application/json", [authHeader]: authHeader.toLowerCase() === "authorization" ? `Bearer ${token}` : token, "x-requested-with": "xmlhttprequest" },
               body: JSON.stringify({ model: modelId, input: prompt }),

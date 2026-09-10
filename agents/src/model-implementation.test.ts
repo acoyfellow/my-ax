@@ -81,7 +81,9 @@ test("chat smoke validation decodes escaped newlines before comparing source", (
 test("the implementation model selects context and returns bounded source with tests", async () => {
   const originalFetch = globalThis.fetch;
   const prompts: string[] = [];
-  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    urls.push(String(input));
     const request = JSON.parse(String(init?.body || "{}")) as { input?: string };
     prompts.push(request.input || "");
     const text = prompts.length === 1
@@ -109,6 +111,7 @@ test("the implementation model selects context and returns bounded source with t
     }));
     assert.deepEqual(files.map((file) => file.path), ["src/ui/message.ts", "src/ui/message.test.ts"]);
     assert.equal(prompts.length, 2);
+    assert.equal(urls[0], "https://gateway.example/openai/v1/responses");
     assert.doesNotMatch(prompts[1]!, /\.github\/workflows\/deploy\.yml/);
   } finally {
     globalThis.fetch = originalFetch;
