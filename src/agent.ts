@@ -517,10 +517,11 @@ export class MyAgent extends Think<Env> {
   }
 
   getTools() {
+    const agent = this;
     return {
-      ...createThinkTools(() => this.buildToolContext()),
-      ...createMyAxBrowserTools(this.env, () => this.identity(), () => this.name),
-      delegate_many: createDelegateManyTool(this),
+      ...createThinkTools(() => agent.buildToolContext()),
+      ...createMyAxBrowserTools(agent.env, () => agent.identity(), () => agent.name),
+      delegate_many: createDelegateManyTool(agent),
     };
   }
 
