@@ -135,11 +135,7 @@ export function validateJobInput(input: Partial<JobInput>): ValidationError | Jo
  * Ownership is the caller's responsibility — REST routes verify the
  * owner_email match before calling.
  */
-export const SCHEDULED_JOB_RUN_PREFIX = "You are executing one scheduled run of an existing recurring job. Do not create, update, resume, pause, delete, or schedule recurring jobs from this run unless the owner explicitly asked this run to modify job configuration. Do the requested check/work once, leave truthful receipts/notifications required by the prompt, then stop.";
-
-export function scheduledJobRunPrompt(prompt: string): string {
-  return `${SCHEDULED_JOB_RUN_PREFIX}\n\n${prompt}`;
-}
+export { SCHEDULED_JOB_RUN_PREFIX, scheduledJobRunPrompt } from "./jobs-prompt";
 
 export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): Promise<{ next_run_at: string | null; ok: boolean; error?: string; target_session_id: string; thread_mode: RecurringJobThreadMode; max_runs: number | null; run_count: number; status: JobStatus; remaining_runs: number | null }> {
   const claim = await claimRecurringJobRun(env, row.id, row.owner_email);

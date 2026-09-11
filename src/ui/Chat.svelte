@@ -31,7 +31,7 @@
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import { sessionTurnLocksComposer, type SessionTurnState } from "../session-turn";
-  import { isScheduledJobRunMessage } from "../session-title";
+  import { isScheduledJobRunMessage } from "../jobs-prompt";
   import { decideComposerKey, isMobileComposer } from "./composer-keys";
   import {
     agentStatusFor,
