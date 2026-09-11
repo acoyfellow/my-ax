@@ -1,9 +1,11 @@
-import { SCHEDULED_JOB_RUN_PREFIX } from "./jobs";
+import { isScheduledJobRunMessage, SCHEDULED_JOB_RUN_PREFIX } from "./jobs-prompt";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS, truncateUnicodeCodePoints } from "./unicode-text";
+
+export { isScheduledJobRunMessage };
 
 export function deriveSessionTitle(content: string): string {
   const withoutCodeBlocks = content.replace(/```[\s\S]*?```/g, "");
-  const withoutScheduledJobFrame = withoutCodeBlocks.startsWith(SCHEDULED_JOB_RUN_PREFIX)
+  const withoutScheduledJobFrame = isScheduledJobRunMessage(withoutCodeBlocks)
     ? withoutCodeBlocks.slice(SCHEDULED_JOB_RUN_PREFIX.length)
     : withoutCodeBlocks;
   const cleaned = withoutScheduledJobFrame.replace(/\s+/g, " ").trim();

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deriveSessionTitle } from "./session-title";
-import { SCHEDULED_JOB_RUN_PREFIX } from "./jobs";
+import { deriveSessionTitle, isScheduledJobRunMessage } from "./session-title";
+import { SCHEDULED_JOB_RUN_PREFIX } from "./jobs-prompt";
+
+test("scheduled job injects are not owner messages", () => {
+  assert.equal(isScheduledJobRunMessage(`${SCHEDULED_JOB_RUN_PREFIX}\n\nCheck the status.`), true);
+  assert.equal(isScheduledJobRunMessage("Check the status."), false);
+});
 
 test("scheduled job guard prefix is stripped from session and notification titles", () => {
   const title = deriveSessionTitle(`${SCHEDULED_JOB_RUN_PREFIX}\n\nCheck the status.`);
