@@ -12,3 +12,11 @@ test("RPC inject starts Think before submit so scheduled jobs do not Illegal inv
   assert.match(slice, /await this\.onStart\(\)/);
   assert.match(slice, /this\.runTurn/);
 });
+
+test("getTools closes over the agent instance instead of relying on call-site this", () => {
+  const start = agent.indexOf("getTools()");
+  const end = agent.indexOf("override async onBeforeSubAgent");
+  const slice = agent.slice(start, end);
+  assert.match(slice, /const agent = this/);
+  assert.match(slice, /createThinkTools\(\(\) => agent\.buildToolContext\(\)\)/);
+});
