@@ -246,6 +246,7 @@ export class MyAgent extends Think<Env> {
   }
 
   async injectUserMessage(body: { content?: string; clientMsgId?: string; attachments?: Attachment[] }) {
+    await this.onStart();
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity) throw new Error("session identity not seeded");
     const content = (body.content ?? "").trim();
