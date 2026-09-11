@@ -25,6 +25,18 @@ test("nextBackoffMs grows exponentially and is capped", () => {
   assert.ok(nextBackoffMs(10, 500, 8000, r) === 8000, "capped");
 });
 
+test("calls fetch with globalThis as this so Workers do not Illegal invocation", async () => {
+  let seen: unknown;
+  function methodFetch(this: unknown, _input: RequestInfo | URL, _init?: RequestInit) {
+    seen = this;
+    return Promise.resolve(res(200));
+  }
+  const rf = createRetryFetch({ fetch: methodFetch as typeof fetch, maxAttempts: 1 });
+  const out = await rf("https://gw/x");
+  assert.equal(out.status, 200);
+  assert.equal(seen, globalThis);
+});
+
 test("retries a 429 then returns the eventual success", async () => {
   let calls = 0;
   const slept: number[] = [];
