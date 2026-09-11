@@ -93,7 +93,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       // Transparently retry transient gateway rate limits (3021 / 429) with
       // bounded backoff so a per-minute cap blip self-heals instead of failing
       // the turn. See src/gateway-retry-fetch.ts (#6).
-      fetch: createRetryFetch({ fetch: globalThis.fetch }),
+      fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
     })(meta.upstreamId ?? modelId);
   } else {
     const gateway = modelGatewayConfig(env, meta);
@@ -102,7 +102,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       baseURL: gateway.baseURL,
       apiKey: meta.gateway === "special" ? env.LLM_SPECIAL_GATEWAY_TOKEN! : "",
       headers: gateway.headers,
-      fetch: createRetryFetch({ fetch: globalThis.fetch }),
+      fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
     }).responses(meta.upstreamId ?? modelId);
   }
 
