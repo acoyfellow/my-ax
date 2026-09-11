@@ -31,6 +31,7 @@
   import { activeTurnIsRestorable, pendingFirstBelongsHere } from "./session-latch";
   import { captureConfig, frameDimensions, frameFilename } from "./webcam-frame";
   import { sessionTurnLocksComposer, type SessionTurnState } from "../session-turn";
+  import { isScheduledJobRunMessage } from "../jobs-prompt";
   import { decideComposerKey, isMobileComposer } from "./composer-keys";
   import {
     agentStatusFor,
@@ -2627,7 +2628,7 @@
             {#if m.role !== "tool"}
               <header class="msg-head">
                 <span class="msg-head__role">
-                  {m.role === "user" ? "You" : m.role === "assistant" ? "Agent" : m.role === "error" ? "Error" : "System"}
+                  {m.role === "user" && isScheduledJobRunMessage(m.content) ? "Job" : m.role === "user" ? "You" : m.role === "assistant" ? "Agent" : m.role === "error" ? "Error" : "System"}
                 </span>
                 {#if m.timestamp}
                   {@const d = new Date(m.timestamp)}

@@ -17,6 +17,7 @@ function assertNotIncludes(haystack, needle, label) {
   }
 }
 
+assertIncludes(chat, 'm.role === "user" && isScheduledJobRunMessage(m.content) ? "Job"', "scheduled job injects are labeled Job, not You");
 assertIncludes(chat, 'if (composerLocked && wsState.status !== "done") return wsState.status;', "composer collapses completed turns back to Send");
 assertIncludes(chat, 'return "idle";', "composer falls back to Send after completed turns");
 assertIncludes(chat, 'aria-label={wsState.conn === "offline" ? "Offline — tap to retry" : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send message"}', "composer accessible action remains Send/Stop and offers Retry when terminally offline");
