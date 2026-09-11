@@ -1,6 +1,11 @@
 import { SCHEDULED_JOB_RUN_PREFIX } from "./jobs";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS, truncateUnicodeCodePoints } from "./unicode-text";
 
+export function issueSessionTitle(number: number, title: string): string {
+  const cleaned = title.replace(/\s+/g, " ").trim() || "untitled";
+  return truncateUnicodeCodePoints(`Issue #${number}: ${cleaned}`, MAX_GENERATED_SESSION_TITLE_CODE_POINTS);
+}
+
 export function deriveSessionTitle(content: string): string {
   const withoutCodeBlocks = content.replace(/```[\s\S]*?```/g, "");
   const withoutScheduledJobFrame = withoutCodeBlocks.startsWith(SCHEDULED_JOB_RUN_PREFIX)
