@@ -41,7 +41,7 @@ export function retryFetchEffect(deps: RetryFetchDeps, input: RequestInfo | URL,
     let waited = 0;
     let last: Response | null = null;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const response = yield* Effect.promise(() => deps.fetch(input as Parameters<typeof fetch>[0], init));
+      const response = yield* Effect.promise(() => deps.fetch.call(globalThis, input as Parameters<typeof fetch>[0], init));
       if (!isRateLimitResponse(response)) return response;
       last = response;
       if (attempt === maxAttempts - 1) break;
