@@ -6,6 +6,7 @@
 
 import type { Env } from "./types";
 import { completeRecurringJobRun } from "./recurring-job-run";
+import { scheduledJobRunPrompt } from "./jobs-prompt";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS, truncateUnicodeCodePoints } from "./unicode-text";
 
 async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
