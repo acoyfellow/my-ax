@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deriveSessionTitle } from "./session-title";
+import { deriveSessionTitle, issueSessionTitle } from "./session-title";
 import { SCHEDULED_JOB_RUN_PREFIX } from "./jobs";
+
+test("factory sessions are titled Issue #<n>:", () => {
+  assert.equal(issueSessionTitle(231, "delegated agent cannot see parent workspace"), "Issue #231: delegated agent cannot see parent workspace");
+});
 
 test("scheduled job guard prefix is stripped from session and notification titles", () => {
   const title = deriveSessionTitle(`${SCHEDULED_JOB_RUN_PREFIX}\n\nCheck the status.`);
