@@ -12,7 +12,7 @@ export type PublicWebSearchToolOptions = {
 export function createPublicWebSearchTool(options: PublicWebSearchToolOptions = {}): ToolDef {
   return {
     name: "web_search",
-    description: "Search the public web through Cloudflare Web Search. Returns a bounded list of public result titles, absolute URLs, and snippets for citation. Discovery only: this tool does not open result pages, execute page content, submit forms, or change state.",
+    description: "Search the public web through Cloudflare Web Search. Returns titles, absolute URLs, and snippets. If the Worker has no WEBSEARCH binding, returns error web_search_unavailable instead of pretending to search. Discovery only.",
     parameters: {
       type: "object",
       additionalProperties: false,

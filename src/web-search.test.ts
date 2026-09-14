@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Effect } from "effect";
 import { createPublicWebSearchTool, performWebSearch } from "./web-search";
@@ -87,4 +88,9 @@ test("returns safe errors without exposing upstream credentials", async () => {
   assert.equal(toolResult, JSON.stringify(unavailable));
   assert.doesNotMatch(JSON.stringify({ failed, unavailable, toolResult }), new RegExp(secret));
   assert.doesNotMatch(JSON.stringify({ failed, unavailable, toolResult }), /Authorization/);
+});
+
+test("wrangler binds Cloudflare Web Search as WEBSEARCH", () => {
+  const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  assert.match(wrangler, /"web_search"\s*:\s*\{\s*"binding"\s*:\s*"WEBSEARCH"/);
 });
