@@ -3,6 +3,11 @@ import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS, truncateUnicodeCodePoints } fr
 
 export { isScheduledJobRunMessage };
 
+export function issueSessionTitle(number: number, title: string): string {
+  const cleaned = title.replace(/\s+/g, " ").trim() || "untitled";
+  return truncateUnicodeCodePoints(`Issue #${number}: ${cleaned}`, MAX_GENERATED_SESSION_TITLE_CODE_POINTS);
+}
+
 export function deriveSessionTitle(content: string): string {
   const withoutCodeBlocks = content.replace(/```[\s\S]*?```/g, "");
   const withoutScheduledJobFrame = isScheduledJobRunMessage(withoutCodeBlocks)
