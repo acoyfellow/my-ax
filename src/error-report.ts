@@ -46,7 +46,11 @@ export function stackFingerprintSite(stack: string): string {
   for (const line of lines) {
     const site = line.match(/([A-Za-z0-9._/-]+\.(?:ts|js|svelte|mjs)(?::\d+(?::\d+)?)?)/i);
     if (site?.[1] && !/node:|node_modules/i.test(site[1])) {
-      return site[1].replace(/:\d+:\d+$/, "").replace(/^\(+/, "");
+      const path = site[1]
+        .replace(/:\d+:\d+$/, "")
+        .replace(/^\(+/, "")
+        .replace(/\.[0-9a-f]{7,}\.(js|mjs)$/i, ".$1");
+      return path.split("/").pop() || path;
     }
   }
   return "unknown";

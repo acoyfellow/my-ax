@@ -55,6 +55,16 @@ test("stack site ignores node internals", () => {
   );
 });
 
+test("hashed svelte bundles collapse so a deploy does not mint a new fingerprint", async () => {
+  assert.equal(
+    stackFingerprintSite("Error: boom\n    at render (//app.example/__svelte/beta.7708e48e.js:1:1)"),
+    "beta.js",
+  );
+  const a = await errorFingerprint({ origin: "client", message: "Agent completed without a visible response. Please retry.", stack: "at x (beta.7708e48e.js:1:1)" });
+  const b = await errorFingerprint({ origin: "client", message: "Agent completed without a visible response. Please retry.", stack: "at x (beta.aaaaaaaa.js:1:1)" });
+  assert.equal(a, b);
+});
+
 test("parseErrorReportInput fails closed", () => {
   assert.equal(parseErrorReportInput(null), null);
   assert.equal(parseErrorReportInput({ origin: "client" }), null);

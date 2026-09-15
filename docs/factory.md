@@ -51,7 +51,7 @@ Place: My AX Workspace (Sandbox) only. Never My Machine. Never cmux. Never page 
 Each ping: work one cycle, then stop until the next ping.
 
 1. Heartbeat: notify_owner only if you are blocked or a PR needs a human. Do not ping every cycle.
-2. List open issues with Sandbox gh on this repo (skip needs-human / already killed with evidence). Prefer actionable product bugs over meta tickets.
+2. List open issues with Sandbox gh on this repo. Skip killed-with-evidence. Skip needs-human unless the body is an Auto error report (those already opted in a ready PR). Prefer actionable product bugs over meta tickets.
 3. Fan-out: for each issue that does not already have a conversation titled exactly
    Issue #<number>: <title>
    open that conversation. Cap: 3 new per ping.

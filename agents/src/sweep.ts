@@ -109,7 +109,7 @@ export function planSweep(issues: SweepIssue[], now = Date.now()): SweepAction[]
     }
     if (issue.hasOpenPr || issue.openPr) continue;
     if (hasActiveImplementationLease(issue.comments, now)) continue;
-    if ((issue.labels ?? []).includes("triage:needs-human")) continue;
+    if ((issue.labels ?? []).includes("triage:needs-human") && !extractFingerprint(issue.body)) continue;
     const attempts = loopBoardAttempts(issue.comments);
     const optedIn = (issue.labels ?? []).includes("triage:draft");
     const retryable = optedIn || isBlockedStamp(issue.comments) || !hasLoopBoard(issue.comments);
