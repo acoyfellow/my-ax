@@ -46,13 +46,31 @@ function codeDiffResult(value: string, toolName: string, isError: boolean): unkn
   }
 }
 
+type TranscriptMessage = ReturnType<typeof d1EntryToTranscriptMessage> & { sessionId: string };
+
+function foldAdjacentToolMessages(messages: TranscriptMessage[]): TranscriptMessage[] {
+  const folded: TranscriptMessage[] = [];
+  for (const message of messages) {
+    const previous = folded[folded.length - 1];
+    const isLonelyTool = message.role === "assistant" && message.parts.length === 1 && message.parts[0]?.kind === "tool" && !message.content;
+    const previousIsAssistant = previous?.role === "assistant";
+    if (isLonelyTool && previousIsAssistant) {
+      previous.parts = [...previous.parts, ...message.parts];
+      continue;
+    }
+    folded.push(message);
+  }
+  return folded;
+}
+
 export function d1EntriesToTranscriptMessages(entries: D1Entry[], options: { sessionId: string; renderMarkdown: (text: string) => string }) {
   if (typeof options.sessionId !== "string" || !options.sessionId) throw new Error("A conversation ID is required to restore messages");
-  return entries.map((entry) => {
+  const messages = entries.map((entry) => {
     const message = d1EntryToTranscriptMessage(entry, options.renderMarkdown);
     const uiMessageId = objectValue(entry.meta).uiMessageId;
     return { ...message, id: typeof uiMessageId === "string" && uiMessageId ? uiMessageId : message.id, sessionId: options.sessionId };
   });
+  return foldAdjacentToolMessages(messages);
 }
 
 export function d1EntryToTranscriptMessage(entry: D1Entry, renderMarkdown: (text: string) => string) {
