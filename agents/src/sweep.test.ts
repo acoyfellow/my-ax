@@ -96,6 +96,21 @@ test("needs-human issues remain open without repeat comments or retries", () => 
   assert.deepEqual(actions, []);
 });
 
+test("auto error reports still queue even if needs-human was stamped", () => {
+  const actions = planSweep([
+    {
+      number: 229,
+      title: "bug: Agent completed without a visible response. Please retry.",
+      body: "## Auto error report\n\nfingerprint: `bf66cd76f4b3058e`\norigin: client",
+      author: "acoyfellow",
+      state: "open",
+      comments: [],
+      labels: ["bug", "triage:draft", "triage:needs-human"],
+    },
+  ]);
+  assert.ok(actions.some((row) => row.action === "queue" && row.number === 229));
+});
+
 test("a real open product PR receives the work and closes the issue", () => {
   const actions = planSweep([
     { number: 155, title: "bug: sessions", body: "repro", author: "o", state: "open", comments: [], hasOpenPr: true, openPr: { number: 169, files: ["src/session-title.ts", "src/session-title.test.ts"] } },
