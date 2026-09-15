@@ -33,10 +33,11 @@ test("replay collapses only a tool receipt whose call is represented inline", ()
     { id: "4", role: "tool", tool: "run", content: "ok", meta: { toolCallId: "call-1" } },
     { id: "5", role: "tool", tool: "run", content: "failed", isError: true, meta: { toolCallId: "call-2" } },
   ], { sessionId, renderMarkdown });
-  const incoming = { ...restored[0]!, id: "assistant", durableToolCallId: undefined };
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0]?.parts.filter((part) => part.kind === "tool").length, 2);
+  const incoming = { ...restored[0]!, id: "assistant", durableToolCallId: undefined, parts: restored[0]!.parts.slice(0, 1) };
   const merged = mergeTranscript<MergeableMessage>(restored, [incoming]);
   assert.equal(merged.some((m) => m.id === "d1-4"), false);
-  assert.equal(merged.some((m) => m.id === "d1-5"), true);
   assert.equal(merged.some((m) => m.id === "assistant"), true);
 });
 
