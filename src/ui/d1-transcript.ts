@@ -46,7 +46,7 @@ function codeDiffResult(value: string, toolName: string, isError: boolean): unkn
   }
 }
 
-type TranscriptMessage = ReturnType<typeof d1EntryToTranscriptMessage> & { sessionId: string };
+type TranscriptMessage = Omit<ReturnType<typeof d1EntryToTranscriptMessage>, "parts"> & { parts: Array<TextPart | ToolPart>; sessionId: string };
 
 function foldAdjacentToolMessages(messages: TranscriptMessage[]): TranscriptMessage[] {
   const folded: TranscriptMessage[] = [];
