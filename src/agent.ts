@@ -112,6 +112,7 @@ type MyAgentConfig = {
   identity?: AccessIdentity;
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
+  sandboxOnly?: boolean;
 };
 
 // Resolve the public origin used to build connector-OAuth callback URLs.
@@ -252,6 +253,8 @@ export class MyAgent extends Think<Env> {
     const content = (body.content ?? "").trim();
     if (!content) throw new Error("content must be non-empty");
     const attachments = (body.attachments ?? []).filter((attachment) => attachment.kind === "image");
+    const current = this.getConfig<MyAgentConfig>() ?? {};
+    this.configure<MyAgentConfig>({ ...current, sandboxOnly: Boolean(body.clientMsgId?.startsWith("job:")) });
     return this.runTurn({
       mode: "submit",
       idempotencyKey: body.clientMsgId,
@@ -460,6 +463,7 @@ export class MyAgent extends Think<Env> {
     if (claim.status === "exhausted" && row.schedule_id) await this.cancelRecurringPrompt(row.schedule_id).catch(() => undefined);
     let error: string | null = null;
     try {
+      this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), sandboxOnly: true });
       await this.runTurn({
         mode: "submit",
         idempotencyKey: `job:${payload.jobId}:${now.getTime()}`,
@@ -518,10 +522,11 @@ export class MyAgent extends Think<Env> {
 
   getTools() {
     const agent = this;
+    const sandboxOnly = agent.getConfig<MyAgentConfig>()?.sandboxOnly === true;
     return {
       ...createThinkTools(() => agent.buildToolContext()),
-      ...createMyAxBrowserTools(agent.env, () => agent.identity(), () => agent.name),
-      delegate_many: createDelegateManyTool(agent),
+      ...(sandboxOnly ? {} : createMyAxBrowserTools(agent.env, () => agent.identity(), () => agent.name)),
+      ...(sandboxOnly ? {} : { delegate_many: createDelegateManyTool(agent) }),
     };
   }
 
@@ -924,8 +929,10 @@ export class MyAgent extends Think<Env> {
     const env = this.env;
     const sessionId = this.name;
     const workingDirectory = WORKSPACE_HOME;
+    const sandboxOnly = this.getConfig<MyAgentConfig>()?.sandboxOnly === true;
     return {
       workingDirectory,
+      sandboxOnly,
       notifyOwner: (input) => notifyOwner(env, identity.email, { ...input, sessionId }),
       shellExec: async (cmd, opts) => {
         const { sandbox } = await getUserWorkspace(env, identity);
@@ -1071,7 +1078,7 @@ export class MyAgent extends Think<Env> {
         return result;
       },
       broadcast: (message) => this.broadcast(message),
-      callPage: (verb, args, opts) => this.callPage(verb, args, opts),
+      callPage: sandboxOnly ? undefined : (verb, args, opts) => this.callPage(verb, args, opts),
       identity,
       sessionId,
       bridgeBaseUrl: env.BRIDGE_BASE_URL,

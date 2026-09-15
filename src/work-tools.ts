@@ -28,6 +28,8 @@ const WORKSPACE_METHODS = [
   { name: "preview_close", description: "Close a workspace preview." },
 ] as const;
 
+export const SANDBOX_ONLY_WORK_CAPABILITIES = WORKSPACE_METHODS.map((method) => `workspace.${method.name}`);
+
 // PAGE_VERBS. Each verb marshals over the chat WS to the live browser client.
 const PAGE_WORK_METHODS = [
   { name: "listSessions", description: "List the owner's recent conversations: [{id,title,status,updatedAt}]. Optional {limit}." },
@@ -141,18 +143,19 @@ export const WORK_SEARCH_TOOL: ToolDef = {
   parameters: { type: "object", properties: { query: { type: "string", description: "What capability or kind of work is needed." } } },
   execute: async (args, ctx) => {
     checkedWorkspaceProvider(ctx);
-    const machine = await createMachineWorkProvider(ctx);
+    const sandboxOnly = ctx.sandboxOnly === true;
+    const machine = sandboxOnly ? { catalog: [] as Array<{ name: string; description: string; inputSchema?: unknown }>, connected: false } : await createMachineWorkProvider(ctx);
     const snippets = ctx.listSavedRecipes ? await ctx.listSavedRecipes().catch(() => []) : [];
     const catalog = [
       ...WORKSPACE_METHODS.map((method) => catalogEntry("workspace", method.name, method.description)),
-      ...machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema)),
-      ...PAGE_WORK_METHODS.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage))),
+      ...(sandboxOnly ? [] : machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema))),
+      ...(sandboxOnly ? [] : PAGE_WORK_METHODS.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage)))),
       ...CODEMODE_METHODS.map((method) => catalogEntry("codemode", method.name, method.description, true)),
       ...snippets.map((snippet) => ({ method: `codemode:${snippet.name}`, where: "codemode" as const, description: snippet.description, available: true, inputSchema: snippet.inputSchema, capabilities: snippet.capabilities })),
     ];
     const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
     const filtered = query ? catalog.filter((entry) => `${entry.method} ${entry.description} ${entry.where}`.toLowerCase().includes(query)) : catalog;
-    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace (persistent Sandbox files, shell, processes, and previews)", machine: "My Machine", page: "My AX Page (live browser UI)" }, matches: filtered.length ? filtered : catalog });
+    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace (persistent Sandbox files, shell, processes, and previews)", ...(sandboxOnly ? {} : { machine: "My Machine", page: "My AX Page (live browser UI)" }) }, matches: filtered.length ? filtered : catalog });
   },
 };
 
@@ -179,18 +182,22 @@ function buildSnippetHook(ctx: ToolContext): CodemodeSnippetHook | undefined {
 export async function executeWorkCode(code: string, ctx: ToolContext) {
   if (!code || new TextEncoder().encode(code).byteLength > 32_000) return { ok: false, error: "code is required and must be <= 32000 bytes" };
   const executionState = resolveWorkCodeExecutionState(ctx.workCodeExecutionState);
-  const executionContext = { ...ctx, workCodeExecutionState: executionState };
-  const machine = await createMachineWorkProvider(ctx);
+  const sandboxOnly = ctx.sandboxOnly === true;
+  const executionContext = {
+    ...ctx,
+    workCodeExecutionState: executionState,
+    allowedWorkCapabilities: sandboxOnly ? SANDBOX_ONLY_WORK_CAPABILITIES : ctx.allowedWorkCapabilities,
+    callPage: sandboxOnly ? undefined : ctx.callPage,
+  };
+  const machine = sandboxOnly ? { catalog: [] as Awaited<ReturnType<typeof createMachineWorkProvider>>["catalog"], fns: {} as Record<string, (input: any) => Promise<unknown>>, connected: false } : await createMachineWorkProvider(executionContext);
   const calls = new WorkCodeCallCollector<WorkCall["where"]>();
-  const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(ctx), ctx.allowedWorkCapabilities), calls);
-  const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, ctx.allowedWorkCapabilities), calls);
-  // page.* connector: each verb marshals to the live browser client via
-  // ctx.callPage (over the chat WS). Only present when a live chat connection
-  const pageFns = ctx.callPage
+  const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(executionContext), executionContext.allowedWorkCapabilities), calls);
+  const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, executionContext.allowedWorkCapabilities), calls);
+  const pageFns = executionContext.callPage
     ? instrument("page", restrictByCapabilities("page", Object.fromEntries(PAGE_WORK_METHODS.map((m) => [
         m.name,
-        async (input: unknown) => ctx.callPage!(m.name, (input ?? {}) as Record<string, unknown>),
-      ])), ctx.allowedWorkCapabilities), calls)
+        async (input: unknown) => executionContext.callPage!(m.name, (input ?? {}) as Record<string, unknown>),
+      ])), executionContext.allowedWorkCapabilities), calls)
     : {};
 
   // Native codemode connector trio. Wrapping the same instrumented dispatchers
@@ -200,11 +207,11 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
       connector: { name: "workspace", description: "My AX Workspace — canonical Sandbox-backed storage, shell, processes, and previews.", tools: WORKSPACE_METHODS.map((method) => ({ name: method.name, description: method.description, execute: workspaceFns[method.name] })) },
       fns: workspaceFns,
     },
-    {
+    ...(!sandboxOnly ? [{
       connector: { name: "machine", description: "My Machine — the connected physical computer with local/authenticated state.", tools: machine.catalog.map((method) => ({ name: method.name, description: method.description, inputSchema: method.inputSchema, execute: machineFns[method.name] ?? (async () => { throw new Error(`machine method ${method.name} not available`); }) })) },
       fns: machineFns,
-    },
-    ...(ctx.callPage ? [{
+    }] : []),
+    ...(executionContext.callPage ? [{
       connector: {
         name: "page",
         description: "My AX Page — the owner's LIVE browser UI for this conversation. Curated, capability-scoped verbs that drive the running app (read sessions/health/transcript, switch conversation, open panels). Only works while the owner has this conversation open in a browser; otherwise each verb errors page_unavailable.",
@@ -233,13 +240,13 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   };
   const namespace = (name: string, methods: string[]) =>
     `globalThis.${name}={${methods.map((method) => `${JSON.stringify(method)}:(args)=>bridge[${JSON.stringify(`${name}_${method}`)}](args)`).join(",")}};`;
-  const pagePrelude = ctx.callPage ? namespace("page", Object.keys(pageFns)) : "globalThis.page=undefined;";
+  const pagePrelude = executionContext.callPage ? namespace("page", Object.keys(pageFns)) : "globalThis.page=undefined;";
   const prelude = [
     namespace("workspace", Object.keys(workspaceFns)),
-    namespace("machine", Object.keys(machineFns)),
+    sandboxOnly ? "globalThis.machine=undefined;" : namespace("machine", Object.keys(machineFns)),
     pagePrelude,
     codemodeRuntime.prelude,
-    "globalThis.ctx={workspace:globalThis.workspace,machine:globalThis.machine,page:globalThis.page,codemode:globalThis.codemode};",
+    `globalThis.ctx={workspace:globalThis.workspace,machine:globalThis.machine,page:globalThis.page,codemode:globalThis.codemode};`,
   ].join("\n");
   const submittedCode = code.trim().replace(/;+$/, "");
   const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
