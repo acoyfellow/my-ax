@@ -160,6 +160,7 @@ export interface ToolContext {
   sendVoiceMessage: (input: { text: string; voice?: string }) => Promise<{ kind: "audio-message"; audioId: string; title: string; voice: string; src: string; bytes: number; createdAt: string; expiresAt: string }>;
   /** Optional saved-recipe execution guard. Undefined means unrestricted normal Code Mode. */
   allowedWorkCapabilities?: string[];
+  sandboxOnly?: boolean;
   /** Disabled while running a saved recipe so saved recipes cannot recursively call saved recipes. */
   exposeSavedRecipes?: boolean;
   /** Enabled owner-approved saved snippets projected into work_code through the codemode namespace. */

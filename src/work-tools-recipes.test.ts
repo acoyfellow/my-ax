@@ -51,7 +51,7 @@ test("work_code wires the page.* namespace into bridgeFns and the sandbox prelud
   // but the bare `page.*` global was never spliced into the work_code scope,
   // so `page.listSessions()` threw 'page is not defined' in prod.
   assert.match(source, /page_\$\{name\}/, "page_* dispatchers must be added to bridgeFns");
-  assert.match(source, /pagePrelude = ctx\.callPage \? namespace\("page"/, "page namespace must be conditionally spliced into the prelude");
+  assert.match(source, /pagePrelude = executionContext\.callPage \? namespace\("page"/, "page namespace must be conditionally spliced into the prelude");
   assert.match(source, /page:globalThis\.page/, "page must be present on globalThis.ctx");
 });
 

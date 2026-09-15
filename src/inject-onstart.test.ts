@@ -13,6 +13,13 @@ test("RPC inject starts Think before submit so scheduled jobs do not Illegal inv
   assert.match(slice, /this\.runTurn/);
 });
 
+test("scheduled job injects mark the turn sandboxOnly so machine tools cannot run", () => {
+  const start = agent.indexOf("async injectUserMessage");
+  const end = agent.indexOf("async sessionTurnState");
+  const slice = agent.slice(start, end);
+  assert.match(slice, /sandboxOnly: Boolean\(body\.clientMsgId\?\.startsWith\("job:"\)\)/);
+});
+
 test("getTools closes over the agent instance instead of relying on call-site this", () => {
   const start = agent.indexOf("getTools()");
   const end = agent.indexOf("override async onBeforeSubAgent");
