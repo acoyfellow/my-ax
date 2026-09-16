@@ -18,6 +18,7 @@ test("scheduled job injects mark the turn sandboxOnly so machine tools cannot ru
   const end = agent.indexOf("async sessionTurnState");
   const slice = agent.slice(start, end);
   assert.match(slice, /sandboxOnly: Boolean\(body\.clientMsgId\?\.startsWith\("job:"\)\)/);
+  assert.ok(slice.indexOf("sandboxOnly") < slice.indexOf("await this.onStart()"), "sandboxOnly must be set before Think starts");
 });
 
 test("getTools closes over the agent instance instead of relying on call-site this", () => {
