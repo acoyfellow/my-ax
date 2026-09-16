@@ -247,14 +247,14 @@ export class MyAgent extends Think<Env> {
   }
 
   async injectUserMessage(body: { content?: string; clientMsgId?: string; attachments?: Attachment[] }) {
+    const current = this.getConfig<MyAgentConfig>() ?? {};
+    this.configure<MyAgentConfig>({ ...current, sandboxOnly: Boolean(body.clientMsgId?.startsWith("job:")) });
     await this.onStart();
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity) throw new Error("session identity not seeded");
     const content = (body.content ?? "").trim();
     if (!content) throw new Error("content must be non-empty");
     const attachments = (body.attachments ?? []).filter((attachment) => attachment.kind === "image");
-    const current = this.getConfig<MyAgentConfig>() ?? {};
-    this.configure<MyAgentConfig>({ ...current, sandboxOnly: Boolean(body.clientMsgId?.startsWith("job:")) });
     return this.runTurn({
       mode: "submit",
       idempotencyKey: body.clientMsgId,
