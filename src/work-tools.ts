@@ -132,10 +132,14 @@ function catalogEntry(where: WorkCall["where"] | "codemode" | "snippet", name: s
 }
 
 const CODEMODE_METHODS = [
-  { name: "search", description: "List or filter codemode tools across My AX Workspace, My Machine, My AX Page, and reusable tools." },
+  { name: "search", description: "List or filter codemode tools across My AX Workspace and reusable tools." },
   { name: "describe", description: "Return the description and input schema for one codemode tool by qualified name." },
   { name: "run", description: "Invoke one codemode tool or owner-approved reusable tool by name with a structured input." },
 ] as const;
+
+const FACTORY_PAGE_METHODS = PAGE_WORK_METHODS.filter((method) =>
+  method.name === "listSessions" || method.name === "sendToSession" || method.name === "deskRead" || method.name === "deskWrite",
+);
 
 export const WORK_SEARCH_TOOL: ToolDef = {
   name: "work_search",
@@ -146,10 +150,11 @@ export const WORK_SEARCH_TOOL: ToolDef = {
     const sandboxOnly = ctx.sandboxOnly === true;
     const machine = sandboxOnly ? { catalog: [] as Array<{ name: string; description: string; inputSchema?: unknown }>, connected: false } : await createMachineWorkProvider(ctx);
     const snippets = ctx.listSavedRecipes ? await ctx.listSavedRecipes().catch(() => []) : [];
+    const pageCatalog = sandboxOnly ? FACTORY_PAGE_METHODS : PAGE_WORK_METHODS;
     const catalog = [
       ...WORKSPACE_METHODS.map((method) => catalogEntry("workspace", method.name, method.description)),
       ...(sandboxOnly ? [] : machine.catalog.map((method) => catalogEntry("machine", method.name, method.description, machine.connected, method.inputSchema))),
-      ...(sandboxOnly ? [] : PAGE_WORK_METHODS.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage)))),
+      ...pageCatalog.map((method) => catalogEntry("page", method.name, method.description, Boolean(ctx.callPage))),
       ...CODEMODE_METHODS.map((method) => catalogEntry("codemode", method.name, method.description, true)),
       ...snippets.map((snippet) => ({ method: `codemode:${snippet.name}`, where: "codemode" as const, description: snippet.description, available: true, inputSchema: snippet.inputSchema, capabilities: snippet.capabilities })),
     ];
@@ -186,15 +191,18 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const executionContext = {
     ...ctx,
     workCodeExecutionState: executionState,
-    allowedWorkCapabilities: sandboxOnly ? SANDBOX_ONLY_WORK_CAPABILITIES : ctx.allowedWorkCapabilities,
-    callPage: sandboxOnly ? undefined : ctx.callPage,
+    allowedWorkCapabilities: sandboxOnly
+      ? [...SANDBOX_ONLY_WORK_CAPABILITIES, ...FACTORY_PAGE_METHODS.map((method) => `page.${method.name}`)]
+      : ctx.allowedWorkCapabilities,
+    callPage: ctx.callPage,
   };
   const machine = sandboxOnly ? { catalog: [] as Awaited<ReturnType<typeof createMachineWorkProvider>>["catalog"], fns: {} as Record<string, (input: any) => Promise<unknown>>, connected: false } : await createMachineWorkProvider(executionContext);
   const calls = new WorkCodeCallCollector<WorkCall["where"]>();
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(executionContext), executionContext.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, executionContext.allowedWorkCapabilities), calls);
+  const pageMethods = sandboxOnly ? FACTORY_PAGE_METHODS : PAGE_WORK_METHODS;
   const pageFns = executionContext.callPage
-    ? instrument("page", restrictByCapabilities("page", Object.fromEntries(PAGE_WORK_METHODS.map((m) => [
+    ? instrument("page", restrictByCapabilities("page", Object.fromEntries(pageMethods.map((m) => [
         m.name,
         async (input: unknown) => executionContext.callPage!(m.name, (input ?? {}) as Record<string, unknown>),
       ])), executionContext.allowedWorkCapabilities), calls)
@@ -215,7 +223,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
       connector: {
         name: "page",
         description: "My AX Page — the owner's LIVE browser UI for this conversation. Curated, capability-scoped verbs that drive the running app (read sessions/health/transcript, switch conversation, open panels). Only works while the owner has this conversation open in a browser; otherwise each verb errors page_unavailable.",
-        tools: PAGE_WORK_METHODS.map((method) => ({ name: method.name, description: method.description, execute: pageFns[method.name] })),
+        tools: pageMethods.map((method) => ({ name: method.name, description: method.description, execute: pageFns[method.name] })),
       },
       fns: pageFns,
     }] : []),

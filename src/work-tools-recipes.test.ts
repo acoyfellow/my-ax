@@ -29,7 +29,7 @@ test("work_search catalog no longer emits recipe.list / recipe.run:* methods", (
   assert.doesNotMatch(source, /method:\s*"recipe\.list"/);
   assert.doesNotMatch(source, /method:\s*`recipe\.run:/);
   assert.match(source, /CODEMODE_METHODS/, "codemode runtime methods must be declared");
-  assert.match(source, /List or filter codemode tools across My AX Workspace, My Machine, My AX Page, and reusable tools\./);
+  assert.match(source, /List or filter codemode tools across My AX Workspace and reusable tools\./);
   assert.doesNotMatch(source, /Computer, My Machine, Terrarium, AgentCast/);
   assert.match(source, /method:\s*`codemode:\$\{snippet\.name\}`/, "snippets must be advertised under codemode:");
 });

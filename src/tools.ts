@@ -10,6 +10,7 @@ import { createVerifiedCodeDiffReceipt } from "./code-diff-read";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
+import { issueSessionTitle } from "./session-title";
 import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
 import { databaseLayer } from "./effect/database";
@@ -181,6 +182,46 @@ export const SHOW_DIFF_TOOL: ToolDef = {
 
 export const CMUX_OBSERVE_TOOL = createCmuxObserveTool({ readerForContext: createCmuxMachineReader });
 
+export const OPEN_ISSUE_SESSION_TOOL: ToolDef = {
+  name: "open_issue_session",
+  description: "Open or reuse one My AX conversation titled exactly Issue #<number>: <title> and send the first message. Does not use My Machine. Cap callers to 3 per turn.",
+  parameters: {
+    type: "object",
+    properties: {
+      number: { type: "number", description: "GitHub issue number" },
+      title: { type: "string", description: "Issue title without the Issue #<n>: prefix" },
+      content: { type: "string", description: "First message / continue heartbeat" },
+    },
+    required: ["number", "title", "content"],
+  },
+  execute: async (args, ctx) => {
+    const number = Number(args.number);
+    const title = typeof args.title === "string" ? args.title : "";
+    const content = typeof args.content === "string" ? args.content.trim() : "";
+    if (!Number.isInteger(number) || number < 1) return JSON.stringify({ ok: false, error: "number must be a positive integer" });
+    if (!content) return JSON.stringify({ ok: false, error: "content required" });
+    const name = issueSessionTitle(number, title);
+    const email = ctx.identity.email.toLowerCase();
+    const existing = await ctx.env.DB.prepare(
+      "SELECT id, name FROM sessions WHERE owner_email = ? AND name = ? ORDER BY updated_at DESC LIMIT 1",
+    ).bind(email, name).first<{ id: string; name: string }>();
+    let sessionId = existing?.id;
+    let created = false;
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      await ctx.env.DB.prepare(
+        "INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))",
+      ).bind(sessionId, name, email).run();
+      created = true;
+    }
+    const { getSessionAgent } = await import("./agent-stub");
+    const stub = await getSessionAgent(ctx.env, email, sessionId);
+    await stub.seedIdentity(ctx.identity);
+    await stub.injectUserMessage({ content, clientMsgId: `fanout:${number}:${created ? "open" : "continue"}:${Date.now()}` });
+    return JSON.stringify({ ok: true, sessionId, name, created });
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   DESK_UPSERT_TOOL,
   DESK_GET_TOOL,
@@ -193,6 +234,7 @@ export const TOOLS: ToolDef[] = [
   PUBLIC_WEB_SEARCH_TOOL,
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
+  OPEN_ISSUE_SESSION_TOOL,
   {
     name: "manage_jobs",
     description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'. threadMode defaults to 'same_session' and controls the destination each run: 'new_session_per_run' (a new thread each run), 'same_session' (this thread), or 'specific_session' (a specific thread whose id you must pass in sessionId). maxRuns is a positive run cap; use 1 for once or null for unlimited.",
@@ -351,8 +393,10 @@ export const TOOLS: ToolDef[] = [
  * bridge that lets the new runtime use the same Sandbox and connector code.
  */
 export function createThinkTools(context: () => ToolContext): ToolSet {
+  const sandboxOnly = context().sandboxOnly === true;
   const tools: Record<string, Tool<Record<string, unknown>, string>> = {};
   for (const definition of TOOLS) {
+    if (sandboxOnly && definition.name === "cmux_observe") continue;
     tools[definition.name] = tool<Record<string, unknown>, string, {}>({
       description: definition.description,
       inputSchema: jsonSchema<Record<string, unknown>>(definition.parameters as Parameters<typeof jsonSchema>[0]),

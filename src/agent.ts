@@ -1078,7 +1078,7 @@ export class MyAgent extends Think<Env> {
         return result;
       },
       broadcast: (message) => this.broadcast(message),
-      callPage: sandboxOnly ? undefined : (verb, args, opts) => this.callPage(verb, args, opts),
+      callPage: (verb, args, opts) => this.callPage(verb, args, opts),
       identity,
       sessionId,
       bridgeBaseUrl: env.BRIDGE_BASE_URL,
