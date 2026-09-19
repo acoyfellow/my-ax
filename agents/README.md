@@ -46,6 +46,7 @@ bash proof/terminal-inline.sh      # no top-bar terminal; inline host; size is m
 bash proof/terminal-on-demand.sh   # terminals are on-demand cards, not a permanent chat strip
 bash proof/transcript-parity.sh    # D1 user/assistant turns survive a compacted Think replay
 bash proof/session-heal.sh         # a foreign Think replay is rejected; the thread restores from D1
+bash proof/factory-sandbox-fanout.sh  # a factory ping opens Issue #<n>: chats with zero machine.* calls
 ```
 
 `factory-no-loop.sh` waits past two 15 minute sweeps on purpose. The re-queue bug it guards only appears across sweep ticks.
