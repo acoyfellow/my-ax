@@ -11,6 +11,7 @@ import { createMachineWorkProvider } from "./routes/machinectl";
 import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { issueSessionTitle } from "./session-title";
+import { getNamedComputer, snapshotNamedComputer } from "./named-computer";
 import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
 import { databaseLayer } from "./effect/database";
@@ -182,6 +183,40 @@ export const SHOW_DIFF_TOOL: ToolDef = {
 
 export const CMUX_OBSERVE_TOOL = createCmuxObserveTool({ readerForContext: createCmuxMachineReader });
 
+export const CREATE_COMPUTER_TOOL: ToolDef = {
+  name: "create_computer",
+  description: "Open a named Ubuntu computer isolated from the owner Sandbox. Files persist under that computer id via snapshot_computer.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "Computer id: lowercase letters, digits, hyphens" },
+    },
+    required: ["id"],
+  },
+  execute: async (args, ctx) => {
+    const id = typeof args.id === "string" ? args.id : "";
+    const opened = await getNamedComputer(ctx.env, ctx.identity, id);
+    return JSON.stringify({ ok: true, computerId: opened.computerId, home: opened.home });
+  },
+};
+
+export const SNAPSHOT_COMPUTER_TOOL: ToolDef = {
+  name: "snapshot_computer",
+  description: "Snapshot a named computer's /home/user to R2 so the next open restores those files.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "Computer id" },
+    },
+    required: ["id"],
+  },
+  execute: async (args, ctx) => {
+    const id = typeof args.id === "string" ? args.id : "";
+    const snap = await snapshotNamedComputer(ctx.env, ctx.identity, id);
+    return JSON.stringify({ ok: true, computerId: snap.computerId, backupId: snap.backup.id });
+  },
+};
+
 export const OPEN_ISSUE_SESSION_TOOL: ToolDef = {
   name: "open_issue_session",
   description: "Open or reuse one My AX conversation titled exactly Issue #<number>: <title> and send the first message. Does not use My Machine. Cap callers to 3 per turn.",
@@ -235,6 +270,8 @@ export const TOOLS: ToolDef[] = [
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
   OPEN_ISSUE_SESSION_TOOL,
+  CREATE_COMPUTER_TOOL,
+  SNAPSHOT_COMPUTER_TOOL,
   {
     name: "manage_jobs",
     description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'. threadMode defaults to 'same_session' and controls the destination each run: 'new_session_per_run' (a new thread each run), 'same_session' (this thread), or 'specific_session' (a specific thread whose id you must pass in sessionId). maxRuns is a positive run cap; use 1 for once or null for unlimited.",

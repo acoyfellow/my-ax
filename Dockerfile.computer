@@ -1,0 +1,11 @@
+FROM docker.io/cloudflare/sandbox:0.12.1
+EXPOSE 3000 6080
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends xfce4 xfce4-terminal dbus-x11 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends tigervnc-standalone-server novnc websockify \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN rm -rf /home/user && mkdir -p /home/user
+ENV DISPLAY=:1
+ENV PATH=/home/user/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

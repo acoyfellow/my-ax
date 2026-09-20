@@ -24,3 +24,5 @@ jobs:
         run: npx wrangler deploy --dry-run --outdir /tmp/my-ax-worker
       - name: Build Sandbox container
         run: docker build -t my-ax-ci .
+      - name: Build named computer container
+        run: docker build -f Dockerfile.computer -t my-ax-computer-ci .
