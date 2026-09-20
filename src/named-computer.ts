@@ -54,10 +54,11 @@ async function processRunning(sandbox: Sandbox, needle: string) {
 export async function ensureComputerDisplay(sandbox: Sandbox) {
   await sandbox.exec("mkdir -p /tmp/my-ax-vnc", { cwd: "/", timeout: 10_000, origin: "internal" });
   if (!(await processRunning(sandbox, "Xtigervnc"))) {
-    await sandbox.startProcess(
+    const x = await sandbox.startProcess(
       "Xtigervnc :1 -geometry 1280x800 -depth 24 -SecurityTypes None -localhost yes",
       { cwd: "/" },
     );
+    await x.waitForPort(5901, { mode: "tcp" });
   }
   if (!(await processRunning(sandbox, "xfce"))) {
     await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY: ":1" } });
