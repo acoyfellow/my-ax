@@ -1,0 +1,31 @@
+src/ui/Chat.svelte
+  s_99b55ecf7d26fa::t_126e9db2d743cd 23,1624-1625
+src/ui/assistant-visible.test.ts
+  s_bbebff7174806f::t_5f57e0d48b8fe7 1-14
+src/ui/assistant-visible.ts
+  s_bbebff7174806f::t_0a4d46045db0d7 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4f321aba5a3b9ba3ec689004d670e8f4fa7af6d3",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_bbebff7174806f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a078-2abb-7221-a035-eb0f8a0fb6a0",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
