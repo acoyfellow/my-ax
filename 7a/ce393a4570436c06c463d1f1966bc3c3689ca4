@@ -1,0 +1,45 @@
+package.json
+  s_99b55ecf7d26fa::t_8f1fb26021cb8c 69
+src/index.tsx
+  s_99b55ecf7d26fa::t_5a560208618443 42,298
+src/named-computer-wiring.test.ts
+  s_99b55ecf7d26fa::t_95ea7232f69520 10-11,25-31
+src/named-computer.ts
+  s_99b55ecf7d26fa::t_c25973e9c843d6 45,49-76
+src/routes/computers.ts
+  s_bbebff7174806f::t_7dcc5c233efae9 1-36
+src/tools.ts
+  s_99b55ecf7d26fa::t_f93b5deefd3e7a 199-206
+src/ui/Settings.svelte
+  s_99b55ecf7d26fa::t_93bfbeb1295a3c 51-54,60,124,129,196-204,1231-1252
+src/ui/ToolResultWidget.svelte
+  s_99b55ecf7d26fa::t_ed9f1d31cab730 85-114
+src/ui/named-computer-widget.test.ts
+  s_99b55ecf7d26fa::t_6d7337426bca79 1-28
+src/ui/tool-result-widgets.ts
+  s_99b55ecf7d26fa::t_20f577d9436038 27,60,142-153,401-403
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7ace393a4570436c06c463d1f1966bc3c3689ca4",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_bbebff7174806f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0a078-2abb-7221-a035-eb0f8a0fb6a0",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
