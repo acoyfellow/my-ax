@@ -12,7 +12,7 @@ export function registerComputerRoutes(app: Hono<AppEnv>) {
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { computers }, next_actions: [] });
   });
 
-  app.all("/api/computers/:id/novnc/*", async (c) => {
+  app.all("/api/computers/:id/novnc/*path", async (c) => {
     let computerId: string;
     let rest: string;
     try {
@@ -26,12 +26,21 @@ export function registerComputerRoutes(app: Hono<AppEnv>) {
         next_actions: [],
       }, 400);
     }
-    const { sandbox } = await getNamedComputer(c.env, c.get("identity"), computerId);
-    const url = new URL(c.req.url);
-    if ((c.req.header("Upgrade") ?? "").toLowerCase() === "websocket") {
-      const proxied = new Request(`https://computer.invalid${rest}${url.search}`, c.req.raw);
-      return sandbox.wsConnect(proxied, NOVNC_PORT);
+    try {
+      const { sandbox } = await getNamedComputer(c.env, c.get("identity"), computerId);
+      const url = new URL(c.req.url);
+      if ((c.req.header("Upgrade") ?? "").toLowerCase() === "websocket") {
+        return sandbox.wsConnect(c.req.raw, NOVNC_PORT);
+      }
+      return await sandbox.containerFetch(`http://localhost:${NOVNC_PORT}${rest}${url.search}`, NOVNC_PORT);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json<ApiResponse>({
+        ok: false,
+        command: c.req.path,
+        error: { code: "COMPUTER_DISPLAY_FAILED", message },
+        next_actions: [],
+      }, 502);
     }
-    return sandbox.containerFetch(`${rest}${url.search}`, { method: c.req.method }, NOVNC_PORT);
   });
 }
