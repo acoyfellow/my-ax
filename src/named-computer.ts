@@ -1,6 +1,6 @@
 import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
 import type { AccessIdentity } from "./auth";
-import { computerSandboxName, normalizeComputerId } from "./computer-id";
+import { computerSandboxName, normalizeComputerId, shouldRestoreComputerSnapshot } from "./computer-id";
 import type { Env } from "./types";
 import { WORKSPACE_HOME } from "./workspace-path";
 import { verifyWorkspaceRestore } from "./workspace-snapshot";
@@ -32,7 +32,10 @@ export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId
   const computerId = normalizeComputerId(rawId);
   const sandbox = handle(env, identity, computerId);
   const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
-  const snapshot = options?.restoreLatest === false || ready?.exitCode === 0 ? null : await latestSnapshot(env, identity, computerId);
+  const readyCode = ready?.exitCode ?? null;
+  const snapshot = shouldRestoreComputerSnapshot(options?.restoreLatest, readyCode)
+    ? await latestSnapshot(env, identity, computerId)
+    : null;
   if (snapshot) {
     const receipt = verifyWorkspaceRestore(snapshot, await sandbox.restoreBackup({ id: snapshot.backupId, dir: snapshot.backupDir }));
     console.info("named_computer.restore_verified", { computerId, ...receipt });

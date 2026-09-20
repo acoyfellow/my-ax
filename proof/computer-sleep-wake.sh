@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 test -f Dockerfile.computer
 test -f src/named-computer.ts
-npx tsx --test src/computer-id.test.ts src/named-computer-wiring.test.ts
+npx tsx --test src/computer-id.test.ts src/named-computer-wiring.test.ts src/named-computer-restore.test.ts
 MAX_BYTES=$((400 * 1024 * 1024))
 if ! command -v docker >/dev/null; then
   echo "FAIL: docker is required to measure computer image layers"

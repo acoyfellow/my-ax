@@ -9,3 +9,8 @@ export function normalizeComputerId(raw: string): string {
 export function computerSandboxName(ownerEmail: string, computerId: string): string {
   return `${ownerEmail.toLowerCase()}::computer::${normalizeComputerId(computerId)}`;
 }
+
+export function shouldRestoreComputerSnapshot(restoreLatest: boolean | undefined, readyExitCode: number | null): boolean {
+  if (restoreLatest === false) return false;
+  return readyExitCode !== 0;
+}
