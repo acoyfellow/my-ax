@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { normalizeComputerId } from "../computer-id";
+import { normalizeComputerId, novncContainerPath } from "../computer-id";
 import { getNamedComputer, listNamedComputers } from "../named-computer";
 
 const NOVNC_PORT = 6080;
@@ -14,8 +14,10 @@ export function registerComputerRoutes(app: Hono<AppEnv>) {
 
   app.all("/api/computers/:id/novnc/*", async (c) => {
     let computerId: string;
+    let rest: string;
     try {
       computerId = normalizeComputerId(c.req.param("id"));
+      rest = novncContainerPath(new URL(c.req.url).pathname, computerId);
     } catch (error) {
       return c.json<ApiResponse>({
         ok: false,
@@ -25,12 +27,11 @@ export function registerComputerRoutes(app: Hono<AppEnv>) {
       }, 400);
     }
     const { sandbox } = await getNamedComputer(c.env, c.get("identity"), computerId);
-    const prefix = `/api/computers/${computerId}/novnc`;
-    const rest = c.req.path.slice(prefix.length) || "/vnc.html";
     const url = new URL(c.req.url);
     if ((c.req.header("Upgrade") ?? "").toLowerCase() === "websocket") {
-      return sandbox.wsConnect(c.req.raw, NOVNC_PORT);
+      const proxied = new Request(`https://computer.invalid${rest}${url.search}`, c.req.raw);
+      return sandbox.wsConnect(proxied, NOVNC_PORT);
     }
-    return sandbox.containerFetch(`${rest.startsWith("/") ? rest : `/${rest}`}${url.search}`, { method: c.req.method }, NOVNC_PORT);
+    return sandbox.containerFetch(`${rest}${url.search}`, { method: c.req.method }, NOVNC_PORT);
   });
 }
