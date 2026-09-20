@@ -7,6 +7,8 @@ const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
 const tools = readFileSync(new URL("./tools.ts", import.meta.url), "utf8");
 const dockerfile = readFileSync(new URL("../Dockerfile.computer", import.meta.url), "utf8");
 const named = readFileSync(new URL("./named-computer.ts", import.meta.url), "utf8");
+const settings = readFileSync(new URL("./ui/Settings.svelte", import.meta.url), "utf8");
+const widgets = readFileSync(new URL("./ui/tool-result-widgets.ts", import.meta.url), "utf8");
 
 test("NamedComputer is a second container class, not the owner Sandbox", () => {
   assert.match(wrangler, /"class_name": "NamedComputer"/);
@@ -20,6 +22,13 @@ test("NamedComputer is a second container class, not the owner Sandbox", () => {
 test("create_computer and snapshot_computer are Think tools", () => {
   assert.match(tools, /name: "create_computer"/);
   assert.match(tools, /name: "snapshot_computer"/);
+  assert.match(tools, /kind: "named-computer"/);
+});
+
+test("computers embed through a same-origin novnc route and a Settings tab", () => {
+  assert.match(index, /registerComputerRoutes/);
+  assert.match(settings, /label: "Computers"/);
+  assert.match(widgets, /kind: "named-computer"/);
 });
 
 test("computer image splits desktop and vnc into separate apt layers", () => {

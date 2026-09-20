@@ -24,6 +24,7 @@ export function browserReplayRecordingHref(replaySrc: string | undefined): strin
 const INTERNAL_RASTER_ARTIFACT_RE = /^\/api\/artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INTERNAL_SVELTE_ARTIFACT_RE = /^\/api\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preview$/i;
 const INTERNAL_AUDIO_MESSAGE_RE = /^\/api\/audio\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
+const INTERNAL_COMPUTER_PREVIEW_RE = /^\/api\/computers\/([a-z0-9][a-z0-9-]{0,62})\/novnc\/vnc\.html(?:\?.*)?$/;
 const AUDIO_VOICES = new Set(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
 const MAX_BROWSER_TEXT_CHARS = 2_000;
 
@@ -56,6 +57,7 @@ export type ToolResultWidget =
   | { kind: "inline-raster-image"; src: string; alt: string }
   | { kind: "inline-video"; src: string; label: string }
   | { kind: "svelte-artifact"; src: string; title: string; artifactId: string }
+  | { kind: "named-computer"; src: string; title: string; computerId: string }
   | { kind: "audio-message"; src: string; title: string; audioId: string; voice: string }
   | CodeDiffReceipt
   | {
@@ -135,6 +137,18 @@ function videoArtifactWidget(value: unknown, toolName: string): ToolResultWidget
   // Only same-origin owner-scoped artifact routes may become a <video> src.
   if (result.kind !== "video-artifact" || typeof result.src !== "string" || !INTERNAL_RASTER_ARTIFACT_RE.test(result.src)) return null;
   return { kind: "inline-video", src: result.src, label: `${toolName} screen recording` };
+}
+
+function namedComputerWidget(value: unknown): ToolResultWidget | null {
+  const decoded = decodeJsonOnce(value);
+  if (typeof decoded !== "object" || decoded === null) return null;
+  if ("content" in decoded) return namedComputerWidget((decoded as { content?: unknown }).content);
+  if ("result" in decoded) return namedComputerWidget((decoded as { result?: unknown }).result);
+  const result = decoded as Record<string, unknown>;
+  const match = typeof result.src === "string" ? result.src.match(INTERNAL_COMPUTER_PREVIEW_RE) : null;
+  if (result.kind !== "named-computer" || !match || typeof result.computerId !== "string") return null;
+  if (result.computerId !== match[1]) return null;
+  return { kind: "named-computer", src: result.src as string, title: boundedText(result.title, 120) ?? result.computerId, computerId: result.computerId };
 }
 
 function svelteArtifactWidget(value: unknown): ToolResultWidget | null {
@@ -383,6 +397,9 @@ export function resolveToolResultWidget(value: unknown, toolName = "tool"): Tool
   // imply live progress. Reconnect/history replay re-resolves the same output.
   const delegation = delegationGroupWidget(value, toolName);
   if (delegation) return delegation;
+
+  const namedComputer = namedComputerWidget(value);
+  if (namedComputer) return namedComputer;
 
   const svelteArtifact = svelteArtifactWidget(value);
   if (svelteArtifact) return svelteArtifact;

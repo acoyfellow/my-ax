@@ -196,7 +196,14 @@ export const CREATE_COMPUTER_TOOL: ToolDef = {
   execute: async (args, ctx) => {
     const id = typeof args.id === "string" ? args.id : "";
     const opened = await getNamedComputer(ctx.env, ctx.identity, id);
-    return JSON.stringify({ ok: true, computerId: opened.computerId, home: opened.home });
+    return JSON.stringify({
+      ok: true,
+      kind: "named-computer",
+      computerId: opened.computerId,
+      home: opened.home,
+      src: `/api/computers/${opened.computerId}/novnc/vnc.html?autoconnect=1&resize=scale`,
+      title: opened.computerId,
+    });
   },
 };
 
