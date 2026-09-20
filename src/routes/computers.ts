@@ -11,7 +11,7 @@ async function proxyNovnc(c: Context<AppEnv>) {
   let computerId: string;
   let rest: string;
   try {
-    computerId = normalizeComputerId(c.req.param("id"));
+    computerId = normalizeComputerId(String(c.req.param("id") ?? ""));
     rest = novncContainerPath(new URL(c.req.url).pathname, computerId);
   } catch (error) {
     return c.json<ApiResponse>({
