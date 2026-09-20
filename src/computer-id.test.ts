@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computerSandboxName, normalizeComputerId, novncContainerPath } from "./computer-id";
+import { computerPreviewSrc, computerSandboxName, normalizeComputerId, novncContainerPath } from "./computer-id";
 
 test("computer ids are lowercase hyphenated names", () => {
   assert.equal(normalizeComputerId("Lab-1"), "lab-1");
@@ -18,4 +18,9 @@ test("novnc proxy paths cannot escape the computer prefix", () => {
   assert.equal(novncContainerPath("/api/computers/desk/novnc/websockify", "desk"), "/websockify");
   assert.throws(() => novncContainerPath("/api/computers/desk/novnc/../etc/passwd", "desk"), /not allowed/);
   assert.throws(() => novncContainerPath("/api/computers/other/novnc/vnc.html", "desk"), /outside/);
+});
+
+test("iframe src points noVNC websocket at the Worker proxy", () => {
+  const src = computerPreviewSrc("desk");
+  assert.equal(new URL(src, "https://example.com").searchParams.get("path"), "api/computers/desk/novnc/websockify");
 });

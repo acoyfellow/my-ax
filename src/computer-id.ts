@@ -26,3 +26,8 @@ export function novncContainerPath(requestPath: string, computerId: string): str
   }
   return rest;
 }
+
+export function computerPreviewSrc(computerId: string): string {
+  const id = normalizeComputerId(computerId);
+  return `/api/computers/${id}/novnc/vnc.html?autoconnect=1&resize=scale&path=${encodeURIComponent(`api/computers/${id}/novnc/websockify`)}`;
+}
