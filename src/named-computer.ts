@@ -80,7 +80,8 @@ export async function listNamedComputers(env: Env, identity: AccessIdentity) {
 }
 
 export function computerPreviewSrc(computerId: string): string {
-  return `/api/computers/${normalizeComputerId(computerId)}/novnc/vnc.html?autoconnect=1&resize=scale`;
+  const id = normalizeComputerId(computerId);
+  return `/api/computers/${id}/novnc/vnc.html?autoconnect=1&resize=scale&path=${encodeURIComponent(`api/computers/${id}/novnc/websockify`)}`;
 }
 
 export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, rawId: string, name = "auto") {

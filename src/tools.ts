@@ -11,7 +11,7 @@ import { createMachineWorkProvider } from "./routes/machinectl";
 import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { issueSessionTitle } from "./session-title";
-import { getNamedComputer, snapshotNamedComputer } from "./named-computer";
+import { computerPreviewSrc, getNamedComputer, snapshotNamedComputer } from "./named-computer";
 import { limitModelToolOutput } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
 import { databaseLayer } from "./effect/database";
@@ -201,7 +201,7 @@ export const CREATE_COMPUTER_TOOL: ToolDef = {
       kind: "named-computer",
       computerId: opened.computerId,
       home: opened.home,
-      src: `/api/computers/${opened.computerId}/novnc/vnc.html?autoconnect=1&resize=scale`,
+      src: computerPreviewSrc(opened.computerId),
       title: opened.computerId,
     });
   },
