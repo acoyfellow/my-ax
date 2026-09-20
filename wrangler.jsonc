@@ -99,6 +99,13 @@
       // Conservative public default for personal deployments. Private wrappers
       // can opt into larger instance types for heavier workloads.
       "instance_type": "basic"
+    },
+    {
+      "class_name": "NamedComputer",
+      "image": "./Dockerfile.computer",
+      "name": "my-ax-computer",
+      "max_instances": 10,
+      "instance_type": "basic"
     }
   ],
 
@@ -145,6 +152,7 @@
       // block above. Each instance (idFromName(email)) is one user's
       // persistent computer.
       { "name": "SANDBOX", "class_name": "Sandbox" },
+      { "name": "NAMED_COMPUTER", "class_name": "NamedComputer" },
       { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
       // Direct-routed voice DO; delegates turns into the MyAgent facet by RPC.
       { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
@@ -174,7 +182,8 @@
     { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
     { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] },
     { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
-    { "tag": "v12-desk-hub" }
+    { "tag": "v12-desk-hub" },
+    { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] }
   ],
 
   // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
@@ -282,6 +291,13 @@
           "name": "my-ax-sandbox-dev",
           "max_instances": 5,
           "instance_type": "basic"
+        },
+        {
+          "class_name": "NamedComputer",
+          "image": "./Dockerfile.computer",
+          "name": "my-ax-computer-dev",
+          "max_instances": 2,
+          "instance_type": "basic"
         }
       ],
       // Dev env must redeclare ALL DO bindings — wrangler does not inherit
@@ -293,6 +309,7 @@
           { "name": "OAUTH_CLIENT", "class_name": "OAuthClientDO" },
           { "name": "MACHINE_HOST", "class_name": "MachineHost" },
           { "name": "SANDBOX", "class_name": "Sandbox" },
+          { "name": "NAMED_COMPUTER", "class_name": "NamedComputer" },
           { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
           { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
           // CODEMODE_RUNTIME intentionally held — see top-level note.
@@ -309,7 +326,8 @@
         { "tag": "v8-remove-voice-ladder", "deleted_classes": ["VoiceLadder1", "VoiceLadder2", "VoiceLadder3", "VoiceLadder4"] },
         { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
         { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] },
-        { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] }
+        { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
+        { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] }
         // v12-codemode-runtime intentionally held — see top-level note.
       ],
       "kv_namespaces": [

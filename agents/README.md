@@ -47,6 +47,7 @@ bash proof/terminal-on-demand.sh   # terminals are on-demand cards, not a perman
 bash proof/transcript-parity.sh    # D1 user/assistant turns survive a compacted Think replay
 bash proof/session-heal.sh         # a foreign Think replay is rejected; the thread restores from D1
 bash proof/factory-sandbox-fanout.sh  # a factory ping opens Issue #<n>: chats with zero machine.* calls
+bash proof/computer-sleep-wake.sh     # named computer image layers stay under 400MB; wiring is isolated
 ```
 
 `factory-no-loop.sh` waits past two 15 minute sweeps on purpose. The re-queue bug it guards only appears across sweep ticks.
