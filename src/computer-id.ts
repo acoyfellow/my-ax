@@ -14,3 +14,15 @@ export function shouldRestoreComputerSnapshot(restoreLatest: boolean | undefined
   if (restoreLatest === false) return false;
   return readyExitCode !== 0;
 }
+
+export function novncContainerPath(requestPath: string, computerId: string): string {
+  const prefix = `/api/computers/${computerId}/novnc`;
+  if (!requestPath.startsWith(prefix + "/") && requestPath !== prefix) {
+    throw new Error("novnc path is outside the computer proxy");
+  }
+  const rest = requestPath === prefix ? "/vnc.html" : requestPath.slice(prefix.length);
+  if (!rest.startsWith("/") || rest.includes("..") || rest.startsWith("//")) {
+    throw new Error("novnc path is not allowed");
+  }
+  return rest;
+}

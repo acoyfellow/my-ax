@@ -48,12 +48,16 @@
   let ownerInstructions = $state("");
   let ownerInstructionsStatus = $state("");
   let ownerInstructionsRevision = 0;
-  let activeSection = $state<"general" | "capabilities" | "artifacts" | "recipes" | "jobs" | "starters" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "artifacts" | "computers" | "recipes" | "jobs" | "starters" | "connections">("general");
+  let computers = $state<Array<{ computer_id: string; backup_id: string; updated_at: string }>>([]);
+  let computersLoading = $state(false);
+  let computerStatus = $state("");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
     { id: "artifacts" as const, label: "Artifacts", hint: "Reusable widgets and dashboards" },
+    { id: "computers" as const, label: "Computers", hint: "Named Ubuntu desktops" },
     { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
     { id: "starters" as const, label: "Starters", hint: "New-conversation suggestions" },
@@ -117,10 +121,12 @@
     const requestedRecipeName = detail?.recipeName ?? query.get("recipe");
     if (requestedSection === "recipes") activeSection = "recipes";
     if (requestedSection === "artifacts") activeSection = "artifacts";
+    if (requestedSection === "computers") activeSection = "computers";
     if (requestedSection === "starters") activeSection = "starters";
     open = true;
     refreshJobs();
     void refreshArtifacts();
+    void refreshComputers();
     void refreshDeskApp();
     void refreshStarters();
     void refreshRecipePreferences();
@@ -186,6 +192,15 @@
       artifacts = body?.result?.artifacts ?? [];
     } catch (error) { artifactStatus = "Could not load artifacts: " + (error instanceof Error ? error.message : String(error)); }
     finally { artifactsLoading = false; }
+  }
+  async function refreshComputers() {
+    computersLoading = true; computerStatus = "";
+    try {
+      const response = await fetch("/api/computers", { credentials: "include" });
+      const body = await response.json();
+      computers = body?.result?.computers ?? [];
+    } catch (error) { computerStatus = "Could not load computers: " + (error instanceof Error ? error.message : String(error)); }
+    finally { computersLoading = false; }
   }
   function openArtifact(artifact: LibraryArtifact) { window.open("/api/artifacts/" + encodeURIComponent(artifact.id) + "/preview", "_blank", "noopener,noreferrer"); }
   let deskArtifactId = $state<string | null>(null);
@@ -1211,6 +1226,28 @@
             <li>Work Code Mode only calls named callbacks.</li>
           </ul>
         </section>
+      </div>
+
+      <div hidden={activeSection !== "computers"} class="space-y-4">
+        <header class="flex items-start justify-between gap-3">
+          <div><h3 class="text-sm font-semibold text-fg">Computers</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Named Ubuntu desktops isolated from the shared Sandbox. Ask My AX to create_computer; the desktop embeds in chat like an artifact.</p></div>
+          <button type="button" onclick={refreshComputers} class="job-action-button shrink-0 hover:border-brand/60" disabled={computersLoading}>Refresh</button>
+        </header>
+        {#if computersLoading && computers.length === 0}
+          <p class="text-xs text-fg-mut">Loading computers…</p>
+        {:else if computers.length === 0}
+          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No computers yet</strong><p class="mt-1 text-xs text-fg-mut">Ask My AX to create_computer with an id like desk.</p></section>
+        {:else}
+          <div class="grid gap-3">
+            {#each computers as computer (computer.computer_id)}
+              <section class="overflow-hidden rounded-lg border border-line bg-elev">
+                <iframe title={computer.computer_id} src={"/api/computers/" + computer.computer_id + "/novnc/vnc.html?autoconnect=1&resize=scale"} class="h-56 w-full border-0 bg-black"></iframe>
+                <div class="p-3"><strong class="block truncate text-sm text-fg">{computer.computer_id}</strong><span class="mt-1 block text-[11px] text-fg-mut">snapshot {computer.backup_id}</span></div>
+              </section>
+            {/each}
+          </div>
+        {/if}
+        {#if computerStatus}<p class="text-xs text-fg-mut" role="status" aria-live="polite">{computerStatus}</p>{/if}
       </div>
 
       <div hidden={activeSection !== "artifacts"} class="space-y-4">

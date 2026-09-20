@@ -42,7 +42,36 @@ export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId
   }
   const initialized = await sandbox.exec(`mkdir -p ${WORKSPACE_HOME} && touch ${READY_MARKER}`, { cwd: "/", timeout: 30_000, origin: "internal" });
   if (initialized.exitCode !== 0) throw new Error(initialized.stderr || "computer initialization failed");
+  await ensureComputerDisplay(sandbox);
   return { sandbox, home: WORKSPACE_HOME, computerId };
+}
+
+export async function ensureComputerDisplay(sandbox: Sandbox) {
+  const script = [
+    "mkdir -p /tmp/my-ax-vnc",
+    "if ! pgrep -x Xtigervnc >/dev/null 2>&1; then",
+    "  Xtigervnc :1 -geometry 1280x800 -depth 24 -SecurityTypes None -localhost yes >/tmp/my-ax-vnc/x.log 2>&1 &",
+    "  sleep 1",
+    "  DISPLAY=:1 startxfce4 >/tmp/my-ax-vnc/xfce.log 2>&1 &",
+    "fi",
+    "if ! pgrep -f 'websockify.*6080' >/dev/null 2>&1; then",
+    "  websockify --web=/usr/share/novnc 6080 localhost:5901 >/tmp/my-ax-vnc/ws.log 2>&1 &",
+    "  sleep 1",
+    "fi",
+  ].join("\n");
+  const started = await sandbox.exec(script, { cwd: "/", timeout: 45_000, origin: "internal" });
+  if (started.exitCode !== 0) throw new Error(started.stderr || "computer display failed to start");
+}
+
+export async function listNamedComputers(env: Env, identity: AccessIdentity) {
+  const rows = await env.DB.prepare(
+    "SELECT computer_id, backup_id, updated_at FROM computer_snapshots WHERE owner_email = ? ORDER BY updated_at DESC",
+  ).bind(identity.email.toLowerCase()).all<{ computer_id: string; backup_id: string; updated_at: string }>();
+  return rows.results ?? [];
+}
+
+export function computerPreviewSrc(computerId: string): string {
+  return `/api/computers/${normalizeComputerId(computerId)}/novnc/vnc.html?autoconnect=1&resize=scale`;
 }
 
 export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, rawId: string, name = "auto") {

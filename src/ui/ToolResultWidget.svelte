@@ -82,6 +82,36 @@
   <CodeDiffWidget diff={widget} />
 {:else if widget.kind === "delegation-group"}
   <DelegationGroup group={widget} />
+{:else if widget.kind === "named-computer"}
+  <section class="svelte-artifact-shell" data-fullscreen={fullscreen ? "1" : "0"}>
+    <div class="tool-call__result tool-call__browser-summary" data-tool-widget="named-computer">
+      <strong>{widget.title}</strong>
+      <span>Named computer</span>
+    </div>
+    <div class="svelte-artifact-stage">
+      {#if fullscreen}
+        <button type="button" class="svelte-artifact-exit" aria-label="Exit fullscreen computer" title="Exit fullscreen (Esc)" onclick={closeFullscreen}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          <span>Exit</span>
+        </button>
+      {:else}
+        <button type="button" class="svelte-artifact-fullscreen" aria-label="Open computer fullscreen" title="Fullscreen" onclick={openFullscreen}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg>
+        </button>
+      {/if}
+      <iframe
+        class="svelte-artifact-frame"
+        data-tool-widget-frame="named-computer"
+        src={widget.src}
+        title={widget.title}
+        loading="lazy"
+        allow="fullscreen"
+        allowfullscreen
+        referrerpolicy="no-referrer"
+        data-computer-id={widget.computerId}
+      ></iframe>
+    </div>
+  </section>
 {:else if widget.kind === "svelte-artifact"}
   <section class="svelte-artifact-shell" data-fullscreen={fullscreen ? "1" : "0"}>
     <div class="tool-call__result tool-call__browser-summary" data-tool-widget="svelte-artifact">
