@@ -1,0 +1,31 @@
+package.json
+  s_99b55ecf7d26fa::t_6a36f2b0ee95e4 69
+src/computer-id.ts
+  s_f6655a1a4ac563::t_73eae140e39966 12-16
+src/named-computer-restore.test.ts
+  s_f6655a1a4ac563::t_a122e25dc9e0e3 1-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "817c49aec45baec312d5614437d17a9889184724",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_f6655a1a4ac563": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0affb-56ed-7099-b09f-9c2818777144",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
