@@ -46,21 +46,29 @@ export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId
   return { sandbox, home: WORKSPACE_HOME, computerId };
 }
 
+async function processRunning(sandbox: Sandbox, needle: string) {
+  const listed = await sandbox.listProcesses().catch(() => []);
+  return listed.some((proc) => (proc.command ?? "").includes(needle));
+}
+
 export async function ensureComputerDisplay(sandbox: Sandbox) {
-  const script = [
-    "mkdir -p /tmp/my-ax-vnc",
-    "if ! pgrep -x Xtigervnc >/dev/null 2>&1; then",
-    "  Xtigervnc :1 -geometry 1280x800 -depth 24 -SecurityTypes None -localhost yes >/tmp/my-ax-vnc/x.log 2>&1 &",
-    "  sleep 1",
-    "  DISPLAY=:1 startxfce4 >/tmp/my-ax-vnc/xfce.log 2>&1 &",
-    "fi",
-    "if ! pgrep -f 'websockify.*6080' >/dev/null 2>&1; then",
-    "  websockify --web=/usr/share/novnc 6080 localhost:5901 >/tmp/my-ax-vnc/ws.log 2>&1 &",
-    "  sleep 1",
-    "fi",
-  ].join("\n");
-  const started = await sandbox.exec(script, { cwd: "/", timeout: 45_000, origin: "internal" });
-  if (started.exitCode !== 0) throw new Error(started.stderr || "computer display failed to start");
+  await sandbox.exec("mkdir -p /tmp/my-ax-vnc", { cwd: "/", timeout: 10_000, origin: "internal" });
+  if (!(await processRunning(sandbox, "Xtigervnc"))) {
+    await sandbox.startProcess(
+      "Xtigervnc :1 -geometry 1280x800 -depth 24 -SecurityTypes None -localhost yes",
+      { cwd: "/" },
+    );
+  }
+  if (!(await processRunning(sandbox, "xfce"))) {
+    await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY: ":1" } });
+  }
+  if (!(await processRunning(sandbox, "websockify"))) {
+    const novnc = await sandbox.startProcess(
+      "websockify --web=/usr/share/novnc 6080 localhost:5901",
+      { cwd: "/" },
+    );
+    await novnc.waitForPort(6080, { mode: "tcp" });
+  }
 }
 
 export async function listNamedComputers(env: Env, identity: AccessIdentity) {
