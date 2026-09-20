@@ -3,7 +3,7 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { normalizeComputerId, novncContainerPath } from "../computer-id";
-import { getNamedComputer, listNamedComputers } from "../named-computer";
+import { ensureComputerDisplay, getNamedComputer, listNamedComputers } from "../named-computer";
 
 const NOVNC_PORT = 6080;
 
@@ -23,6 +23,7 @@ async function proxyNovnc(c: Context<AppEnv>) {
   }
   try {
     const { sandbox } = await getNamedComputer(c.env, c.get("identity"), computerId);
+    await ensureComputerDisplay(sandbox);
     const url = new URL(c.req.url);
     if ((c.req.header("Upgrade") ?? "").toLowerCase() === "websocket") {
       return sandbox.wsConnect(c.req.raw, NOVNC_PORT);
