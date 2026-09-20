@@ -12,7 +12,7 @@ export function registerComputerRoutes(app: Hono<AppEnv>) {
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { computers }, next_actions: [] });
   });
 
-  app.all("/api/computers/:id/novnc/*path", async (c) => {
+  app.all("/api/computers/:id/novnc/*", async (c) => {
     let computerId: string;
     let rest: string;
     try {
