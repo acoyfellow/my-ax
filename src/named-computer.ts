@@ -1,6 +1,7 @@
 import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
 import type { AccessIdentity } from "./auth";
 import { computerSandboxName, normalizeComputerId, shouldRestoreComputerSnapshot } from "./computer-id";
+export { computerPreviewSrc } from "./computer-id";
 import type { Env } from "./types";
 import { WORKSPACE_HOME } from "./workspace-path";
 import { verifyWorkspaceRestore } from "./workspace-snapshot";
@@ -42,7 +43,6 @@ export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId
   }
   const initialized = await sandbox.exec(`mkdir -p ${WORKSPACE_HOME} && touch ${READY_MARKER}`, { cwd: "/", timeout: 30_000, origin: "internal" });
   if (initialized.exitCode !== 0) throw new Error(initialized.stderr || "computer initialization failed");
-  await ensureComputerDisplay(sandbox);
   return { sandbox, home: WORKSPACE_HOME, computerId };
 }
 
@@ -77,11 +77,6 @@ export async function listNamedComputers(env: Env, identity: AccessIdentity) {
     "SELECT computer_id, backup_id, updated_at FROM computer_snapshots WHERE owner_email = ? ORDER BY updated_at DESC",
   ).bind(identity.email.toLowerCase()).all<{ computer_id: string; backup_id: string; updated_at: string }>();
   return rows.results ?? [];
-}
-
-export function computerPreviewSrc(computerId: string): string {
-  const id = normalizeComputerId(computerId);
-  return `/api/computers/${id}/novnc/vnc.html?autoconnect=1&resize=scale&path=${encodeURIComponent(`api/computers/${id}/novnc/websockify`)}`;
 }
 
 export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, rawId: string, name = "auto") {
