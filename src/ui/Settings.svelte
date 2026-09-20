@@ -1241,7 +1241,7 @@
           <div class="grid gap-3">
             {#each computers as computer (computer.computer_id)}
               <section class="overflow-hidden rounded-lg border border-line bg-elev">
-                <iframe title={computer.computer_id} src={"/api/computers/" + computer.computer_id + "/novnc/vnc.html?autoconnect=1&resize=scale"} class="h-56 w-full border-0 bg-black"></iframe>
+                <iframe title={computer.computer_id} src={"/api/computers/" + computer.computer_id + "/novnc/vnc.html?autoconnect=1&resize=scale&path=" + encodeURIComponent("api/computers/" + computer.computer_id + "/novnc/websockify")} class="h-56 w-full border-0 bg-black"></iframe>
                 <div class="p-3"><strong class="block truncate text-sm text-fg">{computer.computer_id}</strong><span class="mt-1 block text-[11px] text-fg-mut">snapshot {computer.backup_id}</span></div>
               </section>
             {/each}
