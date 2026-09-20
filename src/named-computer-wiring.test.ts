@@ -29,6 +29,8 @@ test("computers embed through a same-origin novnc route and a Settings tab", () 
   assert.match(index, /registerComputerRoutes/);
   assert.match(settings, /label: "Computers"/);
   assert.match(widgets, /kind: "named-computer"/);
+  assert.match(named, /startProcess/);
+  assert.match(named, /waitForPort/);
 });
 
 test("computer image splits desktop and vnc into separate apt layers", () => {
