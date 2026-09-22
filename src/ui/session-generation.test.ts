@@ -28,11 +28,12 @@ test("delayed empty restore A to B is stale, with no message write or error toas
   assert.deepEqual({ outcome, messages, errors }, { outcome: "stale", messages: "B transcript", errors: 0 });
 });
 
-test("genuine current empty restore reports the recoverable-transcript error", async () => {
+test("genuine current empty restore is a blank chat, not an Auto error", async () => {
   const guard = new SessionGenerationGuard(); guard.activate("A");
   const result = await loadCurrentSessionEntries({ expected: guard.capture()!, isCurrent: (e) => guard.isCurrent(e, "A"), maxPages: 20, fetchPage: async () => response([]) });
   assert.equal(result.outcome, "current");
-  assert.equal(shouldReportEmptyRestore(result.entries.length ? "restored" : "empty"), true);
+  assert.equal(result.entries.length, 0);
+  assert.equal(shouldReportEmptyRestore("empty"), false);
 });
 
 test("real loader paginates and compacted restore call-through remains generation guarded", async () => {
