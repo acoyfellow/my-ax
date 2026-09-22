@@ -20,6 +20,7 @@
   import { myAxDeepLinkIntent, parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
   import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
+  import { assistantTurnHasVisibleOutput, shouldReportInvisibleCompletion } from "./assistant-visible";
   import { d1EntriesToTranscriptMessages } from "./d1-transcript";
   import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
@@ -1621,11 +1622,8 @@
         // streamingMsgId (text and tool/artifact output can land in different
         // messages, which falsely tripped the "no visible response" error).
         const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
-        const hasVisibleOutput = !!lastAssistant && (
-          lastAssistant.content.trim().length > 0 ||
-          lastAssistant.parts.some((part) => (part.kind === "text" && part.text.trim().length > 0) || part.kind === "tool")
-        );
-        if (!hasVisibleOutput) pushError("Agent completed without a visible response. Please retry.", { stack: new Error("no-visible-response").stack });
+        const hasVisibleOutput = assistantTurnHasVisibleOutput(lastAssistant);
+        if (shouldReportInvisibleCompletion(hasVisibleOutput)) pushError("Agent completed without a visible response. Please retry.", { stack: new Error("no-visible-response").stack });
         responseRecoveryPending = false;
         activeRequestId = null;
         streamingMsgId = null;
