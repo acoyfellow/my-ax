@@ -1,7 +1,7 @@
 import type { SessionGeneration } from "./session-generation";
 
 export type RestoreOutcome = "restored" | "empty" | "stale";
-export const shouldReportEmptyRestore = (outcome: RestoreOutcome): boolean => outcome === "empty";
+export const shouldReportEmptyRestore = (_outcome: RestoreOutcome): boolean => false;
 
 export type SessionHistoryResult<T> =
   | { outcome: "stale" }
