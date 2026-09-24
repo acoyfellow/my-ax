@@ -28,6 +28,7 @@ describe("model catalog", () => {
     assert.equal(findModel("gpt-5.6-luna")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-sol")?.route, "gateway-openai");
     assert.equal(findModel("gpt-5.6-terra")?.route, "gateway-openai");
+    assert.equal(findModel("claude-opus-5-5")?.route, "gateway-anthropic");
     assert.equal(findModel("claude-opus-5")?.route, "gateway-anthropic");
     assert.equal(findModel("claude-opus-4-8")?.route, "gateway-anthropic");
     for (const model of MODELS) assert.equal(model.tools, true, model.id);
@@ -35,7 +36,7 @@ describe("model catalog", () => {
 
   it("shows gateway rows only when the installation has gateway config", () => {
     assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"]);
-    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "claude-opus-5", "claude-opus-4-8", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
     assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
   });
 
@@ -69,6 +70,7 @@ describe("model catalog", () => {
     assert.equal(resolveAvailableModelId(minimalEnv, "gpt-5.5"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-5"), DEFAULT_MODEL_ID);
     assert.equal(resolveAvailableModelId(minimalEnv, "claude-opus-4-8"), DEFAULT_MODEL_ID);
+    assert.equal(resolveAvailableModelId(gatewayEnv, "claude-opus-5-5"), "claude-opus-5-5");
     assert.equal(resolveAvailableModelId(gatewayEnv, "claude-opus-5"), "claude-opus-5");
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.5"), DEFAULT_GATEWAY_MODEL_ID);
     assert.equal(resolveAvailableModelId(gatewayEnv, "gpt-5.6-luna"), "gpt-5.6-luna");
