@@ -1,0 +1,21 @@
+src/models.test.ts
+  s_1760e4cf135740::t_72dfe95160be65 31,39,73
+src/models.ts
+  s_1760e4cf135740::t_cd4c904b6c757d 68-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "71869bf18633e3dd57ce58cdda9e1d1548ddd142",
+  "prompts": {},
+  "sessions": {
+    "s_1760e4cf135740": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0cb06-a219-752b-b565-4689d592a2b3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
