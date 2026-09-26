@@ -2,7 +2,7 @@
 
 There is no Factory tab and no factory verb. A factory is **one durable My AX conversation** plus a **recurring job** that pings that same thread on a short cadence. It is not a new session every run.
 
-Checkpoint to eject to: git SHA `4f0be045daee26d6ba185327c7292d738fba7617` (sidecar agents Worker with keyword-safe sweep). The scheduled sidecar sweep is **off**. Do not turn that cron back on unless you eject.
+The old GitHub webhook workers (`my-ax-agents`, `my-ax-agents-hook`) are deleted. Nothing outside My AX triages issues, comments on them, or opens branches. The last commit that still has that code is `4f0be045daee26d6ba185327c7292d738fba7617`.
 
 ## Shape (like a terraloop)
 
@@ -74,4 +74,4 @@ The cockpit skips titles that already exist. GitHub is the forge (branches, PRs)
 
 ## Stop
 
-Pause or delete the `factory` job. Issue sessions stay as normal chats. Sidecar factory stays off unless you eject to `4f0be04` and restore cron yourself.
+Pause or delete the `factory` job. Issue sessions stay as normal chats.

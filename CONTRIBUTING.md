@@ -46,7 +46,7 @@ A GitHub webhook classifies `issues.opened`. The Worker comments and labels. A 1
 
 If `bot/issue-<number>` exists, the Worker may open a **ready** pull request (`draft: false`). The PR body must include `Closes #<n>` and a proof command. It must not invent a Files list. Review and audit comment `neverMerge: true`. A human merges.
 
-Hunt-only work follows [agents/HUNT.md](./agents/HUNT.md): find one new issue, file it, stop. Do not open a PR from a hunt tick.
+Hunt-only work follows [docs/hunt.md](./docs/hunt.md): find one new issue, file it, stop. Do not open a PR from a hunt tick.
 
 Push the branch. If the head is missing, triage comments and no PR appears.
 
