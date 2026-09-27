@@ -9,6 +9,7 @@
   //   - POST /api/mcps      (Save button)
 
   import { onMount } from "svelte";
+  import { connectorRowDisplay, type ConnectorStatusPayload } from "./connector-row";
 
   type UserMcp = {
     id: string;
@@ -20,7 +21,7 @@
   let summary = $state<string>("—");
 
   let userMcps = $state<UserMcp[]>([]);
-  let authStatus = $state<Record<string, { authorized?: boolean; connected?: boolean; kind?: string }>>({});
+  let authStatus = $state<Record<string, ConnectorStatusPayload & { connected?: boolean; kind?: string }>>({});
   let laptopConnected = $state<boolean>(false);
   let userMcpsError = $state<string | null>(null);
   let userMcpsLoading = $state<boolean>(true);
@@ -222,14 +223,20 @@
       <h4 class="text-xs font-medium text-fg-mut mb-1.5">Included MCP servers</h4>
       <table class="w-full text-[12px] border-collapse"><tbody>
         {#each Object.entries(authStatus).filter(([id, status]: [string, any]) => id !== "machinectl" && !userMcps.some((m) => m.id === id) && status?.kind === "oauth-bearer") as [id, status]: [string, any]}
-          <tr class="conn-row" data-mcp-id={id}>
+          {@const row = connectorRowDisplay(id, status)}
+          <tr class="conn-row" data-mcp-id={id} data-connection={row.kind}>
             <td class="conn-row__name">{id}</td>
-            <td class="conn-row__count">—</td>
+            <td class="conn-row__count">{row.kind === "connected" ? row.toolCount : "—"}</td>
             <td class="conn-row__status">
-              {#if status.authorized}
-                <span class="conn-status-dot" data-state="enabled" aria-label="On" title="On"></span>
+              {#if row.kind === "connected"}
+                <span class="conn-status-dot" data-state="enabled" aria-label={row.title} title={row.title}></span>
+              {:else if row.kind === "degraded"}
+                <span class="conn-status-dot" data-state="degraded" aria-label={row.title} title={row.title}></span>
+                <a class="user-mcp-authorize" href={row.href} title={row.title}>reconnect</a>
+              {:else if row.kind === "pending"}
+                <span class="conn-status-dot" data-state="disabled" aria-label={row.title} title={row.title}></span>
               {:else}
-                <a class="user-mcp-authorize" href={status.authorize_url || `/api/connectors/${encodeURIComponent(id)}/authorize`} title="Authorize via OAuth">authorize</a>
+                <a class="user-mcp-authorize" href={row.href} title="Authorize via OAuth">authorize</a>
               {/if}
             </td>
           </tr>
@@ -273,21 +280,20 @@
           <tr><td colspan={3} class="py-2 text-center text-fg-mut text-[11px] italic">None yet. Click Add to connect one.</td></tr>
         {:else}
           {#each userMcps as m (m.id)}
-            {@const isAuthed = !!authStatus[m.id]?.authorized}
-            <tr class="conn-row" data-mcp-id={m.id}>
+            {@const row = connectorRowDisplay(m.id, authStatus[m.id])}
+            <tr class="conn-row" data-mcp-id={m.id} data-connection={row.kind}>
               <td class="conn-row__name" title={m.upstream ?? ""}>{m.displayName || m.id}</td>
-              <td class="conn-row__count" data-zero="1">—</td>
+              <td class="conn-row__count" data-zero={row.kind === "connected" ? undefined : "1"}>{row.kind === "connected" ? row.toolCount : "—"}</td>
               <td class="conn-row__status">
-                {#if isAuthed}
-                  <span class="conn-status-dot" data-state="enabled" aria-label="On" title="On"></span>
+                {#if row.kind === "connected"}
+                  <span class="conn-status-dot" data-state="enabled" aria-label={row.title} title={row.title}></span>
+                {:else if row.kind === "degraded"}
+                  <span class="conn-status-dot" data-state="degraded" aria-label={row.title} title={row.title}></span>
+                  <a class="user-mcp-authorize" href={row.href} title={row.title}>reconnect</a>
+                {:else if row.kind === "pending"}
+                  <span class="conn-status-dot" data-state="disabled" aria-label={row.title} title={row.title}></span>
                 {:else}
-                  <a
-                    class="user-mcp-authorize"
-                    href={`/api/connectors/${encodeURIComponent(m.id)}/authorize`}
-                    title="Authorize via OAuth"
-                  >
-                    authorize
-                  </a>
+                  <a class="user-mcp-authorize" href={row.href} title="Authorize via OAuth">authorize</a>
                 {/if}
                 <button
                   type="button"
@@ -441,6 +447,7 @@
   }
   :global(.conn-status-dot[data-state="enabled"]) { background: var(--good); }
   :global(.conn-status-dot[data-state="disabled"]) { background: var(--fg-mut); opacity: 0.55; }
+  :global(.conn-status-dot[data-state="degraded"]) { background: var(--warn); }
   :global(.laptop-row) {
     display: flex;
     align-items: center;

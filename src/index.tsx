@@ -50,6 +50,7 @@ import { registerCostSeriesRoutes } from "./routes/cost-series";
 import { registerInstructionRoutes } from "./routes/instructions";
 import { CapabilitiesPage } from "./views/CapabilitiesPage";
 import { parseInternalSourceHosts } from "./internal-source-hosts";
+import { connectorStatusView, type ConnectorHealth } from "./connector-health";
 import { DocsPage } from "./views/DocsPage";
 import { DocsArticlePage } from "./views/DocsArticlePage";
 import { DOC_PAGE_BY_SLUG } from "./docs-content.generated";
@@ -214,14 +215,19 @@ app.get("/api", async (c) => {
     ...Object.entries(callableConnectors(c.env)),
     ...userMcps.map((m) => [m.id, m] as [string, { userAdded?: boolean }]),
   ];
+  const healthById = await store.listConnectorHealth(email).catch(() => ({}));
   for (const [id, def] of allEntries) {
     const tok = await store.getValidAccessToken(email, id as ConnectorId);
-    const authorized = tok !== null;
+    const view = connectorStatusView(tok !== null, (healthById as Record<string, ConnectorHealth>)[id]);
     connectorStatus[id] = {
       kind: "oauth-bearer",
-      authorized,
-      authorize_url: authorized ? null : `/api/connectors/${id}/authorize`,
-      path: authorized ? "per-user-oauth" : "none",
+      authorized: view.authorized,
+      connection: view.connection,
+      tool_count: view.toolCount,
+      error: view.error,
+      checked_at: view.checkedAt,
+      authorize_url: view.connection === "connected" || view.connection === "unchecked" ? null : `/api/connectors/${id}/authorize`,
+      path: view.authorized ? "per-user-oauth" : "none",
       userAdded: !!def.userAdded,
     };
   }

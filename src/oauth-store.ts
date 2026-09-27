@@ -34,6 +34,7 @@ import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
 import { encryptToken, decryptToken, looksEncrypted } from "./grant-crypto";
 import { requirePublicHttpsUrl } from "./public-url";
+import { isConnectorHealth, type ConnectorHealth } from "./connector-health";
 
 // Token-endpoint calls can hit transient network blips; without a retry, a
 // single blip forces an unnecessary full re-authorization. Retry only on a
@@ -261,6 +262,22 @@ export class OAuthClientDO extends DurableObject<Env> {
       const { connectorId } = await req.json<{ connectorId: ConnectorId }>();
       const result = await this.disconnectInternal(connectorId);
       return Response.json(result);
+    }
+
+    if (path === "/health/record" && req.method === "POST") {
+      const { connectorId, health } = await req.json<{ connectorId: string; health: unknown }>();
+      if (typeof connectorId !== "string" || !isConnectorHealth(health)) {
+        return Response.json({ ok: false, error: "invalid health record" }, { status: 400 });
+      }
+      await this.ctx.storage.put(`health:${connectorId}`, health);
+      return Response.json({ ok: true });
+    }
+
+    if (path === "/health/list" && req.method === "GET") {
+      const entries = await this.ctx.storage.list<ConnectorHealth>({ prefix: "health:" });
+      const health: Record<string, ConnectorHealth> = {};
+      for (const [key, value] of entries) health[key.slice("health:".length)] = value;
+      return Response.json({ health });
     }
 
     // ── BYO MCP routes ─────────────────────────────────────────────────
@@ -588,6 +605,7 @@ export class OAuthClientDO extends DurableObject<Env> {
     connectorId: ConnectorId,
   ): Promise<{ ok: true }> {
     await this.ctx.storage.delete(`tokens:${connectorId}`);
+    await this.ctx.storage.delete(`health:${connectorId}`);
     // Also clear any pending authorizations for this connector
     const list = await this.ctx.storage.list({ prefix: "pending:" });
     for (const [key, value] of list) {
@@ -721,6 +739,10 @@ export interface OAuthClientStoreExt extends OAuthClientStore {
   ): Promise<{ ok: true } | { ok: false; error: string }>;
 
   disconnect(userEmail: string, connectorId: ConnectorId): Promise<{ ok: true }>;
+
+  recordConnectorHealth(userEmail: string, connectorId: string, health: ConnectorHealth): Promise<void>;
+
+  listConnectorHealth(userEmail: string): Promise<Record<string, ConnectorHealth>>;
 }
 
 // ─── facade implementing the OAuthClientStore interface for the rest of
@@ -806,6 +828,20 @@ export function makeOAuthClientStore(
         body: JSON.stringify({ connectorId }),
       });
       return (await res.json()) as { ok: true };
+    },
+    async recordConnectorHealth(userEmail, connectorId, health) {
+      const stub = stubFor(userEmail);
+      await stub.fetch("http://internal/health/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectorId, health }),
+      });
+    },
+    async listConnectorHealth(userEmail) {
+      const stub = stubFor(userEmail);
+      const res = await stub.fetch("http://internal/health/list", { method: "GET" });
+      const data = (await res.json()) as { health?: Record<string, ConnectorHealth> };
+      return data.health ?? {};
     },
     async listUserMcps(userEmail) {
       const stub = stubFor(userEmail);
