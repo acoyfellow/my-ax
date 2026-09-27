@@ -223,7 +223,7 @@
   function follow(event: MouseEvent, href: string | null) {
     if (!href) return;
     event.preventDefault();
-    if (isExternalSourceHref(href)) {
+    if (isExternalSourceHref(href, location.href)) {
       window.open(href, "_blank", "noopener,noreferrer");
       return;
     }

@@ -1,5 +1,6 @@
 import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
+import { externalSourceHosts, parseInternalSourceHosts } from "./internal-source-hosts";
 import { sendPush, type PushSubscription } from "./push";
 
 // Network failures talking to a push provider are transient; a returned HTTP
@@ -217,7 +218,17 @@ async function clearDeliveredDismissalTags(env: Env, ownerEmail: string, tags: s
   await env.DB.prepare(`DELETE FROM push_dismissals WHERE owner_email = ? AND tag IN (${placeholders})`).bind(ownerEmail, ...tags).run();
 }
 
-function safeHref(notification: OwnerNotification, baseUrl: string): string {
+function isAllowedExternalHref(raw: string, externalHosts: ReadonlySet<string>): boolean {
+  if (raw.length > MAX_HREF_LENGTH || !/^https:\/\//i.test(raw)) return false;
+  try {
+    const url = new URL(raw);
+    return !url.username && !url.password && url.pathname.length > 0 && externalHosts.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function safeHref(notification: OwnerNotification, baseUrl: string, externalHosts: ReadonlySet<string>): string {
   const fallbackCandidate = notification.sessionId
     ? `/?session=${encodeURIComponent(notification.sessionId)}`
     : "/";
@@ -225,9 +236,7 @@ function safeHref(notification: OwnerNotification, baseUrl: string): string {
   const fallback = fallbackCandidate.length <= MAX_HREF_LENGTH ? fallbackCandidate : "/";
   if (!notification.href) return fallback;
   try {
-    if (/^https:\/\/(gitlab\.cfdata\.org|github\.com|www\.github\.com)\//i.test(notification.href) && notification.href.length <= MAX_HREF_LENGTH) {
-      return notification.href;
-    }
+    if (isAllowedExternalHref(notification.href, externalHosts)) return notification.href;
     const base = new URL(baseUrl);
     const url = new URL(notification.href, base.origin);
     const href = `${url.pathname}${url.search}${url.hash}`;
@@ -295,7 +304,7 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   ).bind(email).all<{ endpoint: string; subscription_json: string }>();
   const rows = result.results ?? [];
   const receipt: NotificationReceipt = { delivered: 0, expired: 0, failed: 0, devices: rows.length };
-  const destinationHref = safeHref(notification, env.BRIDGE_BASE_URL);
+  const destinationHref = safeHref(notification, env.BRIDGE_BASE_URL, externalSourceHosts(parseInternalSourceHosts(env.INTERNAL_SOURCE_HOSTS_JSON)));
   const attentionId = intermediateProgress ? undefined : crypto.randomUUID();
   const notificationTag = taggedProgress ?? attentionId;
   if (attentionId) {

@@ -138,8 +138,8 @@ test("safeHref rejects a scheme-relative (//host) href that would re-navigate cr
 test("safeHref keeps https gitlab source urls", async () => {
   const h = makeEnv();
   try {
-    await notifyOwner(h.env, OWNER, { ...base, href: "https://gitlab.cfdata.org/cloudflare/fe/stratus/-/merge_requests/571#note_13087255" });
-    assert.equal(h.attention[0]?.href, "https://gitlab.cfdata.org/cloudflare/fe/stratus/-/merge_requests/571#note_13087255");
+    await notifyOwner(h.env, OWNER, { ...base, href: "https://gitlab.example.com/team/app/-/merge_requests/571#note_13087255" });
+    assert.equal(h.attention[0]?.href, "https://gitlab.example.com/team/app/-/merge_requests/571#note_13087255");
   } finally { h.restore(); }
 });
 
@@ -210,4 +210,15 @@ test("boundedPushPayload includes a normal sessionId but omits an oversized one"
   assert.equal("sessionId" in huge, false, "an oversized id is omitted, not truncated");
   const bytes = new TextEncoder().encode(JSON.stringify(huge)).length;
   assert.ok(bytes <= MAX_PUSH_PAYLOAD_BYTES, `payload stays within budget: ${bytes}`);
+});
+
+test("safeHref keeps only configured internal source hosts", async () => {
+  const h = makeEnv();
+  try {
+    h.env.INTERNAL_SOURCE_HOSTS_JSON = JSON.stringify({ gitlab: "git.corp.test" });
+    await notifyOwner(h.env, OWNER, { ...base, href: "https://git.corp.test/team/app/-/merge_requests/9" });
+    assert.equal(h.attention[0]?.href, "https://git.corp.test/team/app/-/merge_requests/9");
+    await notifyOwner(h.env, OWNER, { ...base, title: "second", href: "https://gitlab.example.com/team/app/-/merge_requests/9" });
+    assert.equal(h.attention[1]?.href, "/");
+  } finally { h.restore(); }
 });

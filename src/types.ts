@@ -78,6 +78,8 @@ declare global {
       // private deployments inject JSON without committing connector names.
       BUILTIN_CONNECTORS_JSON?: string;
 
+      INTERNAL_SOURCE_HOSTS_JSON?: string;
+
       /**
        * Optional, deploy-owned exact allowlist for official MCP Code Mode.
        * Shape: {"version":1,"enabled":true,"connectors":{"id":{"expose":["tool"]}}}
