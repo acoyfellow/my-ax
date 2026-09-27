@@ -65,11 +65,6 @@ const runtimeBoundaries = new Set([
   "src/web-search.ts",
   "src/workspace-read.ts",
   "src/workspace.ts",
-  "agents/src/hook.ts",
-  "agents/src/implementation-handler.ts",
-  "agents/src/ports.ts",
-  "agents/src/worker.ts",
-  "agents/src/workflow-entry.ts",
   "proof/plan.ts",
   "proof/terminal-gh-probe.mjs",
   "proof/terminal-live-client.mjs",
@@ -77,11 +72,6 @@ const runtimeBoundaries = new Set([
 ]);
 
 const pureFiles = new Set([
-  "agents/src/github-hmac.ts",
-  "agents/src/policy.ts",
-  "agents/src/preview-check.ts",
-  "agents/src/public-text.ts",
-  "agents/src/sweep.ts",
   "src/app-env.ts",
   "src/artifact-theme.ts",
   "src/attachment-alignment.ts",
@@ -165,7 +155,6 @@ function classify(path, source) {
   if (staticEvidenceFiles.has(path) || /\.test\.(?:ts|mjs|cjs)$/.test(path) || /(?:^|\/)fixtures?(?:\/|$)/.test(path)) return ["static-evidence", "test or fixture"];
   if (frontendGeneratedFiles.has(path) || /^(?:src\/ui\/|src\/views\/|src\/styles\/)/.test(path) || /(?:generated|\.svelte)/.test(path)) return ["frontend-generated", "frontend or generated"];
   if (/\.(?:md|json)$/.test(path) || /wrangler(?:\.hook)?\.jsonc$/.test(path)) return ["static-evidence", "documentation, configuration, or receipt"];
-  if (path === "agents/src/implementation-submission.ts") return ["runtime-adapter", "WebCrypto signing primitive and pure grant/file validation; consumed by implementation-program.ts"];
   if (path.startsWith("src/routes/") || runtimeBoundaries.has(path)) return ["runtime-adapter", "Cloudflare or HTTP runtime edge"];
   if (path.startsWith("proof/") && (/\.sh$/.test(path) || /(?:browser-e2e|terminal-paste-proof|terminal-render-proof)\.mjs$/.test(path))) return ["runtime-adapter", "shell or live-proof execution boundary"];
   if (path.startsWith("scripts/") && /(?:deploy|dev-access|proxy|prove|trigger|test-|recipe-)/.test(path)) return ["runtime-adapter", "CLI or operational execution boundary"];

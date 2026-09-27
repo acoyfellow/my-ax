@@ -179,9 +179,9 @@ npm run dev
 - [Contributing](./CONTRIBUTING.md)
 - [Changelog](./CHANGELOG.md)
 
-Report bugs and feature requests in [GitHub Issues](https://github.com/acoyfellow/my-ax/issues). Put one checkable receipt in the issue (command output, file:line, or URL). A hook classifies new issues. A live error with a fingerprint opens a ready PR when `bot/issue-<n>` exists. The Worker never merges. You merge after you read the receipt. Hunt-only ticks follow [agents/HUNT.md](./agents/HUNT.md): one new issue, then stop. Report vulnerabilities through the [Security Policy](./SECURITY.md), not a public issue.
+Report bugs and feature requests in [GitHub Issues](https://github.com/acoyfellow/my-ax/issues). Put one checkable receipt in the issue (command output, file:line, or URL). The [factory](./docs/factory.md) is a recurring My AX job that opens one chat per issue and proposes PRs. It never merges. You merge after you read the receipt. Hunt-only ticks follow [docs/hunt.md](./docs/hunt.md): one new issue, then stop. Report vulnerabilities through the [Security Policy](./SECURITY.md), not a public issue.
 
-See [Contributing](./CONTRIBUTING.md) and [lifecycle agents](./agents/README.md).
+See [Contributing](./CONTRIBUTING.md) and [the factory](./docs/factory.md).
 
 ## License
 
