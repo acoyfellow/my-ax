@@ -2,16 +2,23 @@ import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import type { ThemePref } from "../routes/theme";
 import { createCapabilityBundle, runCapabilityReviewDemo } from "../capability-review";
+import { EXAMPLE_INTERNAL_SOURCE_HOSTS, type InternalSourceHosts } from "../internal-source-hosts";
 
 interface Props {
   identityEmail?: string | null;
   buildId?: string;
   theme?: ThemePref;
   appOrigin?: string;
+  sourceHosts?: InternalSourceHosts;
 }
 
-const demoUrls = `https://jira.cfdata.org/browse/DEVTOOLS-123\nhttps://wiki.cfdata.org/spaces/TEAM/pages/123456/Foo+Spec\nhttps://gitlab.cfdata.org/group/project/-/merge_requests/42`;
-const defaultUrls = demoUrls.split("\n");
+function demoUrlsFor(hosts: InternalSourceHosts): string[] {
+  return [
+    `https://${hosts.jira}/browse/DEVTOOLS-123`,
+    `https://${hosts.wiki}/spaces/TEAM/pages/123456/Foo+Spec`,
+    `https://${hosts.gitlab}/group/project/-/merge_requests/42`,
+  ];
+}
 
 const SCRIPT = String.raw`
 (function(){
@@ -49,8 +56,10 @@ const SCRIPT = String.raw`
 })();`;
 
 export const CapabilitiesPage: FC<Props> = (props) => {
-  const bundle = createCapabilityBundle({ principal: props.identityEmail || "unknown", urls: defaultUrls, task: "Review these resources without broad internal search" });
-  const proof = runCapabilityReviewDemo(bundle);
+  const hosts = props.sourceHosts ?? EXAMPLE_INTERNAL_SOURCE_HOSTS;
+  const defaultUrls = demoUrlsFor(hosts);
+  const bundle = createCapabilityBundle({ principal: props.identityEmail || "unknown", urls: defaultUrls, task: "Review these resources without broad internal search", hosts });
+  const proof = runCapabilityReviewDemo(bundle, hosts);
   return <Layout title="Scoped capabilities · my · ax" identityEmail={props.identityEmail} buildId={props.buildId} theme={props.theme} appOrigin={props.appOrigin} ownViewport={false} bodyClass="min-h-dvh bg-bg text-fg">
     <main class="cap-page mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <section class="cap-hero">
@@ -84,7 +93,7 @@ export const CapabilitiesPage: FC<Props> = (props) => {
             <input data-cap-task value="Review these resources without broad internal search" />
           </label>
           <label>Resource URLs
-            <textarea data-cap-urls rows={4}>{demoUrls}</textarea>
+            <textarea data-cap-urls rows={4}>{defaultUrls.join("\n")}</textarea>
           </label>
           <div class="cap-actions">
             <button type="submit">Run scoped proof</button>

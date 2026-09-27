@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { createCapabilityBundle, runCapabilityReviewDemo } from "../capability-review";
+import { parseInternalSourceHosts } from "../internal-source-hosts";
 
 export function registerCapabilityRoutes(app: Hono<AppEnv>) {
   app.post("/api/capabilities/demo", async (c) => {
@@ -17,8 +18,9 @@ export function registerCapabilityRoutes(app: Hono<AppEnv>) {
       }, 400);
     }
     try {
-      const bundle = createCapabilityBundle({ principal: identity.email, urls, task: typeof body.task === "string" ? body.task : "Scoped capability review" });
-      const proof = runCapabilityReviewDemo(bundle);
+      const hosts = parseInternalSourceHosts(c.env.INTERNAL_SOURCE_HOSTS_JSON);
+      const bundle = createCapabilityBundle({ principal: identity.email, urls, task: typeof body.task === "string" ? body.task : "Scoped capability review", hosts });
+      const proof = runCapabilityReviewDemo(bundle, hosts);
       return c.json<ApiResponse>({
         ok: true,
         command: "POST /api/capabilities/demo",

@@ -2,16 +2,16 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 478,
+    "total": 482,
     "classifications": {
-      "static-evidence": 190,
+      "static-evidence": 191,
       "runtime-adapter": 101,
       "effect-program": 25,
-      "plain-typescript": 95,
+      "plain-typescript": 98,
       "frontend-generated": 67
     },
     "statuses": {
-      "accepted": 453,
+      "accepted": 457,
       "migrated": 24,
       "pending": 1
     }
@@ -318,6 +318,12 @@
       "reason": "CLI or operational execution boundary"
     },
     {
+      "path": "scripts/public-leak-rules.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "scripts/recipe-dogfood-loop.mjs",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -334,6 +340,12 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "CLI or operational execution boundary"
+    },
+    {
+      "path": "scripts/scan-public-text.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "scripts/seed-e2e.mjs",
@@ -406,6 +418,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "scripts/verify-public-clean.test.mjs",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/agent-stub.ts",
@@ -1078,6 +1096,12 @@
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
+    },
+    {
+      "path": "src/internal-source-hosts.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/job-service.test.ts",

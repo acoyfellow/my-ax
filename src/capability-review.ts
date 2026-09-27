@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { EXAMPLE_INTERNAL_SOURCE_HOSTS, type InternalSourceHosts } from "./internal-source-hosts";
 
 export interface ParsedResource {
   system: string;
@@ -48,24 +49,24 @@ export function stableHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-export function parseResourceUrl(raw: string): ParsedResource {
+export function parseResourceUrl(raw: string, hosts: InternalSourceHosts = EXAMPLE_INTERNAL_SOURCE_HOSTS): ParsedResource {
   let url: URL;
   try {
     url = new URL(raw.trim());
   } catch {
     throw new Error("unsupported resource URL");
   }
-  if (url.hostname === "wiki.cfdata.org") {
+  if (url.hostname === hosts.wiki) {
     const match = url.pathname.match(/\/pages\/(\d+)(?:\/|$)/);
     if (!match) throw new Error("unsupported wiki URL: missing page id");
     return { system: "wiki", kind: "wiki.page.read", id: match[1], url: raw.trim() };
   }
-  if (url.hostname === "jira.cfdata.org") {
+  if (url.hostname === hosts.jira) {
     const match = url.pathname.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)(?:\/|$)/);
     if (!match) throw new Error("unsupported Jira URL: missing issue key");
     return { system: "jira", kind: "jira.issue.read", id: match[1], url: raw.trim() };
   }
-  if (url.hostname === "gitlab.cfdata.org") {
+  if (url.hostname === hosts.gitlab) {
     const match = url.pathname.match(/^\/(.+?)\/-\/merge_requests\/(\d+)(?:\/|$)/);
     if (!match) throw new Error("unsupported GitLab URL: missing MR iid");
     return { system: "gitlab", kind: "gitlab.mr.read", id: `${match[1]}!${match[2]}`, project: match[1], iid: match[2], url: raw.trim() };
@@ -84,15 +85,15 @@ export function parseResourceUrl(raw: string): ParsedResource {
     if (space) return { system: "google-chat", kind: "google.chat.space.read", id: space[1], url: raw.trim() };
     throw new Error("unsupported Google Chat URL: missing space/thread/message id");
   }
-  if (url.hostname === "portal.mcp.cfdata.org") {
+  if (url.hostname === hosts.mcpPortal) {
     if (url.pathname !== "/mcp") throw new Error("unsupported cf-portal URL: expected /mcp");
-    return { system: "cf-portal", kind: "cf-portal.server.tools.list", id: "portal.mcp.cfdata.org/mcp", url: raw.trim() };
+    return { system: "cf-portal", kind: "cf-portal.server.tools.list", id: `${hosts.mcpPortal}/mcp`, url: raw.trim() };
   }
   throw new Error(`unsupported host: ${url.hostname}`);
 }
 
-export function createCapabilityBundle({ principal, urls, task = "Scoped resource review" }: { principal: string; urls: string[]; task?: string }): CapabilityBundle {
-  const parsed = urls.filter((url) => url.trim()).map(parseResourceUrl);
+export function createCapabilityBundle({ principal, urls, task = "Scoped resource review", hosts = EXAMPLE_INTERNAL_SOURCE_HOSTS }: { principal: string; urls: string[]; task?: string; hosts?: InternalSourceHosts }): CapabilityBundle {
+  const parsed = urls.filter((url) => url.trim()).map((url) => parseResourceUrl(url, hosts));
   const capabilities = parsed.map((resource) => ({ id: `cap_${randomUUID()}`, kind: resource.kind, resource, constraints }));
   const base = { schema: "capability.bundle.v1" as const, principal: { type: "cloudflare-user" as const, id: principal }, source: { kind: "user-pasted-url" as const, urls }, task, capabilities, nonce: randomUUID() };
   return { ...base, hash: stableHash(base) };
@@ -102,7 +103,7 @@ function fakeContentFor(resource: ParsedResource): string {
   return JSON.stringify({ resource: resource.id, kind: resource.kind, demo: true });
 }
 
-export function runCapabilityReviewDemo(bundle: CapabilityBundle): CapabilityReviewProof {
+export function runCapabilityReviewDemo(bundle: CapabilityBundle, hosts: InternalSourceHosts = EXAMPLE_INTERNAL_SOURCE_HOSTS): CapabilityReviewProof {
   const allowed = bundle.capabilities.slice(0, 3).map((cap) => {
     const content = fakeContentFor(cap.resource);
     return { operation: cap.kind, resource: cap.resource.id, url: cap.resource.url, status: "success" as const, contentHash: stableHash(content), contentLength: content.length };
@@ -112,6 +113,6 @@ export function runCapabilityReviewDemo(bundle: CapabilityBundle): CapabilityRev
     { operation: "cfi", resource: "*", result: "tool_not_available" as const, beforeResolver: true },
     { operation: "wiki.search", resource: "*", result: "tool_not_available" as const, beforeResolver: true },
   ];
-  const asks = [{ schema: "capability.ask.v1" as const, requestedCapability: "wiki.page.read:123457", requestedUrl: "https://wiki.cfdata.org/spaces/TEAM/pages/123457/Adjacent", reason: "Need adjacent page for comparison; not present in the original bundle.", status: "ask" as const }];
+  const asks = [{ schema: "capability.ask.v1" as const, requestedCapability: "wiki.page.read:123457", requestedUrl: `https://${hosts.wiki}/spaces/TEAM/pages/123457/Adjacent`, reason: "Need adjacent page for comparison; not present in the original bundle.", status: "ask" as const }];
   return { schema: "capability.review.proof.v1", principal: bundle.principal.id, bundleHash: bundle.hash, childSurface: { tools: [...childTools] }, forbiddenTools: [...forbiddenTools], allowed, denied, asks, rawInternalContentPersisted: false, decision: "pass", createdAt: new Date().toISOString() };
 }
