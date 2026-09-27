@@ -1,14 +1,11 @@
 import { myAxDeepLinkIntent, parseMyAxDeepLink } from "./ui/deep-links";
 
-const EXTERNAL_HOSTS = new Set(["gitlab.example.com", "github.com", "www.github.com"]);
-
-export function isExternalSourceHref(raw: string | null | undefined): boolean {
-  if (!raw) return false;
+export function isExternalSourceHref(raw: string | null | undefined, currentHref: string): boolean {
+  if (!raw || !/^https:\/\//i.test(raw)) return false;
   try {
     const url = new URL(raw);
-    if (url.protocol !== "https:") return false;
     if (url.username || url.password) return false;
-    return EXTERNAL_HOSTS.has(url.hostname);
+    return url.origin !== new URL(currentHref).origin;
   } catch {
     return false;
   }
@@ -16,7 +13,7 @@ export function isExternalSourceHref(raw: string | null | undefined): boolean {
 
 export function attentionSourceLabel(href: string | null, currentHref: string): string | null {
   if (!href) return null;
-  if (isExternalSourceHref(href)) return "Open source";
+  if (isExternalSourceHref(href, currentHref)) return "Open source";
   const target = parseMyAxDeepLink(href, currentHref);
   if (!target) return null;
   if (target.sessionId) return "Open conversation";
