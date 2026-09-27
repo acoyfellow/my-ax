@@ -39,6 +39,7 @@ import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } f
 import { createAudioMessage } from "./audio-messages";
 import type { Attachment } from "./types";
 import { makeOAuthClientStore } from "./oauth-store";
+import { healthFromDiscovery, summarizeConnectorError, type ConnectorHealth } from "./connector-health";
 import { getBuiltinConnectors } from "./connectors";
 import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
@@ -564,8 +565,13 @@ export class MyAgent extends Think<Env> {
         if (existingEntry) await this.mcp.removeServer(existingEntry[0]).catch(() => undefined);
         return;
       }
+      const recordHealth = (health: ConnectorHealth) =>
+        store.recordConnectorHealth(identity.email, id, health).catch((err) => {
+          console.error("mcp_health_record_failed", { server: id, err: summarizeConnectorError(err) });
+        });
+      const toolCountFor = (serverId: string) => this.mcp.listTools().filter((catalogTool) => catalogTool.serverId === serverId).length;
       if (existingEntry) {
-        const discovered = this.mcp.listTools().some((catalogTool) => catalogTool.serverId === existingEntry[0]);
+        const discovered = toolCountFor(existingEntry[0]) > 0;
         if (discovered) return;
         // A persisted registration can reconnect with an empty catalog after a
         // deploy/upstream blip. Settings still says "authorized", but the model
@@ -578,15 +584,24 @@ export class MyAgent extends Think<Env> {
       // via the reauth banner instead.
       if (!safePublicHttpUrl(upstream, { httpsOnly: true })) {
         console.error("mcp_hydrate_skipped_invalid_upstream", { server: id });
+        await recordHealth({ outcome: "failed", error: "upstream URL is not a public https URL", checkedAt: new Date().toISOString() });
         return;
       }
       try {
-        await this.addMcpServer(id, upstream, {
+        const result = await this.addMcpServer(id, upstream, {
           id,
           transport: { type: "streamable-http", headers: { Authorization: `Bearer ${token}` } },
         });
+        const checkedAt = new Date().toISOString();
+        if (result.state === "authenticating") {
+          await recordHealth({ outcome: "failed", error: "upstream asked for a new sign-in", checkedAt });
+        } else {
+          await recordHealth(healthFromDiscovery(toolCountFor(result.id), checkedAt));
+        }
       } catch (err) {
-        console.error("mcp_hydrate_failed", { server: id, err: err instanceof Error ? err.message : String(err) });
+        const error = summarizeConnectorError(err);
+        console.error("mcp_hydrate_failed", { server: id, err: error });
+        await recordHealth({ outcome: "failed", error, checkedAt: new Date().toISOString() });
       }
     };
     // Public deployments default to no built-ins. Private wrappers can inject
