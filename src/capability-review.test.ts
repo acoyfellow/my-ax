@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createCapabilityBundle, parseResourceUrl, runCapabilityReviewDemo } from "./capability-review";
+import { parseInternalSourceHosts } from "./internal-source-hosts";
 
 test("a junk string does not throw Invalid URL string", () => {
   try {
@@ -34,4 +35,12 @@ test("demo proof shows handle-only child surface, denials, and ask receipt", () 
   assert.ok(proof.denied.some((entry) => entry.result === "tool_not_available" && entry.operation === "cfi"));
   assert.equal(proof.asks[0].status, "ask");
   assert.equal(proof.rawInternalContentPersisted, false);
+});
+
+test("deploy-configured hosts replace the example hosts", () => {
+  const hosts = parseInternalSourceHosts(JSON.stringify({ wiki: "wiki.corp.test", jira: "jira.corp.test", gitlab: "git.corp.test", mcpPortal: "portal.corp.test" }));
+  assert.equal(parseResourceUrl("https://jira.corp.test/browse/OPS-7", hosts).id, "OPS-7");
+  assert.throws(() => parseResourceUrl("https://jira.example.com/browse/OPS-7", hosts), /unsupported host/);
+  assert.equal(parseInternalSourceHosts("not json").jira, "jira.example.com");
+  assert.equal(parseInternalSourceHosts(JSON.stringify({ jira: "https://evil/x" })).jira, "jira.example.com");
 });

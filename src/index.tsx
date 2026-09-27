@@ -49,6 +49,7 @@ import { registerRecipeRoutes } from "./routes/recipes";
 import { registerCostSeriesRoutes } from "./routes/cost-series";
 import { registerInstructionRoutes } from "./routes/instructions";
 import { CapabilitiesPage } from "./views/CapabilitiesPage";
+import { parseInternalSourceHosts } from "./internal-source-hosts";
 import { DocsPage } from "./views/DocsPage";
 import { DocsArticlePage } from "./views/DocsArticlePage";
 import { DOC_PAGE_BY_SLUG } from "./docs-content.generated";
@@ -556,6 +557,7 @@ app.get("/capabilities", (c) => {
       buildId={buildId}
       theme={theme}
       appOrigin={c.env.BRIDGE_BASE_URL || new URL(c.req.url).origin}
+      sourceHosts={parseInternalSourceHosts(c.env.INTERNAL_SOURCE_HOSTS_JSON)}
     />,
   );
 });

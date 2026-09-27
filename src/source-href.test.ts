@@ -9,11 +9,11 @@ test("a root href is not an Open source button", () => {
   assert.equal(attentionSourceLabel(null, here), null);
 });
 
-test("gitlab and github https links are Open source", () => {
-  assert.equal(isExternalSourceHref("https://gitlab.example.com/cloudflare/fe/stratus/-/merge_requests/571"), true);
-  assert.equal(attentionSourceLabel("https://gitlab.example.com/cloudflare/fe/stratus/-/merge_requests/571", here), "Open source");
-  assert.equal(isExternalSourceHref("https://evil.example/phish"), false);
-  assert.equal(isExternalSourceHref("javascript:alert(1)"), false);
+test("any cross-origin https link is Open source; same-origin and non-https are not", () => {
+  assert.equal(isExternalSourceHref("https://gitlab.example.com/team/app/-/merge_requests/571", here), true);
+  assert.equal(attentionSourceLabel("https://gitlab.example.com/team/app/-/merge_requests/571", here), "Open source");
+  assert.equal(isExternalSourceHref("https://app.example/phish", here), false);
+  assert.equal(isExternalSourceHref("javascript:alert(1)", here), false);
 });
 
 test("session and run hrefs keep their labels", () => {

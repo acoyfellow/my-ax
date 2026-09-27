@@ -174,6 +174,21 @@ Do not point two installations at one D1 database or copy a configured `wrangler
 
 For repeatable production operation, keep a **private deployment wrapper** outside the public engine. A wrapper should clone or check out an exact public revision, inject non-public account/hostname/Access configuration, resolve deployment-owned resources, run checks and migrations, and deploy. It must not patch product behavior or commit secrets. Independently deployed instances share source revision only; they must not share runtime storage, credentials, or Access applications.
 
+### Keep private names out of the public repo
+
+The public repo and its GitHub issues and pull requests never name a real deployment. Write these instead:
+
+| Instead of | Write |
+| --- | --- |
+| the owner's production hostname | `jordan's instance` (or `<your-instance>` in setup steps) |
+| a preview hostname | `<preview-host>` |
+| an internal GitLab, Jira, or Wiki link | `internal GitLab`, `internal Jira`, `internal Wiki`; in tests use `gitlab.example.com` |
+| an account id, Access team, or username | nothing; keep it in the wrapper |
+
+Hosts the app must recognize come from the wrapper as `INTERNAL_SOURCE_HOSTS_JSON`, for example `{"wiki":"wiki.corp.test","jira":"jira.corp.test","gitlab":"git.corp.test","mcpPortal":"portal.corp.test"}`. Without it, the app uses `*.example.com`.
+
+`npm run verify:public` checks tracked files. `npm run verify:public-text` checks issue and pull request titles, bodies, and comments. CI runs both.
+
 ## Update a Deployment
 
 ```bash

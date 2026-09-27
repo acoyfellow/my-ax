@@ -16,6 +16,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify:public
+      - name: Scan public issue and PR text
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run verify:public-text
       # Build assets + typecheck + unit/widget smoke tests.
       - run: npm run check
       # Catch stale generated/source surfaces after product/API renames.
