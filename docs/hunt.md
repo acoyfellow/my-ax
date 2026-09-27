@@ -20,11 +20,8 @@ One tick finds one new, checkable issue. Then it stops that hunt.
 
 ## Surfaces, in order, skip if already open
 
-1. `agents/src/worker.ts` webhook payloads
-2. `agents/src/ports.ts` GitHub hop count
-3. `src/desk-board.ts` remaining mutant survivors
-4. `src/session-turn.ts` composer lock
-5. `agents/src/policy.ts` classify / audit findings
+1. `src/desk-board.ts` remaining mutant survivors
+2. `src/session-turn.ts` composer lock
 
 ## Proof for a filed issue
 

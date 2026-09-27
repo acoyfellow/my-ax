@@ -170,7 +170,7 @@ A live client or server error may open the issue through `POST /api/errors`.
 One fingerprint is one issue. Desk gets a card. The hook writes one loop board.
 A sweep closes same-fingerprint duplicates. If `bot/issue-<n>` exists, the
 Worker opens a ready PR. Review and audit never approve or merge. You merge.
-Hunt-only ticks file one issue and stop. See [agents/HUNT.md](../agents/HUNT.md).
+Hunt-only ticks file one issue and stop. See [docs/hunt.md](./hunt.md).
 
 ## What This Tour Does Not Prove
 

@@ -2,272 +2,21 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 503,
+    "total": 478,
     "classifications": {
-      "static-evidence": 197,
-      "effect-program": 34,
-      "plain-typescript": 97,
-      "runtime-adapter": 108,
+      "static-evidence": 190,
+      "runtime-adapter": 101,
+      "effect-program": 25,
+      "plain-typescript": 95,
       "frontend-generated": 67
     },
     "statuses": {
-      "accepted": 469,
-      "migrated": 34
+      "accepted": 453,
+      "migrated": 24,
+      "pending": 1
     }
   },
   "entries": [
-    {
-      "path": "agents/HUNT.md",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "documentation, configuration, or receipt"
-    },
-    {
-      "path": "agents/README.md",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "documentation, configuration, or receipt"
-    },
-    {
-      "path": "agents/src/audit-effect.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/audit-effect.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/docs-drift.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/github-hmac.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/github-hmac.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "agents/src/harness.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/hook.ts",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
-    },
-    {
-      "path": "agents/src/implementation-handler.ts",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
-    },
-    {
-      "path": "agents/src/implementation-hook.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/implementation-program.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/implementation-submission.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/implementation-submission.ts",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "WebCrypto signing primitive and pure grant/file validation; consumed by implementation-program.ts"
-    },
-    {
-      "path": "agents/src/implementation-worker.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/model-implementation-policy.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "no managed side effects detected"
-    },
-    {
-      "path": "agents/src/model-implementation-program.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/model-implementation.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/model-implementation.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/model-output.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/model-output.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/orchestrate.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/policy.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/policy.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "agents/src/ports.ts",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
-    },
-    {
-      "path": "agents/src/preview-check.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/preview-check.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "agents/src/public-text.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/public-text.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "agents/src/review-effect.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/review.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/review.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "no managed side effects detected"
-    },
-    {
-      "path": "agents/src/sweep-effect.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/sweep.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/sweep.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "agents/src/terrarium-port.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/triage-effect.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/triage-effect.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
-    {
-      "path": "agents/src/worker-comment.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "agents/src/worker.ts",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
-    },
-    {
-      "path": "agents/src/workflow-entry.ts",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
-    },
-    {
-      "path": "agents/src/workflows.ts",
-      "classification": "effect-program",
-      "status": "migrated",
-      "reason": "Effect workflow"
-    },
     {
       "path": "proof/README.md",
       "classification": "static-evidence",
@@ -276,6 +25,12 @@
     },
     {
       "path": "proof/browser-e2e.mjs",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "shell or live-proof execution boundary"
+    },
+    {
+      "path": "proof/computer-sleep-wake.sh",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "shell or live-proof execution boundary"
@@ -293,25 +48,7 @@
       "reason": "shell or live-proof execution boundary"
     },
     {
-      "path": "proof/error-queue-drained.sh",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "shell or live-proof execution boundary"
-    },
-    {
-      "path": "proof/factory-canary.sh",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "shell or live-proof execution boundary"
-    },
-    {
-      "path": "proof/factory-implements.sh",
-      "classification": "runtime-adapter",
-      "status": "accepted",
-      "reason": "shell or live-proof execution boundary"
-    },
-    {
-      "path": "proof/factory-no-loop.sh",
+      "path": "proof/factory-sandbox-fanout.sh",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "shell or live-proof execution boundary"
@@ -503,6 +240,12 @@
       "reason": "CLI or operational execution boundary"
     },
     {
+      "path": "scripts/dev-e2e.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "scripts/effect-backend-inventory.mjs",
       "classification": "plain-typescript",
       "status": "accepted",
@@ -591,6 +334,12 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "CLI or operational execution boundary"
+    },
+    {
+      "path": "scripts/seed-e2e.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "scripts/setup.sh",
@@ -945,6 +694,18 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/computer-id.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/computer-id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/computer-owner.ts",
@@ -1313,6 +1074,12 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/inject-onstart.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/job-service.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1335,6 +1102,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/jobs-prompt.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/jobs.ts",
@@ -1463,6 +1236,30 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/named-computer-restore.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/named-computer-wiring.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/named-computer.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/notification-session.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/notify.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1563,6 +1360,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/publication-authority.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/push-decision-actions.test.ts",
@@ -1745,6 +1548,18 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/routes/computers.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/routes/computers.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
       "path": "src/routes/connectors.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1845,6 +1660,12 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/routes/sessions.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/routes/sessions.ts",
@@ -2141,12 +1962,6 @@
       "reason": "no managed side effects detected"
     },
     {
-      "path": "src/ui/.pi/fresh-session-handoff/state.json",
-      "classification": "frontend-generated",
-      "status": "accepted",
-      "reason": "frontend or generated"
-    },
-    {
       "path": "src/ui/SvelteEmbed.tsx",
       "classification": "frontend-generated",
       "status": "accepted",
@@ -2178,6 +1993,18 @@
     },
     {
       "path": "src/ui/artifact-tools.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/assistant-visible.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/assistant-visible.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2259,6 +2086,12 @@
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/chat-outbound-whitespace.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/ui/chat-user-whitespace.test.ts",
@@ -2397,6 +2230,12 @@
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/named-computer-widget.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/ui/notification-stream.test.ts",
@@ -2741,6 +2580,12 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/unicode-text.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/uploads.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2931,6 +2776,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/work-sandbox-only.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/work-tools-recipes.test.ts",

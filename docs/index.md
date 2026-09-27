@@ -14,4 +14,4 @@
 - [Security Policy](../SECURITY.md) — reporting and deployment-owner responsibilities.
 - [Contributing](../CONTRIBUTING.md) — local checks, issue-then-PR flow, and repository invariants.
 - [Factory](./factory.md) — a recurring job that opens one conversation per issue. Not a Settings tab.
-- [Lifecycle agents](../agents/README.md) — sidecar GitHub workflows (webhook). Scheduled sweep cron is off; use the Factory job instead. Hunt ticks: [HUNT.md](../agents/HUNT.md).
+- [Factory](./factory.md) — recurring My AX job that works the issue queue. Hunt ticks: [hunt.md](./hunt.md).
