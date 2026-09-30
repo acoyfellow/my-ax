@@ -36,7 +36,7 @@ describe("model catalog", () => {
 
   it("shows gateway rows only when the installation has gateway config", () => {
     assert.deepEqual(availableModels(minimalEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3"]);
-    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
+    assert.deepEqual(availableModels(gatewayEnv).map((m) => m.id), ["@cf/moonshotai/kimi-k3", "@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.3", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
     assert.deepEqual(availableModels(serviceGatewayEnv).map((m) => m.id), availableModels(gatewayEnv).map((m) => m.id));
   });
 
