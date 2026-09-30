@@ -1,0 +1,21 @@
+package-lock.json
+  s_bddf4eb8848d16::t_47244adf72f408 49,719-721,754-756,771-773,788-790,805-807,822-824,839-841,7556-7558,7563-7565,7569-7571,7576-8168,10229-10231,10474-10476,10487-10491,10519-10521,10526,10529,10532,10546
+package.json
+  s_bddf4eb8848d16::t_633b9e9411b788 194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b322b137c78e5a1337d12459789f0ba456145ebb",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
