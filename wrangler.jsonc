@@ -345,5 +345,11 @@
         }
       ]
     }
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true },
+    "traces": { "enabled": true },
+    "issues": { "enabled": true }
   }
 }

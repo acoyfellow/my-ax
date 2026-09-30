@@ -1,4 +1,5 @@
 import { Think } from "@cloudflare/think";
+import { applyIssueContext } from "./issue-context";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
@@ -1128,6 +1129,11 @@ export class MyAgent extends Think<Env> {
   }
 
   async beforeTurn(ctx: { body?: Record<string, unknown>; messages: ModelMessage[]; system?: string }) {
+    applyIssueContext({
+      userId: this.identity()?.email,
+      sessionId: this.name,
+      model: this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env),
+    });
     try {
       return await this.prepareTurn(ctx);
     } catch (error) {

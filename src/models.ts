@@ -5,7 +5,7 @@
 
 import type { Env } from "./types";
 
-export type ModelRoute = "workers-ai" | "gateway-openai" | "gateway-anthropic";
+export type ModelRoute = "workers-ai" | "gateway-openai" | "gateway-anthropic" | "gateway-workers-ai";
 
 export interface ModelEntry {
   id: string;
@@ -44,6 +44,16 @@ export const MODELS: ModelEntry[] = [
     tools: true,
     vision: true,
     label: "fable",
+  },
+  {
+    id: "@cf/moonshotai/kimi-k3",
+    route: "gateway-workers-ai",
+    owned_by: "moonshotai",
+    context: 262_144,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "Kimi K3",
   },
   {
     id: "@cf/moonshotai/kimi-k2.7-code",

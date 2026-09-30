@@ -48,10 +48,20 @@ function anthropicGatewayURL(baseURL: string): string {
   return /\/openai\/?$/.test(baseURL) ? baseURL.replace(/\/openai\/?$/, "/anthropic") : baseURL;
 }
 
+function workersAiGatewayURL(baseURL: string): string {
+  return /\/openai\/?$/.test(baseURL) ? baseURL.replace(/\/openai\/?$/, "/workers-ai/v1") : `${baseURL.replace(/\/$/, "")}/workers-ai/v1`;
+}
+
+function gatewayRouteURL(baseURL: string, route: ModelEntry["route"]): string {
+  if (route === "gateway-anthropic") return anthropicGatewayURL(baseURL);
+  if (route === "gateway-workers-ai") return workersAiGatewayURL(baseURL);
+  return baseURL;
+}
+
 export function modelGatewayConfig(env: Env, meta: ModelEntry) {
   if (meta.gateway !== "special") {
     const config = gatewayConfig(env);
-    return { ...config, baseURL: meta.route === "gateway-anthropic" ? anthropicGatewayURL(config.baseURL) : config.baseURL };
+    return { ...config, baseURL: gatewayRouteURL(config.baseURL, meta.route) };
   }
   const origin = env.LLM_SPECIAL_GATEWAY_URL?.trim();
   const token = env.LLM_SPECIAL_GATEWAY_TOKEN?.trim();
@@ -95,6 +105,14 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       // the turn. See src/gateway-retry-fetch.ts (#6).
       fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
     })(meta.upstreamId ?? modelId);
+  } else if (meta.route === "gateway-workers-ai") {
+    const gateway = modelGatewayConfig(env, meta);
+    model = createOpenAI({
+      baseURL: gateway.baseURL,
+      apiKey: "",
+      headers: gateway.headers,
+      fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
+    }).chat(meta.upstreamId ?? modelId);
   } else {
     const gateway = modelGatewayConfig(env, meta);
     // The curated OpenAI/custom gateway models use the Responses protocol.
