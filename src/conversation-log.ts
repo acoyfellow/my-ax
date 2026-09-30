@@ -48,7 +48,7 @@ export async function appendConversationLog(
   let inserted = false;
 
   try {
-    const metaJson = entry.meta ? JSON.stringify(entry.meta).slice(0, 4096) : null;
+    const metaJson = entry.meta ? JSON.stringify(entry.meta) : null;
     const uiMessageId = typeof entry.meta?.uiMessageId === "string" ? entry.meta.uiMessageId : null;
     const toolCallId = typeof entry.meta?.toolCallId === "string" ? entry.meta.toolCallId : null;
     if (uiMessageId) {
