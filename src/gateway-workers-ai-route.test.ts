@@ -26,3 +26,15 @@ test("gateway Workers AI models are hidden when no gateway is configured", () =>
   assert.equal(ids.includes("@cf/moonshotai/kimi-k3"), false);
   assert.equal(ids.includes("@cf/zai-org/glm-5.3"), true);
 });
+
+test("a blank bearer header is removed before the gateway call", async () => {
+  const { withoutBlankAuthorization } = await import("./llm");
+  const seen: Array<string | null> = [];
+  const fetcher = withoutBlankAuthorization((async (_input: RequestInfo | URL, init?: RequestInit) => {
+    seen.push(new Headers(init?.headers).get("authorization"));
+    return new Response("{}");
+  }) as typeof fetch);
+  await fetcher("https://gateway.example.com", { headers: { authorization: "Bearer ", "cf-access-token": "t" } });
+  await fetcher("https://gateway.example.com", { headers: { authorization: "Bearer real" } });
+  assert.deepEqual(seen, [null, "Bearer real"]);
+});
