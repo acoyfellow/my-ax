@@ -58,6 +58,14 @@ function gatewayRouteURL(baseURL: string, route: ModelEntry["route"]): string {
   return baseURL;
 }
 
+export function withoutBlankAuthorization(fetcher: typeof fetch): typeof fetch {
+  return (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (/^Bearer\s*$/i.test(headers.get("authorization") ?? "")) headers.delete("authorization");
+    return fetcher(input, { ...init, headers });
+  };
+}
+
 export function modelGatewayConfig(env: Env, meta: ModelEntry) {
   if (meta.gateway !== "special") {
     const config = gatewayConfig(env);
@@ -111,7 +119,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       baseURL: gateway.baseURL,
       apiKey: "",
       headers: gateway.headers,
-      fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
+      fetch: withoutBlankAuthorization(createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) })),
     }).chat(meta.upstreamId ?? modelId);
   } else {
     const gateway = modelGatewayConfig(env, meta);
