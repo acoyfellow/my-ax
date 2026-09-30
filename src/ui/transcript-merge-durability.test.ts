@@ -24,7 +24,7 @@ test("a stored reply with long reasoning restores under its live message id", ()
 test("the restored copy and the live copy of one reply merge into one message", () => {
   const meta = JSON.stringify({ uiMessageId: "reply-1", reasoning: LONG_REASONING });
   const restored = restoredIds([storedRow(1, "reply-1", "This is a meaty one.", meta)]);
-  const live = [{ id: "reply-1", role: "assistant", content: "This is a meaty one.", timestamp: Date.parse("2026-09-30T08:01:00.000Z"), sessionId: "session-1" }];
+  const live = [{ id: "reply-1", role: "assistant", content: "This is a meaty one.", timestamp: Date.parse("2026-09-30T08:01:00.000Z"), sessionId: "session-1", parts: restored[0]?.parts ?? [], streaming: false, pending: false }];
   const merged = mergeTranscript(restored, live);
   assert.equal(merged.length, 1);
   assert.equal(merged[0]?.id, "reply-1");
