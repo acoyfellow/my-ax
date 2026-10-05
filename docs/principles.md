@@ -30,7 +30,7 @@ The default posture is to fan work out, not to block on one long step.
 
 - `delegate_many` fans out to independent read-only analysis children.
 
-Honest limit: `delegate_many` runs its children serially today, not concurrently. Two concurrent children hit the shared Workers AI per-minute inference cap (error 3021) and both failed. The policy now runs children one at a time, and marks any not-yet-started child "deferred" rather than failing it. See `src/delegate-serial.ts`.
+Parallel first: `delegate_many` runs independent children at the same time. Sequential work is the exception, used only when a task needs an earlier result. A shared Workers AI per-minute cap (error 3021) is backpressure: the scheduler halves its window, backs off, and retries. It marks a child "deferred" only when retries or the batch deadline run out. See `src/delegate-serial.ts`.
 
 So the theory is parallel-first, and the practice is parallel where the shared inference limit allows it. When the limit changes, the practice widens. The rule stays the same: prefer independent, resumable work over one blocking chain.
 

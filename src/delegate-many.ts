@@ -8,7 +8,7 @@ import {
   stripOpenAiStoredItemRefs,
   delegateResultSchema,
   delegateRunId,
-  runDelegatesSerially,
+  runDelegatesInParallel,
   shouldRetryDelegate,
   taskFingerprint,
   type DelegateResult,
@@ -18,15 +18,12 @@ import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
 import { ReadOnlyDelegateWorkspace, requireDelegateIdentity, splitDelegateRunInput } from "./read-only-delegate-workspace";
 
-// Pure retry/backpressure policy + serial orchestration live in delegate-serial.ts
-// (no @cloudflare/think import) so they are unit-testable. Re-export the pieces
-// other modules/tests already import from here.
 export {
   DELEGATE_MANY_LIMIT,
   delegateResultSchema,
   delegateRunId,
   isRateLimitFailure,
-  runDelegatesSerially,
+  runDelegatesInParallel,
   shouldRetryDelegate,
   shouldRetryDelegateAttempt,
   taskFingerprint,
@@ -36,6 +33,7 @@ export {
 
 export const DELEGATE_TTL_MS = 60 * 60 * 1000;
 export const DELEGATE_TIMEOUT_MS = 120_000;
+export const DELEGATE_BATCH_DEADLINE_MS = 10 * 60_000;
 
 export const delegateTaskSchema = z.object({
   label: z.string().trim().min(1).max(80).optional(),
@@ -109,17 +107,15 @@ export interface DelegateParent {
 
 export function createDelegateManyTool(parent: DelegateParent) {
   return tool({
-    // Runs the tasks SERIALLY (not concurrently): two child inferences hitting
-    // the shared per-minute cap at once was the observed 3021 double-failure.
-    // On 3021 the remaining task is deferred (backpressure), not retried.
-    description: "Delegate one or two independent read-only analysis tasks (run sequentially to respect shared inference limits). The parent must synthesize the retained child evidence.",
+    description: "Delegate independent read-only analysis tasks. Split the work into as many independent tasks as it has (up to 1000) and send them in ONE call; they run in parallel. Only do work sequentially when a later task needs an earlier result. Rate limits are handled by adaptive backoff, not by asking for fewer tasks. The parent must synthesize the retained child evidence.",
     inputSchema: delegateManyInputSchema,
     outputSchema: delegateManyOutputSchema,
     execute: async (input, context) => {
       const parsed = delegateManyInputSchema.parse(input);
       const identity = requireDelegateIdentity(parent.delegateIdentity());
       const runIds = parsed.tasks.map(({ task }, index) => delegateRunId(parent.name, context.toolCallId, task, index));
-      const results = await runDelegatesSerially(parsed.tasks, async (index) => {
+      const deadlineAt = Date.now() + DELEGATE_BATCH_DEADLINE_MS;
+      const results = await runDelegatesInParallel(parsed.tasks, async (index) => {
         const { task } = parsed.tasks[index];
         const timeout = AbortSignal.timeout(DELEGATE_TIMEOUT_MS);
         const signal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeout]) : timeout;
@@ -134,7 +130,7 @@ export function createDelegateManyTool(parent: DelegateParent) {
           error: result.error,
           failure: asAgentToolFailure(result),
         };
-      });
+      }, { deadline: () => Date.now() > deadlineAt });
       await parent.notifyDelegateManyComplete?.(results);
       await parent.clearAgentToolRuns({ olderThan: Date.now() - DELEGATE_TTL_MS, status: ["completed", "error", "aborted", "interrupted"] });
       return { results, synthesisRequired: true as const };

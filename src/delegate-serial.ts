@@ -1,31 +1,11 @@
-// Pure serial orchestration + retry/backpressure policy for delegate-many.
-//
-// Kept in its OWN module (no @cloudflare/think import) so it is unit-testable
-// under plain tsx without pulling the `cloudflare:` runtime scheme. delegate-
-// many.ts composes this with the real Think parent.
-//
-// Root cause this addresses (grounded in captured production metadata): the
-// delegate default model @cf/moonshotai/kimi-k2.7-code is route "workers-ai",
-// used via createWorkersAI({ binding }) which exposes NO custom fetch, so the
-// existing createRetryFetch wrapper cannot see its 3021s; and delegate-many
-// fired up to 2 children CONCURRENTLY (Promise.all). Two children hit the
-// shared per-minute inference cap at once and both failed with
-// "3021: rate limiting: inference request per min rate reached" (surfaced as a
-// thrown SDK error => status "error", NOT an HTTP 429 / interruption).
-//
-// Policy (per owner): 3021 is SHARED BACKPRESSURE.
-//   - Run tasks SERIALLY, never concurrently.
-//   - On 3021: do NOT retry in-call (an immediate retry against a per-minute
-//     cap only amplifies pressure) and do NOT launch the remaining tasks; mark
-//     them truthfully "deferred" for a later owner/turn to re-run after the cap
-//     recovers.
-//   - A stopped, non-running interruption keeps its single existing retry.
-
 import { z } from "zod";
 import type { AgentToolFailure } from "agents/agent-tools";
 import { isTransientRateLimit } from "./upstream-rate-limit";
 
-export const DELEGATE_MANY_LIMIT = 2;
+export const DELEGATE_MANY_LIMIT = 1000;
+export const DELEGATE_INITIAL_CONCURRENCY = 32;
+export const DELEGATE_MIN_CONCURRENCY = 1;
+export const DELEGATE_RATE_LIMIT_RETRIES = 4;
 
 const OPENAI_STORED_ITEM_ID = /^rs_[A-Za-z0-9]+$/;
 
@@ -70,7 +50,7 @@ export const delegateResultSchema = z.object({
   summary: z.string().optional(),
   output: z.unknown().optional(),
   error: z.string().optional(),
-  attempts: z.number().int().min(0).max(2),
+  attempts: z.number().int().min(0).max(2 + DELEGATE_RATE_LIMIT_RETRIES),
 });
 export type DelegateResult = z.infer<typeof delegateResultSchema>;
 
@@ -129,51 +109,95 @@ export type DelegateTaskOutcome = {
   failure?: AgentToolFailure;
 };
 
-/**
- * Run delegate tasks ONE AT A TIME (never concurrently). On a 3021, retain the
- * truthful failed result, stop launching the rest, and return them as
- * "deferred". `runTask(index)` performs one launch+attempt; injected so tests
- * need no real inference. No timers, no response-body inspection.
- */
-export async function runDelegatesSerially(
+export type ParallelDelegateOptions = {
+  initialConcurrency?: number;
+  rateLimitRetries?: number;
+  backoff?: (attempt: number) => Promise<void>;
+  deadline?: () => boolean;
+};
+
+type AdmissionState = { limit: number; active: number; waiters: Array<() => void> };
+
+function admit(state: AdmissionState): Promise<void> {
+  if (state.active < state.limit) { state.active++; return Promise.resolve(); }
+  return new Promise((resolve) => state.waiters.push(() => { state.active++; resolve(); }));
+}
+
+function release(state: AdmissionState): void {
+  state.active--;
+  while (state.active < state.limit && state.waiters.length) state.waiters.shift()!();
+}
+
+function narrow(state: AdmissionState): void {
+  state.limit = Math.max(DELEGATE_MIN_CONCURRENCY, Math.floor(state.limit / 2));
+}
+
+function widen(state: AdmissionState, ceiling: number): void {
+  if (state.limit < ceiling) state.limit++;
+  while (state.active < state.limit && state.waiters.length) state.waiters.shift()!();
+}
+
+function isRateLimitedOutcome(out: DelegateTaskOutcome): boolean {
+  return isRateLimitFailure(out.failure) || isTransientRateLimit(out.error);
+}
+
+const defaultBackoff = (attempt: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.min(8_000, 500 * 2 ** attempt) * (0.5 + Math.random())));
+
+function deferredResult(task: { label?: string; task: string }, index: number, attempts: number): DelegateResult {
+  return {
+    runId: delegateDeferredRunId(index),
+    taskFingerprint: taskFingerprint(task.task),
+    status: "deferred",
+    error: "Deferred: the shared inference rate limit (3021) did not recover before the delegation deadline. Re-run this task.",
+    attempts,
+    label: task.label,
+  };
+}
+
+export async function runDelegatesInParallel(
   tasks: { label?: string; task: string }[],
   runTask: (index: number) => Promise<DelegateTaskOutcome>,
+  options: ParallelDelegateOptions = {},
 ): Promise<DelegateResult[]> {
-  const results: DelegateResult[] = [];
-  let deferring = false;
-  for (let index = 0; index < tasks.length; index++) {
-    if (deferring) {
-      results.push({
-        runId: delegateDeferredRunId(index),
-        taskFingerprint: taskFingerprint(tasks[index].task),
-        status: "deferred",
-        error: "Deferred: a prior task hit the shared inference rate limit (3021). Re-run after it recovers.",
-        attempts: 0,
-        label: tasks[index].label,
-      });
-      continue;
-    }
+  const ceiling = Math.max(DELEGATE_MIN_CONCURRENCY, Math.min(options.initialConcurrency ?? DELEGATE_INITIAL_CONCURRENCY, tasks.length));
+  const rateLimitRetries = options.rateLimitRetries ?? DELEGATE_RATE_LIMIT_RETRIES;
+  const backoff = options.backoff ?? defaultBackoff;
+  const pastDeadline = options.deadline ?? (() => false);
+  const state: AdmissionState = { limit: ceiling, active: 0, waiters: [] };
+
+  const runOne = async (index: number): Promise<DelegateResult> => {
     let attempts = 0;
-    let out: DelegateTaskOutcome;
-    do {
-      attempts++;
-      out = await runTask(index);
-      if (!shouldRetryDelegateAttempt(out.failure, attempts)) break;
-    } while (true);
-    results.push({
-      runId: out.runId,
-      taskFingerprint: taskFingerprint(tasks[index].task),
-      status: out.status,
-      summary: out.summary,
-      output: out.output,
-      error: out.error,
-      attempts,
-      label: tasks[index].label,
-    });
-    // Backpressure: stop fan-out on 3021. The rate-limit signal can arrive on
-    // EITHER channel — a structured `failure` object OR just the `error` string
-    // (some runners surface the 3021 text without a failure), so check both.
-    if (isRateLimitFailure(out.failure) || isTransientRateLimit(out.error)) deferring = true;
-  }
-  return results;
+    let rateLimited = 0;
+    for (;;) {
+      if (pastDeadline()) return deferredResult(tasks[index], index, attempts);
+      await admit(state);
+      let out: DelegateTaskOutcome;
+      try {
+        attempts++;
+        out = await runTask(index);
+      } finally {
+        release(state);
+      }
+      if (isRateLimitedOutcome(out)) {
+        narrow(state);
+        if (rateLimited >= rateLimitRetries) return deferredResult(tasks[index], index, attempts);
+        await backoff(rateLimited++);
+        continue;
+      }
+      if (shouldRetryDelegateAttempt(out.failure, attempts)) continue;
+      widen(state, ceiling);
+      return {
+        runId: out.runId,
+        taskFingerprint: taskFingerprint(tasks[index].task),
+        status: out.status,
+        summary: out.summary,
+        output: out.output,
+        error: out.error,
+        attempts,
+        label: tasks[index].label,
+      };
+    }
+  };
+
+  return Promise.all(tasks.map((_, index) => runOne(index)));
 }
