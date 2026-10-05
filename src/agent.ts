@@ -3,6 +3,7 @@ import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
+import { TURN_STEP_BATCH, turnStoppedMidWork } from "./turn-continuation";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { Effect } from "effect";
 import { createCompactFunction } from "agents/experimental/memory/utils";
@@ -167,7 +168,7 @@ function attachmentParts(message: UIMessage): Attachment[] {
  * my-ax supplies its Cloud Computer workspace, connectors, memory mirror, and push channel.
  */
 export class MyAgent extends Think<Env> {
-  maxSteps = 25;
+  maxSteps = TURN_STEP_BATCH;
   maxConcurrentAgentTools = 2;
   sendReasoning = true;
   override chatRecovery = {
@@ -696,6 +697,11 @@ export class MyAgent extends Think<Env> {
   async onChatResponse(result: ChatResponseResult) {
     const identity = this.identity();
     if (!identity) return;
+    const stoppedMidWork = turnStoppedMidWork({
+      status: result.status,
+      stepFinishReasons: this.cycleStepUsage.map((step) => step.finishReason),
+      stepBatch: this.maxSteps,
+    });
     await this.recordCurrentCycleCost(result).catch((error) => console.error("cycle_cost_record_failed", { sessionId: this.name, err: String(error) }));
     await this.logAcceptedUsers();
     const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
@@ -780,6 +786,13 @@ export class MyAgent extends Think<Env> {
     } else {
       this.dirtyFsThisTurn = false;
     }
+    if (stoppedMidWork) {
+      await this.schedule(0, "continueTurnAfterStepBatch").catch((error) => console.error("turn_continuation_schedule_failed", { sessionId: this.name, err: String(error) }));
+    }
+  }
+
+  async continueTurnAfterStepBatch() {
+    await this.runTurn({ mode: "wait", continuation: true });
   }
 
   onConnect(connection: Parameters<Think<Env>["onConnect"]>[0], ctx: Parameters<Think<Env>["onConnect"]>[1]) {
