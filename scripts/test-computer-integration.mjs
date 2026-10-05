@@ -87,8 +87,9 @@ async function stopWorker(workerProcess, output) {
     workerProcess.kill("SIGKILL");
     await exited;
   }
-  if (workerProcess.exitCode !== 0 && workerProcess.signalCode !== "SIGTERM") {
-    throw new Error(`Wrangler stopped unexpectedly.\n${output()}`);
+  const stoppedBySigterm = workerProcess.signalCode === "SIGTERM" || workerProcess.exitCode === 143;
+  if (workerProcess.exitCode !== 0 && !stoppedBySigterm) {
+    throw new Error(`Wrangler stopped unexpectedly (exit ${workerProcess.exitCode}, signal ${workerProcess.signalCode}).\n${output()}`);
   }
 }
 
