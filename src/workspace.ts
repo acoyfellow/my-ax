@@ -1,4 +1,5 @@
 import { getSandbox, type DirectoryBackup, type Sandbox } from "@cloudflare/sandbox";
+import { workspaceInitCommand } from "./workspace-init";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
 import { Effect } from "effect";
@@ -70,7 +71,7 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
         throw new Error(`Workspace restore failed for backup ${snapshot.backupId}`);
       }
     }
-    const initialized = await sandbox.exec(`mkdir -p ${WORKSPACE_HOME}/.config ${WORKSPACE_HOME}/.my-ax/conversations && touch ${READY_MARKER}`, {
+    const initialized = await sandbox.exec(workspaceInitCommand(WORKSPACE_HOME, READY_MARKER), {
       cwd: "/",
       timeout: 30_000,
       origin: "internal",

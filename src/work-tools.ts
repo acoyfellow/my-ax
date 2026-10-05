@@ -75,8 +75,8 @@ function workspaceProvider(ctx: ToolContext) {
     },
     list: async (input: any) => ctx.listFiles(String(input?.path ?? ctx.workingDirectory), { recursive: Boolean(input?.recursive), includeHidden: Boolean(input?.includeHidden) }),
     search: async (input: any) => ctx.shellExec(`rg -n --glob '!.my-ax/conversations/**' --glob '!*.jsonl' -- ${JSON.stringify(String(input?.query ?? ""))} ${JSON.stringify(String(input?.path ?? ctx.workingDirectory))}`, { cwd: ctx.workingDirectory, timeout: Number(input?.timeoutMs ?? 30_000) }),
-    exec: async (input: any) => ctx.shellExec(String(input?.command ?? ""), { cwd: input?.cwd === undefined ? ctx.workingDirectory : String(input.cwd), cwdExplicit: input?.cwd !== undefined, timeout: Number(input?.timeoutMs ?? 30_000) }),
-    process_start: async (input: any) => ctx.processStart(String(input?.command ?? ""), { cwd: input?.cwd === undefined ? ctx.workingDirectory : String(input.cwd), cwdExplicit: input?.cwd !== undefined }),
+    exec: async (raw: any) => { const input = commandInput(raw); return ctx.shellExec(String(input?.command ?? ""), { cwd: input?.cwd === undefined ? ctx.workingDirectory : String(input.cwd), cwdExplicit: input?.cwd !== undefined, timeout: Number(input?.timeoutMs ?? 30_000) }) },
+    process_start: async (raw: any) => { const input = commandInput(raw); return ctx.processStart(String(input?.command ?? ""), { cwd: input?.cwd === undefined ? ctx.workingDirectory : String(input.cwd), cwdExplicit: input?.cwd !== undefined }); },
     process_status: async (input: any) => ctx.processStatus(String(input?.processId ?? "")),
     process_logs: async (input: any) => ctx.processLogs(String(input?.processId ?? "")),
     process_cancel: async (input: any) => ({ cancelled: await ctx.processCancel(String(input?.processId ?? ""), input?.signal === undefined ? undefined : String(input.signal)) }),
@@ -85,6 +85,11 @@ function workspaceProvider(ctx: ToolContext) {
     preview_list: async () => ctx.tunnelList(),
     preview_close: async (input: any) => { await ctx.tunnelDestroy(Number(input?.port)); return { closed: true, port: Number(input?.port) }; },
   };
+}
+
+export function commandInput(raw: unknown): { command?: unknown; cwd?: unknown; timeoutMs?: unknown } | undefined {
+  if (typeof raw === "string") return { command: raw };
+  return raw as { command?: unknown; cwd?: unknown; timeoutMs?: unknown } | undefined;
 }
 
 function checkedWorkspaceProvider(ctx: ToolContext) {
