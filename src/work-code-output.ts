@@ -282,3 +282,64 @@ export function capWorkCodeCollectionWithMetadata(values: readonly unknown[], ma
 export function capWorkCodeCollection(values: readonly unknown[], maxEntries: number, maxBytes: number): unknown[] {
   return capWorkCodeCollectionWithMetadata(values, maxEntries, maxBytes).values;
 }
+
+export const WORK_CODE_TIMEOUT_GRACE_MS = 5_000;
+
+export type WorkCodeExecutionOutcome = { result: unknown; error?: string; logs?: string[]; timedOut: boolean };
+
+export function isWorkCodeTimeoutError(error: unknown): boolean {
+  return typeof error === "string" && /timed out/i.test(error);
+}
+
+export async function raceWorkCodeExecution(
+  execution: Promise<{ result: unknown; error?: string; logs?: string[] }>,
+  timeoutMs: number,
+): Promise<WorkCodeExecutionOutcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<WorkCodeExecutionOutcome>((resolve) => {
+    timer = setTimeout(() => resolve({ result: undefined, error: `work_code timed out after ${timeoutMs}ms`, timedOut: true }), timeoutMs);
+  });
+  try {
+    const outcome = await Promise.race([
+      execution.then(
+        (value) => ({ ...value, timedOut: isWorkCodeTimeoutError(value.error) }),
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          return { result: undefined, error: message, timedOut: isWorkCodeTimeoutError(message) };
+        },
+      ),
+      timeout,
+    ]);
+    return outcome;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export class WorkCodeLogMirror {
+  #logs: string[] = [];
+
+  record = async (input: unknown) => {
+    if (this.#logs.length >= WORK_CODE_LOGS_MAX_ENTRIES) return;
+    this.#logs.push(typeof input === "string" ? input : String((input as { line?: unknown } | undefined)?.line ?? ""));
+  };
+
+  get logs(): readonly string[] {
+    return this.#logs;
+  }
+
+  static prelude(bridgeName: string, fnName: string): string {
+    const forward = (prefix: string) => `(...a)=>{try{${bridgeName}[${JSON.stringify(fnName)}]({line:${JSON.stringify(prefix)}+a.map(String).join(" ")}).catch(()=>{})}catch{}}`;
+    return [
+      `{const __l=console.log,__w=console.warn,__e=console.error;`,
+      `const __fl=${forward("")},__fw=${forward("[warn] ")},__fe=${forward("[error] ")};`,
+      `console.log=(...a)=>{__l(...a);__fl(...a)};`,
+      `console.warn=(...a)=>{__w(...a);__fw(...a)};`,
+      `console.error=(...a)=>{__e(...a);__fe(...a)};}`,
+    ].join("");
+  }
+}
+
+export function mergeWorkCodeLogs(sandboxLogs: readonly string[] | undefined, mirroredLogs: readonly string[]): readonly string[] {
+  return sandboxLogs && sandboxLogs.length ? sandboxLogs : mirroredLogs;
+}

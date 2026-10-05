@@ -2,7 +2,7 @@ import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
 import { resolveWorkCodeExecutionState } from "./computer-work-budget";
-import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, instrumentWorkCodeFunctions, WorkCodeCallCollector, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
+import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, instrumentWorkCodeFunctions, mergeWorkCodeLogs, raceWorkCodeExecution, WorkCodeLogMirror, WORK_CODE_TIMEOUT_GRACE_MS, WorkCodeCallCollector, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
 import { isSandboxMutationWorkCodeCall } from "./workspace-snapshot-classification";
 import type { ToolContext, ToolDef } from "./types";
 import { suggestRecipeName, suggestRecipeDescription, isPortable } from "./suggest-recipe-name";
@@ -252,6 +252,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     run: codemodeRuntime.bridgeFns["codemode__run"],
   }, calls, false);
 
+  const logMirror = new WorkCodeLogMirror();
   const bridgeFns = {
     ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
     ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
@@ -259,11 +260,13 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     codemode__search: instrumentedCodemodeBridge.search,
     codemode__describe: instrumentedCodemodeBridge.describe,
     codemode__run: instrumentedCodemodeBridge.run,
+    work_code_log: logMirror.record,
   };
   const namespace = (name: string, methods: string[]) =>
     `globalThis.${name}={${methods.map((method) => `${JSON.stringify(method)}:(args)=>bridge[${JSON.stringify(`${name}_${method}`)}](args)`).join(",")}};`;
   const pagePrelude = executionContext.callPage ? namespace("page", Object.keys(pageFns)) : "globalThis.page=undefined;";
   const prelude = [
+    WorkCodeLogMirror.prelude("bridge", "work_code_log"),
     namespace("workspace", Object.keys(workspaceFns)),
     sandboxOnly ? "globalThis.machine=undefined;" : namespace("machine", Object.keys(machineFns)),
     pagePrelude,
@@ -273,9 +276,12 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
   const submittedCode = code.trim().replace(/;+$/, "");
   const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
-  const execution = await executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]);
+  const execution = await raceWorkCodeExecution(
+    executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]),
+    CODE_MODE_EXECUTION_TIMEOUT_MS + WORK_CODE_TIMEOUT_GRACE_MS,
+  );
   const serializedCalls = capWorkCodeCollectionWithMetadata(calls.calls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
-  const serializedLogs = capWorkCodeCollection(execution.logs ?? [], WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES);
+  const serializedLogs = capWorkCodeCollection([...mergeWorkCodeLogs(execution.logs, logMirror.logs)], WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES);
   const serializedResult = capWorkCodeValue(execution.result, WORK_CODE_RESULT_MAX_BYTES);
   const serializedError = execution.error === undefined ? undefined : capWorkCodeValue(execution.error, 1024);
   const inferredCapabilities = calls.inferredCapabilities;
@@ -311,6 +317,7 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
     ok: !execution.error,
     result: serializedResult,
     ...(execution.error ? { error: serializedError } : {}),
+    ...(execution.timedOut ? { timedOut: true, partial: true } : {}),
     logs: serializedLogs,
     calls: serializedCalls.values,
     callsTruncated: calls.callsTruncated || serializedCalls.truncated,
