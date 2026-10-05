@@ -300,3 +300,25 @@ test("listSessions returns a real title from the shape /api/sessions actually se
   const rows = frame.result as Array<{ id: string; title: string | null }>;
   assert.equal(rows[0].title, "Desk work", "a desk app renders this; null becomes an em-dash");
 });
+
+test("listNotifications caps at 20, issues only one GET, and never mutates", async () => {
+  installGlobals({ fetchJson: () => ({ ok: true, result: { unread: 25, items: Array.from({ length: 25 }, (_, i) => ({ id: `n${i}` })) } }) });
+  const shimFetch = (globalThis as any).fetch;
+  const calls: Array<{ url: string; method: string }> = [];
+  (globalThis as any).fetch = async (url: string, init?: { method?: string }) => {
+    calls.push({ url, method: init?.method ?? "GET" });
+    return shimFetch(url, init);
+  };
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "cap", verb: "listNotifications", args: { limit: 500, sessionId: "11111111-1111-4111-8111-111111111111" } });
+  assert.equal(frame.ok, true);
+  const result = frame.result as { unread: number; items: unknown[] };
+  assert.equal(result.items.length, 20);
+  assert.equal(result.unread, 25);
+  assert.deepEqual(calls, [{ url: "/api/attention?sessionId=11111111-1111-4111-8111-111111111111", method: "GET" }]);
+});
+
+test("listNotifications fails instead of returning data when the attention read is rejected", async () => {
+  installGlobals({ fetchResponse: { status: 401 } });
+  const { frame } = await handlePageCall({ type: "page_call", requestId: "denied", verb: "listNotifications" });
+  assert.equal(frame.ok, false);
+});

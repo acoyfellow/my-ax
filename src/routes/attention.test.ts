@@ -390,3 +390,37 @@ test("dropping the /attention/* wildcard reproduces the pre-fix bypass (regressi
     console.error = originalError;
   }
 });
+
+test("GET /api/attention never returns another owner's notification and only reads", async () => {
+  const app = new Hono<AppEnv>();
+  app.use("*", async (c, next) => {
+    c.set("identity", { email: "Owner@Example.com", sub: "owner" });
+    await next();
+  });
+  registerAttentionRoutes(app);
+  const rows = [
+    { owner_email: "owner@example.com", id: "mine", session_id: null, kind: "job.complete", title: "Mine", body: "", href: "/", created_at: "2026-08-03 17:49:22", seen_at: null },
+    { owner_email: "intruder@example.com", id: "theirs", session_id: null, kind: "job.complete", title: "Theirs", body: "", href: "/", created_at: "2026-08-03 17:50:00", seen_at: null },
+  ];
+  const statements: string[] = [];
+  const DB = {
+    prepare(sql: string) {
+      statements.push(sql);
+      let values: unknown[] = [];
+      const owned = () => rows.filter((row) => row.owner_email === values[0]);
+      const statement = {
+        bind(...nextValues: unknown[]) { values = nextValues; return statement; },
+        async all() { return { results: /GROUP BY/.test(sql) ? [] : owned().map(({ owner_email, ...item }) => item) }; },
+        async first() { return { count: owned().length }; },
+      };
+      return statement;
+    },
+  };
+  const response = await app.fetch(new Request("http://my-ax.test/api/attention"), { DB } as any);
+  assert.equal(response.status, 200);
+  const result = (await response.json() as any).result;
+  assert.deepEqual(result.items.map((item: { id: string }) => item.id), ["mine"]);
+  assert.equal(result.unread, 1);
+  assert.ok(statements.every((sql) => /^\s*SELECT\b/.test(sql) && /owner_email = \?/.test(sql)));
+  assert.ok(statements.some((sql) => /LIMIT 20\b/.test(sql)));
+});
