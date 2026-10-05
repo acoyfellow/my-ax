@@ -49,14 +49,16 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
   const inFlight = preparing.get(id);
   if (inFlight) {
     await inFlight;
-    return { sandbox, home: WORKSPACE_HOME };
+    return { sandbox, home: WORKSPACE_HOME, recycled: false };
   }
+  let recycled = false;
   const promise = (async () => {
     // Restore only when acquiring a fresh container. Re-applying the latest
     // backup before every tool call resurrects files intentionally deleted by
     // an earlier tool in the same turn. A /tmp marker survives calls within a
     // live container but disappears naturally when Sandbox recycles it.
     const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
+    recycled = ready?.exitCode !== 0;
     const snapshot = options?.restoreLatest === false || ready?.exitCode === 0 ? null : await latestSnapshot(env, identity);
     if (snapshot) {
       try {
@@ -84,7 +86,7 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
   } finally {
     preparing.delete(id);
   }
-  return { sandbox, home: WORKSPACE_HOME };
+  return { sandbox, home: WORKSPACE_HOME, recycled };
 }
 
 export async function snapshotUserWorkspace(env: Env, identity: AccessIdentity, name = "auto") {

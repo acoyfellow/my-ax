@@ -3,6 +3,7 @@ import type { FileInfo } from "@cloudflare/shell";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import { getUserWorkspace } from "./workspace";
+import { globSearchRoot } from "./workspace-exec";
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
 
 /**
@@ -89,12 +90,9 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
   }
 
   async glob(pattern: string): Promise<FileInfo[]> {
-    // The Sandbox SDK has no glob primitive; enumerate the workstation and
-    // filter using shell's `find -path`, preserving normal filesystem glob
-    // behavior without creating a second storage backend.
     const rootPattern = this.path(pattern);
     const { stdout } = await (await this.sandbox()).exec(
-      `find ${JSON.stringify(WORKSPACE_HOME)} -path ${JSON.stringify(rootPattern)} -print | head -500`,
+      `find ${JSON.stringify(globSearchRoot(rootPattern, WORKSPACE_HOME))} -path ${JSON.stringify(rootPattern)} -print | head -500`,
       { cwd: WORKSPACE_HOME, timeout: 30_000 },
     );
     const matches = stdout.split("\n").map((value) => value.trim()).filter(Boolean);
