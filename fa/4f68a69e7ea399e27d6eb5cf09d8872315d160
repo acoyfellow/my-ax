@@ -1,0 +1,35 @@
+README.md
+  s_6784fb7afda1e6::t_01dfde66c944a4 55,67
+docs/principles.md
+  s_6784fb7afda1e6::t_8d3d2e132f0201 33
+src/delegate-many.ts
+  s_6784fb7afda1e6::t_8920f03ec0ff54 11,26,36,110,117-118,133
+src/delegate-serial.test.ts
+  s_6784fb7afda1e6::t_645ed50e329b6a 8-10,89-110,113-119,122-128,131-144,146,150-157,160-200,204-209
+src/delegate-serial.ts
+  s_7410e04aafe3da::t_94796057f3da10 5-8,53,112-157,160,162-190,192-196,198,200-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fa4f68a69e7ea399e27d6eb5cf09d8872315d160",
+  "prompts": {},
+  "sessions": {
+    "s_6784fb7afda1e6": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a10baa-6597-763e-b627-841914eb8e2c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_7410e04aafe3da": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a010c5-b200-71a3-933e-bf8a794b4e87",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
