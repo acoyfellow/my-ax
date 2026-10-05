@@ -1,4 +1,5 @@
 import { Think } from "@cloudflare/think";
+import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
@@ -1012,13 +1013,10 @@ export class MyAgent extends Think<Env> {
         const result = await sandbox.listFiles(path, opts);
         return result.files.map((file) => ({ path: file.absolutePath, name: file.name, type: file.type, size: file.size }));
       },
-      searchConversations: async (query, limit = 20) => {
-        // Extract word tokens and AND them as quoted terms so punctuation and
-        // FTS5 operators in code or debugging searches cannot invalidate syntax.
-        const tokens = (query.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []).slice(0, 24);
-        if (!tokens.length) return [];
-        const ftsQuery = tokens.map((token) => `"${token}"`).join(" ");
-        const result = await env.DB.prepare(`SELECT e.session_id AS sessionId, e.ts, e.role, snippet(conversation_entries_fts, 0, '<<', '>>', '…', 24) AS snippet FROM conversation_entries_fts JOIN conversation_entries e ON e.id = conversation_entries_fts.rowid WHERE conversation_entries_fts MATCH ? AND e.owner_email = ? ORDER BY bm25(conversation_entries_fts) LIMIT ?`).bind(ftsQuery, identity.email.toLowerCase(), Math.max(1, Math.min(limit, 100))).all<{ sessionId: string; ts: string; role: string; snippet: string }>();
+      searchConversations: async (query, options) => {
+        const built = buildConversationSearchQuery(query, identity.email, options);
+        if (!built) return [];
+        const result = await env.DB.prepare(built.sql).bind(...built.params).all<{ sessionId: string; ts: string; role: string; snippet: string }>();
         return result.results ?? [];
       },
       searchArtifacts: (query, limit = 10) => searchOwnedArtifacts(env, identity, query, limit),

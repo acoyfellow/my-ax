@@ -1,3 +1,4 @@
+import type { ConversationSearchOptions } from "./conversation-search";
 // my-ax — Core Type Definitions
 // Research/analysis agent running as a Cloudflare Durable Object
 // with shell access, tool use, and WebSocket streaming.
@@ -152,7 +153,7 @@ export interface ToolContext {
   readFile: (path: string, options?: { maxBytes?: number }) => Promise<string | null>;
   writeFile: (path: string, content: string) => Promise<void>;
   listFiles: (path: string, opts?: { recursive?: boolean; includeHidden?: boolean }) => Promise<Array<{ path: string; name?: string; type?: string; size?: number }>>;
-  searchConversations: (query: string, limit?: number) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
+  searchConversations: (query: string, options?: ConversationSearchOptions) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
   /** Search the owner-scoped artifact library by reusable intent/title. */
   searchArtifacts: (query: string, limit?: number) => Promise<Array<{ id: string; sessionId: string; kind: string; title: string; sourceHash: string; createdAt: string; updatedAt: string; score: number }>>;
   getArtifact: (id: string) => Promise<{ id: string; title: string; source: string; sourceHash: string; createdAt: string } | null>;

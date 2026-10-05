@@ -11,3 +11,19 @@ export function parseMachineShellContent(content: string): { stdout: string; exi
   if (!Number.isSafeInteger(exitCode)) return { stdout: content, exitCode: null, raw: content };
   return { stdout: content.slice(match[0].length), exitCode, raw: content };
 }
+
+export const LAPTOP_BUSY_RETRY_AFTER_MS = 2_000;
+
+export type LaptopBusyResult = { ok: false; busy: true; retryAfterMs: number; error: string };
+
+export function laptopBusyResult(retryAfterMs = LAPTOP_BUSY_RETRY_AFTER_MS): LaptopBusyResult {
+  return { ok: false, busy: true, retryAfterMs, error: "Laptop busy: too many in-flight calls." };
+}
+
+export function machineBusyOutcome(result: { busy?: unknown; retryAfterMs?: unknown }): { busy: true; retryAfterMs: number } | null {
+  if (result.busy !== true) return null;
+  const retryAfterMs = typeof result.retryAfterMs === "number" && Number.isFinite(result.retryAfterMs) && result.retryAfterMs >= 0
+    ? result.retryAfterMs
+    : LAPTOP_BUSY_RETRY_AFTER_MS;
+  return { busy: true, retryAfterMs };
+}

@@ -6,6 +6,7 @@
 // are forwarded over the existing socket, then receipt-logged to AUDIT_KV.
 
 import { DurableObject } from "cloudflare:workers";
+import { laptopBusyResult } from "./machinectl-output";
 
 interface PublishedTool {
   name: string;
@@ -255,7 +256,7 @@ export class MachineHost extends DurableObject<HostEnv> {
     if (!tools.some((candidate) => candidate.name === body.tool)) {
       return Response.json({ ok: false, error: `Tool not available on the connected laptop: ${body.tool}` });
     }
-    if (this.pending.size >= MAX_PENDING_CALLS) return Response.json({ ok: false, error: "Laptop busy: too many in-flight calls." });
+    if (this.pending.size >= MAX_PENDING_CALLS) return Response.json(laptopBusyResult());
     const result = await this.callLaptop(body.tool, body.args ?? {});
     const machineName = (await this.machineName()) ?? "unknown";
     const user = request.headers.get("X-Machinectl-User") ?? await this.machineUser();
@@ -281,7 +282,7 @@ export class MachineHost extends DurableObject<HostEnv> {
     if (!tool || !tools.some((candidate) => candidate.name === tool)) {
       return Response.json(rpc(body.id, text(`Tool not available on the connected laptop: ${tool ?? "(missing)"}`, true)));
     }
-    if (this.pending.size >= MAX_PENDING_CALLS) return Response.json(rpc(body.id, text("Laptop busy: too many in-flight calls.", true)));
+    if (this.pending.size >= MAX_PENDING_CALLS) return Response.json(rpc(body.id, { ...text(JSON.stringify(laptopBusyResult()), true), structuredContent: laptopBusyResult() }));
     const result = await this.callLaptop(tool, args);
     const machineName = (await this.machineName()) ?? "unknown";
     const user = request.headers.get("X-Machinectl-User") ?? await this.machineUser();

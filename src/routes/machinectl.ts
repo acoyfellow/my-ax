@@ -9,11 +9,11 @@ import type { ToolDef } from "../types";
 import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { storeInlineMediaArtifact } from "../uploads";
 import { getUserWorkspace } from "../workspace";
-import { parseMachineShellContent } from "../machinectl-output";
+import { machineBusyOutcome, parseMachineShellContent } from "../machinectl-output";
 import { isFocusTool, isVerifiedPromptTool, withVerifiedCmuxDelivery } from "../cmux-delivery-verification";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
-type MachineResult = { ok?: boolean; content?: string; error?: string };
+type MachineResult = { ok?: boolean; content?: string; error?: string; busy?: boolean; retryAfterMs?: number };
 type ObserveSessionBody = { runId?: string; session?: { harness?: string; id?: string; label?: string; state?: string }; note?: string };
 const MACHINE_STATUS_CACHE_MS = 5_000;
 const machineStatusCache = new Map<string, { at: number; status: { connected: boolean; machineName?: string; tools?: PublishedTool[] } }>();
@@ -159,6 +159,8 @@ export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute
   for (const published of catalog) {
     fns[published.name] = async (input) => {
       const result = await machineInvoke(published.name, (input && typeof input === "object" ? input : {}) as Record<string, unknown>, ctx);
+      const busy = machineBusyOutcome(result);
+      if (busy) return busy;
       if (!result.ok) throw new Error(result.error ?? `Laptop tool failed: ${published.name}`);
       if ((published.name === "screenshot" || published.name === "screen_record") && typeof result.content === "string") {
         const artifact = await storeInlineMediaArtifact(ctx.env, ctx.identity, result.content);

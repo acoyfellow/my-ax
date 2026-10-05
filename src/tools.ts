@@ -316,11 +316,19 @@ export const TOOLS: ToolDef[] = [
       properties: {
         query: { type: "string", description: "Full-text query" },
         limit: { type: "number", description: "Maximum results, default 20, max 100" },
+        sort: { type: "string", enum: ["relevance", "recent"], description: "Order by full-text relevance (default) or most recent first" },
+        since: { type: "string", description: "Optional ISO date/time lower bound (inclusive)" },
+        until: { type: "string", description: "Optional ISO date/time upper bound (inclusive)" },
       },
       required: ["query"],
     },
     execute: async (args, ctx) => {
-      const rows = await ctx.searchConversations(args.query as string, args.limit as number | undefined);
+      const rows = await ctx.searchConversations(args.query as string, {
+        limit: typeof args.limit === "number" ? args.limit : undefined,
+        sort: args.sort === "recent" ? "recent" : "relevance",
+        since: typeof args.since === "string" ? args.since : undefined,
+        until: typeof args.until === "string" ? args.until : undefined,
+      });
       if (!rows.length) return "No matching prior conversations found.";
       return rows.map((row) => `${row.ts}\t${row.sessionId}\t${row.role}\t${row.snippet}`).join("\n");
     },
