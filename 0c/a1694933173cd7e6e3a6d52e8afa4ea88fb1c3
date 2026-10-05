@@ -1,0 +1,25 @@
+proof/factory-sandbox-fanout.sh
+  s_99b55ecf7d26fa::t_46c11941cc7d8e 1-22
+src/work-tools-recipes.test.ts
+  s_99b55ecf7d26fa::t_b8f40ae2146d4d 32
+package.json
+  s_99b55ecf7d26fa::t_d6158eb3990a57 69
+proof/computer-sleep-wake.sh
+  s_99b55ecf7d26fa::t_2800c1fca7f1f1 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0ca1694933173cd7e6e3a6d52e8afa4ea88fb1c3",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

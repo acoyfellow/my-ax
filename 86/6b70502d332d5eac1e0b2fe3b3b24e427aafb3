@@ -1,0 +1,21 @@
+agents/src/orchestrate.ts
+  s_9ea43334029fe9::t_5783d2917aaf06 2,30,55,191-194
+agents/src/worker.ts
+  s_9ea43334029fe9::t_804d3595862e5c 4,125-128,130,141-150,154-155,158,160-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "866b70502d332d5eac1e0b2fe3b3b24e427aafb3",
+  "prompts": {},
+  "sessions": {
+    "s_9ea43334029fe9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00c04-39b0-7c41-8f8c-319dfb49fbd0",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+scripts/build-docs.mjs
+  s_3ebc4b0c49995a::t_962a4bb525893b 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e675787f3ec89a255998cb5408fe5fd193962faa",
+  "prompts": {},
+  "sessions": {
+    "s_3ebc4b0c49995a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f893f-9fc0-7b06-8130-9000d6cef630",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

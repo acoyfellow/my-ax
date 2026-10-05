@@ -1,0 +1,23 @@
+src/agent.ts
+  s_99b55ecf7d26fa::t_e16a9dc502728e 1112
+src/ui-history-urls.test.ts
+  s_99b55ecf7d26fa::t_1cbfc54583ee06 12-42
+src/ui-history-urls.ts
+  s_99b55ecf7d26fa::t_b2dcdad9c0ba61 12-22,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "26effaa3ae571d19faed444a4784da7a4869d190",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

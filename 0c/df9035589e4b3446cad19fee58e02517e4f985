@@ -1,0 +1,23 @@
+CHANGELOG.md
+  s_b08e9baae4ab1a::t_77b7143c80c1be 9
+LOOP.md
+  s_b08e9baae4ab1a::t_982cd10192b4d3 3-4,6-7
+docs/feature-tour.md
+  s_b08e9baae4ab1a::t_f66f53d995d6c2 7-10,58-59,61,103,121-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0cdf9035589e4b3446cad19fee58e02517e4f985",
+  "prompts": {},
+  "sessions": {
+    "s_b08e9baae4ab1a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f65ec-d524-76e8-9a59-c65e21107c73",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

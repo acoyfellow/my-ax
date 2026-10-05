@@ -1,0 +1,33 @@
+package.json
+  s_952b167abec97a::t_9ba627fdc6729c 89,139-141
+scripts/verify-preview-isolation.mjs
+  s_952b167abec97a::t_b4336725540a34 1-69
+src/preview-isolation.test.ts
+  s_952b167abec97a::t_d49ae11c7aa04d 1-70
+wrangler.jsonc
+  s_99b55ecf7d26fa::t_9fb6f04e7b9f62 204-255,266,318-319,324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4f6865c50993c56ecfe5802550745e847186b4d6",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

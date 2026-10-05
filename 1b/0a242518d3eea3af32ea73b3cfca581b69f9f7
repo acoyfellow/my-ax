@@ -1,0 +1,23 @@
+src/agent.ts
+  s_e050e2bde8a246::t_384924c2831bd0 71,153
+src/tools.ts
+  s_e050e2bde8a246::t_6ebb8eea17223d 5,33-59,62
+src/ui/tool-result-widgets.ts
+  s_e050e2bde8a246::t_8ea0fa84b95571 7-8,53,190-194,369-371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1b0a242518d3eea3af32ea73b3cfca581b69f9f7",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

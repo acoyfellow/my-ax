@@ -1,0 +1,33 @@
+CONTRIBUTING.md
+  s_bddf4eb8848d16::t_d4149e30e98961 49
+README.md
+  s_bddf4eb8848d16::t_2f0786986e81e7 182,184
+docs/effect-backend-inventory.json
+  s_bddf4eb8848d16::t_b55200d90a90ce 5,7-10,14-16,33,39,45,51,242-247,338-343,698-709,1076-1081,1106-1111,1238-1261,1364-1369,1550-1561,1664-1669,2000-2011,2090-2095,2234-2239,2582-2587,2780-2785
+docs/factory.md
+  s_bddf4eb8848d16::t_f2f6eacb77c953 5,77
+docs/feature-tour.md
+  s_bddf4eb8848d16::t_2831887b73a128 173
+docs/hunt.md
+  s_bddf4eb8848d16::t_05b7064f56446f 23-24
+docs/index.md
+  s_bddf4eb8848d16::t_c388765f981c0c 17
+package.json
+  s_bddf4eb8848d16::t_f27b67beac5206 20-21,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "09b71ffefb5988ae08dd339e64420e9cd8dfaf67",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

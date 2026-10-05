@@ -1,0 +1,21 @@
+src/dead-session-scan.test.ts
+  s_e050e2bde8a246::t_bcd33f7a1ed33d 1-145
+src/memory-block.test.ts
+  s_e050e2bde8a246::t_c788bfe1a4f192 1-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "206d2c68483605438fc52207f497de317c5bb203",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

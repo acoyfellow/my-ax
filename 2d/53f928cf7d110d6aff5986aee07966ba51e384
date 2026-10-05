@@ -1,0 +1,31 @@
+src/routes/sessions.ts
+  s_c8608720a9aca0::t_950d0aa239cf2d 7,326-348
+src/session-entries.test.ts
+  s_30b74bee55c4f8::t_026ec34d3e8a46 1-53
+src/session-entries.ts
+  s_30b74bee55c4f8::t_57b6d72fd85802 23-28,31,34-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2d53f928cf7d110d6aff5986aee07966ba51e384",
+  "prompts": {},
+  "sessions": {
+    "s_30b74bee55c4f8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f4177-850b-78dc-9754-6625f37a17af",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_c8608720a9aca0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f435b-44f1-750c-911d-62ea6492e54d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

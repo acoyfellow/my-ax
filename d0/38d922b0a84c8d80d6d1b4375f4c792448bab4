@@ -1,0 +1,19 @@
+migrations/0022_conversation_uimsgid_index.sql
+  s_c8608720a9aca0::t_7c2376d6965dd4 4,7-15,18-20,24-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d038d922b0a84c8d80d6d1b4375f4c792448bab4",
+  "prompts": {},
+  "sessions": {
+    "s_c8608720a9aca0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f435b-44f1-750c-911d-62ea6492e54d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

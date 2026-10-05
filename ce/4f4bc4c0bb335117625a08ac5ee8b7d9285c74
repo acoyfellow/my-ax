@@ -1,0 +1,48 @@
+agents/src/sweep.ts
+  s_99b55ecf7d26fa::t_b1d6debc46d1f3 4-5,8-9,21-22,28-32,47-72,101-126,135-182
+agents/src/implementation-submission.ts
+  s_99b55ecf7d26fa::t_9f89ff0a0c0dc2 1-80
+agents/src/workflows.ts
+  s_99b55ecf7d26fa::t_85b5b965ca7247 17
+agents/src/policy.ts
+  s_99b55ecf7d26fa::t_af731e434c9bb3 46,94,257,259
+agents/src/worker-comment.test.ts
+  s_99b55ecf7d26fa::t_074b27d2bf8b10 7-9
+agents/src/implementation-hook.test.ts
+  s_99b55ecf7d26fa::t_b9718b78207d4d 1-29
+agents/src/orchestrate.ts
+  s_99b55ecf7d26fa::t_3e88ea0ad114ad 2,29-30,32-34,36,46,60,63,68,100-113,115-131,133,197-209,211-227,230-232,237,249-252,279-280
+agents/src/harness.test.ts
+  s_99b55ecf7d26fa::t_95456163ca75a6 67-120
+agents/src/worker.ts
+  s_99b55ecf7d26fa::t_f36150f030834f 4-6,21,31,51-70,83,91,134-135,139,141,148-153,155,158,164-185,189,194,196,199
+agents/src/ports.ts
+  s_99b55ecf7d26fa::t_bc1e2c7d8acc11 5,71-94,101-130,147-178,238,251-264,266-291
+  s_99b55ecf7d26fa::t_fa50d83ce594d3 302,305-306
+agents/src/sweep.test.ts
+  s_99b55ecf7d26fa::t_01d4485f601f82 3,15,22,47,55-64,79-93,97-142
+agents/src/hook.ts
+  s_99b55ecf7d26fa::t_5599e39d114975 12,14-20,25
+agents/src/implementation-submission.test.ts
+  s_99b55ecf7d26fa::t_780371150ca01d 1-32
+agents/src/policy.test.ts
+  s_99b55ecf7d26fa::t_8854055b6ca93e 32,89-99,169,173,176,181-182,196,198,201,209,278
+agents/src/terrarium-port.test.ts
+  s_99b55ecf7d26fa::t_47098712ea16b6 1-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ce4f4bc4c0bb335117625a08ac5ee8b7d9285c74",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+agents/README.md
+  s_58fd295f2ea96b::t_5486fb01d22e06 15,20
+agents/src/docs-drift.test.ts
+  s_0a87e8fcc24611::t_12f3eedaa9232d 31
+agents/src/orchestrate.ts
+  s_0a87e8fcc24611::t_dfc8fdcc62be44 35
+agents/src/policy.test.ts
+  s_58fd295f2ea96b::t_d9c8ce27a78e3d 50-54,57
+agents/src/policy.ts
+  s_0a87e8fcc24611::t_05a25248a661a5 141-142,151
+agents/src/ports.ts
+  s_0a87e8fcc24611::t_e66de082f99193 139-141
+agents/src/sweep.test.ts
+  s_58fd295f2ea96b::t_60aa7d8b2d5b7a 18,24,44,49-50,68-74
+agents/src/sweep.ts
+  s_0a87e8fcc24611::t_9868bb37e3e61d 15,68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2dcf069fc5009de32bc99fc9635d1761b6edbeba",
+  "prompts": {},
+  "sessions": {
+    "s_0a87e8fcc24611": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a038fe-d370-7a9e-b05c-ce3bd6601a10",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_58fd295f2ea96b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e8e0e-e5c2-78a0-81ed-9f91469bc981",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

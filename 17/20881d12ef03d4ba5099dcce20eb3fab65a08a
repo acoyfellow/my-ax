@@ -1,0 +1,19 @@
+agents/wrangler.jsonc
+  s_3c15ef2f1d0c6a::t_aa136e3e9f2e69 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1720881d12ef03d4ba5099dcce20eb3fab65a08a",
+  "prompts": {},
+  "sessions": {
+    "s_3c15ef2f1d0c6a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00f07-c2ba-7e46-86bf-cc125baf8d93",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

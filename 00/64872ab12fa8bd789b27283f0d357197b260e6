@@ -1,0 +1,24 @@
+.no-added-comments-allow
+  s_99b55ecf7d26fa::t_5ddb8269fe0984 2
+proof/error-queue-drained.sh
+  s_99b55ecf7d26fa::t_9836bbc9b14cde 1-50
+agents/README.md
+  s_99b55ecf7d26fa::t_d86d994030c4f0 40
+  s_99b55ecf7d26fa::t_434453721ef076 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0064872ab12fa8bd789b27283f0d357197b260e6",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

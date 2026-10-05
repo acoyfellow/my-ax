@@ -1,0 +1,31 @@
+src/delegate-many.ts
+  s_952b167abec97a::t_3c94b4abf5dc33 8,68-73
+src/delegate-serial.test.ts
+  s_fbc698c57649da::t_bd946f77c46a99 12-13,39-54
+src/delegate-serial.ts
+  s_fbc698c57649da::t_3c0c3f9e96c049 30-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "89882a7f0cd6efb6156cd80bc014c5d7074d56e7",
+  "prompts": {},
+  "sessions": {
+    "s_952b167abec97a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd391-aa11-7719-9c9c-d9bc68c3f904",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_fbc698c57649da": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ebbde-e57b-7697-94e8-b45a3f83ebdc",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

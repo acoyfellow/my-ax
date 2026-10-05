@@ -1,0 +1,21 @@
+src/ui/session-generation.test.ts
+  s_99b55ecf7d26fa::t_89810174615d30 31,35-36
+src/ui/session-history.ts
+  s_99b55ecf7d26fa::t_4eb88040a62f73 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "480d1f5c8b25eecacbb1be5761d873941871121a",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

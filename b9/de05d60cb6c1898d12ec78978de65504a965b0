@@ -1,0 +1,73 @@
+agents/src/policy.test.ts
+  s_e987d30b51587b::t_672b7e4d889abf 3,17-26,242-246
+agents/src/worker.ts
+  s_2a77a1542d3982::t_f837117f38a845 5-6,145-151
+agents/src/workflows.ts
+  s_7410e04aafe3da::t_89bd1fe7c2c155 1,9,11-12,40-51,56-58,61,66-68,71
+docs/effect-backend-inventory.json
+  s_2a77a1542d3982::t_df491db5cf23a1 1-3038
+src/agent.ts
+  s_7410e04aafe3da::t_20f4d6d54056ed 5,24-25,52-53,55,1189,1275-1289,1313-1316
+src/owner-instructions.test.ts
+  s_2a77a1542d3982::t_1d90d7332a830a 3,7,9-10,15-18
+src/owner-instructions.ts
+  s_7410e04aafe3da::t_81929be4c3b3fe 2-5,34-37,39-40,42-45,48-64,67-75
+src/pantry-client.test.ts
+  s_7410e04aafe3da::t_898ce68b329000 3-8
+src/reusable-tool-approval-route.test.ts
+  s_e987d30b51587b::t_418eafa80f4a85 23-24
+src/reusable-tool-promotion.test.ts
+  s_0a87e8fcc24611::t_f8b8cd216e6b4d 57,104-106,118
+src/routes/instructions.ts
+  s_7410e04aafe3da::t_fe7accc0a38921 2,5,15,29,32,40
+src/routes/terminal.ts
+  s_7410e04aafe3da::t_4c48dbb0f78533 3,31,34
+src/terminal-protocol.test.ts
+  s_7410e04aafe3da::t_043c1ba698eb6c 90-92
+src/workspace-recycle.test.ts
+  s_0a87e8fcc24611::t_571f6d8bcd78db 3-6
+src/workspace-recycle.ts
+  s_7410e04aafe3da::t_5ee23f507032f4 1-9,12-22
+wrangler.jsonc
+  s_0a87e8fcc24611::t_1c6df7af231f57 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b9de05d60cb6c1898d12ec78978de65504a965b0",
+  "prompts": {},
+  "sessions": {
+    "s_0a87e8fcc24611": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a038fe-d370-7a9e-b05c-ce3bd6601a10",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_7410e04aafe3da": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a010c5-b200-71a3-933e-bf8a794b4e87",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_e987d30b51587b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00ffb-0c59-74f4-8153-ea729ca0edd6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

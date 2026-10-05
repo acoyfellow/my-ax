@@ -1,0 +1,21 @@
+agents/src/review.test.ts
+  s_99b55ecf7d26fa::t_73b181be869050 8-20,36,45,49,57,63,72,76
+src/error-report.ts
+  s_99b55ecf7d26fa::t_1aefc3c675d56c 83-84,90,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "68d5f1c7fc65fb9838f3690cdce19ec8a8faabbb",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

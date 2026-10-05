@@ -1,0 +1,57 @@
+.gitignore
+  s_e050e2bde8a246::t_3da4ff941f8df4 34,36-37
+README.md
+  s_e050e2bde8a246::t_b2aa0e9e446e70 156
+docs/architecture.md
+  s_e050e2bde8a246::t_4fc34e4a4b96f6 24,32,138
+docs/feature-matrix.md
+  s_e050e2bde8a246::t_db9751097f5c4c 16,27,33,43-44
+docs/patterns.md
+  s_e050e2bde8a246::t_84fdbea1ebe4a6 58-59,111-112
+package.json
+  s_e050e2bde8a246::t_493d6f9faec0b8 23-37,63-73,99,102-107,113,116
+proof/README.md
+  s_e050e2bde8a246::t_31948971964119 37
+src/index.tsx
+  s_e050e2bde8a246::t_89c452995a6b92 51
+src/ui/Attention.svelte
+  s_e050e2bde8a246::t_7a612e4b848cef 400-401
+src/ui/ComputerHealth.svelte
+  s_e050e2bde8a246::t_bbe31f4cd8fcdf 91,140
+src/ui/Sessions.svelte
+  s_e050e2bde8a246::t_35b713590a2bbe 774-775
+src/ui/Settings.svelte
+  s_e050e2bde8a246::t_85b8990ba964e8 926,936,944,986,1006,1023,1071,1099,1125,1153,1170,1184,1206,1221,1225,1229,1239,1248,1250,1287,1294,1296,1315,1387
+src/ui/check-in-shell-smoke.mjs
+  s_e050e2bde8a246::t_f97104280a8213 25,27-33
+src/ui/deploy-refresh-smoke.mjs
+  s_e050e2bde8a246::t_1d637d5ba79ad2 5
+src/ui/embed.ts
+  s_e050e2bde8a246::t_70ba9868887894 100,113
+src/ui/owner-routes-smoke.mjs
+  s_e050e2bde8a246::t_99b30f4c44a425 99,102-103
+src/ui/tool-result-widgets-smoke.mjs
+  s_e050e2bde8a246::t_afe5476a4f4dfe 17,180,198
+src/views/BetaPage.tsx
+  s_e050e2bde8a246::t_7236ae1b6b997c 6,8
+src/views/Layout.tsx
+  s_e050e2bde8a246::t_c0393321e5d496 22
+wrangler.jsonc
+  s_e050e2bde8a246::t_cb6893c8425716 118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2159e147addddd93cb29c133e99406176dca54a6",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

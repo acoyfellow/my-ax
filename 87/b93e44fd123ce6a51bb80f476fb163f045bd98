@@ -1,0 +1,19 @@
+docs/effect-backend-inventory.json
+  s_99b55ecf7d26fa::t_c62fbd23f05ad8 5,10,14-16,2744-2749,2758-2760
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "87b93e44fd123ce6a51bb80f476fb163f045bd98",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

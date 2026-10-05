@@ -1,0 +1,41 @@
+src/agent.ts
+  s_8d6441ab9a574f::t_fd6b9efc1505a9 55-56,59,1237
+src/code-mode-runtime.ts
+  s_8d6441ab9a574f::t_c19576b30cd1ea 3,63,148,265
+src/recipe-approval-policy.test.ts
+  s_c8608720a9aca0::t_79d00f6dc663d5 35-36
+src/reusable-tool-candidate.test.ts
+  s_8d6441ab9a574f::t_96dbe2425b4135 220
+src/routes/recipes.ts
+  s_8d6441ab9a574f::t_f2540782a39f50 88,93
+src/suggest-recipe-name.ts
+  s_c8608720a9aca0::t_6bd5e5157ced66 5,30,39
+src/types.ts
+  s_c8608720a9aca0::t_60979351f8a01d 82-84
+src/work-tools-recipes.test.ts
+  s_8d6441ab9a574f::t_1fce9da1001c58 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9b898a7d7b5291eb067df5988a2d8d77bdcf0779",
+  "prompts": {},
+  "sessions": {
+    "s_8d6441ab9a574f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019edfca-3671-72bb-aedb-1bbb477db17b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_c8608720a9aca0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f435b-44f1-750c-911d-62ea6492e54d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

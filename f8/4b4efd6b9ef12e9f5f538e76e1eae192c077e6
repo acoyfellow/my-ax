@@ -1,0 +1,21 @@
+agents/src/worker.ts
+  s_9ea43334029fe9::t_cc2fa26cd48d36 29
+agents/src/workflow-entry.ts
+  s_9ea43334029fe9::t_bafaaf624a3fae 1,6-7,9,13-14,16,20-21,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f84b4efd6b9ef12e9f5f538e76e1eae192c077e6",
+  "prompts": {},
+  "sessions": {
+    "s_9ea43334029fe9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a00c04-39b0-7c41-8f8c-319dfb49fbd0",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+docs/architecture.md
+  s_9995a31335769c::t_88355c4ace5d7a 42-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4905ee8504b9362767a005213585720a581112e3",
+  "prompts": {},
+  "sessions": {
+    "s_9995a31335769c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f808e-b553-703e-979d-90ff115871cd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

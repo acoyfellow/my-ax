@@ -1,0 +1,31 @@
+src/session-turn.test.ts
+  s_4f3d73861137de::t_47d36dd5650abc 3,27-31
+src/session-turn.ts
+  s_4f3d73861137de::t_4bf5929b455826 8-11
+src/ui/Chat.svelte
+  s_99b55ecf7d26fa::t_01670128d1ea7d 30,616,618-620,622-632,1225,1366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e076822832ac1c908882eb5bdda974f9ec9f4e9a",
+  "prompts": {},
+  "sessions": {
+    "s_4f3d73861137de": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019febf7-4b34-7b21-970a-5f277fcc20a8",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

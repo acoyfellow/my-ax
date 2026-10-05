@@ -1,0 +1,21 @@
+src/desk-board.test.ts
+  s_99b55ecf7d26fa::t_cc2008fa7bba34 34-40
+src/desk-board.ts
+  s_99b55ecf7d26fa::t_0289f3d5125597 113-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6fdc8d81619a955b51f6c733b4ec703846560346",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

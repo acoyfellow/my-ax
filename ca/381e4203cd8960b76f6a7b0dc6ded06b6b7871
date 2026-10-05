@@ -1,0 +1,21 @@
+src/ui/Chat.svelte
+  s_980221f942959f::t_1ab21ec491092e 540
+src/ui/voice-lifecycle-source.test.ts
+  s_980221f942959f::t_0ea54fd1908fa4 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ca381e4203cd8960b76f6a7b0dc6ded06b6b7871",
+  "prompts": {},
+  "sessions": {
+    "s_980221f942959f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a04dae-e52e-7b57-ad8e-7e48376654a8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

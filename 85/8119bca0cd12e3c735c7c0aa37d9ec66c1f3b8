@@ -1,0 +1,21 @@
+src/error-issue.test.ts
+  s_99b55ecf7d26fa::t_9129f4ead41852 20-21,71-110
+src/error-issue.ts
+  s_99b55ecf7d26fa::t_cb9e7482edabe3 30-42,102-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "858119bca0cd12e3c735c7c0aa37d9ec66c1f3b8",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

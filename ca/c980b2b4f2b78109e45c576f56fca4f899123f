@@ -1,0 +1,21 @@
+agents/README.md
+  s_99b55ecf7d26fa::t_fb52ecadfce256 14-15,18,20,22-36,43
+package.json
+  s_99b55ecf7d26fa::t_914bb7347a8b09 15,68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cac980b2b4f2b78109e45c576f56fca4f899123f",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

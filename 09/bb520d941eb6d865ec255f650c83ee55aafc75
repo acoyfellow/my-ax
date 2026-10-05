@@ -1,0 +1,23 @@
+src/delegate-many.test.ts
+  s_99b55ecf7d26fa::t_b2f2e9acd08f6f 4,33-39
+src/delegate-many.ts
+  s_99b55ecf7d26fa::t_72561e1119de2b 12,103,108-111
+src/delegate-serial.ts
+  s_99b55ecf7d26fa::t_740f57e098efb5 180-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "09bb520d941eb6d865ec255f650c83ee55aafc75",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+agents/src/preview-check.test.ts
+  s_99b55ecf7d26fa::t_ebe285da545222 1-115
+agents/src/review.test.ts
+  s_99b55ecf7d26fa::t_1023258e44e3a0 86,88-89,94-95
+package.json
+  s_99b55ecf7d26fa::t_5be0fc33a8a745 69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "812277b8b60ed5227fc557c01f04de05192d64a9",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

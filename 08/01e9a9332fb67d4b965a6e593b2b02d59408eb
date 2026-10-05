@@ -1,0 +1,35 @@
+proof/svelte/Chat.svelte
+  s_8d6441ab9a574f::t_aa146006482b4b 2193-2198,2201,2212
+proof/svelte/page-registry.test.ts
+  s_c8608720a9aca0::t_b2b975368f5e40 45,104-127
+proof/svelte/page-registry.ts
+  s_8d6441ab9a574f::t_8d8bd6fc3e2b4d 143-169
+src/oauth-store.ts
+  s_c8608720a9aca0::t_139e477c7ee1e2 147-162,466-467
+src/work-tools.ts
+  s_c8608720a9aca0::t_14f02c0c8bbd71 36-37,289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0801e9a9332fb67d4b965a6e593b2b02d59408eb",
+  "prompts": {},
+  "sessions": {
+    "s_8d6441ab9a574f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019edfca-3671-72bb-aedb-1bbb477db17b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_c8608720a9aca0": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f435b-44f1-750c-911d-62ea6492e54d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

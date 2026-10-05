@@ -1,0 +1,27 @@
+proof/svelte/ios-safe-area-frame.test.mjs
+  s_e050e2bde8a246::t_52cfadb54a5b65 48-52,244
+proof/svelte/page-registry.test.ts
+  s_e050e2bde8a246::t_074ce883d8fe25 11,14,19-24,26,31-36,56,61,93-122
+proof/svelte/page-registry.ts
+  s_e050e2bde8a246::t_709d57c9180319 110-145
+src/styles/app.css
+  s_e050e2bde8a246::t_cf7f101b944836 759
+src/work-tools.ts
+  s_e050e2bde8a246::t_f2d0e3064e53da 32,292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "723d9ef03b924f977faed95f3b810f703ec5375f",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

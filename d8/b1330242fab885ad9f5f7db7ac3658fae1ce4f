@@ -1,0 +1,23 @@
+src/desk-board.test.ts
+  s_99b55ecf7d26fa::t_a63609e4d679c2 34-39
+src/routes/desk.ts
+  s_99b55ecf7d26fa::t_0754cc9ffe7fbf 32-37,52-55
+src/ui/Desk.svelte
+  s_99b55ecf7d26fa::t_df3f4e7c626d8b 23-38,71-76,81,85,142-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d8b1330242fab885ad9f5f7db7ac3658fae1ce4f",
+  "prompts": {},
+  "sessions": {
+    "s_99b55ecf7d26fa": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a01133-f7dc-78e5-bff4-bbe27a662c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

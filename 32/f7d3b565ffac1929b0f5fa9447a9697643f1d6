@@ -1,0 +1,23 @@
+proof/svelte/page-connector-benchmark.mjs
+  s_58fd295f2ea96b::t_012132dc03dcdb 34
+proof/svelte/page-registry.test.ts
+  s_58fd295f2ea96b::t_f313931ce5c2dc 64,67
+scripts/verify-public-clean.mjs
+  s_58fd295f2ea96b::t_72b5dcff64bb26 47-49,55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "32f7d3b565ffac1929b0f5fa9447a9697643f1d6",
+  "prompts": {},
+  "sessions": {
+    "s_58fd295f2ea96b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e8e0e-e5c2-78a0-81ed-9f91469bc981",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+package.json
+  s_5ef55672c203f4::t_e57f0337cb6142 25,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e4eb5cd8c59e5d04f82cd00c9d31ef8eda6482be",
+  "prompts": {},
+  "sessions": {
+    "s_5ef55672c203f4": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fb25a-228d-7953-81fc-99672300b01b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

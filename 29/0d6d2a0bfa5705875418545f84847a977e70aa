@@ -1,0 +1,21 @@
+.guardrailignore
+  s_e050e2bde8a246::t_afdba04c416f7b 1
+src/tools.ts
+  s_e050e2bde8a246::t_4ddb6c40690586 13,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "290d6d2a0bfa5705875418545f84847a977e70aa",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+scripts/build-docs.mjs
+  s_2a77a1542d3982::t_361c56d767083e 8,17,19-25,30-35
+src/views/DocsPage.tsx
+  s_2a77a1542d3982::t_2ce76524399cf7 36,38-39,42,121,151-152,233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "53cca9698c57b4594dd3d8374bfea9fc6f1168ae",
+  "prompts": {},
+  "sessions": {
+    "s_2a77a1542d3982": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e4aeb-bfd3-7cb8-82c3-9b8c799f4c6e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

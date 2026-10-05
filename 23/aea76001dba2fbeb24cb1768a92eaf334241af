@@ -1,0 +1,19 @@
+proof/svelte/Chat.svelte
+  s_8d6441ab9a574f::t_09ad45a0d00f71 1483,1515-1518,1521,1647-1653,1658-1670
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "23aea76001dba2fbeb24cb1768a92eaf334241af",
+  "prompts": {},
+  "sessions": {
+    "s_8d6441ab9a574f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019edfca-3671-72bb-aedb-1bbb477db17b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+agents/src/harness.test.ts
+  s_e050e2bde8a246::t_fa6ea2bfed42f9 1-65
+agents/src/policy.test.ts
+  s_e050e2bde8a246::t_b44f698a035bbe 1-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "07e26052d90722ab9f947b3c01de05a54f482210",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}

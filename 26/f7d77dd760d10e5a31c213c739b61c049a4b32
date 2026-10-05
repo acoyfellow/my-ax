@@ -1,0 +1,29 @@
+src/agent.ts
+  s_5fe3591d60297c::t_64aaaa81ac312f 31,78,251-270,957-961
+src/workspace-mcp.ts
+  s_fbc698c57649da::t_8735cce0b940e0 2,59-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "26f7d77dd760d10e5a31c213c739b61c049a4b32",
+  "prompts": {},
+  "sessions": {
+    "s_5fe3591d60297c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019fd866-e69a-76ed-8232-4f273583c9fe",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_fbc698c57649da": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ebbde-e57b-7697-94e8-b45a3f83ebdc",
+        "model": "grok-4.6"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
