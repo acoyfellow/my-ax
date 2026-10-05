@@ -25,6 +25,7 @@
   import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
+  import { isTransientClientError } from "../transient-client-errors";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
   import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
   import { ArtifactToolRegistry } from "./artifact-tools";
@@ -459,7 +460,11 @@
     client.addEventListener("error", (error) => {
       if (!eventIsCurrent()) return;
       voiceError = error;
-      if (error && (voiceEnabled || voiceStarting)) pushError(`Voice mode: ${error}`);
+      if (error && (voiceEnabled || voiceStarting)) {
+        const message = `Voice mode: ${error}`;
+        if (isTransientClientError(message)) pushSystem(message);
+        else pushError(message);
+      }
     });
     client.addEventListener("metricschange", (metrics) => { if (eventIsCurrent() && metrics) console.info("[voice] pipeline metrics", metrics); });
     client.addEventListener("connectionchange", (connected) => {
