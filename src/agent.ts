@@ -4,6 +4,7 @@ import { applyIssueContext } from "./issue-context";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { TURN_STEP_BATCH, turnStoppedMidWork } from "./turn-continuation";
+import { TURN_SNAPSHOT_COOLDOWN_MS } from "./workspace-policy";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { Effect } from "effect";
 import { createCompactFunction } from "agents/experimental/memory/utils";
@@ -18,7 +19,7 @@ import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
 import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
-import { getUserWorkspace, snapshotUserWorkspace } from "./workspace";
+import { getUserWorkspace, snapshotWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
@@ -770,7 +771,7 @@ export class MyAgent extends Think<Env> {
     if (this.dirtyFsThisTurn) {
       this.dirtyFsThisTurn = false;
       try {
-        await snapshotUserWorkspace(this.env, identity, "turn");
+        await this.schedule(0, "snapshotWorkspaceAfterTurn");
       } catch (err) {
         // Non-fatal: the turn itself already succeeded. Surface the
         // failure mode in console.error so wrangler tail / Logpush can pick
@@ -788,6 +789,18 @@ export class MyAgent extends Think<Env> {
     }
     if (stoppedMidWork) {
       await this.schedule(0, "continueTurnAfterStepBatch").catch((error) => console.error("turn_continuation_schedule_failed", { sessionId: this.name, err: String(error) }));
+    }
+  }
+
+  async snapshotWorkspaceAfterTurn() {
+    const identity = this.identity();
+    if (!identity) return;
+    const outcome = await snapshotWorkspace(this.env, identity, "turn", { respectCooldown: true }).catch((error) => {
+      console.error("workspace_snapshot_after_turn_failed", { email: identity.email, sessionId: this.name, err: error instanceof Error ? error.message : String(error) });
+      return null;
+    });
+    if (outcome && !outcome.published && outcome.reason === "cooldown") {
+      await this.schedule(Math.ceil(TURN_SNAPSHOT_COOLDOWN_MS / 1000), "snapshotWorkspaceAfterTurn", undefined, { idempotent: true });
     }
   }
 
