@@ -26,10 +26,11 @@ export class JobService {
     await this.env.DB.prepare("INSERT INTO job_events (id, job_id, owner_email, action, ok, detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(crypto.randomUUID(), jobId, this.owner, action, ok ? 1 : 0, JSON.stringify(detail), this.now().toISOString()).run();
   }
-  async list(status?: JobRow["status"]) {
+  async list(status?: JobRow["status"], cap = 100) {
+    const limit = Math.max(1, Math.min(Math.trunc(cap) || 100, 1000));
     const rows = status
-      ? await this.env.DB.prepare(`SELECT ${COLS} FROM jobs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT 100`).bind(this.owner, status).all<JobRow>()
-      : await this.env.DB.prepare(`SELECT ${COLS} FROM jobs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT 100`).bind(this.owner).all<JobRow>();
+      ? await this.env.DB.prepare(`SELECT ${COLS} FROM jobs WHERE owner_email = ? AND status = ? ORDER BY updated_at DESC LIMIT ?`).bind(this.owner, status, limit).all<JobRow>()
+      : await this.env.DB.prepare(`SELECT ${COLS} FROM jobs WHERE owner_email = ? ORDER BY updated_at DESC LIMIT ?`).bind(this.owner, limit).all<JobRow>();
     return rows.results ?? [];
   }
   async history(id: string) {
