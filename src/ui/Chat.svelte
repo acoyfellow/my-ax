@@ -27,6 +27,7 @@
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { isTransientClientError } from "../transient-client-errors";
+  import { createPendingSendQueue, RECONNECTING_SEND_ERROR } from "./pending-send";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
   import { handlePageCall, setArtifactBridge, type PageCallFrame } from "./page-registry";
   import { ArtifactToolRegistry } from "./artifact-tools";
@@ -1405,6 +1406,7 @@
 
   function onOpen() {
     setConn("live");
+    flushPendingSends();
     restoreActiveTurn();
     void refreshRemoteTurn();
     sendVisibility();
@@ -1961,10 +1963,6 @@
     if (decision !== "send") return;
     e.preventDefault();
     if (wsState.status !== "idle" && wsState.status !== "done") return;
-    if (wsState.conn !== "live") {
-      pushError("Message not sent: reconnecting. Your draft is still in the composer — retry when the connection is live.");
-      return;
-    }
     formEl?.requestSubmit();
   }
   async function onInputPaste(e: ClipboardEvent) {
@@ -2056,15 +2054,34 @@
     return "u-" + Math.random().toString(36).slice(2, 10) + "-" + Date.now().toString(36);
   }
 
+  const pendingSends = createPendingSendQueue<string>({
+    schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    cancel: (handle) => window.clearTimeout(handle as number),
+  });
+
+  function queueSendUntilOpen(text: string) {
+    if (pendingSends.size() > 0) return;
+    pendingSends.enqueue(makeClientMsgId(), text, () => {
+      pushError(RECONNECTING_SEND_ERROR, { alreadyReported: true });
+    });
+  }
+
+  function flushPendingSends() {
+    pendingSends.flush((text) => {
+      if (composerText !== text) return;
+      queueMicrotask(() => formEl?.requestSubmit());
+    });
+  }
+
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (composerLocked) return;
-    if (ws && wsState.conn !== "live") {
-      pushError("Message not sent: reconnecting. Your draft is still in the composer — retry when the connection is live.");
-      return;
-    }
     const text = composerText;
     if (!text.trim() && pendingAttachments.length === 0) return;
+    if (ws && wsState.conn !== "live") {
+      queueSendUntilOpen(text);
+      return;
+    }
 
     if (!ws) {
       // First message: spin a session, stash payload, reload.

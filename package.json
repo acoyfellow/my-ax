@@ -80,7 +80,7 @@
     "test:deep-links": "tsx --test src/ui/deep-links.test.ts src/source-href.test.ts",
     "test:attention-state": "tsx --test src/ui/attention-state.test.ts",
     "test:session-generation": "tsx --test src/ui/session-generation.test.ts",
-    "test:reconnecting-socket": "tsx --test src/ui/reconnecting-socket.test.ts",
+    "test:reconnecting-socket": "tsx --test src/ui/reconnecting-socket.test.ts src/ui/pending-send.test.ts",
     "test:session-latch": "tsx --test src/ui/session-latch.test.ts",
     "test:voice-half-duplex": "tsx --test src/ui/voice-half-duplex.test.ts src/ui/voice-continue.test.ts",
     "test:voice-chime": "tsx --test src/ui/voice-chime.test.ts",
