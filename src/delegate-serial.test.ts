@@ -5,7 +5,9 @@ import {
   delegateResultSchema,
   delegateRunId,
   isRateLimitFailure,
-  runDelegatesSerially,
+  runDelegatesInParallel,
+  DELEGATE_MANY_LIMIT,
+  DELEGATE_INITIAL_CONCURRENCY,
   shouldRetryDelegate,
   shouldRetryDelegateAttempt,
   taskFingerprint,
@@ -29,7 +31,6 @@ function outcome(status: DelegateTaskOutcome["status"], over: Partial<DelegateTa
   const failure = status === "completed" ? undefined : failureFor(status as any, over.error);
   return { runId: over.runId ?? "r", status, summary: over.summary, output: over.output, error: over.error, failure };
 }
-// Records launch order so we can prove serial execution + no second launch after 3021.
 function launcher(script: (index: number, launchNo: number) => DelegateTaskOutcome) {
   const launches: number[] = [];
   const runTask = async (index: number) => { launches.push(index); return script(index, launches.length); };
@@ -85,78 +86,125 @@ test("a 3021 is backpressure: shouldRetryDelegateAttempt NEVER retries it in-cal
   assert.equal(shouldRetryDelegateAttempt(undefined, 1), false);
 });
 
-test("two clean tasks run SERIALLY, in order", async () => {
-  const { runTask, launches } = launcher(() => outcome("completed", { summary: "ok" }));
-  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
-  assert.deepEqual(launches, [0, 1], "one at a time, in order");
-  assert.equal(results.length, 2);
+const noWait = async () => {};
+
+function concurrencyProbe(script: (index: number, attempt: number) => DelegateTaskOutcome) {
+  let active = 0;
+  let peak = 0;
+  const attempts = new Map<number, number>();
+  const launches: number[] = [];
+  const runTask = async (index: number) => {
+    const attempt = (attempts.get(index) ?? 0) + 1;
+    attempts.set(index, attempt);
+    launches.push(index);
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setImmediate(resolve));
+    active--;
+    return script(index, attempt);
+  };
+  return { runTask, launches, peak: () => peak };
+}
+
+test("the batch limit is 1000 tasks", () => {
+  assert.equal(DELEGATE_MANY_LIMIT, 1000);
+});
+
+test("independent tasks start together instead of one after the other", async () => {
+  const probe = concurrencyProbe(() => outcome("completed", { summary: "ok" }));
+  const tasks = Array.from({ length: 16 }, (_, i) => ({ task: `t${i}` }));
+  const results = await runDelegatesInParallel(tasks, probe.runTask, { backoff: noWait });
+  assert.equal(probe.peak(), 16);
+  assert.equal(results.length, 16);
+  assert.ok(results.every((r) => r.status === "completed"));
+});
+
+test("results keep input order even when tasks finish out of order", async () => {
+  const runTask = async (index: number) => {
+    await new Promise((resolve) => setTimeout(resolve, (5 - index) * 2));
+    return outcome("completed", { runId: `r${index}`, summary: `s${index}` });
+  };
+  const results = await runDelegatesInParallel(Array.from({ length: 5 }, (_, i) => ({ task: `t${i}` })), runTask, { backoff: noWait });
+  assert.deepEqual(results.map((r) => r.runId), ["r0", "r1", "r2", "r3", "r4"]);
+});
+
+test("the concurrency window caps active children for a 1000-task batch", async () => {
+  const probe = concurrencyProbe(() => outcome("completed"));
+  const tasks = Array.from({ length: DELEGATE_MANY_LIMIT }, (_, i) => ({ task: `t${i}` }));
+  const results = await runDelegatesInParallel(tasks, probe.runTask, { backoff: noWait });
+  assert.equal(results.length, 1000);
+  assert.ok(probe.peak() <= DELEGATE_INITIAL_CONCURRENCY);
+  assert.equal(probe.peak(), DELEGATE_INITIAL_CONCURRENCY);
+});
+
+test("a 3021 backs off and re-admits the same task instead of deferring the batch", async () => {
+  let backoffs = 0;
+  const probe = concurrencyProbe((index, attempt) => (index === 0 && attempt === 1 ? outcome("error", { error: RATE_LIMIT_MSG }) : outcome("completed", { summary: "ok" })));
+  const results = await runDelegatesInParallel([{ task: "a" }, { task: "b" }], probe.runTask, { backoff: async () => { backoffs++; } });
+  assert.equal(backoffs, 1);
   assert.equal(results[0].status, "completed");
+  assert.equal(results[0].attempts, 2);
   assert.equal(results[1].status, "completed");
 });
 
-test("3021 on task 0: zero same-call retry AND the second delegate is NEVER launched", async () => {
-  let runsForZero = 0;
-  const { runTask, launches } = launcher((index) => {
-    if (index === 0) { runsForZero++; return outcome("error", { error: RATE_LIMIT_MSG }); }
-    return outcome("completed", { summary: "should never run" });
-  });
-  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
-  assert.equal(runsForZero, 1, "task 0 launched exactly once — no same-call 3021 retry");
-  assert.deepEqual(launches, [0], "task 1 was NEVER launched (fan-out stopped)");
-  assert.equal(results[0].status, "error", "truthful failed status retained for task 0");
-  assert.ok(results[0].error?.includes("3021"), "error text carried for UX/receipt");
-  assert.equal(results[0].attempts, 1);
-  assert.equal(results[1].status, "deferred", "task 1 marked deferred (backpressure), not failed");
-  assert.equal(results[1].attempts, 0, "deferred task was never attempted");
-  assert.ok(results[1].error?.toLowerCase().includes("defer"));
+test("3021 detected via the error channel alone still triggers backoff and retry", async () => {
+  let backoffs = 0;
+  const runTask = async (index: number) => (index === 0 && backoffs === 0
+    ? ({ runId: "r0", status: "error", error: RATE_LIMIT_MSG, failure: undefined } as DelegateTaskOutcome)
+    : outcome("completed"));
+  const results = await runDelegatesInParallel([{ task: "a" }, { task: "b" }], runTask, { backoff: async () => { backoffs++; } });
+  assert.equal(backoffs, 1);
+  assert.equal(results[0].status, "completed");
 });
 
-test("deferred + real results are schema-valid; deferred runId is a distinct non-evidence id", async () => {
-  const { runTask } = launcher((index) => index === 0 ? outcome("error", { error: RATE_LIMIT_MSG }) : outcome("completed"));
-  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
-  for (const r of results) delegateResultSchema.parse(r); // throws if the contract is violated
-  assert.match(results[1].runId, /^delegate:deferred:/, "deferred runId cannot masquerade as real evidence");
+test("rate-limit pressure narrows the window for retries", async () => {
+  const attempts = new Map<number, number>();
+  let active = 0;
+  let firstWavePeak = 0;
+  let retryPeak = 0;
+  const runTask = async (index: number) => {
+    const attempt = (attempts.get(index) ?? 0) + 1;
+    attempts.set(index, attempt);
+    active++;
+    if (attempt === 1) firstWavePeak = Math.max(firstWavePeak, active); else retryPeak = Math.max(retryPeak, active);
+    await new Promise((resolve) => setImmediate(resolve));
+    active--;
+    return attempt === 1 ? outcome("error", { error: RATE_LIMIT_MSG }) : outcome("completed");
+  };
+  const results = await runDelegatesInParallel(Array.from({ length: 8 }, (_, i) => ({ task: `t${i}` })), runTask, { backoff: noWait, initialConcurrency: 8 });
+  assert.ok(results.every((r) => r.status === "completed" && r.attempts === 2));
+  assert.equal(firstWavePeak, 8);
+  assert.ok(retryPeak < firstWavePeak, `retry peak ${retryPeak} should be below first wave ${firstWavePeak}`);
 });
 
-test("a stopped interruption on task 0 still retries once, then task 1 runs normally", async () => {
-  const { runTask, launches } = launcher((index, launchNo) => {
-    if (index === 0) return launchNo === 1 ? outcome("interrupted", { error: "deploy" }) : outcome("completed", { summary: "recovered" });
-    return outcome("completed", { summary: "ok" });
-  });
-  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
-  assert.deepEqual(launches, [0, 0, 1], "task 0 retried once; task 1 still runs after a non-rate-limit recovery");
+test("a task is deferred only after its rate-limit retries are exhausted", async () => {
+  const probe = concurrencyProbe(() => outcome("error", { error: RATE_LIMIT_MSG }));
+  const results = await runDelegatesInParallel([{ task: "only" }], probe.runTask, { backoff: noWait, rateLimitRetries: 2 });
+  assert.equal(results[0].status, "deferred");
+  assert.equal(results[0].attempts, 3);
+  assert.match(results[0].runId, /^delegate:deferred:/);
+  delegateResultSchema.parse(results[0]);
+});
+
+test("the deadline defers tasks that have not started", async () => {
+  const probe = concurrencyProbe(() => outcome("completed"));
+  const results = await runDelegatesInParallel([{ task: "a" }, { task: "b" }], probe.runTask, { backoff: noWait, deadline: () => true });
+  assert.deepEqual(probe.launches, []);
+  assert.ok(results.every((r) => r.status === "deferred" && r.attempts === 0));
+});
+
+test("a stopped interruption still retries once", async () => {
+  const probe = concurrencyProbe((index, attempt) => (index === 0 && attempt === 1 ? outcome("interrupted", { error: "deploy" }) : outcome("completed", { summary: "recovered" })));
+  const results = await runDelegatesInParallel([{ task: "a" }, { task: "b" }], probe.runTask, { backoff: noWait });
   assert.equal(results[0].attempts, 2);
   assert.equal(results[0].status, "completed");
   assert.equal(results[1].status, "completed");
 });
 
-test("single-task 3021: truthful error, one attempt, nothing to defer", async () => {
-  const { runTask, launches } = launcher(() => outcome("error", { error: RATE_LIMIT_MSG }));
-  const results = await runDelegatesSerially([{ task: "only" }], runTask);
-  assert.deepEqual(launches, [0]);
-  assert.equal(results.length, 1);
+test("a non-rate-limit error is reported and does not affect sibling tasks", async () => {
+  const probe = concurrencyProbe((index) => (index === 0 ? outcome("error", { error: "bad input" }) : outcome("completed")));
+  const results = await runDelegatesInParallel([{ task: "a" }, { task: "b" }], probe.runTask, { backoff: noWait });
   assert.equal(results[0].status, "error");
-  assert.equal(results[0].attempts, 1, "no same-call retry");
-});
-
-test("non-rate-limit error on task 0 does NOT defer task 1 (only 3021 is backpressure)", async () => {
-  const { runTask, launches } = launcher((index) => index === 0 ? outcome("error", { error: "bad input" }) : outcome("completed", { summary: "ok" }));
-  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
-  assert.deepEqual(launches, [0, 1], "a plain error is not backpressure; task 1 still launches");
-  assert.equal(results[0].status, "error");
+  assert.equal(results[0].attempts, 1);
   assert.equal(results[1].status, "completed");
-});
-
-test("3021 detected via the error channel alone (no structured failure) still defers fan-out", async () => {
-  const { runTask, launches } = launcher((index) => {
-    if (index === 0) {
-      // A runner that surfaces the 3021 text only in `error`, with NO failure object.
-      return { runId: "r0", status: "error", error: RATE_LIMIT_MSG, failure: undefined } as DelegateTaskOutcome;
-    }
-    return outcome("completed", { summary: "should never run" });
-  });
-  const results = await runDelegatesSerially([{ task: "a" }, { task: "b" }], runTask);
-  assert.deepEqual(launches, [0], "task 1 never launched — backpressure detected via error channel");
-  assert.equal(results[1].status, "deferred");
-  assert.equal(results[1].attempts, 0);
 });
