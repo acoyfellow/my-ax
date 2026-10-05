@@ -10,6 +10,7 @@ import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError }
 import { storeInlineMediaArtifact } from "../uploads";
 import { getUserWorkspace } from "../workspace";
 import { parseMachineShellContent } from "../machinectl-output";
+import { isFocusTool, isVerifiedPromptTool, withVerifiedCmuxDelivery } from "../cmux-delivery-verification";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
 type MachineResult = { ok?: boolean; content?: string; error?: string };
@@ -167,7 +168,7 @@ export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute
       try { return JSON.parse(result.content ?? "") as unknown; } catch { return result.content ?? ""; }
     };
   }
-  return { connected: status.connected, machineName: status.machineName, catalog, fns };
+  return { connected: status.connected, machineName: status.machineName, catalog, fns: withVerifiedCmuxDelivery(fns) };
 }
 
 export const MACHINECTL_CODE_TOOL: ToolDef = {
@@ -220,6 +221,16 @@ export const MACHINECTL_TOOL: ToolDef = {
     if (tool === "tools/list") {
       const status = await host.fetch("http://internal/status").then((response) => response.json<{ connected: boolean; machineName?: string; tools?: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> }>());
       return JSON.stringify(status);
+    }
+    if (isVerifiedPromptTool(tool) || isFocusTool(tool)) {
+      const provider = await createMachineWorkProvider(ctx);
+      const verified = provider.fns[tool];
+      if (!verified) return JSON.stringify({ ok: false, verified: false, reason: `My Machine does not publish ${tool}` });
+      try {
+        return JSON.stringify(await verified((args.arguments as Record<string, unknown> | undefined) ?? {}));
+      } catch (error) {
+        return JSON.stringify({ ok: false, verified: false, reason: error instanceof Error ? error.message : String(error) });
+      }
     }
     const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": identity.email.toLowerCase() });
     const response = await host.fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool, args: (args.arguments as Record<string, unknown> | undefined) ?? {} }) });
