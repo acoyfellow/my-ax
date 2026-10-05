@@ -1,4 +1,5 @@
 import type { Env } from "./types";
+import { isTransientClientError } from "./transient-client-errors";
 import {
   errorFingerprint,
   formatAutoIssueBody,
@@ -19,9 +20,10 @@ export async function fileOwnerErrorIssue(
   ownerEmail: string,
   raw: unknown,
   post: typeof fetch = fetch,
-): Promise<FiledErrorIssue | { skipped: "not-configured" } | { error: string }> {
+): Promise<FiledErrorIssue | { skipped: "not-configured" | "transient" } | { error: string }> {
   const input = parseErrorReportInput(raw);
   if (!input) return { error: "invalid error report" };
+  if (isTransientClientError(input.message)) return { skipped: "transient" };
   const token = env.GITHUB_TOKEN?.trim();
   const repo = env.GITHUB_REPO?.trim() || "acoyfellow/my-ax";
   if (!token) return { skipped: "not-configured" };
