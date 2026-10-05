@@ -44,3 +44,34 @@ export function stallMessage(verdict: Extract<StallVerdict, { kind: "stalled" }>
   const seconds = Math.floor(verdict.silentMs / 1000);
   return `No response from the agent for ${seconds}s, and no tool is running. The turn may have failed. Send another message to retry or steer.`;
 }
+
+export interface TurnLogEntry {
+  role?: unknown;
+  content?: unknown;
+  meta?: unknown;
+}
+
+function entryStatus(entry: TurnLogEntry): unknown {
+  return entry.meta && typeof entry.meta === "object" ? (entry.meta as { status?: unknown }).status : undefined;
+}
+
+function isTurnErrorEntry(entry: TurnLogEntry): boolean {
+  if (typeof entry.content !== "string" || !entry.content.trim()) return false;
+  return entry.role === "error" || (entry.role === "assistant" && entryStatus(entry) === "error");
+}
+
+export function persistedTurnError(chronologicalEntries: readonly TurnLogEntry[]): string | null {
+  for (let index = chronologicalEntries.length - 1; index >= 0; index--) {
+    const entry = chronologicalEntries[index];
+    if (entry.role === "user") return null;
+    if (isTurnErrorEntry(entry)) return (entry.content as string).trim();
+  }
+  return null;
+}
+
+export function stallSurfaceText(
+  verdict: Extract<StallVerdict, { kind: "stalled" }>,
+  turnError: string | null,
+): string {
+  return turnError ?? stallMessage(verdict);
+}

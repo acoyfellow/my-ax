@@ -6,7 +6,7 @@
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
-  import { evaluateTurnStall, stallFingerprint, stallMessage } from "./turn-stall";
+  import { evaluateTurnStall, persistedTurnError, stallFingerprint, stallMessage, stallSurfaceText } from "./turn-stall";
   import { VOICE_CLIENT_OPTIONS } from "./voice-client-options";
   import { initialVoiceGateState, onStatusChange, rearm, withRearmTimer } from "./voice-half-duplex";
   import { chimeForTransition, chimeTones, type VoiceChimeStatus } from "./voice-chime";
@@ -580,6 +580,26 @@
       applyStatus(agentStatusFor(next));
     }
     return next;
+  }
+
+  async function latestPersistedTurnError(): Promise<string | null> {
+    const expected = sessionGeneration.capture();
+    if (!expected) return null;
+    try {
+      const result = await loadNewestEntries(expected, 20);
+      return result.outcome === "current" ? persistedTurnError(result.entries) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function surfaceStall(verdict: Extract<ReturnType<typeof evaluateTurnStall>, { kind: "stalled" }>) {
+    const turnError = await latestPersistedTurnError();
+    if (turnError) {
+      pushError(stallSurfaceText(verdict, turnError), { alreadyReported: true });
+      return;
+    }
+    pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
   }
 
   function showThinking() {
@@ -2311,7 +2331,7 @@
       });
       if (verdict.kind === "stalled") {
         turnStallSurfaced = true;
-        pushError(stallMessage(verdict), { stack: stallFingerprint(verdict) });
+        void surfaceStall(verdict);
       }
     }, 5_000);
 

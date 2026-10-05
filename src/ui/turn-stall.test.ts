@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { evaluateTurnStall, stallFingerprint, stallMessage, TURN_STALL_MS } from "./turn-stall";
+import { evaluateTurnStall, persistedTurnError, stallFingerprint, stallMessage, stallSurfaceText, TURN_STALL_MS } from "./turn-stall";
 
 const base = {
   now: 100_000,
@@ -69,11 +69,51 @@ test("the watchdog does not fake a done frame; a live turn must not be marked fi
 
 test("a genuine stall is reported as an error, not a system aside", () => {
   const block = watchdogBlock();
-  assert.match(block, /pushError\(stallMessage/, "a stall is a failure and must be reported as one");
+  assert.match(block, /surfaceStall\(verdict\)/, "a stall is a failure and must be reported as one");
   assert.doesNotMatch(block, /pushSystem/, "a failed turn must not be a neutral aside");
 });
 
 test("the watchdog asks whether a tool is running before it judges", () => {
   assert.match(watchdogBlock(), /pendingTool:\s*firstPendingTool\(\)/,
     "without the pending-tool input the evaluator cannot tell work from silence");
+});
+
+test("a persisted model error for the turn is shown instead of the generic stall", () => {
+  const verdict = evaluateTurnStall(base);
+  assert.equal(verdict.kind, "stalled");
+  if (verdict.kind !== "stalled") return;
+  const entries = [
+    { role: "user", content: "hello" },
+    { role: "error", content: "Not Found" },
+  ];
+  const text = stallSurfaceText(verdict, persistedTurnError(entries));
+  assert.equal(text, "Not Found");
+  assert.doesNotMatch(text, /No response from the agent/);
+});
+
+test("an assistant receipt with error status counts as the turn error", () => {
+  assert.equal(persistedTurnError([
+    { role: "user", content: "hi" },
+    { role: "assistant", content: "Unauthorized", meta: { status: "error" } },
+  ]), "Unauthorized");
+});
+
+test("an error from an earlier turn does not replace the stall for the current turn", () => {
+  const verdict = evaluateTurnStall(base);
+  if (verdict.kind !== "stalled") return assert.fail("expected stall");
+  const entries = [
+    { role: "user", content: "first" },
+    { role: "error", content: "Not Found" },
+    { role: "user", content: "second" },
+  ];
+  assert.equal(persistedTurnError(entries), null);
+  assert.equal(stallSurfaceText(verdict, null), stallMessage(verdict));
+});
+
+test("the stall surface reads the persisted turn error before the generic message", () => {
+  const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
+  const start = chat.indexOf("async function surfaceStall(");
+  assert.ok(start > 0);
+  const body = chat.slice(start, start + 500);
+  assert.ok(body.indexOf("latestPersistedTurnError") < body.indexOf("stallMessage(verdict)"));
 });
