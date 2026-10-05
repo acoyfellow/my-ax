@@ -126,7 +126,7 @@
     "test:voice-turn-narration": "node src/ui/voice-turn-narration-smoke.mjs",
     "test:check-in": "tsx --test src/check-in.test.ts",
     "test:models": "tsx --test src/models.test.ts src/llm.test.ts src/gateway-workers-ai-route.test.ts",
-    "test:workspace-reliability": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/workspace-init.test.ts src/workspace-exec.test.ts src/tool-output-spill.test.ts src/job-list-query.test.ts src/conversation-log-durability.test.ts src/ui/transcript-merge-durability.test.ts src/issue-context.test.ts src/issue-286-partial-results.test.ts",
+    "test:workspace-reliability": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/workspace-init.test.ts src/workspace-exec.test.ts src/tool-output-spill.test.ts src/job-list-query.test.ts src/conversation-log-durability.test.ts src/ui/transcript-merge-durability.test.ts src/issue-context.test.ts src/issue-286-partial-results.test.ts src/turn-continuation.test.ts",
     "test:auth": "tsx --test src/auth.test.ts",
     "test:cycle-costs": "tsx --test src/cycle-costs.test.ts",
     "test:tool-id-sanitize": "tsx --test src/tool-id-sanitize.test.ts",
