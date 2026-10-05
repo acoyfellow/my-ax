@@ -47,7 +47,7 @@
     "test:check-in-shell": "tsx --test src/ui/check-in-display-href.test.ts && node src/ui/check-in-shell-smoke.mjs",
     "test:owner-routes": "node src/ui/owner-routes-smoke.mjs",
     "test:tool-output-limit": "tsx --test src/tool-output-limit.test.ts",
-    "test:machinectl-output": "tsx --test src/machinectl-output.test.ts",
+    "test:machinectl-output": "tsx --test src/machinectl-output.test.ts src/cmux-delivery-verification.test.ts",
     "test:grant-crypto": "tsx --test src/grant-crypto.test.ts",
     "test:runs": "tsx --test src/routes/runs.test.ts",
     "test:jobs-route": "tsx --test src/routes/jobs.test.ts",
