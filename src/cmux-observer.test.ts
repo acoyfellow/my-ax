@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "./test-expect";
 import { observeCmux, type CmuxReadRequest } from "./cmux-observer";
 
 const status = JSON.stringify({

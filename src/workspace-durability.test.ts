@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { test } from "./test-expect";
 import {
   createWorkspaceSnapshotManifest,
   verifyWorkspaceRestore,
