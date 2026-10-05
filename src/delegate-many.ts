@@ -14,6 +14,9 @@ import {
   type DelegateResult,
 } from "./delegate-serial";
 import type { Env } from "./types";
+import type { AccessIdentity } from "./auth";
+import { SandboxThinkWorkspace } from "./think-workspace";
+import { ReadOnlyDelegateWorkspace, requireDelegateIdentity, splitDelegateRunInput } from "./read-only-delegate-workspace";
 
 // Pure retry/backpressure policy + serial orchestration live in delegate-serial.ts
 // (no @cloudflare/think import) so they are unit-testable. Re-export the pieces
@@ -62,6 +65,15 @@ export function asAgentToolFailure(result: RunAgentToolResult): AgentToolFailure
 export class ReadOnlyDelegateAgent extends Think<Env> {
   maxSteps = 8;
   workspaceBash = false;
+  override workspace = new ReadOnlyDelegateWorkspace(
+    () => this.getConfig<{ identity?: AccessIdentity }>()?.identity,
+    (identity) => new SandboxThinkWorkspace(this.env, () => identity),
+  );
+  override async startAgentToolRun(input: unknown, options: { runId: string }) {
+    const { task, identity } = splitDelegateRunInput(input);
+    this.configure<{ identity?: AccessIdentity }>({ ...(this.getConfig<{ identity?: AccessIdentity }>() ?? {}), identity });
+    return super.startAgentToolRun({ task }, options);
+  }
   // Undefined -> resolveMyAxModel heals to defaultModelId(env): the resilient
   // gateway model on gateway installs, the Workers-AI fallback otherwise.
   getModel() { return resolveMyAxModel(this.env).model; }
@@ -89,6 +101,7 @@ export class ReadOnlyDelegateAgent extends Think<Env> {
 
 export interface DelegateParent {
   name: string;
+  delegateIdentity(): AccessIdentity | undefined;
   runAgentTool<Input, Output>(cls: typeof ReadOnlyDelegateAgent, options: { input: Input; runId: string; displayOrder: number; signal?: AbortSignal; inputPreview?: unknown }): Promise<RunAgentToolResult<Output>>;
   clearAgentToolRuns(options: { olderThan: number; status: Array<"completed" | "error" | "aborted" | "interrupted"> }): Promise<void>;
   notifyDelegateManyComplete?(results: DelegateResult[]): Promise<void>;
@@ -104,13 +117,14 @@ export function createDelegateManyTool(parent: DelegateParent) {
     outputSchema: delegateManyOutputSchema,
     execute: async (input, context) => {
       const parsed = delegateManyInputSchema.parse(input);
+      const identity = requireDelegateIdentity(parent.delegateIdentity());
       const runIds = parsed.tasks.map(({ task }, index) => delegateRunId(parent.name, context.toolCallId, task, index));
       const results = await runDelegatesSerially(parsed.tasks, async (index) => {
         const { task } = parsed.tasks[index];
         const timeout = AbortSignal.timeout(DELEGATE_TIMEOUT_MS);
         const signal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeout]) : timeout;
         const result = await parent.runAgentTool(ReadOnlyDelegateAgent, {
-          input: { task }, runId: runIds[index], displayOrder: index, signal, inputPreview: { task },
+          input: { task, identity }, runId: runIds[index], displayOrder: index, signal, inputPreview: { task },
         });
         return {
           runId: result.runId,
