@@ -28,6 +28,35 @@ export function limitModelToolOutput(
   return `${prefix}\n\n[truncated: original ${bytes.byteLength} bytes, retained ${retainedBytes} bytes]`;
 }
 
+export type SpillWriter = (path: string, content: string) => Promise<void>;
+
+export const TOOL_OUTPUT_SPILL_DIR = "/home/user/.my-ax/tool-output";
+
+export function spillPath(toolName: string, now: Date = new Date()): string {
+  const safeName = toolName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64) || "tool";
+  return `${TOOL_OUTPUT_SPILL_DIR}/${now.toISOString().replace(/[:.]/g, "-")}-${safeName}-${crypto.randomUUID().slice(0, 8)}.txt`;
+}
+
+export async function limitModelToolOutputWithSpill(
+  output: string,
+  toolName: string,
+  writeSpill: SpillWriter | undefined,
+  limitBytes = MODEL_TOOL_OUTPUT_LIMIT_BYTES,
+): Promise<string> {
+  const totalBytes = encoder.encode(output).byteLength;
+  if (totalBytes <= limitBytes) return output;
+  const notice = (detail: string) => `\n[INCOMPLETE RESULT: this output was cut off. ${detail} Do not report counts, totals, or "none found" from this partial view.]`;
+  if (!writeSpill) return limitModelToolOutput(output, limitBytes) + notice("The full output was not saved.");
+  const path = spillPath(toolName);
+  try {
+    await writeSpill(path, output);
+  } catch {
+    return limitModelToolOutput(output, limitBytes) + notice("Saving the full output failed.");
+  }
+  const footer = notice(`The full ${totalBytes}-byte output is saved at ${path}; read or grep that file for the rest.`);
+  return limitModelToolOutput(output, Math.max(1024, limitBytes - encoder.encode(footer).byteLength)) + footer;
+}
+
 /** Cap one tool result value (string capped directly; oversized non-strings
  * are serialized and capped) so model-visible output stays bounded. */
 export function limitToolResultValue(value: unknown): unknown {

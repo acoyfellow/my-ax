@@ -1,4 +1,5 @@
 import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
+import { parseJobListQuery, queryJobList, type JobListRow } from "./job-list-query";
 import { Effect } from "effect";
 import { coerceToolArguments } from "./tool-arguments";
 import type { ToolDef, ToolContext } from "./types";
@@ -13,7 +14,7 @@ import type { RecurringJobThreadMode } from "./jobs";
 import { issueSessionTitle } from "./session-title";
 import { computerPreviewSrc } from "./computer-id";
 import { getNamedComputer, snapshotNamedComputer } from "./named-computer";
-import { limitModelToolOutput } from "./tool-output-limit";
+import { limitModelToolOutputWithSpill } from "./tool-output-limit";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
 import { databaseLayer } from "./effect/database";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
@@ -283,7 +284,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "manage_jobs",
     description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'. threadMode defaults to 'same_session' and controls the destination each run: 'new_session_per_run' (a new thread each run), 'same_session' (this thread), or 'specific_session' (a specific thread whose id you must pass in sessionId). maxRuns is a positive run cap; use 1 for once or null for unlimited.",
-    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string", description: "Target session id. For create, omit to use the current conversation. Required when threadMode is 'specific_session'." }, threadMode: { type: "string", enum: ["new_session_per_run", "same_session", "specific_session"], description: "Run destination. Defaults to same_session; specific_session requires a valid owned sessionId." }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, maxRuns: { type: ["number", "null"], description: "Positive run cap; 1 runs once and null is unlimited." }, idempotencyKey: { type: "string" } }, required: ["action"] },
+    parameters: { type: "object", properties: { action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "run", "delete", "history"] }, id: { type: "string" }, sessionId: { type: "string", description: "Target session id. For create, omit to use the current conversation. Required when threadMode is 'specific_session'." }, threadMode: { type: "string", enum: ["new_session_per_run", "same_session", "specific_session"], description: "Run destination. Defaults to same_session; specific_session requires a valid owned sessionId." }, name: { type: "string" }, prompt: { type: "string" }, cadenceSecs: { type: "number" }, maxRuns: { type: ["number", "null"], description: "Positive run cap; 1 runs once and null is unlimited." }, idempotencyKey: { type: "string" }, status: { type: "string", description: "list: only jobs with this status, e.g. active or paused." }, nameContains: { type: "string", description: "list: only jobs whose name contains this text (case-insensitive)." }, limit: { type: "number", description: "list: page size, default 50, max 200." }, offset: { type: "number", description: "list: skip this many matching jobs." } }, required: ["action"] },
     execute: async (args, ctx) => {
       const jobs = new JobService(ctx.env, ctx.identity.email);
       const id = typeof args.id === "string" ? args.id : "";
@@ -295,7 +296,7 @@ export const TOOLS: ToolDef[] = [
       const explicitSessionId = typeof args.sessionId === "string" && args.sessionId.trim() ? args.sessionId : undefined;
       const sessionId = explicitSessionId ?? (action === "create" && threadMode !== "specific_session" ? ctx.sessionId : undefined);
       const input = { sessionId, threadMode, name: args.name as string | undefined, prompt: args.prompt as string | undefined, cadenceSecs: args.cadenceSecs as number | undefined, maxRuns: args.maxRuns === null ? null : args.maxRuns as number | undefined };
-      const result = action === "list" ? (await jobs.list()).slice(0, 20)
+      const result = action === "list" ? queryJobList(await jobs.list() as JobListRow[], parseJobListQuery(args))
         : action === "create" ? await jobs.create(input, args.idempotencyKey as string | undefined)
         : action === "update" ? await jobs.update(id, input)
         : action === "pause" ? await jobs.setPaused(id, true)
@@ -445,8 +446,14 @@ export function createThinkTools(context: () => ToolContext): ToolSet {
     tools[definition.name] = tool<Record<string, unknown>, string, {}>({
       description: definition.description,
       inputSchema: jsonSchema<Record<string, unknown>>(definition.parameters as Parameters<typeof jsonSchema>[0]),
-      execute: async (input: Record<string, unknown>) =>
-        limitModelToolOutput(await definition.execute(coerceToolArguments(input), context())),
+      execute: async (input: Record<string, unknown>) => {
+        const toolContext = context();
+        return limitModelToolOutputWithSpill(
+          await definition.execute(coerceToolArguments(input), toolContext),
+          definition.name,
+          toolContext.writeFile,
+        );
+      },
     });
   }
   return tools as ToolSet;
