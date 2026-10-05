@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { postSessionWithRetry, sessionCreateErrorMessage } from "./session-create";
   // Canonical conversation UI and browser runtime: transport recovery,
   // transcript rendering, composer, attachments, voice, and tool results.
 
@@ -1339,14 +1340,7 @@
   }
 
   async function createSession(): Promise<string> {
-    const r = await fetch("/api/sessions", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    if (!r.ok) throw new Error("session create HTTP " + r.status);
-    const session = (await r.json()).result;
+    const session = await postSessionWithRetry(fetch);
     const previousSessionId = localStorage.getItem(SESSION_KEY);
     if (previousSessionId && previousSessionId !== session.sessionId) void stopVoiceMode();
     localStorage.setItem(SESSION_KEY, session.sessionId);
@@ -2052,7 +2046,7 @@
       try {
         await createSession();
       } catch (err: any) {
-        pushError("Could not create session: " + err.message);
+        pushError(sessionCreateErrorMessage(err));
         return;
       }
       sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1");

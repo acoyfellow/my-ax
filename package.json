@@ -36,7 +36,7 @@
     "test:chat-composer": "node src/ui/chat-composer-smoke.mjs",
     "test:page-registry": "tsx --test src/ui/page-registry.test.ts src/page-connection.test.ts",
     "test:artifact-tools": "tsx --test src/ui/artifact-tools.test.ts",
-    "test:composer-keys": "tsx --test src/ui/composer-keys.test.ts",
+    "test:composer-keys": "tsx --test src/ui/composer-keys.test.ts src/ui/session-create.test.ts",
     "test:ios-safe-area-frame": "node src/ui/ios-safe-area-frame.test.mjs",
     "test:settings-snippets": "node src/ui/settings-snippets-smoke.mjs",
     "test:appbar-controls": "node src/ui/appbar-controls-smoke.mjs",
