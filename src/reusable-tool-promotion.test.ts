@@ -1,118 +1,161 @@
-// Contract tests for the agent.ts promoteSuggestedRecipe frozen behaviour.
-//
-// The promotion loop cannot be executed in a unit test without spinning up a
-// Think agent + D1 + all of the Workers-only bindings. But every rule in the
-// frozen contract is a structural invariant that a static read of the source
-// can verify: the guards MUST appear in the promotion path, the notification
-// MUST render the Settings href, and the loop MUST catch SavedRecipeError
-// Conflict per-iteration so a duplicate cannot short-circuit later candidates.
-//
-// Complementary tests:
-//   - reusable-tool-candidate.test.ts covers the pure eligibility policy.
-//   - work-tools-recipes.test.ts covers work_code's namespace surface guards.
-
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { promoteWorkCodeCandidates, type PromotionDependencies, type RecipeCreateInput, type ReusableToolTrustMode } from "./reusable-tool-promotion";
+import { SavedRecipeError } from "./saved-recipes";
 
 const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 
-function promotionSlice(src: string): string {
-  const start = src.indexOf("private async promoteSuggestedRecipe(");
-  assert.ok(start >= 0, "promoteSuggestedRecipe must exist in agent.ts");
-  // Grab a generous window; the function is a few dozen lines.
-  return src.slice(start, start + 10000);
+type RecipeNotification = Parameters<PromotionDependencies["notifyOwner"]>[0];
+
+interface Harness {
+  deps: PromotionDependencies;
+  created: RecipeCreateInput[];
+  projected: string[];
+  notifications: RecipeNotification[];
+  logs: { event: string; detail: Record<string, unknown> }[];
 }
 
-// ---------------------------------------------------------------------------
-// Only work_code outputs are eligible
-// ---------------------------------------------------------------------------
+function harness(options: { existingNames?: string[]; createError?: Error } = {}): Harness {
+  const names = new Set(options.existingNames ?? []);
+  const created: RecipeCreateInput[] = [];
+  const projected: string[] = [];
+  const notifications: RecipeNotification[] = [];
+  const logs: Harness["logs"] = [];
+  const deps: PromotionDependencies = {
+    async createRecipe(input) {
+      if (options.createError) throw options.createError;
+      if (names.has(input.name)) throw new SavedRecipeError("Conflict", "saved recipe name already exists");
+      names.add(input.name);
+      created.push(input);
+      return { id: `id-${input.name}`, name: input.name, description: input.description, status: input.status };
+    },
+    async projectEnabledRecipe(recipeId) { projected.push(recipeId); },
+    async notifyOwner(notification) { notifications.push(notification); },
+    logError(event, detail) { logs.push({ event, detail }); },
+    now: () => 42,
+  };
+  return { deps, created, projected, notifications, logs };
+}
 
-test("promotion loop scopes candidates to work_code tool outputs only", () => {
-  const slice = promotionSlice(agent);
-  assert.match(
-    slice,
-    /candidate\.type === "tool-work_code"|toolName === "work_code"/,
-    "promotion must gate on the work_code tool identity, not any suggestedRecipe-shaped output",
-  );
+interface PartOptions {
+  eligible?: boolean;
+  capabilities?: string[];
+  portable?: boolean;
+  ok?: boolean;
+  type?: string;
+  toolName?: string;
+  state?: string;
+}
+
+function workCodePart(name: string, options: PartOptions = {}) {
+  return {
+    type: options.type ?? "tool-work_code",
+    toolName: options.toolName,
+    state: options.state ?? "output-available",
+    output: {
+      ok: options.ok ?? true,
+      suggestedRecipe: {
+        name,
+        description: `${name} description.`,
+        inputSchema: { type: "object", properties: {} },
+        code: "return 1;",
+        capabilities: options.capabilities ?? ["workspace.read"],
+        ...(options.portable === undefined ? {} : { portable: options.portable }),
+      },
+      reusableToolCandidate: { eligible: options.eligible ?? true, fingerprint: `fp-${name}` },
+    },
+  };
+}
+
+function promote(parts: unknown[], trustMode: ReusableToolTrustMode, h: Harness) {
+  return promoteWorkCodeCandidates({ parts, trustMode, sourceRunId: "session-1", deps: h.deps });
+}
+
+test("a duplicate candidate is skipped and the next candidate still persists", async () => {
+  const h = harness({ existingNames: ["Dup"] });
+  const receipts = await promote([workCodePart("Dup"), workCodePart("Fresh")], "review", h);
+  assert.deepEqual(h.created.map((c) => c.name), ["Fresh"]);
+  assert.deepEqual(receipts, [
+    { ok: false, fingerprint: "fp-Dup", reason: "Conflict", error: "saved recipe name already exists" },
+    { id: "id-Fresh", name: "Fresh", status: "pending", trustMode: "review", fingerprint: "fp-Fresh" },
+  ]);
+  assert.equal(h.logs[0].event, "recipe_promotion_skipped");
+  assert.equal(h.logs[0].detail.code, "Conflict");
+  assert.deepEqual(h.notifications.map((n) => n.title), ["Review reusable tool: Fresh"]);
 });
 
-// ---------------------------------------------------------------------------
-// Marker eligibility gate
-// ---------------------------------------------------------------------------
-
-test("promotion loop only persists candidates whose reusableToolCandidate.eligible is true", () => {
-  const slice = promotionSlice(agent);
-  assert.match(slice, /reusableToolCandidate/, "promotion must read the reusableToolCandidate field");
-  assert.match(slice, /!candidate\.eligible|candidate\.eligible === false/, "promotion must skip when eligible is false");
+test("failures other than SavedRecipeError are not swallowed", async () => {
+  const h = harness({ createError: new Error("db down") });
+  await assert.rejects(promote([workCodePart("A")], "review", h), /db down/);
 });
 
-// ---------------------------------------------------------------------------
-// Owner-selectable approval mode
-// ---------------------------------------------------------------------------
-
-test("promotion loop uses the owner-scoped approval preference", () => {
-  const slice = promotionSlice(agent);
-  assert.match(slice, /reusableToolApprovalMode\(identity\.email, fallback\)\.pipe\(Effect\.provide\(databaseLayer\(this\.env\.DB\)\)\)/, "promotion must read the owner setting through its database layer");
-  assert.match(slice, /autoEnable\s*\?\s*"enabled"[\s\S]*?:\s*"pending"/, "review mode stays pending while auto mode enables");
-  assert.match(slice, /autoTrust:\s*autoEnable/, "approval policy must receive the selected mode");
+test("review mode persists pending, notifies the owner with the Settings deep-link, and does not project", async () => {
+  const h = harness();
+  await promote([workCodePart("My Tool")], "review", h);
+  assert.equal(h.created[0].status, "pending");
+  assert.equal(h.created[0].sourceRunId, "session-1");
+  assert.deepEqual(h.projected, []);
+  assert.equal(h.notifications.length, 1);
+  const notification = h.notifications[0];
+  assert.equal(notification.kind, "recipe.approval");
+  assert.equal(notification.title, "Review reusable tool: My Tool");
+  assert.equal(notification.href, "/?action=settings&section=recipes&recipe=My%20Tool");
+  assert.doesNotMatch(notification.href ?? "", /\/api\/recipes\//);
 });
 
-test("auto-enabled candidates are projected into Code Mode immediately", () => {
-  const slice = promotionSlice(agent);
-  assert.match(slice, /recipe\.status === "enabled"/);
-  assert.match(slice, /projectSavedRecipe\(/);
+test("auto mode persists enabled, projects into Code Mode, and skips the review notification", async () => {
+  const h = harness();
+  const receipts = await promote([workCodePart("Auto")], "auto", h);
+  assert.equal(h.created[0].status, "enabled");
+  assert.deepEqual(h.projected, ["id-Auto"]);
+  assert.deepEqual(h.notifications, []);
+  assert.deepEqual(receipts, [{ id: "id-Auto", name: "Auto", status: "enabled", trustMode: "auto", fingerprint: "fp-Auto" }]);
 });
 
-// ---------------------------------------------------------------------------
-// High-authority inline-only preservation
-// ---------------------------------------------------------------------------
-
-test("promotion loop keeps the high-authority inline-only decision (recipeApprovalDecision) intact", () => {
-  const slice = promotionSlice(agent);
-  assert.match(slice, /recipeApprovalDecision\(/);
-  assert.match(slice, /shouldPersistSuggestedRecipe\(decision\)/);
+test("only completed work_code tool outputs are eligible", async () => {
+  const h = harness();
+  await promote([
+    workCodePart("Other", { type: "tool-work_run" }),
+    workCodePart("CallOther", { type: "tool-call", toolName: "work_run" }),
+    workCodePart("NotReady", { state: "input-available" }),
+    workCodePart("ByToolName", { type: "tool-call", toolName: "work_code" }),
+  ], "review", h);
+  assert.deepEqual(h.created.map((c) => c.name), ["ByToolName"]);
 });
 
-// ---------------------------------------------------------------------------
-// Owner notification uses the Settings deep-link href
-// ---------------------------------------------------------------------------
-
-test("owner notification renders the Reusable tools Settings deep-link, not the legacy API approval URL", () => {
-  const slice = promotionSlice(agent);
-  assert.match(slice, /href:\s*`\/\?action=settings&section=recipes&recipe=\$\{encodeURIComponent\(recipe\.name\)\}`/, "must use the rendered Settings review deep-link");
-  assert.match(slice, /Review reusable tool:/, "owner-visible notification must use Reusable tool language");
-  assert.doesNotMatch(slice, /\/api\/recipes\/\$\{encodeURIComponent\(recipe\.id\)\}\/approval/, "legacy approval URL must be gone");
+test("candidates without an eligible reusableToolCandidate or ok output are not persisted", async () => {
+  const h = harness();
+  await promote([
+    workCodePart("Ineligible", { eligible: false }),
+    workCodePart("Failed", { ok: false }),
+    { type: "tool-work_code", state: "output-available", output: "not json" },
+  ], "review", h);
+  assert.deepEqual(h.created, []);
 });
 
-// ---------------------------------------------------------------------------
-// SavedRecipeError Conflict is fail-soft per iteration
-// ---------------------------------------------------------------------------
-
-test("promotion loop catches SavedRecipeError inside each iteration so a duplicate does not abort later candidates", () => {
-  const slice = promotionSlice(agent);
-  assert.match(slice, /try\s*\{[\s\S]*?SavedRecipeService[\s\S]*?\.create\(/, "create must be inside a try");
-  assert.match(slice, /catch\s*\(\s*error\s*\)\s*\{[\s\S]*?SavedRecipeError[\s\S]*?continue/, "SavedRecipeError must continue to the next iteration");
+test("high-authority non-portable candidates stay inline-only in every mode", async () => {
+  for (const mode of ["review", "auto"] as const) {
+    const h = harness();
+    await promote([workCodePart("Machine", { capabilities: ["machine.exec"], portable: false })], mode, h);
+    assert.deepEqual(h.created, []);
+    assert.deepEqual(h.notifications, []);
+  }
 });
 
-// ---------------------------------------------------------------------------
-// Preference service keeps the legacy deploy fallback outside the agent path
-// ---------------------------------------------------------------------------
-
-test("agent delegates approval-mode resolution to the owner preference service", () => {
+test("agent delegates promotion to the tested core using the owner preference service", () => {
+  const start = agent.indexOf("private async promoteSuggestedRecipe(");
+  assert.ok(start >= 0, "promoteSuggestedRecipe must exist in agent.ts");
+  const slice = agent.slice(start, start + 3000);
   assert.match(agent, /import \{ reusableToolApprovalMode \} from "\.\/reusable-tool-preferences-program"/);
-  assert.match(promotionSlice(agent), /const trustMode = await Effect\.runPromise\(\s*reusableToolApprovalMode\(identity\.email, fallback\)/);
-  assert.doesNotMatch(promotionSlice(agent), /const (?:trustMode|autoEnable) = autoTrustMode\(this\.env\)/);
+  assert.match(slice, /reusableToolApprovalMode\(identity\.email, fallback\)\.pipe\(Effect\.provide\(databaseLayer\(this\.env\.DB\)\)\)/);
+  assert.match(slice, /promoteWorkCodeCandidates\(/);
+  assert.match(slice, /recipesSavedThisTurn\.push\(\.\.\.receipts\)/);
+  assert.doesNotMatch(slice, /const (?:trustMode|autoEnable) = autoTrustMode\(this\.env\)/);
 });
 
-// ---------------------------------------------------------------------------
-// work_code surface: reusableToolCandidate is now on the response, marker
-// guidance is in the tool description, and public system prompt teaches the
-// marker semantics.
-// ---------------------------------------------------------------------------
-
-test("executeWorkCode now returns a reusableToolCandidate alongside suggestedRecipe (compat preserved)", () => {
+test("executeWorkCode returns a reusableToolCandidate alongside suggestedRecipe (compat preserved)", () => {
   assert.match(workTools, /suggestedRecipe,/, "suggestedRecipe compatibility field must remain");
   assert.match(workTools, /reusableToolCandidate,/, "reusableToolCandidate must be added");
   assert.match(workTools, /reusableToolApprovalMode: reusableToolApprovalModeValue,/, "owner approval mode must be included for truthful card actions");

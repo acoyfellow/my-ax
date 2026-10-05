@@ -46,7 +46,7 @@ import { createOfficialMcpCodeModeTool } from "./mcp-code-mode";
 import { createDelegateManyTool, ReadOnlyDelegateAgent, type DelegateResult } from "./delegate-many";
 import { selectLivePageConnection, type PageConnectionState } from "./page-connection";
 import { delegateCompletionNotification } from "./delegate-receipt";
-import { SavedRecipeError, SavedRecipeService, hasRetiredRecipeCapability, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
+import { SavedRecipeService, hasRetiredRecipeCapability, recipeRunTitle, savedRecipeExecutionCode, validateRecipeRunInput } from "./saved-recipes";
 import { executeWorkCode } from "./work-tools";
 import { reserveSavedRecipeInvocation, type WorkCodeExecutionState } from "./computer-work-budget";
 import { RecipeUsageCollector } from "./recipe-usage-collector";
@@ -55,13 +55,12 @@ import { autoTrustMode } from "./auto-trust";
 import { databaseLayer } from "./effect/database";
 import { safePublicHttpUrl } from "./public-url";
 import { reusableToolApprovalMode } from "./reusable-tool-preferences-program";
-import type { ReusableToolCandidate } from "./reusable-tool-candidate";
+import { promoteWorkCodeCandidates } from "./reusable-tool-promotion";
 import { codemodeExecutionIdForRecipe, listSnippetsDualRead, projectSavedRecipe } from "./cm-snippets";
 import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
 import { voiceChannelPrompt } from "./voice-channel";
 import { requireInputChannel } from "./client-snapshot";
-import { recipeApprovalDecision, shouldPersistSuggestedRecipe } from "./recipe-approval-policy";
 import { shouldSnapshotSandboxForToolCall } from "./workspace-snapshot-classification";
 
 // Generic system prompt for the public/self-host engine. Users connect
@@ -1326,21 +1325,6 @@ export class MyAgent extends Think<Env> {
   private async promoteSuggestedRecipe(result: ChatResponseResult): Promise<void> {
     const identity = this.identity();
     if (!identity || result.status !== "completed") return;
-    // Only work_code outputs are candidates for promotion. Every other tool's
-    // JSON output is opaque to this policy — a match on suggestedRecipe there
-    // would let an unrelated tool payload smuggle a recipe onto the shelf.
-    // The tool-name filter narrows the search to work_code parts only.
-    const workCodeOutputs = result.message.parts.flatMap((part) => {
-      const candidate = part as { type?: string; toolName?: string; output?: unknown; state?: string };
-      if (candidate.state !== "output-available") return [];
-      // Think surfaces AI SDK parts as either type "tool-work_code" (name in
-      // the type suffix) or type "tool-call" with a toolName field. Accept
-      // both so upstream tool-part shape drift doesn't silently drop
-      // promotions.
-      const isWorkCode = candidate.type === "tool-work_code"
-        || (candidate.type?.startsWith("tool-") && candidate.toolName === "work_code");
-      return isWorkCode ? [candidate.output] : [];
-    });
     // The owner chooses whether qualifying reusable tools wait for review or
     // become enabled immediately. The stored owner preference wins; the legacy
     // deploy variable remains a migration-safe fallback when no choice exists.
@@ -1348,97 +1332,24 @@ export class MyAgent extends Think<Env> {
     const trustMode = await Effect.runPromise(
       reusableToolApprovalMode(identity.email, fallback).pipe(Effect.provide(databaseLayer(this.env.DB))),
     );
-    const autoEnable = trustMode === "auto";
-    for (const output of workCodeOutputs) {
-      const text = typeof output === "string" ? output : JSON.stringify(output);
-      let parsed:
-        | {
-            ok?: boolean;
-            suggestedRecipe?: unknown;
-            reusableToolCandidate?: unknown;
-            portable?: unknown;
-            inferredCapabilities?: unknown;
-          }
-        | null = null;
-      try { parsed = JSON.parse(text); } catch { parsed = null; }
-      if (!parsed?.ok || !parsed.suggestedRecipe) continue;
-      // Marker-driven eligibility gate (frozen contract). A work_code result
-      // without an eligible reusableToolCandidate is inline-only, no matter
-      // what suggestedRecipe looks like.
-      const candidate = parsed.reusableToolCandidate as ReusableToolCandidate | undefined;
-      if (!candidate || !candidate.eligible) continue;
-      const raw = parsed.suggestedRecipe as Record<string, unknown>;
-      const capabilities = Array.isArray(raw.capabilities) ? raw.capabilities.map(String) : [];
-      const decision = recipeApprovalDecision({
-        autoTrust: autoEnable,
-        capabilities,
-        portable: typeof raw.portable === "boolean" ? raw.portable : undefined,
-      });
-      if (!shouldPersistSuggestedRecipe(decision)) continue;
-      // Review mode is the safe default. Auto-enable is an explicit owner
-      // preference and still cannot bypass the high-authority inline-only rule
-      // enforced by recipeApprovalDecision above.
-      const status = autoEnable ? "enabled" as const : "pending" as const;
-      // Conflict fail-soft per iteration. A duplicate name from a previous
-      // turn must not abort promotion of every later candidate in this same
-      // result — catch InvalidInput / Conflict inside the loop, log, and
-      // continue with the next candidate.
-      let recipe;
-      try {
-        recipe = await new SavedRecipeService(this.env, identity.email).create({
-          name: typeof raw.name === "string" && raw.name.trim() ? raw.name : `WorkCodeRecipe_${Date.now()}`,
-          description: typeof raw.description === "string" ? raw.description : "Promoted from a successful work_code run.",
-          inputSchema: raw.inputSchema && typeof raw.inputSchema === "object" ? raw.inputSchema : { type: "object", properties: {} },
-          code: typeof raw.code === "string" ? raw.code : "return null;",
-          capabilities,
-          sourceRunId: this.name,
-          status,
-        });
-      } catch (error) {
-        if (error instanceof SavedRecipeError) {
-          console.error("recipe_promotion_skipped", {
-            sessionId: this.name,
-            fingerprint: candidate.fingerprint,
-            code: error.code,
-            err: error.message,
-          });
-          this.recipesSavedThisTurn.push({
-            ok: false,
-            fingerprint: candidate.fingerprint,
-            reason: error.code,
-            error: error.message,
-          });
-          continue;
-        }
-        throw error;
-      }
-      // Enabled tools must enter the Code Mode projection immediately. Review
-      // mode projects later through the explicit approval route.
-      if (recipe.status === "enabled") {
-        await projectSavedRecipe(this.env, await new SavedRecipeService(this.env, identity.email).get(recipe.id))
-          .catch((error) => console.error("cm_snippet_projection_failed", { recipeId: recipe.id, err: error instanceof Error ? error.message : String(error) }));
-      }
-      this.recipesSavedThisTurn.push({
-        id: recipe.id,
-        name: recipe.name,
-        status: recipe.status,
-        trustMode,
-        fingerprint: candidate.fingerprint,
-      });
-      if (decision.notify) {
-        // Owner notification uses the rendered Settings deep-link (not the
-        // legacy /api/recipes/<id>/approval JSON endpoint) so a tap lands on
-        // Reusable tools where the owner can review, edit, and enable the
-        // pending candidate — the single approval surface for the marker path.
-        await notifyOwner(this.env, identity.email, {
-          kind: "recipe.approval",
-          sessionId: this.name,
-          title: `Review reusable tool: ${recipe.name}`,
-          body: `${recipe.description} Review its source and capabilities, then approve it if you want My AX to reuse it.`,
-          href: `/?action=settings&section=recipes&recipe=${encodeURIComponent(recipe.name)}`,
-        }).catch((error) => console.error("recipe_approval_attention_failed", { sessionId: this.name, err: String(error) }));
-      }
-    }
+    const env = this.env;
+    const ownerEmail = identity.email;
+    const sessionId = this.name;
+    const receipts = await promoteWorkCodeCandidates({
+      parts: result.message.parts,
+      trustMode,
+      sourceRunId: sessionId,
+      deps: {
+        createRecipe: (input) => new SavedRecipeService(env, ownerEmail).create(input),
+        projectEnabledRecipe: async (recipeId) => {
+          await projectSavedRecipe(env, await new SavedRecipeService(env, ownerEmail).get(recipeId));
+        },
+        notifyOwner: (notification) => notifyOwner(env, ownerEmail, { ...notification, sessionId }),
+        logError: (event, detail) => console.error(event, detail),
+        now: () => Date.now(),
+      },
+    });
+    this.recipesSavedThisTurn.push(...receipts);
   }
 
   getSystemPrompt() {
