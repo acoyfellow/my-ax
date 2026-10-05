@@ -7,6 +7,7 @@ import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
 import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
+import { workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
 
 export const PI_ENGINE_DEFAULT_MODEL = "@cf/zai-org/glm-5.3";
@@ -116,6 +117,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async sandboxId(): Promise<string> {
-    return `${this.identity().email}#chat:${this.chatId().toLowerCase()}`;
+    return workspaceSandboxId(this.identity().email, { kind: "chat", chatId: this.chatId() });
   }
 }
