@@ -57,6 +57,17 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     return c.json({ ok: true, result: { busy, sandboxId, entries } } as Record<string, unknown>);
   });
 
+  app.post("/api/pi/chats/:id/workspace/recycle", async (c) => {
+    const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
+    if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    try {
+      const result = await stub.recycleWorkspace();
+      return c.json({ ok: true, result });
+    } catch (error) {
+      return c.json({ ok: false, error: { code: "RECYCLE_FAILED", message: error instanceof Error ? error.message : String(error) } }, 502);
+    }
+  });
+
   app.post("/api/pi/chats/:id/abort", async (c) => {
     const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
     if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);

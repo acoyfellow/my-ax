@@ -5,7 +5,7 @@ import { PiHarness } from "agents-pi/harness/pi";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
-import { getUserWorkspace } from "../workspace";
+import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
 
@@ -102,6 +102,17 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   async abortAll(): Promise<void> {
     await this.harness.abort();
+  }
+
+  async recycleWorkspace(): Promise<{ snapshot: string; destroyed: boolean }> {
+    const identity = this.identity();
+    const scope = { kind: "chat" as const, chatId: this.chatId() };
+    const outcome = await snapshotWorkspace(this.env, identity, "recycle", { scope });
+    if (!outcome.published) throw new Error(`snapshot not published: ${outcome.reason}`);
+    const { sandbox } = await getUserWorkspace(this.env, identity, { scope });
+    await sandbox.destroy();
+    invalidateUserWorkspace(identity, scope);
+    return { snapshot: outcome.backup.id, destroyed: true };
   }
 
   async sandboxId(): Promise<string> {
