@@ -38,7 +38,7 @@ export async function postSessionWithRetry(fetchImpl: typeof fetch, options: Ret
       lastError = new SessionCreateNetworkError();
       continue;
     }
-    if (response.ok) return (await response.json()).result as CreatedSession;
+    if (response.ok) return ((await response.json()) as { result: CreatedSession }).result;
     lastError = new SessionCreateHttpError(response.status);
     if (!isRetryableStatus(response.status)) throw lastError;
   }

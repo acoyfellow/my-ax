@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { postSessionWithRetry, sessionCreateErrorMessage } from "./session-create.ts";
+import { postSessionWithRetry, sessionCreateErrorMessage } from "./session-create";
 
 const okResponse = () => new Response(JSON.stringify({ result: { sessionId: "s1", name: "n" } }), { status: 200 });
 const noWait = async () => {};
