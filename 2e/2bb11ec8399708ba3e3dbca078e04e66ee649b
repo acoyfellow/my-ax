@@ -1,0 +1,35 @@
+package.json
+  s_bddf4eb8848d16::t_daa154ba963984 83
+src/error-issue.test.ts
+  s_fc002e6ac2c2f5::t_137e754277337e 71-81
+src/ui/Chat.svelte
+  s_fc002e6ac2c2f5::t_bd4913ba5ff1e3 30,1409,2057-2075,2079-2080,2082
+src/ui/pending-send.test.ts
+  s_bddf4eb8848d16::t_4ba4b70b257df8 1-50
+src/ui/pending-send.ts
+  s_bddf4eb8848d16::t_4cb4b8e8fa99c4 1-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2e2bb11ec8399708ba3e3dbca078e04e66ee649b",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_fc002e6ac2c2f5": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0aab9-f490-72e1-8d73-920246e8faec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
