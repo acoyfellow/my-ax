@@ -68,6 +68,17 @@ test("missing token skips without throwing", async () => {
   assert.deepEqual(result, { skipped: "not-configured" });
 });
 
+test("expected reconnecting send notice is not filed as an issue", async () => {
+  const { env } = makeEnv({ token: "t" });
+  let posted = 0;
+  const result = await fileOwnerErrorIssue(env, "owner@example.com", {
+    origin: "client",
+    message: "Message not sent: reconnecting. Your draft is still in the composer — retry when the connection is live.",
+  }, (async () => { posted += 1; return new Response("{}"); }) as typeof fetch);
+  assert.deepEqual(result, { skipped: "transient" });
+  assert.equal(posted, 0);
+});
+
 test("a concurrent report for one fingerprint files exactly one issue", async () => {
   const { env } = makeEnv({ token: "t" });
   let created = 0;
