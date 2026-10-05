@@ -36,3 +36,11 @@ test("workspace exec accepts a plain command string as well as an object", () =>
   assert.deepEqual(commandInput("ls -la"), { command: "ls -la" });
   assert.deepEqual(commandInput({ command: "ls", cwd: "/home/user" }), { command: "ls", cwd: "/home/user" });
 });
+
+test("the work_code argument layer turns a plain exec string into a command", async () => {
+  const { normalizeWorkArguments } = await import("./work-tools");
+  assert.deepEqual(normalizeWorkArguments("exec", "ls -ld /workspace"), { command: "ls -ld /workspace" });
+  assert.deepEqual(normalizeWorkArguments("process_start", "npm ci"), { command: "npm ci" });
+  assert.deepEqual(normalizeWorkArguments("exec", '{"command":"ls"}'), { command: "ls" });
+  assert.throws(() => normalizeWorkArguments("read", "/home/user/a.txt"), /JSON object/);
+});

@@ -87,6 +87,15 @@ function workspaceProvider(ctx: ToolContext) {
   };
 }
 
+const PLAIN_COMMAND_METHODS = new Set(["exec", "process_start"]);
+
+export function normalizeWorkArguments(method: string, input: unknown): Record<string, unknown> {
+  if (PLAIN_COMMAND_METHODS.has(method) && typeof input === "string" && !input.trim().startsWith("{")) {
+    return { command: input };
+  }
+  return coerceToolArguments(input);
+}
+
 export function commandInput(raw: unknown): { command?: unknown; cwd?: unknown; timeoutMs?: unknown } | undefined {
   if (typeof raw === "string") return { command: raw };
   return raw as { command?: unknown; cwd?: unknown; timeoutMs?: unknown } | undefined;
@@ -123,7 +132,7 @@ function instrument(
   const functions = normalizeArguments
     ? Object.fromEntries(Object.entries(fns).map(([method, invoke]) => [
         method,
-        (input: unknown) => invoke(coerceToolArguments(input)),
+        (input: unknown) => invoke(normalizeWorkArguments(method, input)),
       ]))
     : fns;
   return instrumentWorkCodeFunctions(where, functions, calls, (method) => ({
