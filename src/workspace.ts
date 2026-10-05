@@ -8,18 +8,21 @@ import { publishWorkspaceSnapshot } from "./workspace-snapshot-program";
 import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
+import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
 export { WORKSPACE_HOME, assertSeedablePath };
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const READY_MARKER = "/tmp/my-ax-workspace-ready";
 
-function key(identity: AccessIdentity): string {
-  return identity.email.toLowerCase();
+const OWNER_SCOPE: WorkspaceScope = { kind: "owner" };
+
+function key(identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): string {
+  return workspaceSandboxId(identity.email, scope);
 }
 
-function handle(env: Env, identity: AccessIdentity) {
+function handle(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE) {
   return getSandbox(
     (env as unknown as { SANDBOX: DurableObjectNamespace<Sandbox> }).SANDBOX,
-    key(identity),
+    key(identity, scope),
     {
       containerTimeouts: { instanceGetTimeoutMS: 120_000, portReadyTimeoutMS: 240_000 },
       transport: "rpc",
@@ -32,20 +35,32 @@ function handle(env: Env, identity: AccessIdentity) {
 // Workers' cross-request/cross-DO I/O guard on later chat turns.
 const preparing = new Map<string, Promise<void>>();
 
-export function invalidateUserWorkspace(identity: AccessIdentity): void {
-  preparing.delete(key(identity));
+export function invalidateUserWorkspace(identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): void {
+  preparing.delete(key(identity, scope));
 }
 
-async function latestSnapshot(env: Env, identity: AccessIdentity): Promise<WorkspaceSnapshotManifest | null> {
-  const row = await env.DB.prepare(
-    "SELECT backup_id, backup_dir FROM workspace_snapshots WHERE owner_email = ?",
-  ).bind(key(identity)).first<{ backup_id: string; backup_dir: string }>();
+type SnapshotRow = { backup_id: string; backup_dir: string; size_bytes: number | null; updated_at: string };
+
+async function latestSnapshotRow(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<SnapshotRow | null> {
+  return env.DB.prepare(
+    "SELECT backup_id, backup_dir, size_bytes, updated_at FROM workspace_snapshots WHERE owner_email = ?",
+  ).bind(workspaceSnapshotKey(identity.email, scope)).first<SnapshotRow>();
+}
+
+async function latestSnapshot(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<WorkspaceSnapshotManifest | null> {
+  const row = await latestSnapshotRow(env, identity, scope);
   return row ? { backupId: row.backup_id, backupDir: row.backup_dir } : null;
 }
 
-export async function getUserWorkspace(env: Env, identity: AccessIdentity, options?: { restoreLatest?: boolean }) {
-  const id = key(identity);
-  const sandbox = handle(env, identity);
+function workspaceSizeCommand(): string {
+  const excludes = REBUILDABLE_BACKUP_EXCLUDES.map((pattern) => `--exclude=${JSON.stringify(pattern)}`).join(" ");
+  return `du -sb ${excludes} ${WORKSPACE_HOME} 2>/dev/null | cut -f1`;
+}
+
+export async function getUserWorkspace(env: Env, identity: AccessIdentity, options?: { restoreLatest?: boolean; scope?: WorkspaceScope }) {
+  const scope = options?.scope ?? OWNER_SCOPE;
+  const id = key(identity, scope);
+  const sandbox = handle(env, identity, scope);
   const inFlight = preparing.get(id);
   if (inFlight) {
     await inFlight;
@@ -59,7 +74,7 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     // live container but disappears naturally when Sandbox recycles it.
     const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
     recycled = ready?.exitCode !== 0;
-    const snapshot = options?.restoreLatest === false || ready?.exitCode === 0 ? null : await latestSnapshot(env, identity);
+    const snapshot = options?.restoreLatest === false || ready?.exitCode === 0 ? null : await latestSnapshot(env, identity, scope);
     if (snapshot) {
       try {
         const receipt = verifyWorkspaceRestore(snapshot, await sandbox.restoreBackup({ id: snapshot.backupId, dir: snapshot.backupDir }));
@@ -89,21 +104,54 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
   return { sandbox, home: WORKSPACE_HOME, recycled };
 }
 
-export async function snapshotUserWorkspace(env: Env, identity: AccessIdentity, name = "auto") {
-  const { sandbox } = await getUserWorkspace(env, identity, { restoreLatest: false });
+export type WorkspaceSnapshotOutcome =
+  | { published: true; backup: DirectoryBackup; sizeBytes: number }
+  | { published: false; reason: "cooldown" | "shrink_refused"; sizeBytes?: number; previousBytes?: number };
+
+export async function snapshotUserWorkspace(
+  env: Env,
+  identity: AccessIdentity,
+  name = "auto",
+  options?: { scope?: WorkspaceScope; respectCooldown?: boolean },
+): Promise<DirectoryBackup> {
+  const outcome = await snapshotWorkspace(env, identity, name, { ...options, respectCooldown: options?.respectCooldown ?? false });
+  if (!outcome.published) throw new Error(`workspace snapshot not published: ${outcome.reason}`);
+  return outcome.backup;
+}
+
+export async function snapshotWorkspace(
+  env: Env,
+  identity: AccessIdentity,
+  name: string,
+  options?: { scope?: WorkspaceScope; respectCooldown?: boolean },
+): Promise<WorkspaceSnapshotOutcome> {
+  const scope = options?.scope ?? OWNER_SCOPE;
+  const previous = await latestSnapshotRow(env, identity, scope);
+  if (options?.respectCooldown && previous && !turnSnapshotDue(Date.parse(`${previous.updated_at}Z`), Date.now())) {
+    return { published: false, reason: "cooldown" };
+  }
+  const { sandbox } = await getUserWorkspace(env, identity, { scope });
+  const measured = await sandbox.exec(workspaceSizeCommand(), { cwd: "/", timeout: 20_000, origin: "internal" }).catch(() => null);
+  const sizeBytes = Number.parseInt(measured?.stdout?.trim() ?? "", 10);
+  const knownSize = Number.isFinite(sizeBytes) ? sizeBytes : 0;
+  const decision = decideSnapshotPublish(previous?.size_bytes ?? null, knownSize);
+  if (!decision.publish) {
+    console.error("workspace_snapshot_shrink_refused", { email: identity.email, scope, previousBytes: decision.previousBytes, nextBytes: decision.nextBytes });
+    return { published: false, reason: "shrink_refused", sizeBytes: knownSize, previousBytes: decision.previousBytes };
+  }
   const backup = await sandbox.createBackup({
     dir: WORKSPACE_HOME,
     name: `my-ax-${name}-${Date.now()}`,
     ttl: SNAPSHOT_TTL_SECONDS,
     gitignore: false,
-    excludes: [".cache", "*.log"],
+    excludes: [...REBUILDABLE_BACKUP_EXCLUDES],
     compression: { format: "zstd" },
     multipart: true,
   });
   await Effect.runPromise(
-    publishWorkspaceSnapshot(key(identity), backup).pipe(Effect.provide(databaseLayer(env.DB))),
+    publishWorkspaceSnapshot(workspaceSnapshotKey(identity.email, scope), backup, knownSize, name).pipe(Effect.provide(databaseLayer(env.DB))),
   );
-  return backup;
+  return { published: true, backup, sizeBytes: knownSize };
 }
 
 export interface SeedFileInput {

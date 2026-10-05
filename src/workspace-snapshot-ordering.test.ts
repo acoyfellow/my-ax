@@ -21,6 +21,9 @@ function fakeDb(initialVersion?: number) {
     : { id: "legacy", dir: "/home/user", version: initialVersion };
   const db = {
     prepare(sql: string) {
+      if (sql.includes("workspace_snapshot_history")) {
+        return { bind() { return { async run() {} }; } };
+      }
       assert.match(sql, /snapshot_version=workspace_snapshots\.snapshot_version \+ 1/);
       assert.doesNotMatch(sql, /Date\.now|random|WHERE workspace_snapshots\.snapshot_version/);
       return {
