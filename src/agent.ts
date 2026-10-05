@@ -620,6 +620,10 @@ export class MyAgent extends Think<Env> {
     for (const mcp of configured) await register(mcp.id, mcp.upstream);
   }
 
+  delegateIdentity(): AccessIdentity | undefined {
+    return this.identity();
+  }
+
   private identity(): AccessIdentity | undefined {
     return this.getConfig<MyAgentConfig>()?.identity;
   }
