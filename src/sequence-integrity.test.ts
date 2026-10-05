@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "./test-expect";
 import { checkSequenceIntegrity } from "./sequence-integrity";
 
 const row = (sequence: number) => ({ sequence });

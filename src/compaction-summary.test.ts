@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "./test-expect";
 import { ownerVisibleTranscript } from "./compaction-summary";
 
 test("compaction summaries stay in model context but leave the owner transcript", () => {

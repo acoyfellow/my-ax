@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "./test-expect";
 import { claimRecurringJobRun, remainingRecurringJobRuns, type JobStatus } from "./jobs";
 import { recurringJobReceipt } from "./recurring-job-receipt";
 import type { Env } from "./types";
