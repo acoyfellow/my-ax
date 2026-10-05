@@ -22,6 +22,7 @@ import { deploymentVersionResponse } from "./deploy-version";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
+import { registerPiEngineRoutes } from "./pi-engine/routes";
 import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerPushRoutes } from "./routes/push";
@@ -71,6 +72,7 @@ export { MachineHost } from "./machinectl-host";
 export { Sandbox } from "@cloudflare/sandbox";
 export { Sandbox as NamedComputer } from "@cloudflare/sandbox";
 export { ComputerWorkspace } from "./computer-workspace";
+export { PiChatAgent } from "./pi-engine/pi-chat-agent";
 const app = new Hono<AppEnv>();
 
 // Fail loud on missing CORE secrets only. The two below are required for the
@@ -283,6 +285,7 @@ app.get("/api", async (c) => {
 });
 
 registerSessionRoutes(app);
+registerPiEngineRoutes(app);
 registerUploadRoutes(app);
 registerPushRoutes(app);
 registerJobRoutes(app);

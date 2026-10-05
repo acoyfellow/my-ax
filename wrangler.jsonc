@@ -154,6 +154,7 @@
       { "name": "SANDBOX", "class_name": "Sandbox" },
       { "name": "NAMED_COMPUTER", "class_name": "NamedComputer" },
       { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
+      { "name": "PI_CHAT", "class_name": "PiChatAgent" },
       // Direct-routed voice DO; delegates turns into the MyAgent facet by RPC.
       { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
       // NOTE: The native @cloudflare/codemode `CodemodeRuntime` Durable
@@ -183,7 +184,8 @@
     { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] },
     { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
     { "tag": "v12-desk-hub" },
-    { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] }
+    { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] },
+    { "tag": "v14-pi-chat", "new_sqlite_classes": ["PiChatAgent"] }
   ],
 
   // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
@@ -311,6 +313,7 @@
           { "name": "SANDBOX", "class_name": "Sandbox" },
           { "name": "NAMED_COMPUTER", "class_name": "NamedComputer" },
           { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
+          { "name": "PI_CHAT", "class_name": "PiChatAgent" },
           { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
           // CODEMODE_RUNTIME intentionally held — see top-level note.
         ]
@@ -327,7 +330,8 @@
         { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
         { "tag": "v10-remove-voice-proof", "deleted_classes": ["VoiceProofAgent"] },
         { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
-        { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] }
+        { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] },
+        { "tag": "v14-pi-chat", "new_sqlite_classes": ["PiChatAgent"] }
         // v12-codemode-runtime intentionally held — see top-level note.
       ],
       "kv_namespaces": [
