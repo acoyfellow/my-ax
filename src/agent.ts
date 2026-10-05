@@ -9,6 +9,7 @@ import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultCo
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
 import { composeOwnerSystemPrompt, DEFAULT_OWNER_INSTRUCTIONS, getOwnerInstructions } from "./owner-instructions";
+import { workspaceShellExec } from "./workspace-exec";
 import { DEFAULT_MODEL_ID, defaultModelId, findModel } from "./models";
 import { gatewayAuthenticationFailure } from "./model-auth";
 import type { AccessIdentity } from "./auth";
@@ -954,11 +955,7 @@ export class MyAgent extends Think<Env> {
       workingDirectory,
       sandboxOnly,
       notifyOwner: (input) => notifyOwner(env, identity.email, { ...input, sessionId }),
-      shellExec: async (cmd, opts) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        const result = await sandbox.exec(cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout ?? 30_000, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } });
-        return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", exitCode: result.exitCode ?? (result.success ? 0 : 1) };
-      },
+      shellExec: (cmd, opts) => workspaceShellExec(() => getUserWorkspace(env, identity), cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout ?? 30_000, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } }),
       processStart: async (cmd, opts) => {
         const { sandbox } = await getUserWorkspace(env, identity);
         const process = await sandbox.startProcess(cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout, processId: opts?.processId, autoCleanup: false, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } });
