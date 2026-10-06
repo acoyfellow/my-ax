@@ -63,8 +63,11 @@
     setActiveSession,
     captureTitleEpoch,
     isTitleEpochCurrent,
+    storedSessionEngine,
+    rememberSessionEngine,
   } from "@my-ax/store";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
+  import { PiTranscript, type PiSnapshot } from "./pi-transcript";
 
   // Markdown ships in the application bundle so the first streamed token can
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
@@ -506,7 +509,7 @@
     const preparation = (async () => {
       try {
         await createAndPrepareVoiceSession(
-          createSession,
+          createThinkSession,
           (sessionId) => generation === voiceLifecycleGeneration && localStorage.getItem(SESSION_KEY) === sessionId,
           attachFreshVoiceChatSession,
           prepareVoiceClientForSession,
@@ -664,6 +667,7 @@
   }
   const wsDown = $derived(wsState.conn !== "live");
   const sendStatus = $derived.by(() => {
+    if (piBusy && !wsDown) return composerText.trim() || pendingAttachments.length ? "idle" : "running";
     if (wsDown && !composerLocked) return "offline";
     if (composerLocked && wsState.status !== "done") return wsState.status;
     return "idle";
@@ -1107,6 +1111,75 @@
 
   // ── Bootstrap & WebSocket ──────────────────────────────────────────
   let ws: WebSocket | null = null;
+  let piTranscript: PiTranscript | null = null;
+  const isPiSession = (sessionId: string | null) => storedSessionEngine(sessionId) === "pi";
+  async function learnSessionEngine(sessionId: string): Promise<void> {
+    if (localStorage.getItem("my-ax-session-engine:" + sessionId)) return;
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/engine`, { credentials: "include" });
+      const body = await response.json().catch(() => null);
+      const engine = body?.result?.engine;
+      if (engine === "pi" || engine === "think") rememberSessionEngine(sessionId, engine);
+    } catch {}
+  }
+  function chatSocketUrl(sessionId: string) {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    if (isPiSession(sessionId)) {
+      piTranscript = new PiTranscript();
+      return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
+    }
+    piTranscript = null;
+    return `${proto}//${location.host}/agents/my-agent/${sessionId}`;
+  }
+  let piBusy = $state(false);
+  function renderPiTranscript() {
+    if (!piTranscript) return;
+    piBusy = piTranscript.busy;
+    const sessionId = currentSessionId();
+    const optimistic = messages.filter((message) => message.pending && message.role === "user");
+    const rendered: MessageView[] = piTranscript.messages().map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      parts: message.parts.map((part) => part.kind === "text"
+        ? { kind: "text" as const, text: part.text, rendered: message.streaming ? undefined : renderMarkdown(part.text) }
+        : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: Date.now(), elapsedText: "", result: part.tool.result, isError: part.tool.isError } }),
+      reasoning: message.reasoning,
+      timestamp: message.timestamp,
+      streaming: message.streaming,
+      pending: false,
+      sessionId,
+    }));
+    const confirmedUserTexts = new Set(rendered.filter((message) => message.role === "user").map((message) => message.content));
+    messages = [...rendered, ...optimistic.filter((message) => !confirmedUserTexts.has(message.content))];
+    if (piTranscript.busy !== (wsState.status === "running" || wsState.status === "thinking")) applyStatus(piTranscript.busy ? "running" : "idle");
+    bootstrapPending = false;
+    resumingExistingSession = false;
+    sessionResumeVisible = false;
+    if (messages.length) onboardingHidden = true;
+    queueScrollToBottom();
+  }
+  function onPiFrame(frame: any): boolean {
+    if (!piTranscript) return false;
+    if (frame.type === "pi_snapshot") {
+      piTranscript.applySnapshot(frame.view as PiSnapshot);
+      renderPiTranscript();
+      return true;
+    }
+    if (frame.type === "pi_events") {
+      piTranscript.applyEvents(frame.events ?? []);
+      renderPiTranscript();
+      return true;
+    }
+    if (frame.type === "pi_error") {
+      pushError(String(frame.message ?? "Message failed"));
+      return true;
+    }
+    return frame.type === "pi_receipt" || frame.type === "pi_pong";
+  }
+  function sendPiMessage(text: string, attachments: Attachment[], clientMsgId: string) {
+    ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, model: modelState.current }));
+  }
   let activeRequestId: string | null = null;
   let thinkMessages: any[] = [];
   let streamingMsgId: string | null = null;
@@ -1213,7 +1286,7 @@
     sessionResumeVisible = false;
     setConn("reconnecting");
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${sessionId}`);
+    ws = makeReconnectingSocket(chatSocketUrl(sessionId));
     void refreshPendingDecision(sessionId);
   }
 
@@ -1227,9 +1300,10 @@
       return;
     }
     prepareVoiceClientForSession(sessionId);
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${sessionId}`);
+    await learnSessionEngine(sessionId);
+    ws = makeReconnectingSocket(chatSocketUrl(sessionId));
     void refreshPendingDecision(sessionId);
+    if (piTranscript) return;
     // Resuming an existing session (e.g. tapping a notification deep-link into a
     // long thread): render the durable D1 transcript eagerly so the messages
     // appear immediately instead of waiting for the slow WS replay. Skipped for
@@ -1241,6 +1315,15 @@
   // socket, swaps the active session, and reconnects so the server replays
   // history via cf_agent_chat_messages. Avoids the re-download/re-parse jank.
   function switchToSession(id: string) {
+    if (!id || id === localStorage.getItem(SESSION_KEY)) return;
+    if (!localStorage.getItem("my-ax-session-engine:" + id)) {
+      void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
+      return;
+    }
+    switchToSessionKnownEngine(id);
+  }
+
+  function switchToSessionKnownEngine(id: string) {
     if (!id || id === localStorage.getItem(SESSION_KEY)) return;
     void stopVoiceMode();
     sessionGeneration.activate(id);
@@ -1268,8 +1351,10 @@
     void refreshActiveSessionTitle(id);
     void refreshRemoteTurn(id);
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    void proto;
     setConn("reconnecting");
-    ws = makeReconnectingSocket(`${proto}//${location.host}/agents/my-agent/${id}`);
+    ws = makeReconnectingSocket(chatSocketUrl(id));
+    if (piTranscript) return;
     queueMicrotask(() => { void hydrateHistoryTimestamps(); });
     // Eagerly render the durable D1 transcript instead of waiting for the WS
     // cf_agent_chat_messages replay. On a LONG thread the server's DO wake +
@@ -1366,12 +1451,37 @@
   }
 
   async function createSession(): Promise<string> {
-    const session = await postSessionWithRetry(fetch);
+    const session = await createPiSessionOrFallback();
     const previousSessionId = localStorage.getItem(SESSION_KEY);
     if (previousSessionId && previousSessionId !== session.sessionId) void stopVoiceMode();
     localStorage.setItem(SESSION_KEY, session.sessionId);
     setActiveSession(session.sessionId, session.name);
     return session.sessionId;
+  }
+
+  async function createThinkSession(): Promise<string> {
+    const session = await postSessionWithRetry(fetch);
+    localStorage.setItem(SESSION_KEY, session.sessionId);
+    setActiveSession(session.sessionId, session.name);
+    return session.sessionId;
+  }
+
+  async function createPiSessionOrFallback(): Promise<{ sessionId: string; name?: string }> {
+    try {
+      const response = await fetch("/api/pi/chats", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "New chat" }),
+      });
+      const body = await response.json().catch(() => null);
+      const chatId = body?.result?.chatId;
+      if (response.ok && typeof chatId === "string") {
+        rememberSessionEngine(chatId, "pi");
+        return { sessionId: chatId, name: "New chat" };
+      }
+    } catch {}
+    return postSessionWithRetry(fetch);
   }
 
   function makeReconnectingSocket(url: string) {
@@ -1407,12 +1517,12 @@
   function onOpen() {
     setConn("live");
     flushPendingSends();
-    restoreActiveTurn();
-    void refreshRemoteTurn();
-    sendVisibility();
-    // If a connection was suspended/replaced during a live turn, Think can
-    // replay both active and already-completed streams by request id.
-    requestActiveResponseRecovery();
+    if (!piTranscript) {
+      restoreActiveTurn();
+      void refreshRemoteTurn();
+      sendVisibility();
+      requestActiveResponseRecovery();
+    }
     const pendingFirst = sessionStorage.getItem("my-ax-pending-first-message");
     const pendingFirstAttachments = sessionStorage.getItem("my-ax-pending-first-attachments");
     const pendingFirstSession = sessionStorage.getItem("my-ax-pending-first-session");
@@ -1493,7 +1603,9 @@
     } catch {
       return;
     }
-    if (m.type === "my_ax_pong") {
+    if (onPiFrame(m)) {
+      return;
+    } else if (m.type === "my_ax_pong") {
       return;
     } else if (m.type === "desk.board") {
       window.dispatchEvent(new CustomEvent("my-ax:desk-board", { detail: m.board }));
@@ -2075,7 +2187,7 @@
 
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
-    if (composerLocked) return;
+    if (composerLocked && !piTranscript) return;
     const text = composerText;
     if (!text.trim() && pendingAttachments.length === 0) return;
     if (ws && wsState.conn !== "live") {
@@ -2124,7 +2236,8 @@
     ];
     queueScrollToBottom();
 
-    sendThinkMessage(text, outgoingAttachments, clientMsgId);
+    if (piTranscript) sendPiMessage(text, outgoingAttachments, clientMsgId);
+    else sendThinkMessage(text, outgoingAttachments, clientMsgId);
 
     composerText = "";
     applyStatus("thinking");
@@ -2184,6 +2297,10 @@
   }
   function cancelAgent() {
     if (wsState.status === "idle" || wsState.status === "done") return;
+    if (piTranscript && ws && (ws as any).readyState === WebSocket.OPEN) {
+      (ws as any).send(JSON.stringify({ type: "pi_abort" }));
+      return;
+    }
     if (ws && (ws as any).readyState === WebSocket.OPEN) {
       if (activeRequestId)
         (ws as any).send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId }));

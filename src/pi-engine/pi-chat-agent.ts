@@ -1,6 +1,9 @@
 import { createModels } from "@earendil-works/pi-ai/models";
 import { createRegistry, Harness, type EntryRecord } from "@earendil-works/pi-durable";
-import { Agent } from "agents-pi";
+import { Agent, type Connection, type WSMessage } from "agents-pi";
+import type { AgentEvent, AgentEventStream } from "@earendil-works/pi-durable";
+import { readUploadBytes } from "../uploads";
+import type { Attachment } from "../types";
 import { PiHarness } from "agents-pi/harness/pi";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
@@ -9,7 +12,13 @@ import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "..
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
-import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID } from "./gateway-models";
+import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID, resolvePiModelChoice } from "./gateway-models";
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  return btoa(binary);
+}
 
 export const PI_ENGINE_DEFAULT_MODEL = "@cf/zai-org/glm-5.3";
 
@@ -58,6 +67,71 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.lifecycle.use(this.harness);
+  }
+
+  async onStart(): Promise<void> {
+    if ([...this.getConnections()].length) await this.ensureEventStream();
+  }
+
+  private eventStream: AgentEventStream | null = null;
+
+  private async ensureEventStream(): Promise<void> {
+    if (this.eventStream) return;
+    const stream = await this.harness.session().events();
+    this.eventStream = stream;
+    stream.start(async (events: readonly AgentEvent[]) => {
+      this.broadcast(JSON.stringify({ type: "pi_events", events }));
+    });
+    void stream.closed.finally(() => {
+      if (this.eventStream === stream) this.eventStream = null;
+    });
+  }
+
+  async onConnect(connection: Connection): Promise<void> {
+    await this.ensureEventStream();
+    connection.send(JSON.stringify({ type: "pi_snapshot", view: await this.live() }));
+  }
+
+  async onMessage(connection: Connection, message: WSMessage): Promise<void> {
+    if (typeof message !== "string") return;
+    await this.ensureEventStream();
+    let frame: { type?: string; text?: string; operationId?: string; attachments?: Attachment[]; model?: string } = {};
+    try { frame = JSON.parse(message); } catch { return; }
+    if (frame.type === "pi_ping") {
+      connection.send(JSON.stringify({ type: "pi_pong" }));
+      return;
+    }
+    if (frame.type === "pi_abort") {
+      await this.abortAll();
+      return;
+    }
+    if (frame.type === "pi_submit") {
+      try {
+        if (frame.model) await this.applyModelChoice(frame.model);
+        const receipt = await this.submitInput(frame.text ?? "", frame.attachments ?? [], frame.operationId);
+        connection.send(JSON.stringify({ type: "pi_receipt", operationId: receipt.operationId, accepted: receipt.accepted }));
+      } catch (error) {
+        connection.send(JSON.stringify({ type: "pi_error", operationId: frame.operationId, message: error instanceof Error ? error.message : String(error) }));
+      }
+    }
+  }
+
+  private async applyModelChoice(modelId: string): Promise<void> {
+    const choice = resolvePiModelChoice(modelId);
+    if (!choice) return;
+    const current = (await this.live()).model;
+    if (current !== choice.id) await this.setModel(choice.provider, choice.id);
+  }
+
+  async submitInput(text: string, attachments: Attachment[], operationId?: string): Promise<PiChatSubmitResult> {
+    const images = await Promise.all(attachments.map(async (attachment) => ({
+      type: "image" as const,
+      data: bytesToBase64(await readUploadBytes(this.env, this.identity(), attachment)),
+      mimeType: attachment.mime || "image/png",
+    })));
+    const content = images.length ? [{ type: "text" as const, text: text || "Describe the attached image." }, ...images] : text;
+    const receipt = await this.harness.submit(content, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
+    return { operationId: receipt.operationId, accepted: receipt.accepted };
   }
 
   bind(identity: { email: string }, chatId: string): void {
