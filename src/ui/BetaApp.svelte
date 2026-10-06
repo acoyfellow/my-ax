@@ -12,21 +12,12 @@
   import Sessions from "./Sessions.svelte";
   import Settings from "./Settings.svelte";
   import Connectors from "./Connectors.svelte";
-  import PiChat from "./PiChat.svelte";
-  import { sessionState, createPiChat } from "@my-ax/store";
 
   interface Props {
     identityEmail?: string | null;
     initialTheme?: "system" | "light" | "dark";
   }
   const { identityEmail = null, initialTheme = "system" }: Props = $props();
-
-  let piStartError = $state("");
-  $effect(() => {
-    if (typeof window === "undefined" || sessionState.id) return;
-    if (sessionStorage.getItem("my-ax-pending-first-message")) return;
-    void createPiChat().catch((err: unknown) => { piStartError = err instanceof Error ? err.message : String(err); });
-  });
 
   let vpDebug = $state<string>("");
   let vpDebugOn = $state(false);
@@ -89,15 +80,7 @@
 <div class="h-full flex flex-col">
   <AppShell {identityEmail} />
   <div class="flex-1 min-h-0 flex flex-col">
-    {#if sessionState.engine === "pi" && sessionState.id}
-      {#key sessionState.id}
-        <PiChat chatId={sessionState.id} />
-      {/key}
-    {:else if !sessionState.id && !piStartError}
-      <div class="flex-1 flex items-center justify-center text-sm text-fg-mut">Starting a new chat…</div>
-    {:else}
-      <Chat />
-    {/if}
+    <Chat />
   </div>
 </div>
 
