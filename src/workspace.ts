@@ -57,6 +57,44 @@ function workspaceSizeCommand(): string {
   return `du -sb ${excludes} ${WORKSPACE_HOME} 2>/dev/null | cut -f1`;
 }
 
+const RESTORE_FALLBACK_DEPTH = 3;
+
+async function restoreCandidates(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<WorkspaceSnapshotManifest[]> {
+  const latest = await latestSnapshot(env, identity, scope);
+  const history = await env.DB.prepare(
+    "SELECT backup_id, backup_dir FROM workspace_snapshot_history WHERE workspace_key = ? ORDER BY id DESC LIMIT ?",
+  ).bind(workspaceSnapshotKey(identity.email, scope), RESTORE_FALLBACK_DEPTH + 1).all<{ backup_id: string; backup_dir: string }>()
+    .then((rows) => rows.results ?? [])
+    .catch(() => []);
+  const ordered = [latest, ...history.map((row) => ({ backupId: row.backup_id, backupDir: row.backup_dir }))]
+    .filter((candidate): candidate is WorkspaceSnapshotManifest => candidate !== null);
+  const seen = new Set<string>();
+  return ordered.filter((candidate) => !seen.has(candidate.backupId) && seen.add(candidate.backupId)).slice(0, RESTORE_FALLBACK_DEPTH);
+}
+
+async function restoreWithFallback(env: Env, identity: AccessIdentity, scope: WorkspaceScope, sandbox: ReturnType<typeof handle>): Promise<void> {
+  const candidates = await restoreCandidates(env, identity, scope);
+  let destroyedBrokenContainer = false;
+  for (const candidate of candidates) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const receipt = verifyWorkspaceRestore(candidate, await sandbox.restoreBackup({ id: candidate.backupId, dir: candidate.backupDir }));
+        console.info("workspace.restore_verified", receipt);
+        return;
+      } catch (err) {
+        console.error("workspace.restore_failed", { email: identity.email, scope, backupId: candidate.backupId, attempt, err: String(err) });
+        if (!destroyedBrokenContainer) {
+          destroyedBrokenContainer = true;
+          await sandbox.destroy().catch((destroyError: unknown) => console.error("workspace.destroy_after_restore_failure_failed", { err: String(destroyError) }));
+          continue;
+        }
+        break;
+      }
+    }
+  }
+  if (candidates.length) console.error("workspace.restore_unavailable_continuing", { email: identity.email, scope, tried: candidates.map((candidate) => candidate.backupId) });
+}
+
 export async function getUserWorkspace(env: Env, identity: AccessIdentity, options?: { restoreLatest?: boolean; scope?: WorkspaceScope }) {
   const scope = options?.scope ?? OWNER_SCOPE;
   const id = key(identity, scope);
@@ -74,19 +112,8 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     // live container but disappears naturally when Sandbox recycles it.
     const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
     recycled = ready?.exitCode !== 0;
-    const snapshot = options?.restoreLatest === false || ready?.exitCode === 0 ? null : await latestSnapshot(env, identity, scope);
-    if (snapshot) {
-      try {
-        const receipt = verifyWorkspaceRestore(snapshot, await sandbox.restoreBackup({ id: snapshot.backupId, dir: snapshot.backupDir }));
-        console.info("workspace.restore_verified", receipt);
-      } catch (err) {
-        console.error("workspace.restore_failed", { email: identity.email, backupId: snapshot.backupId, err: String(err) });
-        // Never bless an empty/partial workspace as ready after restore failed.
-        // Leave the marker absent so the next acquisition retries restoration,
-        // and prevent a subsequent turn from snapshotting empty state over the
-        // latest durable pointer.
-        throw new Error(`Workspace restore failed for backup ${snapshot.backupId}`);
-      }
+    if (options?.restoreLatest !== false && ready?.exitCode !== 0) {
+      await restoreWithFallback(env, identity, scope, sandbox);
     }
     const initialized = await sandbox.exec(workspaceInitCommand(WORKSPACE_HOME, READY_MARKER), {
       cwd: "/",
