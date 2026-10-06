@@ -1,6 +1,7 @@
 import { Agent, getAgentByName, getSubAgentByName, type Connection } from "agents";
 import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type VoiceTurnContext } from "@cloudflare/voice";
 import { MyAgent } from "./agent";
+import { openPiChat } from "./pi-engine/routes";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import {
@@ -39,6 +40,24 @@ const VoiceAgent = withVoice(Agent);
  * socket (chat log updates live). We return the full assistant string so the
  * stock string TTS path synthesizes and speaks it.
  */
+async function sessionEngine(env: Env, ownerEmail: string, sessionId: string): Promise<"pi" | "think"> {
+  const row = await env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, ownerEmail.toLowerCase()).first<{ engine: string }>();
+  return row?.engine === "pi" ? "pi" : "think";
+}
+
+export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, sessionId: string, transcript: string): Promise<string> {
+  if (await sessionEngine(env, identity.email, sessionId) === "pi") {
+    const chat = await openPiChat(env, identity.email, sessionId);
+    const receipt = await chat.submit(transcript);
+    const result = await chat.wait(receipt.operationId);
+    return result.text ?? (result.reason ? `The turn ended: ${result.reason}` : "");
+  }
+  const parent = await getAgentByName(env.USER_AGENT, identity.email.toLowerCase());
+  const facet = await getSubAgentByName(parent, MyAgent, sessionId);
+  await facet.seedIdentity(identity);
+  return await facet.runVoiceTurn(transcript);
+}
+
 export class VoiceThinkAgent extends VoiceAgent<Env> {
   transcriber = new WorkersAIFluxSTT(this.env.AI, { keyterms: [...VOICE_STT_KEYTERMS] });
   tts = new WorkersAITTS(this.env.AI, { speaker: "asteria" });
@@ -94,10 +113,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
       let outcome: { reply: string } | { error: string } | null = null;
       const runReply = (async () => {
         try {
-          const parent = await getAgentByName(env.USER_AGENT, cfg.identity!.email.toLowerCase());
-          const facet = await getSubAgentByName(parent, MyAgent, cfg.sessionId!);
-          await facet.seedIdentity(cfg.identity!);
-          const reply = await facet.runVoiceTurn(transcript);
+          const reply = await runEngineVoiceTurn(env, cfg.identity!, cfg.sessionId!, transcript);
           outcome = { reply: reply || "Sorry, I didn't catch a response." };
         } catch (e) {
           console.error("voice_turn_failed", { err: e instanceof Error ? e.message : String(e) });

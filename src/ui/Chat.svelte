@@ -509,7 +509,7 @@
     const preparation = (async () => {
       try {
         await createAndPrepareVoiceSession(
-          createThinkSession,
+          createSession,
           (sessionId) => generation === voiceLifecycleGeneration && localStorage.getItem(SESSION_KEY) === sessionId,
           attachFreshVoiceChatSession,
           prepareVoiceClientForSession,
@@ -1454,13 +1454,6 @@
     const session = await createPiSessionOrFallback();
     const previousSessionId = localStorage.getItem(SESSION_KEY);
     if (previousSessionId && previousSessionId !== session.sessionId) void stopVoiceMode();
-    localStorage.setItem(SESSION_KEY, session.sessionId);
-    setActiveSession(session.sessionId, session.name);
-    return session.sessionId;
-  }
-
-  async function createThinkSession(): Promise<string> {
-    const session = await postSessionWithRetry(fetch);
     localStorage.setItem(SESSION_KEY, session.sessionId);
     setActiveSession(session.sessionId, session.name);
     return session.sessionId;
