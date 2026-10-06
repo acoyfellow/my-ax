@@ -1161,6 +1161,7 @@
   }
   function onPiFrame(frame: any): boolean {
     if (!piTranscript) return false;
+    lastTurnFrameAt = Date.now();
     if (frame.type === "pi_snapshot") {
       piTranscript.applySnapshot(frame.view as PiSnapshot);
       renderPiTranscript();
@@ -1795,6 +1796,7 @@
   }
 
   async function hydrateHistoryTimestamps() {
+    if (piTranscript) return;
     // NO-OP by design. This used to re-download up to 2000 oldest-first D1 rows
     // (entries?after=0) on every resume AND every Think replay just to patch
     // message timestamps. On a large thread (the Master conversation) that was
@@ -1807,6 +1809,7 @@
   }
 
   async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
+    if (piTranscript) return "stale";
     if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
     // P1 Stage 2: render ONE newest-first bounded page immediately instead of
     // draining up to 20 oldest-first 200-row pages before first paint. Older
@@ -1829,6 +1832,7 @@
   // page (chronological) ahead of the current transcript, merged by id so a
   // Think replay that already rendered some of these does not duplicate them.
   async function loadOlderHistory(): Promise<void> {
+    if (piTranscript) return;
     if (loadingOlderHistory || olderHistoryCursor === null || olderHistoryCursor === "") return;
     const expected = sessionGeneration.capture();
     if (!expected) return;
@@ -1869,6 +1873,7 @@
   }
 
   function renderThinkHistory(historyMessages: any[]) {
+    if (piTranscript) return;
     if (activeRequestId) return;
     const wasResuming = resumingExistingSession;
     thinkMessages = historyMessages || [];
@@ -2449,7 +2454,7 @@
       // next real frame in dispatchTurn).
       const verdict = evaluateTurnStall({
         now: Date.now(),
-        composerLocked,
+        composerLocked: composerLocked && !piTranscript,
         socketOpen: (ws as any).readyState === WebSocket.OPEN,
         alreadySurfaced: turnStallSurfaced,
         lastTurnFrameAt,
