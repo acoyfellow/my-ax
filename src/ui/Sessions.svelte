@@ -16,7 +16,7 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
-  import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine, storedSessionEngine } from "@my-ax/store";
+  import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
 
   type SessionRow = {
@@ -181,12 +181,7 @@
     const target = sessions.find((row) => row.id === id);
     const engine = target?.engine === "pi" ? "pi" : "think";
     rememberSessionEngine(id, engine);
-    if (engine === "pi" || storedSessionEngine(localStorage.getItem(SESSION_KEY)) === "pi") {
-      close();
-      localStorage.setItem(SESSION_KEY, id);
-      setActiveSession(id, target?.name);
-      return;
-    }
+
     // Do NOT pre-write SESSION_KEY here: switchToSession() in the chat mount
     // guards on `id === localStorage[SESSION_KEY]` and would no-op. Let the
     // chat mount own the session swap; we just request it.

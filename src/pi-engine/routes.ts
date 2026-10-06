@@ -12,6 +12,13 @@ export function piChatObjectName(ownerEmail: string, chatId: string): string {
 
 type PiEnv = { PI_CHAT: DurableObjectNamespace<PiChatAgent> };
 
+export async function openPiChat(env: AppEnv["Bindings"], ownerEmail: string, chatId: string) {
+  const email = ownerEmail.toLowerCase();
+  const stub = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
+  await stub.bind({ email }, chatId);
+  return stub;
+}
+
 async function ownedPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") => { email: string } }, chatId: string) {
   if (!PI_CHAT_ID_PATTERN.test(chatId)) throw new Error("invalid chat id");
   const email = c.get("identity").email.toLowerCase();
@@ -59,6 +66,13 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     if (!choice) return c.json({ ok: false, error: { code: "UNKNOWN_MODEL", message: "unknown model" } }, 400);
     await stub.setModel(choice.provider, choice.id);
     return c.json({ ok: true, result: choice });
+  });
+
+  app.get("/api/sessions/:id/engine", async (c) => {
+    const email = c.get("identity").email.toLowerCase();
+    const row = await c.env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(c.req.param("id"), email).first<{ engine: string }>();
+    if (!row) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
+    return c.json({ ok: true, result: { engine: row.engine === "pi" ? "pi" : "think" } });
   });
 
   app.get("/api/pi/models", (c) => c.json({ ok: true, result: { models: PI_ENGINE_MODEL_CHOICES } }));

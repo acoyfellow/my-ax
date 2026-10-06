@@ -22,7 +22,7 @@ import { deploymentVersionResponse } from "./deploy-version";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
-import { registerPiEngineRoutes } from "./pi-engine/routes";
+import { openPiChat, registerPiEngineRoutes } from "./pi-engine/routes";
 import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
 import { registerUploadRoutes } from "./routes/uploads";
 import { registerPushRoutes } from "./routes/push";
@@ -421,6 +421,16 @@ app.all("/bridge/:connectorId/*", async (c) => {
 });
 
 // ─── Catch-all: agents SDK WS routing ──────────────────────────────────────
+app.get("/agents/pi-chat/:id", async (c) => {
+  const identity = c.get("identity");
+  const chatId = c.req.param("id");
+  if (c.req.header("upgrade")?.toLowerCase() !== "websocket") return c.json({ ok: false, error: { code: "UPGRADE_REQUIRED", message: "websocket required" } }, 426);
+  const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, identity.email.toLowerCase()).first<{ id: string }>();
+  if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+  const stub = await openPiChat(c.env, identity.email, chatId);
+  return stub.fetch(c.req.raw);
+});
+
 app.all("/agents/*", async (c) => {
   // Preserve the public /agents/my-agent/:sessionId URL while routing the
   // conversation into a MyAgent facet inside one per-user UserAgent root.

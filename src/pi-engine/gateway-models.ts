@@ -1,4 +1,6 @@
-import { createProvider, type MutableModels } from "@earendil-works/pi-ai/models";
+import { createProvider, type MutableModels, type Provider } from "@earendil-works/pi-ai/models";
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { gatewayConfig } from "../llm";
@@ -31,14 +33,14 @@ export function installGatewayModels(models: MutableModels, env: Env): boolean {
   const wanted = new Set<string>(PI_GATEWAY_MODEL_IDS);
   const catalog = anthropicProvider().getModels().filter((model) => wanted.has(model.id));
   if (!catalog.length) return false;
-  models.setProvider(createProvider({
+  models.setProvider(withRefusalFallback(createProvider({
     id: PI_GATEWAY_PROVIDER_ID,
     name: "My AX gateway",
     baseUrl,
     auth: { apiKey: { name: "My AX gateway", resolve: async () => ({ auth: { headers }, source: "gateway" }) } },
     models: catalog.map((model) => ({ ...model, provider: PI_GATEWAY_PROVIDER_ID, baseUrl })),
     api: anthropicMessagesApi(),
-  }));
+  })));
   return true;
 }
 
@@ -50,3 +52,69 @@ export const PI_ENGINE_MODEL_CHOICES: readonly PiModelChoice[] = [
   { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
   { provider: "cloudflare", id: "@cf/zai-org/glm-5.3", label: "GLM 5.3" },
 ];
+
+export const PI_REFUSAL_FALLBACK_CHAIN: Readonly<Record<string, string>> = {
+  "claude-opus-5-5": "claude-opus-5",
+  "claude-opus-5": "claude-sonnet-5-5",
+};
+
+export function isRefusal(message: { stopReason?: string; errorMessage?: string; content?: unknown[] }): boolean {
+  if (message.stopReason !== "error") return false;
+  if (Array.isArray(message.content) && message.content.length > 0) return false;
+  return /usage policy|refus|violative/i.test(message.errorMessage ?? "");
+}
+
+export function refusalFallbackModel(modelId: string): string | undefined {
+  return PI_REFUSAL_FALLBACK_CHAIN[modelId];
+}
+
+type StreamSimple = Provider["streamSimple"];
+
+export function withRefusalFallback(provider: Provider): Provider {
+  const streamWithFallback: StreamSimple = (model, context, options) => {
+    const out = createAssistantMessageEventStream();
+    void (async () => {
+      let current: Model<Api> = model;
+      for (;;) {
+        const buffered: Parameters<typeof out.push>[0][] = [];
+        let refused = false;
+        for await (const event of provider.streamSimple(current, context, options)) {
+          if (event.type === "error" && isRefusal(event.error)) {
+            const next = refusalFallbackModel(current.id);
+            const nextModel = next ? provider.getModels().find((candidate) => candidate.id === next) : undefined;
+            if (nextModel) {
+              console.warn("pi_model_refusal_fallback", { from: current.id, to: nextModel.id });
+              current = nextModel;
+              refused = true;
+              break;
+            }
+          }
+          buffered.push(event);
+          if (event.type !== "start") {
+            for (const pending of buffered.splice(0)) out.push(pending);
+          }
+        }
+        if (!refused) {
+          for (const pending of buffered.splice(0)) out.push(pending);
+          out.end();
+          return;
+        }
+      }
+    })().catch((error: unknown) => {
+      console.error("pi_refusal_fallback_failed", { err: error instanceof Error ? error.message : String(error) });
+      out.end();
+    });
+    return out;
+  };
+  return { ...provider, getModels: () => provider.getModels(), streamSimple: streamWithFallback };
+}
+
+const SETTINGS_MODEL_TO_PI: Readonly<Record<string, string>> = {
+  "@cf/moonshotai/kimi-k3": "@cf/zai-org/glm-5.3",
+  "@cf/moonshotai/kimi-k2.7-code": "@cf/zai-org/glm-5.3",
+};
+
+export function resolvePiModelChoice(settingsModelId: string): PiModelChoice | undefined {
+  const id = SETTINGS_MODEL_TO_PI[settingsModelId] ?? settingsModelId;
+  return PI_ENGINE_MODEL_CHOICES.find((choice) => choice.id === id);
+}
