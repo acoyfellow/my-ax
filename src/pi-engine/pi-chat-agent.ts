@@ -9,6 +9,7 @@ import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "..
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
+import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID } from "./gateway-models";
 
 export const PI_ENGINE_DEFAULT_MODEL = "@cf/zai-org/glm-5.3";
 
@@ -22,6 +23,19 @@ type PiChatState = { ownerEmail?: string; chatId?: string };
 
 export type PiChatSubmitResult = { operationId: string; accepted: boolean };
 export type PiChatWaitResult = { status: string; text?: string; reason?: string };
+export type PiChatLiveView = {
+  busy: boolean;
+  model: string;
+  entries: unknown[];
+  partial: unknown | null;
+  tools: unknown[];
+  queued: number;
+  retry: { at: number; error: string } | null;
+};
+
+function hasGatewayModels(env: Env): boolean {
+  return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
+}
 
 export class PiChatAgent extends Agent<Env, PiChatState> {
   initialState: PiChatState = {};
@@ -32,10 +46,13 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     harness: ({ storage, context }) => {
       const models = createModels();
       models.setProvider(this.ai.provider);
+      installGatewayModels(models, this.env);
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
       return Harness.open(storage, { models, registry: this.registry }, context);
     },
-    defaults: { model: this.ai(PI_ENGINE_DEFAULT_MODEL), thinkingLevel: "low" },
+    defaults: hasGatewayModels(this.env)
+      ? { model: { provider: PI_GATEWAY_PROVIDER_ID, id: PI_ENGINE_GATEWAY_DEFAULT_MODEL }, thinkingLevel: "medium" }
+      : { model: this.ai(PI_ENGINE_DEFAULT_MODEL), thinkingLevel: "low" },
   });
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -63,7 +80,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const { sandbox } = await getUserWorkspace(this.env, this.identity(), { scope: { kind: "chat", chatId: this.chatId() } });
     return {
       exec: async (command, timeoutMs) => {
-        const result = await sandbox.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs });
+        const result = await sandbox.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() });
         return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", exitCode: result.exitCode ?? -1 };
       },
       readFile: async (path) => {
@@ -82,8 +99,17 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     };
   }
 
+  private toolEnv(): Record<string, string> {
+    const token = this.env.GITHUB_TOKEN?.trim();
+    return token ? { GH_TOKEN: token, GITHUB_TOKEN: token } : {};
+  }
+
+  async setModel(provider: string, id: string): Promise<void> {
+    await this.harness.session().setModel({ provider, id });
+  }
+
   async submit(text: string, operationId?: string): Promise<PiChatSubmitResult> {
-    const receipt = await this.harness.submit(text, operationId ? { operationId } : undefined);
+    const receipt = await this.harness.submit(text, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
     return { operationId: receipt.operationId, accepted: receipt.accepted };
   }
 
@@ -95,6 +121,22 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async transcriptJson(): Promise<string> {
     const entries: EntryRecord[] = await this.harness.messages();
     return JSON.stringify(entries);
+  }
+
+  async live(): Promise<PiChatLiveView> {
+    const stream = await this.harness.session().events();
+    const snapshot = stream.snapshot;
+    await stream.stop();
+    const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
+    return {
+      busy: snapshot.run !== undefined,
+      model: model?.modelId ?? model?.id ?? "",
+      entries: [...snapshot.entries],
+      partial: snapshot.generation?.message ?? null,
+      tools: [...snapshot.tools],
+      queued: snapshot.inbox.length,
+      retry: snapshot.generation?.retry ?? null,
+    };
   }
 
   async busy(): Promise<boolean> {

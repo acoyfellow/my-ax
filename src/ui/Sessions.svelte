@@ -16,7 +16,7 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
-  import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState } from "@my-ax/store";
+  import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, createPiChat, rememberSessionEngine, storedSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
 
   type SessionRow = {
@@ -26,6 +26,7 @@
     status?: string | null;
     pinned?: number | null;
     pin_rank?: string | null;
+    engine?: string | null;
   };
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -175,6 +176,15 @@
     // rapid in-place switches.
     if (id === localStorage.getItem(SESSION_KEY)) {
       close();
+      return;
+    }
+    const target = sessions.find((row) => row.id === id);
+    const engine = target?.engine === "pi" ? "pi" : "think";
+    rememberSessionEngine(id, engine);
+    if (engine === "pi" || storedSessionEngine(localStorage.getItem(SESSION_KEY)) === "pi") {
+      close();
+      localStorage.setItem(SESSION_KEY, id);
+      setActiveSession(id, target?.name);
       return;
     }
     // Do NOT pre-write SESSION_KEY here: switchToSession() in the chat mount
@@ -342,7 +352,15 @@
     void sendReorder(row.id, plan.beforeId);
   }
 
-  function newConversation() {
+  async function newConversation() {
+    try {
+      await createPiChat();
+      close();
+      window.dispatchEvent(new Event("my-ax:sessions-refresh"));
+      return;
+    } catch (err) {
+      console.warn("[sessions] pi chat create failed, falling back", err);
+    }
     // "New" = blank composer, not "persist an empty DB session". The
     // first SEND creates the durable session row.
     localStorage.removeItem(SESSION_KEY);
