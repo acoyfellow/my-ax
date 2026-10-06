@@ -55,7 +55,7 @@ export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, ses
   const parent = await getAgentByName(env.USER_AGENT, identity.email.toLowerCase());
   const facet = await getSubAgentByName(parent, MyAgent, sessionId);
   await facet.seedIdentity(identity);
-  return facet.runVoiceTurn(transcript);
+  return await facet.runVoiceTurn(transcript);
 }
 
 export class VoiceThinkAgent extends VoiceAgent<Env> {
