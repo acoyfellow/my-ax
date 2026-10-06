@@ -2452,9 +2452,9 @@
       // a genuinely-slow server turn can still land and reconcile via the normal
       // frame/adopt path. Fire once per stall (turnStallSurfaced resets on the
       // next real frame in dispatchTurn).
-      const verdict = piTranscript ? { kind: "quiet" as const } : evaluateTurnStall({
+      const verdict = evaluateTurnStall({
         now: Date.now(),
-        composerLocked,
+        composerLocked: composerLocked && !piTranscript,
         socketOpen: (ws as any).readyState === WebSocket.OPEN,
         alreadySurfaced: turnStallSurfaced,
         lastTurnFrameAt,
