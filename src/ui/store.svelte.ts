@@ -28,7 +28,33 @@ function storedSessionTitle(id: string | null): string | null {
   return localStorage.getItem(`my-ax-session-title:${id}`);
 }
 const initialActiveSessionId = initialSessionId();
+export const SESSION_ENGINE_KEY_PREFIX = "my-ax-session-engine:";
+export type SessionEngine = "think" | "pi";
+export function storedSessionEngine(id: string | null): SessionEngine {
+  if (!id || typeof localStorage === "undefined") return "think";
+  return localStorage.getItem(SESSION_ENGINE_KEY_PREFIX + id) === "pi" ? "pi" : "think";
+}
+export function rememberSessionEngine(id: string, engine: SessionEngine) {
+  try { localStorage.setItem(SESSION_ENGINE_KEY_PREFIX + id, engine); } catch {}
+  if (sessionState.id === id) sessionState.engine = engine;
+}
+export async function createPiChat(): Promise<string> {
+  const response = await fetch("/api/pi/chats", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "New chat" }),
+  });
+  const body = (await response.json().catch(() => null)) as { result?: { chatId?: unknown } } | null;
+  const chatId = body?.result?.chatId;
+  if (!response.ok || typeof chatId !== "string") throw new Error(`Could not create chat (HTTP ${response.status})`);
+  rememberSessionEngine(chatId, "pi");
+  localStorage.setItem(SESSION_KEY, chatId);
+  setActiveSession(chatId, "New chat");
+  return chatId;
+}
 export const sessionState = $state({
+  engine: storedSessionEngine(initialActiveSessionId),
   id: initialActiveSessionId,
   title: storedSessionTitle(initialActiveSessionId) || (initialActiveSessionId ? `Session ${initialActiveSessionId.slice(0, 8)}` : "New conversation"),
 });
@@ -43,6 +69,7 @@ export function setActiveSession(id: string | null, title?: string | null) {
   const nextTitle = title?.trim();
   sessionTitleEpoch += 1;
   sessionState.id = id;
+  sessionState.engine = storedSessionEngine(id);
   sessionState.title = nextTitle || storedSessionTitle(id) || (id ? `Session ${id.slice(0, 8)}` : "New conversation");
   if (id && nextTitle) try { localStorage.setItem(`my-ax-session-title:${id}`, nextTitle); } catch {}
 }

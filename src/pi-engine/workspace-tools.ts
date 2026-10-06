@@ -1,5 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
+import { awaitWithContext } from "@earendil-works/chord/context";
 
 export type ChatWorkspace = {
   exec(command: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; exitCode: number }>;
@@ -34,8 +35,8 @@ export function chatWorkspaceExtension(workspace: () => Promise<ChatWorkspace>, 
       command: Type.String(),
       timeoutMs: Type.Optional(Type.Number()),
     }),
-    execute: async (args) => {
-      const result = await (await workspace()).exec(args.command, boundedExecTimeout(args.timeoutMs));
+    execute: async (args, _api, context) => {
+      const result = await awaitWithContext((await workspace()).exec(args.command, boundedExecTimeout(args.timeoutMs)), context);
       return textResult(`exit ${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`);
     },
   });

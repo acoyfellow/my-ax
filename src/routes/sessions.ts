@@ -88,11 +88,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       const pinned = before
         ? []
         : ((await c.env.DB.prepare(
-            "SELECT id, name, status, created_at, updated_at, pinned, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 1 ORDER BY pin_rank ASC, updated_at DESC LIMIT 100",
+            "SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 1 ORDER BY pin_rank ASC, updated_at DESC LIMIT 100",
           ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? "SELECT id, name, status, created_at, updated_at, pinned, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?"
-        : "SELECT id, name, status, created_at, updated_at, pinned, pin_rank FROM sessions WHERE owner_email = ? AND pinned = 0 ORDER BY updated_at DESC LIMIT ?";
+        ? "SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?"
+        : "SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 ORDER BY updated_at DESC LIMIT ?";
       const stmt = before
         ? c.env.DB.prepare(query).bind(email, before, limit)
         : c.env.DB.prepare(query).bind(email, limit);
