@@ -240,13 +240,26 @@ export class MyAgent extends Think<Env> {
     return history;
   }
 
-  async healStoredHistory(): Promise<{ rewritten: number; messages: number }> {
+  async clearStuckRecovery(): Promise<{ runs: number; fibers: number; incidents: number }> {
+    const runs = this.sql<{ n: number }>`SELECT COUNT(*) AS n FROM cf_agents_runs`[0]?.n ?? 0;
+    this.sql`DELETE FROM cf_agents_runs`;
+    const fibers = this.sql<{ n: number }>`SELECT COUNT(*) AS n FROM cf_agents_fibers WHERE status IN ('pending', 'running', 'interrupted')`[0]?.n ?? 0;
+    this.sql`UPDATE cf_agents_fibers SET status = 'error', error_message = 'cleared stuck recovery', completed_at = ${Date.now()} WHERE status IN ('pending', 'running', 'interrupted')`;
+    this.sql`DELETE FROM cf_agents_schedules WHERE callback IN ('_chatRecoveryContinue', '_chatRecoveryRetry')`;
+    const incidents = await this.ctx.storage.list({ prefix: "cf:chat-recovery:incident:" });
+    if (incidents.size) await this.ctx.storage.delete([...incidents.keys()]);
+    console.warn("chat_recovery_cleared", { sessionId: this.name, runs, fibers, incidents: incidents.size });
+    return { runs, fibers, incidents: incidents.size };
+  }
+
+  async healStoredHistory(): Promise<{ rewritten: number; messages: number; clearedRecovery: { runs: number; fibers: number; incidents: number } }> {
+    const clearedRecovery = await this.clearStuckRecovery();
     const origin = resolveBridgeOrigin(this.env.BRIDGE_BASE_URL);
-    if (!origin) return { rewritten: 0, messages: this.messages.length };
+    if (!origin) return { rewritten: 0, messages: this.messages.length, clearedRecovery };
     const rewritten = healUiHistoryFileUrls(this.messages as Array<{ parts?: Array<Record<string, unknown>> }>, origin);
-    if (!rewritten) return { rewritten: 0, messages: this.messages.length };
+    if (!rewritten) return { rewritten: 0, messages: this.messages.length, clearedRecovery };
     for (const message of this.messages) await this.session.updateMessage(message);
-    return { rewritten, messages: this.messages.length };
+    return { rewritten, messages: this.messages.length, clearedRecovery };
   }
 
   async seedForkHistory(identity: AccessIdentity, messages: UIMessage[]): Promise<void> {
@@ -932,6 +945,12 @@ export class MyAgent extends Think<Env> {
       recoveryKind: ctx.recoveryKind,
     });
     if (!identity) return;
+    const terminalizedKey = `myax:recovery-terminalized:${ctx.incidentId}`;
+    if (await this.ctx.storage.get(terminalizedKey)) {
+      await this.clearStuckRecovery();
+      return;
+    }
+    await this.ctx.storage.put(terminalizedKey, Date.now());
     await recordRecoveryExhaustion(this.env, identity, this.name, {
       terminalMessage: ctx.terminalMessage,
       incidentId: ctx.incidentId,
