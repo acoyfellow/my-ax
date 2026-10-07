@@ -92,5 +92,5 @@ test("returns safe errors without exposing upstream credentials", async () => {
 
 test("wrangler binds Cloudflare Web Search as WEBSEARCH", () => {
   const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  assert.match(wrangler, /"web_search"\s*:\s*\{\s*"binding"\s*:\s*"WEBSEARCH"/);
+  assert.match(wrangler, /\{\s*"type"\s*:\s*"websearch"\s*,\s*"name"\s*:\s*"WEBSEARCH"\s*\}/);
 });

@@ -2152,6 +2152,7 @@
   }
 
   function onSendClick(e: MouseEvent) {
+    if (sendStatus === "idle") return;
     const cancellable = wsState.status !== "idle" && wsState.status !== "done";
     if (!cancellable) return;
     e.preventDefault();
