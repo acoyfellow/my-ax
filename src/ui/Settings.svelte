@@ -17,6 +17,8 @@
     themeState,
     applyTheme,
     SESSION_KEY,
+    readTabSession,
+    writeTabSession,
   } from "@my-ax/store";
   import { MODELS } from "../../src/models";
   import { classifyJobHealth, jobResultAttr } from "./job-health";
@@ -587,7 +589,7 @@
   }
   async function submitJob(e: SubmitEvent) {
     e.preventDefault();
-    const sessionId = localStorage.getItem(SESSION_KEY);
+    const sessionId = readTabSession();
     if (!sessionId) {
       jobsStatusText = "Start a conversation before adding a job.";
       return;
@@ -868,7 +870,7 @@
     if (editingRecipeId === id) resetRecipeForm();
   }
   async function runRecipe(recipe: Recipe) {
-    const sessionId = localStorage.getItem(SESSION_KEY);
+    const sessionId = readTabSession();
     if (!sessionId) {
       recipeStatusText = "Start a conversation before running a reusable tool.";
       return;

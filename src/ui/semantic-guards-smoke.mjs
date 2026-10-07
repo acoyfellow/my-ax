@@ -34,14 +34,14 @@ assertIncludes(sessions, 'return "reconnecting";', "session row distinguishes re
 assertIncludes(sessions, 'return "Reconnecting";', "session reconnecting label is honest about transport state");
 assertIncludes(reconnectingSocket, 'return !manuallyClosed && socket === candidate;', "reconnecting transport gates every callback on the current, non-retired socket");
 assertIncludes(reconnectingSocket, 'if (retryTimer !== null) dependencies.cancel(retryTimer);', "manual close cancels any scheduled reconnect timer");
-assertIncludes(sessions, 'if (id === localStorage.getItem(SESSION_KEY)) {', "sidebar no-op switch compares against synchronous localStorage, not a stale snapshot");
+assertIncludes(sessions, 'if (id === readTabSession()) {', "sidebar no-op switch compares against this tab's live session, not a stale snapshot");
 assertIncludes(sessions, 'let currentId = $derived(sessionState.id);', "sidebar active identity is driven by the shared session store");
 assertIncludes(chat, 'setConn("reconnecting");\n    ws = makeReconnectingSocket(', "in-place switch marks reconnecting synchronously until the new socket opens");
 // H3: active-turn latch is session-bound and cleared on the way out.
 assertIncludes(chat, 'activeTurnIsRestorable(saved, currentId)', "active-turn latch restore is gated by the session-bound freshness check");
-assertIncludes(chat, 'forgetActiveTurn();\n    localStorage.setItem(SESSION_KEY, id);', "switchToSession clears the outgoing latch before flipping SESSION_KEY");
+assertIncludes(chat, 'forgetActiveTurn();\n    writeTabSession(id);', "switchToSession clears the outgoing latch before flipping SESSION_KEY");
 assertIncludes(chat, 'forgetActiveTurnFor(sessionId);', "fork clears the parent latch");
-assertIncludes(chat, 'localStorage.setItem(SESSION_KEY, forkId);', "fork flips SESSION_KEY to the new fork id");
+assertIncludes(chat, 'writeTabSession(forkId);', "fork flips SESSION_KEY to the new fork id");
 // H4: pending-first-message is bound to its session.
 assertIncludes(chat, 'sessionStorage.setItem("my-ax-pending-first-session", currentSessionId());', "pending first-message records the session it was typed for");
 assertIncludes(chat, 'pendingFirstBelongsHere(pendingFirstSession, currentSessionId())', "pending first-message is only adopted by its bound session");

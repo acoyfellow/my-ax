@@ -16,7 +16,7 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
-  import { captureTitleEpoch, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
+  import { captureTitleEpoch, readTabSession, writeTabSession, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
 
   type SessionRow = {
@@ -112,7 +112,7 @@
     cursor = null;
     const titleEpoch = captureTitleEpoch();
     try {
-      const requestedId = localStorage.getItem(SESSION_KEY);
+      const requestedId = readTabSession();
       const r = await fetch(`/api/sessions?limit=${PAGE_SIZE}`, {
         credentials: "include",
       });
@@ -125,7 +125,7 @@
       // clobber the newly selected app-bar title.
       // Only push the server title if the active session is unchanged AND no
       // newer local title (rename/fork) landed while this list was in flight.
-      if (requestedId === localStorage.getItem(SESSION_KEY) && isTitleEpochCurrent(titleEpoch)) setActiveSession(requestedId, active?.name);
+      if (requestedId === readTabSession() && isTitleEpochCurrent(titleEpoch)) setActiveSession(requestedId, active?.name);
       cursor = d?.result?.nextCursor ?? null;
       // Scroll the active row into view after the next paint.
       if (open) setTimeout(scrollActiveIntoView, 100);
@@ -174,7 +174,7 @@
     // localStorage is updated synchronously by Chat.svelte's switch handler;
     // unlike the sidebar's previous refresh-time snapshot, it cannot lag across
     // rapid in-place switches.
-    if (id === localStorage.getItem(SESSION_KEY)) {
+    if (id === readTabSession()) {
       close();
       return;
     }
@@ -193,7 +193,7 @@
     const ack = () => { handled = true; };
     window.addEventListener("my-ax:switch-session-ack", ack, { once: true });
     window.dispatchEvent(new CustomEvent("my-ax:switch-session", { detail: { id } }));
-    setTimeout(() => { window.removeEventListener("my-ax:switch-session-ack", ack); if (!handled) { localStorage.setItem(SESSION_KEY, id); setActiveSession(id, sessions.find((row) => row.id === id)?.name); sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1"); location.reload(); } }, 600);
+    setTimeout(() => { window.removeEventListener("my-ax:switch-session-ack", ack); if (!handled) { writeTabSession(id); setActiveSession(id, sessions.find((row) => row.id === id)?.name); sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1"); location.reload(); } }, 600);
   }
 
   async function rename(row: SessionRow) {
@@ -240,7 +240,7 @@
       });
       if (!r.ok) throw new Error("HTTP " + r.status);
       if (row.id === currentId) {
-        localStorage.removeItem(SESSION_KEY);
+        writeTabSession(null);
         location.reload();
         return;
       }
@@ -350,7 +350,7 @@
   function newConversation() {
     // "New" = blank composer, not "persist an empty DB session". The
     // first SEND creates the durable session row.
-    localStorage.removeItem(SESSION_KEY);
+    writeTabSession(null);
     setActiveSession(null);
     sessionStorage.removeItem(RESUME_SESSION_ONCE_KEY);
     sessionStorage.removeItem(FIRST_SEND_SESSION_ONCE_KEY);

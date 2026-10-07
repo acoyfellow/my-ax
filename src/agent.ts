@@ -188,6 +188,18 @@ export class MyAgent extends Think<Env> {
   override chatStreamStallTimeoutMs = 300_000;
   private readonly turnProgress = new TurnProgressTracker();
 
+  async messageTimes(): Promise<Record<string, number>> {
+    const times: Record<string, number> = {};
+    try {
+      for (const row of this.sql<{ id: string; created_at: string }>`SELECT id, created_at FROM assistant_messages`) {
+        const raw = String(row.created_at);
+        const ms = Date.parse(raw.includes("T") ? raw : raw.replace(" ", "T") + "Z");
+        if (Number.isFinite(ms)) times[row.id] = ms;
+      }
+    } catch {}
+    return times;
+  }
+
   sendDeskBoard(frame: string): void {
     this.broadcast(frame);
   }

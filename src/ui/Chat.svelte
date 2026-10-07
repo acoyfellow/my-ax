@@ -64,7 +64,11 @@
     isTitleEpochCurrent,
     storedSessionEngine,
     rememberSessionEngine,
+    readTabSession,
+    writeTabSession,
   } from "@my-ax/store";
+  import { readLastUsedSession } from "./tab-session";
+  import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
 
@@ -243,7 +247,7 @@
       if (!raw) return;
       const draft = JSON.parse(raw) as { at?: number; sessionId?: string | null; text?: string; attachments?: Attachment[] };
       if (!draft.at || Date.now() - draft.at > 60 * 60 * 1000) return;
-      if (draft.sessionId !== localStorage.getItem(SESSION_KEY)) return;
+      if (draft.sessionId !== readTabSession()) return;
       if (!composerText && typeof draft.text === "string") composerText = draft.text;
       if (!pendingAttachments.length && Array.isArray(draft.attachments)) pendingAttachments = draft.attachments;
     } catch { sessionStorage.removeItem(DEPLOY_REFRESH_DRAFT_KEY); }
@@ -252,7 +256,7 @@
   function persistDeployRefreshDraft() {
     try {
       sessionStorage.setItem(DEPLOY_REFRESH_DRAFT_KEY, JSON.stringify({
-        at: Date.now(), sessionId: localStorage.getItem(SESSION_KEY),
+        at: Date.now(), sessionId: readTabSession(),
         text: composerText, attachments: pendingAttachments,
       }));
     } catch {}
@@ -444,7 +448,7 @@
     // Think transcript and streams into the chat log via cf_agent_* frames.
     const transport = new TappedVoiceTransport({ agent: "voice-think-agent", name: sessionId, host: location.host });
     const client = new VoiceClient({ agent: "voice-think-agent", name: sessionId, host: location.host, transport, ...VOICE_CLIENT_OPTIONS });
-    const eventIsCurrent = () => voiceActivation.acceptsEvent(sessionId, client, localStorage.getItem(SESSION_KEY));
+    const eventIsCurrent = () => voiceActivation.acceptsEvent(sessionId, client, readTabSession());
     client.addEventListener("statuschange", (status) => {
       if (!eventIsCurrent()) return;
       voiceStatus = status;
@@ -481,7 +485,7 @@
   }
 
   function prepareVoiceClientForSession(sessionId: string): VoiceClient | null {
-    if (localStorage.getItem(SESSION_KEY) !== sessionId) return null;
+    if (readTabSession() !== sessionId) return null;
     const client = voiceActivation.prepare(sessionId, createVoiceClientForSession);
     voiceClient = client;
     voiceReady = client.connected;
@@ -509,7 +513,7 @@
       try {
         await createAndPrepareVoiceSession(
           createSession,
-          (sessionId) => generation === voiceLifecycleGeneration && localStorage.getItem(SESSION_KEY) === sessionId,
+          (sessionId) => generation === voiceLifecycleGeneration && readTabSession() === sessionId,
           attachFreshVoiceChatSession,
           prepareVoiceClientForSession,
         );
@@ -534,7 +538,7 @@
     voiceStarting = true;
     voiceStatus = "idle";
     voiceError = null;
-    const sessionId = localStorage.getItem(SESSION_KEY);
+    const sessionId = readTabSession();
     const attempt = voiceActivation.activate(sessionId, createVoiceClientForSession);
     if (attempt.kind === "needs-session") {
       voiceClient = null;
@@ -553,13 +557,13 @@
     }).catch(() => {});
     void attempt.completion.then(
       () => {
-        if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) return;
+        if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, readTabSession())) return;
         voiceEnabled = true;
         voiceStarting = false;
         voiceError = null;
       },
       (error) => {
-        if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, localStorage.getItem(SESSION_KEY))) return;
+        if (!voiceActivation.acceptsEvent(sessionId!, attempt.client, readTabSession())) return;
         voiceStarting = false;
         void stopVoiceMode();
         pushError(`Microphone access is required for voice mode: ${error instanceof Error ? error.message : String(error)}`);
@@ -893,7 +897,7 @@
     return `${month} ${day} · ${time}`;
   }
   async function forkFromMessage(message: MessageView) {
-    const sessionId = localStorage.getItem(SESSION_KEY);
+    const sessionId = readTabSession();
     if (!sessionId || message.pending || message.streaming || forkingMessageId) return;
     forkingMessageId = message.id;
     try {
@@ -914,7 +918,7 @@
       if (activeRequestId) { try { ws?.send(JSON.stringify({ type: "cf_agent_chat_request_cancel", id: activeRequestId })); } catch {} }
       forgetActiveTurnFor(sessionId);
       void stopVoiceMode();
-      localStorage.setItem(SESSION_KEY, forkId);
+      writeTabSession(forkId);
       setActiveSession(forkId, body?.result?.name);
       sessionStorage.setItem(RESUME_SESSION_ONCE_KEY, "1");
       location.href = `/?session=${encodeURIComponent(forkId)}`;
@@ -1134,12 +1138,13 @@
         : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: Date.now(), elapsedText: "", result: part.tool.result, isError: part.tool.isError } }),
       reasoning: message.reasoning,
       timestamp: message.timestamp,
+      endedAt: message.endedAt,
       streaming: message.streaming,
       pending: false,
       sessionId,
     }));
     const confirmedUserTexts = new Set(rendered.filter((message) => message.role === "user").map((message) => message.content));
-    messages = [...rendered, ...optimistic.filter((message) => !confirmedUserTexts.has(message.content))];
+    messages = annotateTurnDurations([...rendered, ...optimistic.filter((message) => !confirmedUserTexts.has(message.content))]);
     if (piTranscript.busy !== (wsState.status === "running" || wsState.status === "thinking")) applyStatus(piTranscript.busy ? "running" : "idle");
     bootstrapPending = false;
     resumingExistingSession = false;
@@ -1200,7 +1205,7 @@
   let connectionWatchdogId: ReturnType<typeof setInterval> | null = null;
   const ACTIVE_TURN_KEY_PREFIX = "my-ax-active-turn:";
 
-  function currentSessionId() { return localStorage.getItem(SESSION_KEY) || "unknown"; }
+  function currentSessionId() { return readTabSession() || "unknown"; }
   function activeTurnKeyFor(sessionId: string) { return ACTIVE_TURN_KEY_PREFIX + sessionId; }
   function activeTurnKey() { return activeTurnKeyFor(currentSessionId()); }
   function rememberActiveTurn(id: string, clientMsgId: string) {
@@ -1267,7 +1272,7 @@
 
   const sessionGeneration = new SessionGenerationGuard();
   const sessionWorkIsCurrent = (expected: SessionGeneration) =>
-    sessionGeneration.isCurrent(expected, localStorage.getItem(SESSION_KEY));
+    sessionGeneration.isCurrent(expected, readTabSession());
 
   function attachFreshVoiceChatSession(sessionId: string) {
     sessionGeneration.activate(sessionId);
@@ -1299,12 +1304,12 @@
   // socket, swaps the active session, and reconnects so the server replays
   // history via cf_agent_chat_messages. Avoids the re-download/re-parse jank.
   function switchToSession(id: string) {
-    if (!id || id === localStorage.getItem(SESSION_KEY)) return;
+    if (!id || id === readTabSession()) return;
     void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
   }
 
   function switchToSessionKnownEngine(id: string) {
-    if (!id || id === localStorage.getItem(SESSION_KEY)) return;
+    if (!id || id === readTabSession()) return;
     void stopVoiceMode();
     sessionGeneration.activate(id);
     try { ws?.close(); } catch {}
@@ -1324,7 +1329,7 @@
     // Clear the leaving session's active-turn latch so a retired turn cannot
     // pin "thinking" the next time that conversation is opened.
     forgetActiveTurn();
-    localStorage.setItem(SESSION_KEY, id);
+    writeTabSession(id);
     setActiveSession(id);
     prepareVoiceClientForSession(id);
     void refreshPendingDecision(id);
@@ -1345,7 +1350,7 @@
       const row = body?.result?.sessions?.find((session: any) => session.id === id);
       // Drop the server title if the active session changed or a newer local
       // title (rename/fork) landed while this fetch was in flight.
-      if (row?.name && localStorage.getItem(SESSION_KEY) === id && isTitleEpochCurrent(epoch)) setActiveSession(id, row.name);
+      if (row?.name && readTabSession() === id && isTitleEpochCurrent(epoch)) setActiveSession(id, row.name);
     } catch {}
   }
 
@@ -1357,17 +1362,17 @@
     return typeof id === "string" && id ? id : null;
   }
   async function sessionForBootstrap(): Promise<string | null> {
-    const requested = new URL(location.href).searchParams.get("session");
+    const requested = readTabSession();
     const shouldResume = sessionStorage.getItem(RESUME_SESSION_ONCE_KEY) === "1";
     const isFirstSendSession = sessionStorage.getItem(FIRST_SEND_SESSION_ONCE_KEY) === "1";
     const startFresh = sessionStorage.getItem(START_FRESH_ONCE_KEY) === "1";
     sessionStorage.removeItem(RESUME_SESSION_ONCE_KEY);
     sessionStorage.removeItem(FIRST_SEND_SESSION_ONCE_KEY);
     sessionStorage.removeItem(START_FRESH_ONCE_KEY);
-    const cached = localStorage.getItem(SESSION_KEY);
+    const cached = readLastUsedSession();
 
     if (startFresh) {
-      localStorage.removeItem(SESSION_KEY);
+      writeTabSession(null);
       setActiveSession(null);
       bootstrapPending = false;
       return null;
@@ -1385,22 +1390,21 @@
         outcome = classifyLookup(error);
       }
       const plan = planResume({ cached, outcome });
-      if (plan.forgetCachedSession) localStorage.removeItem(SESSION_KEY);
+      if (plan.forgetCachedSession) writeTabSession(null);
       if (plan.toast) pushError(plan.toast, { alreadyReported: wasOffline });
       resumeId = plan.resumeId;
     }
     if (resumeId) {
-      localStorage.setItem(SESSION_KEY, resumeId);
+      writeTabSession(resumeId);
       setActiveSession(resumeId);
       void refreshActiveSessionTitle(resumeId);
-      if (requested) history.replaceState(null, "", location.pathname + location.hash);
       onboardingHidden = true;
       resumingExistingSession = !isFirstSendSession;
       sessionResumeVisible = !isFirstSendSession;
       bootstrapPending = false;
       return resumeId;
     }
-    localStorage.removeItem(SESSION_KEY);
+    writeTabSession(null);
     setActiveSession(null);
     bootstrapPending = false;
     return null;
@@ -1408,9 +1412,9 @@
 
   async function createSession(): Promise<string> {
     const session = await createPiSessionOrFallback();
-    const previousSessionId = localStorage.getItem(SESSION_KEY);
+    const previousSessionId = readTabSession();
     if (previousSessionId && previousSessionId !== session.sessionId) void stopVoiceMode();
-    localStorage.setItem(SESSION_KEY, session.sessionId);
+    writeTabSession(session.sessionId);
     setActiveSession(session.sessionId, session.name);
     return session.sessionId;
   }
@@ -1748,6 +1752,25 @@
     return { outcome: "current", entries: r.entries ?? [], olderCursor: r.olderCursor ?? null, hasOlder: !!r.hasOlder };
   }
 
+  let thinkMessageTimes: Record<string, number> = {};
+  let thinkMessageTimesFor = "";
+  async function loadThinkMessageTimes(sessionId: string) {
+    if (thinkMessageTimesFor === sessionId) return;
+    thinkMessageTimesFor = sessionId;
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/message-times`, { credentials: "include" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || readTabSession() !== sessionId) return;
+      thinkMessageTimes = body?.result?.times ?? {};
+      messages = annotateTurnDurations(messages.map((message) => {
+        const savedAt = thinkMessageTimes[String(message.sourceId ?? message.id)];
+        return savedAt !== undefined && (message.timestamp === undefined || message.timestampInterpolated) ? { ...message, timestamp: savedAt, timestampInterpolated: false } : message;
+      }));
+    } catch {
+      thinkMessageTimesFor = "";
+    }
+  }
+
   function renderThinkHistory(historyMessages: any[]) {
     if (piTranscript) return;
     if (activeRequestId) return;
@@ -1758,7 +1781,7 @@
     const { values: thinkTimestamps, interpolated: thinkTimestampInterpolated } = fillChronologicalTimestampsWithFlags(
       ownerHistory.map((message: any) => {
         const rawId = typeof message.id === "string" && message.id ? message.id : "";
-        return toMillis(message.createdAt) ?? existingTimestamps.get(rawId);
+        return toMillis(message.createdAt) ?? thinkMessageTimes[rawId] ?? existingTimestamps.get(rawId);
       }),
     );
     if (thinkMessages.length > 0) onboardingHidden = true;
@@ -1836,7 +1859,8 @@
     const prevTop = logEl?.scrollTop ?? 0;
     const prevHeight = logEl?.scrollHeight ?? 0;
     const sessionId = currentSessionId();
-    messages = boundToSession(thinkViews, sessionId);
+    messages = annotateTurnDurations(boundToSession(thinkViews, sessionId));
+    if (thinkViews.some((view) => view.timestamp === undefined)) void loadThinkMessageTimes(sessionId);
     if (wasPinned) {
       void revealResumedHistoryAtBottom();
     } else {
@@ -1883,7 +1907,7 @@
       // Tool output can create or resolve owner attention (notably ask_user).
       // Reconcile from the durable decision index immediately instead of
       // waiting for a reload/session switch or trusting tool payload shape.
-      void refreshPendingDecision(localStorage.getItem(SESSION_KEY));
+      void refreshPendingDecision(readTabSession());
     } else if (chunk.type === "finish") {
       finalizeStreaming();
     }
@@ -1927,7 +1951,7 @@
   async function addImageFile(file: File) {
     const formData = new FormData();
     formData.set("file", file);
-    formData.set("sessionId", localStorage.getItem(SESSION_KEY) || "draft");
+    formData.set("sessionId", readTabSession() || "draft");
     const response = await fetch("/api/uploads", {
       method: "POST",
       credentials: "include",
@@ -2345,7 +2369,7 @@
     };
     const onServiceWorkerMessage = (event: MessageEvent) => {
       if (event.data?.type === "my-ax:attention") {
-        void refreshPendingDecision(localStorage.getItem(SESSION_KEY));
+        void refreshPendingDecision(readTabSession());
         return;
       }
       if (event.data?.type !== "my-ax:navigate" || typeof event.data.href !== "string") return;
@@ -2513,7 +2537,7 @@
         <span class="connector-banner__hint">Sign in again to return to this conversation. Your draft stays in the composer.</span>
       </div>
       <a
-        href={accessReauthenticationHref(location.origin, localStorage.getItem(SESSION_KEY))}
+        href={accessReauthenticationHref(location.origin, readTabSession())}
         class="connector-banner__cta"
       >
         Sign in again
@@ -2733,6 +2757,9 @@
                 </summary>
                 <ToolResultWidget result={m.content} {toolName} />
               </details>
+            {/if}
+            {#if m.role === "assistant" && typeof m.durationMs === "number"}
+              <div class="msg-duration" title="Time from your message to the end of this turn">Ran for {formatTurnDuration(m.durationMs)}</div>
             {/if}
           </article>
         {/each}

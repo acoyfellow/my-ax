@@ -1,3 +1,5 @@
+import { readTabSession, writeTabSession } from "./tab-session";
+export { readTabSession, writeTabSession } from "./tab-session";
 import { clarifyOwnerError } from "./owner-error";
 import { buildClientErrorReport } from "./client-error-report";
 
@@ -20,8 +22,7 @@ export const RESUME_SESSION_ONCE_KEY = "my-ax-resume-session-once";
 export const FIRST_SEND_SESSION_ONCE_KEY = "my-ax-first-send-session-once";
 
 function initialSessionId(): string | null {
-  if (typeof localStorage === "undefined") return null;
-  return localStorage.getItem(SESSION_KEY);
+  return readTabSession();
 }
 function storedSessionTitle(id: string | null): string | null {
   if (!id || typeof localStorage === "undefined") return null;
@@ -49,7 +50,7 @@ export async function createPiChat(): Promise<string> {
   const chatId = body?.result?.chatId;
   if (!response.ok || typeof chatId !== "string") throw new Error(`Could not create chat (HTTP ${response.status})`);
   rememberSessionEngine(chatId, "pi");
-  localStorage.setItem(SESSION_KEY, chatId);
+  writeTabSession(chatId);
   setActiveSession(chatId, "New chat");
   return chatId;
 }
@@ -219,7 +220,7 @@ export function pushError(text: string, options?: { alreadyReported?: boolean; s
 
 function reportClientError(message: string, stack?: string) {
   if (typeof fetch !== "function") return;
-  const sessionId = typeof localStorage === "undefined" ? "" : localStorage.getItem(SESSION_KEY) || "";
+  const sessionId = readTabSession() || "";
   return fetch("/api/errors", {
     method: "POST",
     credentials: "include",
