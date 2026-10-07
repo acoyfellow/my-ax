@@ -2596,7 +2596,16 @@
 
   <div class="flex-1 min-h-0 flex">
     <!-- Chat column -->
-    <div class="flex-1 min-w-0 flex flex-col h-full">
+    <div class="relative flex-1 min-w-0 flex flex-col h-full">
+      {#if bootstrapPending || sessionResumeVisible}
+        <div
+          class="absolute inset-0 z-10 grid place-items-center bg-bg/80 backdrop-blur-[1px]"
+          role="status"
+          aria-label="Resuming conversation"
+        >
+          <span class="session-resume-spinner" aria-hidden="true"></span>
+        </div>
+      {/if}
       <main
         bind:this={logEl}
         class="relative flex-1 min-w-0 overflow-x-hidden overflow-y-auto overscroll-x-none touch-pan-y px-3 sm:px-6 lg:px-8 py-4 sm:py-6 scroll-smooth"
@@ -2620,16 +2629,6 @@
                 </button>
               {/each}
             </div>
-          </div>
-        {/if}
-
-        {#if bootstrapPending || sessionResumeVisible}
-          <div
-            class="absolute inset-0 z-10 grid place-items-center bg-bg/80 backdrop-blur-[1px]"
-            role="status"
-            aria-label="Resuming conversation"
-          >
-            <span class="session-resume-spinner" aria-hidden="true"></span>
           </div>
         {/if}
 
