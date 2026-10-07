@@ -4,6 +4,7 @@ import { applyIssueContext } from "./issue-context";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { TURN_STEP_BATCH, turnStoppedMidWork } from "./turn-continuation";
+import { judgeTurn, turnLimitsFromEnv, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, TurnProgressTracker } from "./turn-watchdog";
 import { TURN_SNAPSHOT_COOLDOWN_MS } from "./workspace-policy";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { Effect } from "effect";
@@ -185,6 +186,7 @@ export class MyAgent extends Think<Env> {
   // machinery a deploy/eviction uses. Raise per-turn via beforeTurn's
   // TurnConfig.chatStreamStallTimeoutMs for turns with known-slow tools.
   override chatStreamStallTimeoutMs = 300_000;
+  private readonly turnProgress = new TurnProgressTracker();
 
   sendDeskBoard(frame: string): void {
     this.broadcast(frame);
@@ -306,10 +308,14 @@ export class MyAgent extends Think<Env> {
   async abortActiveTurn(): Promise<{ aborted: boolean; sessionId: string }> {
     const identity = this.identity();
     if (!identity) throw new Error("session identity not seeded");
+    this.turnProgress.finish();
     this.cancelAllChats();
+    await this.clearStuckRecovery().catch((error) => console.error("abort_clear_recovery_failed", { sessionId: this.name, err: String(error) }));
+    await this.disarmTurnWatchdog().catch(() => {});
     await this.env.DB.prepare("UPDATE sessions SET status = 'active', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
       .bind(this.name, identity.email)
       .run();
+    this.broadcast(JSON.stringify({ type: "my_ax_turn_aborted" }));
     return { aborted: true, sessionId: this.name };
   }
 
@@ -709,6 +715,7 @@ export class MyAgent extends Think<Env> {
   }
 
   async onChatResponse(result: ChatResponseResult) {
+    this.turnProgress.finish();
     const identity = this.identity();
     if (!identity) return;
     const stoppedMidWork = turnStoppedMidWork({
@@ -917,7 +924,56 @@ export class MyAgent extends Think<Env> {
     return full;
   }
 
+  async beforeToolCall(): Promise<void> {
+    this.turnProgress.toolStarted();
+  }
+
+  onChunk(): void {
+    this.turnProgress.progress();
+  }
+
+  private async armTurnWatchdog(): Promise<void> {
+    if (this.getSchedules().some((schedule) => schedule.callback === "checkTurnProgress")) return;
+    await this.scheduleEvery(TURN_WATCHDOG_INTERVAL_SECONDS, "checkTurnProgress").catch((error) => console.error("turn_watchdog_arm_failed", { sessionId: this.name, err: String(error) }));
+  }
+
+  private async disarmTurnWatchdog(): Promise<void> {
+    for (const schedule of this.getSchedules().filter((candidate) => candidate.callback === "checkTurnProgress")) {
+      await this.cancelSchedule(schedule.id);
+    }
+  }
+
+  async settleIfNoLiveTurn(): Promise<{ settled: boolean }> {
+    if (this.turnProgress.snapshot().active) return { settled: false };
+    const identity = this.identity();
+    if (!identity) return { settled: false };
+    await this.endStuckTurn(identity);
+    return { settled: true };
+  }
+
+  async checkTurnProgress(): Promise<void> {
+    const verdict = judgeTurn(this.turnProgress.snapshot(), Date.now(), turnLimitsFromEnv((this.env as { TURN_WATCHDOG_LIMIT_SECONDS?: string }).TURN_WATCHDOG_LIMIT_SECONDS));
+    if (verdict === "healthy") return;
+    await this.disarmTurnWatchdog();
+    const identity = this.identity();
+    if (!identity) return;
+    const row = await this.env.DB.prepare("SELECT status FROM sessions WHERE id = ? AND owner_email = ?").bind(this.name, identity.email).first<{ status: string }>();
+    if (verdict === "idle" && row?.status !== "running") return;
+    await this.endStuckTurn(identity);
+  }
+
+  private async endStuckTurn(identity: AccessIdentity): Promise<void> {
+    console.error("turn_stuck_ended", { sessionId: this.name, liveness: this.turnProgress.snapshot() });
+    this.turnProgress.finish();
+    this.cancelAllChats();
+    await this.clearStuckRecovery().catch((error) => console.error("turn_stuck_clear_failed", { sessionId: this.name, err: String(error) }));
+    await logAssistantMessage(this.env, identity, this.name, STUCK_TURN_NOTE, { kind: "turn-stuck" }).catch((error) => console.error("turn_stuck_note_failed", { sessionId: this.name, err: String(error) }));
+    await this.env.DB.prepare("UPDATE sessions SET status = 'active', updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(this.name, identity.email).run();
+    this.broadcast(JSON.stringify({ type: "my_ax_turn_stuck", message: STUCK_TURN_NOTE }));
+  }
+
   async afterToolCall(ctx: ToolCallResultContext) {
+    this.turnProgress.toolFinished();
     const identity = this.identity();
     if (!identity) return;
     // Mark the turn dirty if this tool MAY have written under /home/user.
@@ -1199,6 +1255,8 @@ export class MyAgent extends Think<Env> {
     // Symmetric backfill: recover any assistant turn from a prior interrupted/
     // replaced turn that never reached onChatResponse. Idempotent.
     await this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_before_turn_failed", { err: String(error) }));
+    this.turnProgress.start();
+    await this.armTurnWatchdog();
     const identity = this.identity();
     if (identity) {
       await this.env.DB.prepare("UPDATE sessions SET status = 'running', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")

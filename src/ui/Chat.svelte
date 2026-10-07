@@ -1176,6 +1176,7 @@
       pushError(String(frame.message ?? "Message failed"));
       return true;
     }
+    if (frame.type === "pi_aborted") return true;
     return frame.type === "pi_receipt" || frame.type === "pi_pong";
   }
   function sendPiMessage(text: string, attachments: Attachment[], clientMsgId: string) {
@@ -1653,6 +1654,16 @@
         applyStatus("idle");
         pushError("Response interrupted and could not be resumed after reconnect. Please retry.");
       }
+    } else if (m.type === "my_ax_turn_stuck" || m.type === "my_ax_turn_aborted") {
+      responseRecoveryPending = false;
+      if (activeRequestId) dispatchTurn({ type: "resume-none", requestId: activeRequestId });
+      finalizeStreaming();
+      activeRequestId = null;
+      streamingMsgId = null;
+      restoredActiveTurn = false;
+      forgetActiveTurn();
+      applyStatus("idle");
+      if (m.type === "my_ax_turn_stuck") pushError(String(m.message ?? "This turn stopped making progress."));
     } else if (m.type === "my_ax_connector_reauth") {
       connectorBanner.state = "upstream-auth";
       connectorBanner.server = m.server;

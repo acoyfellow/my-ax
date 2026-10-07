@@ -15,6 +15,11 @@ export function makeDeadSessionDeps(env: Env): DeadSessionDeps {
       await stub.seedIdentity({ email: ownerEmail, sub: "system:auto-revive" });
       await stub.injectUserMessage({ content: message, clientMsgId });
     },
+    settleRunningWithoutTurn: async (ownerEmail, sessionId) => {
+      const stub = await getSessionAgent(env, ownerEmail, sessionId);
+      await stub.seedIdentity({ email: ownerEmail, sub: "system:turn-watchdog" });
+      await stub.settleIfNoLiveTurn();
+    },
     alertOwner: async (ownerEmail, sessionId, dedupeSuffix) => {
       await notifyOwner(env, ownerEmail, {
         kind: DEAD_SESSION_ATTENTION_KIND,

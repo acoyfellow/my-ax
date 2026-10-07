@@ -3,6 +3,7 @@ import { createRegistry, Harness, type EntryRecord } from "@earendil-works/pi-du
 import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { AgentEvent, AgentEventStream } from "@earendil-works/pi-durable";
 import { readUploadBytes } from "../uploads";
+import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
 import { PiHarness } from "agents-pi/harness/pi";
 import { createAI } from "agents-pi/models/pi-ai";
@@ -131,6 +132,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     })));
     const content = images.length ? [{ type: "text" as const, text: text || "Describe the attached image." }, ...images] : text;
     const receipt = await this.harness.submit(content, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
+    this.progressSample = undefined;
+    await this.armTurnWatchdog();
     return { operationId: receipt.operationId, accepted: receipt.accepted };
   }
 
@@ -219,6 +222,36 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   async abortAll(): Promise<void> {
     await this.harness.abort();
+    this.progressSample = undefined;
+    this.broadcast(JSON.stringify({ type: "pi_aborted" }));
+  }
+
+  private progressSample: ProgressSample | undefined;
+
+  private async armTurnWatchdog(): Promise<void> {
+    if (this.getSchedules().some((schedule) => schedule.callback === "checkTurnProgress")) return;
+    await this.scheduleEvery(TURN_WATCHDOG_INTERVAL_SECONDS, "checkTurnProgress").catch((error) => console.error("pi_turn_watchdog_arm_failed", { err: String(error) }));
+  }
+
+  private async disarmTurnWatchdog(): Promise<void> {
+    for (const schedule of this.getSchedules().filter((candidate) => candidate.callback === "checkTurnProgress")) {
+      await this.cancelSchedule(schedule.id);
+    }
+  }
+
+  async checkTurnProgress(): Promise<void> {
+    const view = await this.live();
+    const now = Date.now();
+    const signature = JSON.stringify([view.entries.length, view.partial, view.tools, view.queued, view.retry]);
+    this.progressSample = nextProgressSample(this.progressSample, signature, now);
+    const verdict = judgeTurn({ active: view.busy, lastProgressAt: this.progressSample.at, toolsRunning: view.tools.length }, now, turnLimitsFromEnv((this.env as { TURN_WATCHDOG_LIMIT_SECONDS?: string }).TURN_WATCHDOG_LIMIT_SECONDS));
+    if (verdict === "healthy") return;
+    await this.disarmTurnWatchdog();
+    this.progressSample = undefined;
+    if (verdict === "idle") return;
+    console.error("pi_turn_stuck_ended", { chatId: this.state.chatId, tools: view.tools.length });
+    await this.harness.abort();
+    this.broadcast(JSON.stringify({ type: "pi_error", message: STUCK_TURN_NOTE }));
   }
 
   async recycleWorkspace(): Promise<{ snapshot: string; destroyed: boolean }> {

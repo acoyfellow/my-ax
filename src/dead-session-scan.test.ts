@@ -61,11 +61,13 @@ function makeDb(sessions: Session[], entries: Entry[]) {
 function recordingDeps() {
   const revived: string[] = [];
   const alerted: string[] = [];
+  const settled: string[] = [];
   const deps: DeadSessionDeps = {
     reviveTurn: async (_owner, sessionId) => { revived.push(sessionId); },
     alertOwner: async (_owner, sessionId) => { alerted.push(sessionId); },
+    settleRunningWithoutTurn: async (_owner, sessionId) => { settled.push(sessionId); },
   };
-  return { deps, revived, alerted };
+  return { deps, revived, alerted, settled };
 }
 
 const now = new Date("2026-07-26T12:00:00.000Z");
@@ -146,4 +148,34 @@ test("newer stuck session is still processed even alongside older zombies", asyn
   assert.equal(alerted.length, 5, "all five already-retried zombies alerted and terminalized");
   assert.deepEqual(revived, ["s-new"], "the newer fresh dead turn is still revived in the same batch");
   assert.equal(updates.length, 5, "five zombies terminalized");
+});
+
+test("a running session whose last entry is the assistant gets settled, not left thinking", async () => {
+  const sessions: Session[] = [{ id: "s-thinking", owner_email: "owner@example.com", updated_at: stale, status: "running" }];
+  const entries: Entry[] = [
+    { id: 1, session_id: "s-thinking", owner_email: "owner@example.com", role: "user", content: "go", ts: stale, meta_json: null },
+    { id: 2, session_id: "s-thinking", owner_email: "owner@example.com", role: "assistant", content: "checking with small commands", ts: stale, meta_json: null },
+  ];
+  const { db } = makeDb(sessions, entries);
+  const { deps, revived, alerted, settled } = recordingDeps();
+
+  await runDeadSessionScan(db, deps, now);
+
+  assert.deepEqual(settled, ["s-thinking"]);
+  assert.deepEqual(revived, []);
+  assert.deepEqual(alerted, []);
+});
+
+test("an active session that finished is left alone", async () => {
+  const sessions: Session[] = [{ id: "s-done", owner_email: "owner@example.com", updated_at: stale, status: "active" }];
+  const entries: Entry[] = [
+    { id: 1, session_id: "s-done", owner_email: "owner@example.com", role: "user", content: "go", ts: stale, meta_json: null },
+    { id: 2, session_id: "s-done", owner_email: "owner@example.com", role: "assistant", content: "done", ts: stale, meta_json: null },
+  ];
+  const { db } = makeDb(sessions, entries);
+  const { deps, settled } = recordingDeps();
+
+  await runDeadSessionScan(db, deps, now);
+
+  assert.deepEqual(settled, []);
 });
