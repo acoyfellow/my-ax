@@ -12,6 +12,7 @@ export type PiChatMessage = {
   reasoning?: string;
   attachments?: Array<{ key: string; mime?: string }>;
   timestamp?: number;
+  endedAt?: number;
   streaming: boolean;
 };
 
@@ -141,6 +142,7 @@ export class PiTranscript {
           const previous = out[out.length - 1];
           if (previous?.role === "assistant" && !previous.streaming) {
             previous.parts.push(...parts);
+            if (timestamp !== undefined) previous.endedAt = timestamp;
             if (reasoning) previous.reasoning = (previous.reasoning ?? "") + reasoning;
           } else if (parts.length || reasoning) {
             out.push({ id, role: "assistant", content: "", parts, reasoning: reasoning || undefined, timestamp, streaming: false });
@@ -150,6 +152,8 @@ export class PiTranscript {
           }
         } else if (message.role === "toolResult") {
           const tool = tools.get(String(message.toolCallId ?? ""));
+          const last = out[out.length - 1];
+          if (last?.role === "assistant" && typeof message.timestamp === "number") last.endedAt = message.timestamp;
           if (tool) {
             tool.result = textOf(message.content);
             tool.isError = message.isError === true;
