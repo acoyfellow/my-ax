@@ -33,3 +33,11 @@ test("a turn without timestamps gets no duration", () => {
   const messages = annotateTurnDurations<TimedMessage>([{ role: "user" }, { role: "assistant" }]);
   assert.equal(messages[1]!.durationMs, undefined);
 });
+
+test("a turn whose end equals its start has an unknown duration, not 0s", () => {
+  const messages = annotateTurnDurations<TimedMessage>([
+    { role: "user", timestamp: 1_000 },
+    { role: "assistant", timestamp: 1_000 },
+  ]);
+  assert.equal(messages[1]!.durationMs, undefined);
+});

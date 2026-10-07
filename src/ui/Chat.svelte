@@ -1161,6 +1161,7 @@
       return true;
     }
     if (frame.type === "pi_events") {
+      piTranscript.recordEntryTimes(frame.entryTimes);
       piTranscript.applyEvents(frame.events ?? []);
       renderPiTranscript();
       return true;

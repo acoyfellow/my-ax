@@ -41,6 +41,7 @@ export type PiChatLiveView = {
   tools: unknown[];
   queued: number;
   retry: { at: number; error: string } | null;
+  entryTimes: Record<number, number>;
 };
 
 function hasGatewayModels(env: Env): boolean {
@@ -81,7 +82,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const stream = await this.harness.session().events();
     this.eventStream = stream;
     stream.start(async (events: readonly AgentEvent[]) => {
-      this.broadcast(JSON.stringify({ type: "pi_events", events }));
+      const entryTimes = this.recordEntryTimes(events);
+      this.broadcast(JSON.stringify({ type: "pi_events", events, entryTimes }));
     });
     void stream.closed.finally(() => {
       if (this.eventStream === stream) this.eventStream = null;
@@ -200,6 +202,26 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return JSON.stringify(entries);
   }
 
+  private recordEntryTimes(events: readonly AgentEvent[]): Record<number, number> {
+    const now = Date.now();
+    const recorded: Record<number, number> = {};
+    for (const event of events as ReadonlyArray<{ entry?: { id?: unknown } }>) {
+      const id = event.entry?.id;
+      if (typeof id !== "number") continue;
+      const existing = this.ctx.storage.kv.get<number>(`entry-time:${id}`);
+      if (existing !== undefined) { recorded[id] = existing; continue; }
+      this.ctx.storage.kv.put(`entry-time:${id}`, now);
+      recorded[id] = now;
+    }
+    return recorded;
+  }
+
+  private entryTimes(): Record<number, number> {
+    const times: Record<number, number> = {};
+    for (const [key, value] of this.ctx.storage.kv.list<number>({ prefix: "entry-time:" })) times[Number(key.slice("entry-time:".length))] = value;
+    return times;
+  }
+
   async live(): Promise<PiChatLiveView> {
     const stream = await this.harness.session().events();
     const snapshot = stream.snapshot;
@@ -213,6 +235,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       tools: [...snapshot.tools],
       queued: snapshot.inbox.length,
       retry: snapshot.generation?.retry ?? null,
+      entryTimes: this.entryTimes(),
     };
   }
 

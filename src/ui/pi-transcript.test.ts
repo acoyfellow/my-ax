@@ -51,3 +51,21 @@ test("the user's own message_end does not wipe the assistant reply in progress",
   assert.equal(messages[1].streaming, true);
   assert.equal(t.busy, true);
 });
+
+test("a turn's end uses the time each entry was written, not the step start", () => {
+  const transcript = new PiTranscript();
+  transcript.applySnapshot({
+    busy: false,
+    model: "m",
+    queued: 0,
+    tools: [],
+    partial: null,
+    entryTimes: { "1": 1_000, "2": 61_000 },
+    entries: [
+      { id: 1, kind: "pi.user", model: [{ role: "user", content: "hi", timestamp: 1_000 }] },
+      { id: 2, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "text", text: "done" }], timestamp: 1_000 }] },
+    ],
+  } as never);
+  const [, agent] = transcript.messages();
+  assert.equal(agent!.endedAt, 61_000);
+});
