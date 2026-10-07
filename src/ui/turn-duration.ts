@@ -24,7 +24,7 @@ export function annotateTurnDurations<T extends TimedMessage>(messages: T[]): T[
     if (lastAgentIndex < 0 || turnStart === undefined || turnEnd === undefined) return;
     const agent = messages[lastAgentIndex]!;
     if (agent.streaming) return;
-    if (turnEnd >= turnStart) agent.durationMs = turnEnd - turnStart;
+    if (turnEnd > turnStart) agent.durationMs = turnEnd - turnStart;
   };
   for (const [index, message] of messages.entries()) {
     if (message.role === "user") {

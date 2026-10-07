@@ -25,6 +25,7 @@ export type PiSnapshot = {
   partial: ModelMessage | null;
   tools: Array<{ callId: string; output?: string }>;
   queued: number;
+  entryTimes?: Record<string, number>;
 };
 
 function textOf(content: unknown): string {
@@ -53,8 +54,15 @@ export class PiTranscript {
   model = "";
   queued = 0;
   private liveOutput = new Map<string, string>();
+  private entryTimes = new Map<number, number>();
+
+  recordEntryTimes(times: Record<string, number> | undefined): void {
+    if (!times) return;
+    for (const [id, at] of Object.entries(times)) if (typeof at === "number") this.entryTimes.set(Number(id), at);
+  }
 
   applySnapshot(snapshot: PiSnapshot): void {
+    this.recordEntryTimes(snapshot.entryTimes);
     this.entries.clear();
     for (const entry of snapshot.entries) this.entries.set(entry.id, entry);
     this.partial = snapshot.partial;
@@ -131,6 +139,7 @@ export class PiTranscript {
     const tools = new Map<string, Extract<PiChatPart, { kind: "tool" }>["tool"]>();
     const ordered = [...this.entries.values()].sort((a, b) => a.id - b.id);
     for (const entry of ordered) {
+      const writtenAt = this.entryTimes.get(entry.id);
       for (const [index, message] of (entry.model ?? []).entries()) {
         const id = `pi-${entry.id}-${index}`;
         const timestamp = typeof message.timestamp === "number" ? message.timestamp : undefined;
@@ -142,10 +151,11 @@ export class PiTranscript {
           const previous = out[out.length - 1];
           if (previous?.role === "assistant" && !previous.streaming) {
             previous.parts.push(...parts);
-            if (timestamp !== undefined) previous.endedAt = timestamp;
+            const ended = writtenAt ?? timestamp;
+            if (ended !== undefined) previous.endedAt = ended;
             if (reasoning) previous.reasoning = (previous.reasoning ?? "") + reasoning;
           } else if (parts.length || reasoning) {
-            out.push({ id, role: "assistant", content: "", parts, reasoning: reasoning || undefined, timestamp, streaming: false });
+            out.push({ id, role: "assistant", content: "", parts, reasoning: reasoning || undefined, timestamp, endedAt: writtenAt, streaming: false });
           }
           if (message.stopReason === "error" && typeof message.errorMessage === "string") {
             out.push({ id: `${id}-error`, role: "error", content: message.errorMessage, parts: [], timestamp, streaming: false });
@@ -153,7 +163,8 @@ export class PiTranscript {
         } else if (message.role === "toolResult") {
           const tool = tools.get(String(message.toolCallId ?? ""));
           const last = out[out.length - 1];
-          if (last?.role === "assistant" && typeof message.timestamp === "number") last.endedAt = message.timestamp;
+          const ended = writtenAt ?? (typeof message.timestamp === "number" ? message.timestamp : undefined);
+          if (last?.role === "assistant" && ended !== undefined) last.endedAt = ended;
           if (tool) {
             tool.result = textOf(message.content);
             tool.isError = message.isError === true;
