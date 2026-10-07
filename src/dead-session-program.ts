@@ -22,9 +22,10 @@ export interface DeadSessionDb {
 export interface DeadSessionDeps {
   reviveTurn: (ownerEmail: string, sessionId: string, message: string, clientMsgId: string) => Promise<void>;
   alertOwner: (ownerEmail: string, sessionId: string, dedupeSuffix: number) => Promise<void>;
+  settleRunningWithoutTurn: (ownerEmail: string, sessionId: string) => Promise<void>;
 }
 
-type DeadSessionRow = { id: string; owner_email: string; updated_at: string };
+type DeadSessionRow = { id: string; owner_email: string; updated_at: string; status?: string };
 
 class DeadSessionOperationError extends Data.TaggedError("DeadSessionOperationError")<{
   operation: string;
@@ -55,7 +56,10 @@ function scanSession(
       ) ORDER BY id ASC`,
     ).bind(session.id, ownerEmail).all<RecentConversationEntry>());
     const dead = detectDeadSession(recent.results ?? [], session.updated_at, now, stallMs);
-    if (!dead) return;
+    if (!dead) {
+      if (session.status === "running") yield* operation("settle_running_without_turn", () => deps.settleRunningWithoutTurn(ownerEmail, session.id));
+      return;
+    }
 
     const latestUserEntry = (recent.results ?? []).find((entry) => entry.id === dead.latestUserEntryId);
     if (!latestUserEntry) return;
@@ -95,7 +99,7 @@ export function runDeadSessionScan(
   const cutoff = new Date(now.getTime() - stallMs).toISOString();
   return Effect.gen(function* () {
     const sessions = yield* operation("list_stalled_sessions", () => db.prepare(
-      "SELECT id, owner_email, updated_at FROM sessions WHERE status IN ('active', 'running') AND updated_at < ? ORDER BY updated_at ASC, id ASC LIMIT 50",
+      "SELECT id, owner_email, updated_at, status FROM sessions WHERE status IN ('active', 'running') AND engine = 'think' AND updated_at < ? ORDER BY (status = 'running') DESC, updated_at ASC, id ASC LIMIT 50",
     ).bind(cutoff).all<DeadSessionRow>());
     yield* Effect.forEach(
       sessions.results ?? [],
