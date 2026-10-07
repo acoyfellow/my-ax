@@ -110,4 +110,11 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     await stub.abortAll();
     return c.json({ ok: true, result: { aborted: true } });
   });
+
+  app.post("/api/pi/chats/:id/crash", async (c) => {
+    const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
+    if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    await stub.crash().catch(() => undefined);
+    return c.json({ ok: true, result: { crashed: true } });
+  });
 }

@@ -20,10 +20,9 @@
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
   import { myAxDeepLinkIntent, parseMyAxDeepLink, type MyAxDeepLink } from "./deep-links";
   import { SessionGenerationGuard, type SessionGeneration } from "./session-generation";
-  import { loadCurrentSessionEntries, shouldReportEmptyRestore, type RestoreOutcome } from "./session-history";
   import { assistantTurnHasVisibleOutput, shouldReportInvisibleCompletion } from "./assistant-visible";
   import { d1EntriesToTranscriptMessages } from "./d1-transcript";
-  import { boundToSession, dropHomelessThinkTurns, fillChronologicalTimestamps, fillChronologicalTimestampsWithFlags, mergeTranscript, thinkReplayLooksForeign } from "./transcript-merge";
+  import { boundToSession, fillChronologicalTimestampsWithFlags } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
   import { isTransientClientError } from "../transient-client-errors";
@@ -745,16 +744,6 @@
   }
   function syncScrollToBottom() {
     scrollToBottomVisible = !isLogPinned();
-    // P1 Stage 2: page older history when the user scrolls near the top. Preserve
-    // the visual position across the prepend so the viewport doesn't jump.
-    if (logEl && logEl.scrollTop < 200 && olderHistoryCursor !== null && olderHistoryCursor !== "" && !loadingOlderHistory) {
-      const prevHeight = logEl.scrollHeight;
-      const prevTop = logEl.scrollTop;
-      void loadOlderHistory().then(async () => {
-        await tick();
-        if (logEl) logEl.scrollTop = prevTop + (logEl.scrollHeight - prevHeight);
-      });
-    }
   }
   function queueScrollToBottom() {
     if (!logEl) return;
@@ -1114,7 +1103,6 @@
   let piTranscript: PiTranscript | null = null;
   const isPiSession = (sessionId: string | null) => storedSessionEngine(sessionId) === "pi";
   async function learnSessionEngine(sessionId: string): Promise<void> {
-    if (localStorage.getItem("my-ax-session-engine:" + sessionId)) return;
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/engine`, { credentials: "include" });
       const body = await response.json().catch(() => null);
@@ -1305,12 +1293,6 @@
     await learnSessionEngine(sessionId);
     ws = makeReconnectingSocket(chatSocketUrl(sessionId));
     void refreshPendingDecision(sessionId);
-    if (piTranscript) return;
-    // Resuming an existing session (e.g. tapping a notification deep-link into a
-    // long thread): render the durable D1 transcript eagerly so the messages
-    // appear immediately instead of waiting for the slow WS replay. Skipped for
-    // a first-send bootstrap (no durable history yet). The WS replay reconciles.
-    if (resumingExistingSession) eagerRestoreFromD1(sessionGeneration.capture());
   }
 
   // In-place conversation switch — no full page reload. Closes the current
@@ -1318,11 +1300,7 @@
   // history via cf_agent_chat_messages. Avoids the re-download/re-parse jank.
   function switchToSession(id: string) {
     if (!id || id === localStorage.getItem(SESSION_KEY)) return;
-    if (!localStorage.getItem("my-ax-session-engine:" + id)) {
-      void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
-      return;
-    }
-    switchToSessionKnownEngine(id);
+    void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
   }
 
   function switchToSessionKnownEngine(id: string) {
@@ -1356,30 +1334,6 @@
     void proto;
     setConn("reconnecting");
     ws = makeReconnectingSocket(chatSocketUrl(id));
-    if (piTranscript) return;
-    queueMicrotask(() => { void hydrateHistoryTimestamps(); });
-    // Eagerly render the durable D1 transcript instead of waiting for the WS
-    // cf_agent_chat_messages replay. On a LONG thread the server's DO wake +
-    // full history replay over the fresh socket can take many seconds, during
-    // which the user saw only their own optimistic messages behind the spinner
-    // (the "put the phone down and come back" bug). The D1 REST read is fast and
-    // paginated; the WS replay reconciles when it lands. Generation-guarded so
-    // a stale switch cannot render into a newer conversation.
-    eagerRestoreFromD1(sessionGeneration.capture());
-  }
-
-  // Fast-path history: render the durable transcript ASAP on resume/switch so a
-  // long thread does not sit behind the spinner waiting for the WS replay.
-  function eagerRestoreFromD1(expected = sessionGeneration.capture()) {
-    if (!expected) return;
-    void restoreD1History(expected, true).then((outcome) => {
-      // Reveal whatever we rendered immediately; the WS cf_agent_chat_messages
-      // (Think's authoritative, possibly-compacted view) will reconcile via
-      // renderThinkHistory when it arrives.
-      if (outcome === "restored" && sessionWorkIsCurrent(expected)) {
-        void revealResumedHistoryAtBottom();
-      }
-    }).catch(() => undefined);
   }
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -1782,18 +1736,6 @@
     }
   }
 
-  const loadSessionEntries = (expected: SessionGeneration, maxPages: number) => loadCurrentSessionEntries<any>({
-    expected, isCurrent: sessionWorkIsCurrent, maxPages,
-    fetchPage: (after) => fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?after=${encodeURIComponent(after)}&limit=200`, { credentials: "include" }),
-  });
-
-  // P1 Stage 2: cursor for paging OLDER history on scroll-up after the newest
-  // page rendered. null = not yet loaded; "" = no older history remains.
-  let olderHistoryCursor: string | null = null;
-  let loadingOlderHistory = false;
-
-  // Fetch ONE newest-first bounded page (fast first paint). Returns entries in
-  // chronological order plus the cursor to page further back.
   async function loadNewestEntries(expected: SessionGeneration, limit = 100): Promise<
     { outcome: "stale" } | { outcome: "current"; entries: any[]; olderCursor: string | null; hasOlder: boolean }
   > {
@@ -1806,98 +1748,12 @@
     return { outcome: "current", entries: r.entries ?? [], olderCursor: r.olderCursor ?? null, hasOlder: !!r.hasOlder };
   }
 
-  async function hydrateHistoryTimestamps() {
-    if (piTranscript) return;
-    // NO-OP by design. This used to re-download up to 2000 oldest-first D1 rows
-    // (entries?after=0) on every resume AND every Think replay just to patch
-    // message timestamps. On a large thread (the Master conversation) that was
-    // ~0.6-2MB of duplicate transcript per call, and rebuilding `messages` from
-    // the top is what yanked the viewport to the beginning ~2s after load.
-    // The newest-first loader (d1EntryToMessage) and the Think replay already
-    // set timestamps from entry.createdAt, so this whole second fetch pass is
-    // redundant. Kept as a no-op so existing call sites don't need touching.
-    return;
-  }
-
-  async function restoreD1History(expected = sessionGeneration.capture(), quiet = false): Promise<RestoreOutcome> {
-    if (piTranscript) return "stale";
-    if (!expected || !sessionWorkIsCurrent(expected)) return "stale";
-    // P1 Stage 2: render ONE newest-first bounded page immediately instead of
-    // draining up to 20 oldest-first 200-row pages before first paint. Older
-    // history pages in on scroll-up via loadOlderHistory.
-    const result = await loadNewestEntries(expected, 200);
-    if (result.outcome === "stale") return "stale";
-    const restored = d1EntriesToTranscriptMessages(result.entries, { sessionId: expected.sessionId, renderMarkdown });
-    if (!sessionWorkIsCurrent(expected)) return "stale";
-    if (!restored.length) return "empty";
-    messages = mergeTranscript(messages, restored, { preferIncoming: false }) as MessageView[];
-    olderHistoryCursor = result.hasOlder ? (result.olderCursor ?? "") : "";
-    onboardingHidden = true;
-    // The eager fast-path load is a normal resume, not a recovery — stay quiet.
-    // The explicit recovery paths (empty Think replay) still surface the notice.
-    if (!quiet) pushSystem("Conversation restored from the durable transcript.");
-    return "restored";
-  }
-
-  // P1 Stage 2: page older history on scroll-up. Prepends an older newest-first
-  // page (chronological) ahead of the current transcript, merged by id so a
-  // Think replay that already rendered some of these does not duplicate them.
-  async function loadOlderHistory(): Promise<void> {
-    if (piTranscript) return;
-    if (loadingOlderHistory || olderHistoryCursor === null || olderHistoryCursor === "") return;
-    const expected = sessionGeneration.capture();
-    if (!expected) return;
-    loadingOlderHistory = true;
-    try {
-      const res = await fetch(`/api/sessions/${encodeURIComponent(expected.sessionId)}/entries?order=desc&before=${encodeURIComponent(olderHistoryCursor)}&limit=100`, { credentials: "include" });
-      if (!res.ok || !sessionWorkIsCurrent(expected)) return;
-      const body = await res.json();
-      if (!sessionWorkIsCurrent(expected)) return;
-      const r = body?.result ?? {};
-      const present = new Set(messages.map((m) => m.id));
-      const older = d1EntriesToTranscriptMessages(r.entries ?? [], { sessionId: expected.sessionId, renderMarkdown })
-        .filter((m) => !present.has(m.id));
-      if (older.length) messages = mergeTranscript(older as any, messages as any) as typeof messages;
-      olderHistoryCursor = r.hasOlder ? (r.olderCursor ?? "") : "";
-    } catch {
-      // leave cursor intact so a later scroll retries
-    } finally {
-      loadingOlderHistory = false;
-    }
-  }
-
-  // When Think compacts a long session it replays fewer messages than the
-  // human actually wrote. The durable D1 transcript is the human-facing truth,
-  // so on resume, if D1 holds more user turns than Think replayed, show the
-  // full transcript for display while Think keeps its compacted model context.
-  async function reconcileCompactedHistory(thinkUserTurns: number) {
-    // The L1 merge (renderThinkHistory -> mergeTranscript) already keeps D1-only
-    // messages that a compacted Think replay omitted, so we no longer need to
-    // re-drain the whole transcript oldest-first (entries?after=0, up to 4000
-    // rows) just to detect compaction. If Think replayed nothing useful, the
-    // newest-first restoreD1History has already run. Only fall back to a single
-    // newest-first restore when Think replayed a near-empty history on resume.
-    if (thinkUserTurns > 0) return;
-    const expected = sessionGeneration.capture();
-    if (!expected || activeRequestId || !sessionWorkIsCurrent(expected)) return;
-    try { await restoreD1History(expected); } catch {}
-  }
-
   function renderThinkHistory(historyMessages: any[]) {
     if (piTranscript) return;
     if (activeRequestId) return;
-    const wasResuming = resumingExistingSession;
     thinkMessages = historyMessages || [];
     const ownerHistory = ownerVisibleTranscript(thinkMessages);
     const existingTimestamps = new Map(messages.map((message) => [message.id, message.timestamp]));
-    // Do NOT clear the transcript here. The D1 eager restore already rendered the
-    // durable, complete history; Think's replay is authoritative for content but can
-    // be COMPACTED (fewer messages than the human wrote). Clearing then rebuilding
-    // from Think alone dropped any assistant reply Think omitted (the P1 "replies
-    // lost" race). Instead we build Think's views separately and MERGE: Think wins on
-    // id collision (authoritative content), but D1-only messages are kept. See
-    // transcript-merge.ts. Alignment is by id (D1 meta.uiMessageId === Think id).
-    const priorMessages = messages;
     const thinkViews: MessageView[] = [];
     const { values: thinkTimestamps, interpolated: thinkTimestampInterpolated } = fillChronologicalTimestampsWithFlags(
       ownerHistory.map((message: any) => {
@@ -1905,17 +1761,7 @@
         return toMillis(message.createdAt) ?? existingTimestamps.get(rawId);
       }),
     );
-    if (thinkMessages.length > 0) {
-      onboardingHidden = true;
-      if (wasResuming) {
-        const thinkUserTurns = thinkMessages.filter((message: any) => message.role === "user").length;
-        void reconcileCompactedHistory(thinkUserTurns);
-      }
-    } else if (resumingExistingSession) {
-      void restoreD1History().then((outcome) => {
-        if (shouldReportEmptyRestore(outcome)) pushError("This conversation has no recoverable transcript. Start a new conversation or choose another session.");
-      });
-    }
+    if (thinkMessages.length > 0) onboardingHidden = true;
     resumingExistingSession = false;
     const seenViewIds = new Map<string, number>();
     for (const [messageIndex, message] of ownerHistory.entries()) {
@@ -1968,9 +1814,6 @@
         // Think history should provide stable unique ids, but a duplicated id
         // must not crash the entire Svelte chat mount during recovery.
         id: occurrence === 0 ? rawId : `${rawId}-replay-${occurrence}`,
-        // sourceId preserves the underlying logical id so mergeTranscript can
-        // still dedup against the D1 row even when we assigned a synthetic id
-        // to avoid a Svelte key collision on a duplicated replay.
         sourceId: rawId,
         role: message.role,
         content: text,
@@ -1985,9 +1828,6 @@
       };
       thinkViews.push(m);
     }
-    // Merge Think's replay into whatever the D1 eager restore already rendered.
-    // Think wins on id collision (authoritative), D1-only messages survive. When
-    // Think replayed nothing, this preserves the D1 transcript unchanged.
     // #4 preserve scroll: capture whether the user was pinned at the bottom AND the
     // pre-merge geometry BEFORE mutating `messages`, so the Think replay reconcile
     // never yanks the viewport. If they were at the bottom we settle at the bottom;
@@ -1996,17 +1836,7 @@
     const prevTop = logEl?.scrollTop ?? 0;
     const prevHeight = logEl?.scrollHeight ?? 0;
     const sessionId = currentSessionId();
-    if (thinkReplayLooksForeign(priorMessages, thinkViews)) {
-      thinkMessages = [];
-      void restoreD1History(sessionGeneration.capture(), true);
-      return;
-    }
-    const ownedThink = dropHomelessThinkTurns(priorMessages, thinkViews);
-    const merged = ownedThink.length > 0
-      ? mergeTranscript(priorMessages, ownedThink)
-      : priorMessages;
-    messages = boundToSession(merged, sessionId);
-    void hydrateHistoryTimestamps();
+    messages = boundToSession(thinkViews, sessionId);
     if (wasPinned) {
       void revealResumedHistoryAtBottom();
     } else {
