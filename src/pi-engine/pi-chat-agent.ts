@@ -254,6 +254,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     this.broadcast(JSON.stringify({ type: "pi_error", message: STUCK_TURN_NOTE }));
   }
 
+  async crash(): Promise<void> {
+    console.warn("pi_chat_crash_requested", { chatId: this.state.chatId });
+    this.ctx.abort("owner requested a crash test");
+  }
+
   async recycleWorkspace(): Promise<{ snapshot: string; destroyed: boolean }> {
     const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };

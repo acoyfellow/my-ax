@@ -27,13 +27,10 @@ assertIncludes(chat, '{#if voiceEnabled}', "voice mode renders a distinct hands-
 assertIncludes(chat, 'class="voice-mode-active"', "voice mode shows an audio-active affordance, not a transcript");
 assertIncludes(chat, '{#if !voiceEnabled}\n              <textarea', "the text input is removed/disabled while voice is active");
 assertNotIncludes(chat, 'class="voice-mode-interim"', "the old client-side interim transcript strip must be gone");
-// Long-thread history bug: render the durable D1 transcript eagerly on
-// switch/resume so messages appear immediately instead of waiting for the slow
-// WS replay (the 'put the phone down and come back' bug).
-assertIncludes(chat, 'function eagerRestoreFromD1(', "eager D1 transcript fast-path exists");
-assertIncludes(chat, 'eagerRestoreFromD1(sessionGeneration.capture());\n  }', "switchToSession eagerly loads durable history");
-assertIncludes(chat, 'if (resumingExistingSession) eagerRestoreFromD1(sessionGeneration.capture());', "bootstrap resume (notification deep-link) eagerly loads durable history");
-assertIncludes(chat, 'restoreD1History(expected, true)', "the eager fast-path load is quiet (no recovery toast on a normal resume)");
+assertNotIncludes(chat, '/entries?after=', "the chat screen never drains the D1 copy to draw a transcript");
+assertNotIncludes(chat, 'mergeTranscript(', "the chat screen never merges two transcript copies");
+assertNotIncludes(chat, 'function restoreD1History(', "the D1 transcript restore path is gone from the screen");
+assertIncludes(chat, 'messages = boundToSession(thinkViews, sessionId);', "a frozen Think chat draws its own replay as-is");
 // #10 webcam vision: camera capture routes through the shared upload path so a
 // frame becomes a normal (removable) attachment the agent can see.
 // Consolidated composer input: a single "+" menu (Add file / Camera) replaces the
