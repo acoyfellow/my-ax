@@ -457,8 +457,14 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
     if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
     const stub = await getSessionAgent(c.env, identity.email, id);
-    const messages = await stub.transcript();
-    return c.json({ ok: true, result: { messages } });
+    let messages: string;
+    try {
+      messages = await stub.transcriptJson();
+    } catch (error) {
+      console.error("session_transcript_failed", { id, err: String(error) });
+      return c.json({ ok: false, error: { code: "TRANSCRIPT_UNAVAILABLE", message: String(error) } }, 502);
+    }
+    return new Response(`{"ok":true,"result":{"messages":${messages}}}`, { headers: { "content-type": "application/json" } });
   });
 
   // GET /api/sessions/:id/entries?after=<conversation_entries.id>&limit=<n>

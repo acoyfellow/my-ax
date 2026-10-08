@@ -169,6 +169,9 @@ function attachmentParts(message: UIMessage): Attachment[] {
  * Think owns chat persistence, protocol streaming, recovery, and durable submissions;
  * my-ax supplies its Cloud Computer workspace, connectors, memory mirror, and push channel.
  */
+const TRANSCRIPT_STRING_LIMIT = 4_000;
+const TRANSCRIPT_MESSAGE_LIMIT = 300;
+
 export class MyAgent extends Think<Env> {
   maxSteps = TURN_STEP_BATCH;
   maxConcurrentAgentTools = 2;
@@ -188,8 +191,8 @@ export class MyAgent extends Think<Env> {
   override chatStreamStallTimeoutMs = 300_000;
   private readonly turnProgress = new TurnProgressTracker();
 
-  async transcript(): Promise<unknown[]> {
-    return [...this.messages];
+  async transcriptJson(): Promise<string> {
+    return JSON.stringify(this.messages.slice(-TRANSCRIPT_MESSAGE_LIMIT), (key, value) => typeof value === "string" && value.length > TRANSCRIPT_STRING_LIMIT && (key === "output" || key === "result" || key === "input") ? `${value.slice(0, TRANSCRIPT_STRING_LIMIT)}…` : value);
   }
 
   async messageTimes(): Promise<Record<string, number>> {
