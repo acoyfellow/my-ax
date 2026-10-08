@@ -71,6 +71,7 @@
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
+  import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
 
   // Markdown ships in the application bundle so the first streamed token can
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
@@ -672,6 +673,7 @@
   const sendStatus = $derived.by(() => {
     if (piBusy && !wsDown) return composerText.trim() || pendingAttachments.length ? "idle" : "running";
     if (wsDown && !composerLocked) return "offline";
+    if (composerLocked && wsState.status !== "done" && composerText.trim()) return "idle";
     if (composerLocked && wsState.status !== "done") return wsState.status;
     return "idle";
   });
@@ -1124,6 +1126,45 @@
     return `${proto}//${location.host}/agents/my-agent/${sessionId}`;
   }
   let piBusy = $state(false);
+  const localQueue = new LocalMessageQueue(() => `queued-${crypto.randomUUID()}`);
+  let queuedMessages = $state<readonly QueuedMessage[]>([]);
+  let flushingQueue = false;
+  function syncQueuedMessages() {
+    queuedMessages = localQueue.messages;
+  }
+  function agentIsBusy(): boolean {
+    return piTranscript ? piBusy : wsState.status !== "idle" && wsState.status !== "done";
+  }
+  function queueComposerText() {
+    localQueue.add(composerText);
+    syncQueuedMessages();
+    composerText = "";
+    void tick().then(autoGrow);
+  }
+  function recallQueueForEditing() {
+    composerText = localQueue.takeForEditing();
+    syncQueuedMessages();
+    void tick().then(() => {
+      autoGrow();
+      inputEl?.focus();
+    });
+  }
+  function removeQueued(id: string) {
+    localQueue.remove(id);
+    syncQueuedMessages();
+  }
+  function sendQueueIfIdle() {
+    if (flushingQueue || agentIsBusy() || localQueue.size === 0 || wsState.conn !== "live" || composerText.trim()) return;
+    const combined = localQueue.takeForSending();
+    syncQueuedMessages();
+    if (!combined) return;
+    flushingQueue = true;
+    composerText = combined;
+    queueMicrotask(() => {
+      formEl?.requestSubmit();
+      flushingQueue = false;
+    });
+  }
   function renderPiTranscript() {
     if (!piTranscript) return;
     piBusy = piTranscript.busy;
@@ -1947,6 +1988,11 @@
     autoGrow();
   }
   function onInputKeydown(e: KeyboardEvent) {
+    if (shouldRecallQueue({ key: e.key, composerText, queued: localQueue.size, modifier: e.shiftKey || e.altKey || e.metaKey || e.ctrlKey })) {
+      e.preventDefault();
+      recallQueueForEditing();
+      return;
+    }
     const decision = decideComposerKey({
       key: e.key,
       shiftKey: e.shiftKey,
@@ -1958,7 +2004,10 @@
     // sending is the explicit Send button only.
     if (decision !== "send") return;
     e.preventDefault();
-    if (wsState.status !== "idle" && wsState.status !== "done") return;
+    if (agentIsBusy()) {
+      queueComposerText();
+      return;
+    }
     formEl?.requestSubmit();
   }
   async function onInputPaste(e: ClipboardEvent) {
@@ -2071,7 +2120,10 @@
 
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
-    if (composerLocked && !piTranscript) return;
+    if (agentIsBusy() && ws) {
+      if (composerText.trim()) queueComposerText();
+      return;
+    }
     const text = composerText;
     if (!text.trim() && pendingAttachments.length === 0) return;
     if (ws && wsState.conn !== "live") {
@@ -2131,6 +2183,14 @@
     await tick();
     autoGrow();
   }
+
+  $effect(() => {
+    void wsState.status;
+    void wsState.conn;
+    void piBusy;
+    void queuedMessages;
+    sendQueueIfIdle();
+  });
 
   // One-shot first-send replay after session creation reload. This effect is
   // the convergence point for Svelte hydration + <form bind:this> + WS-open.
@@ -2833,6 +2893,18 @@
 
       <!-- Composer -->
       <div class="flex-none border-t border-line bg-bg-alt">
+        {#if queuedMessages.length > 0}
+          <div class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 flex flex-col gap-1" aria-label="Queued messages">
+            {#each queuedMessages as queued (queued.id)}
+              <div class="flex items-start gap-2 rounded-md ring ring-line bg-bg px-2.5 py-1.5 text-sm">
+                <span class="flex-none text-[11px] uppercase tracking-wide text-fg-mut pt-0.5">Queued</span>
+                <span class="flex-1 min-w-0 whitespace-pre-wrap break-words text-fg">{queued.text}</span>
+                <button type="button" class="flex-none text-fg-mut hover:text-fg" aria-label="Remove queued message" onclick={() => removeQueued(queued.id)}>×</button>
+              </div>
+            {/each}
+            <div class="text-[11px] text-fg-mut">Sends as one message when the agent finishes. ↑ to edit.</div>
+          </div>
+        {/if}
         <form
           bind:this={formEl}
           onsubmit={onSubmit}
