@@ -633,7 +633,7 @@
     if (thinkingVisible || thinkingShowTimer !== null) return;
     thinkingShowTimer = setTimeout(() => {
       thinkingShowTimer = null;
-      if (progressEligible(turnState)) showThinking();
+      if (progressEligible(turnState) || piBusy) showThinking();
     }, THINKING_SHOW_DELAY_MS);
   }
   function noteAgentActivity() {
@@ -1521,6 +1521,7 @@
     if (responseRecoveryPending) return;
     if (!activeRequestId) {
       activeRequestId = requestId;
+      dispatchTurn({ type: "server-resumable", requestId });
       applyStatus("running");
     }
     responseRecoveryPending = true;
@@ -1585,6 +1586,7 @@
       // already-open tab normally owns activeRequestId; a newly mounted view
       // may learn it here while restoring a conversation.
       requestActiveResponseRecovery(typeof m.id === "string" ? m.id : null);
+      void loadHistoryBeneathLiveTurn(currentSessionId());
     } else if (m.type === "cf_agent_stream_resume_none") {
       responseRecoveryPending = false;
       if (activeRequestId) {
@@ -1654,6 +1656,7 @@
         activeRequestId = m.id;
         restoredActiveTurn = false;
         rememberActiveTurn(m.id, "remote-client");
+        dispatchTurn({ type: "adopt", requestId: m.id });
         applyStatus("running");
       }
       if (m.error) {
@@ -1772,9 +1775,24 @@
     }
   }
 
-  function renderThinkHistory(historyMessages: any[]) {
+  function earlierTurnsOnly(historyMessages: any[]): any[] {
+    const lastUser = historyMessages.map((message) => message?.role).lastIndexOf("user");
+    return lastUser < 0 ? [] : historyMessages.slice(0, lastUser + 1);
+  }
+
+  async function loadHistoryBeneathLiveTurn(sessionId: string) {
+    if (piTranscript || messages.some((message) => message.role === "user")) return;
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/transcript`, { credentials: "include" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || readTabSession() !== sessionId || !Array.isArray(body?.result?.messages)) return;
+      renderThinkHistory(earlierTurnsOnly(body.result.messages), { beneathLiveTurn: true });
+    } catch {}
+  }
+
+  function renderThinkHistory(historyMessages: any[], options: { beneathLiveTurn?: boolean } = {}) {
     if (piTranscript) return;
-    if (activeRequestId) return;
+    if (activeRequestId && !options.beneathLiveTurn) return;
     thinkMessages = historyMessages || [];
     const ownerHistory = ownerVisibleTranscript(thinkMessages);
     const existingTimestamps = new Map(messages.map((message) => [message.id, message.timestamp]));
@@ -1860,7 +1878,9 @@
     const prevTop = logEl?.scrollTop ?? 0;
     const prevHeight = logEl?.scrollHeight ?? 0;
     const sessionId = currentSessionId();
-    messages = annotateTurnDurations(boundToSession(thinkViews, sessionId));
+    const historyIds = new Set(thinkViews.map((view) => view.id));
+    const liveViews = options.beneathLiveTurn ? messages.filter((message) => !historyIds.has(message.id)) : [];
+    messages = annotateTurnDurations(boundToSession([...thinkViews, ...liveViews], sessionId));
     if (thinkViews.some((view) => view.timestamp === undefined)) void loadThinkMessageTimes(sessionId);
     if (wasPinned) {
       void revealResumedHistoryAtBottom();
