@@ -30,7 +30,7 @@ assertNotIncludes(chat, 'class="voice-mode-interim"', "the old client-side inter
 assertNotIncludes(chat, '/entries?after=', "the chat screen never drains the D1 copy to draw a transcript");
 assertNotIncludes(chat, 'mergeTranscript(', "the chat screen never merges two transcript copies");
 assertNotIncludes(chat, 'function restoreD1History(', "the D1 transcript restore path is gone from the screen");
-assertIncludes(chat, 'messages = annotateTurnDurations(boundToSession(thinkViews, sessionId));', "a frozen Think chat draws its own replay as-is");
+assertIncludes(chat, 'messages = annotateTurnDurations(boundToSession([...thinkViews, ...liveViews], sessionId));', "a frozen Think chat draws its own replay as-is, plus only the live turn when opened mid-turn");
 // #10 webcam vision: camera capture routes through the shared upload path so a
 // frame becomes a normal (removable) attachment the agent can see.
 // Consolidated composer input: a single "+" menu (Add file / Camera) replaces the
