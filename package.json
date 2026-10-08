@@ -149,7 +149,7 @@
     "verify:preview-isolation": "node scripts/verify-preview-isolation.mjs",
     "test:bootstrap-resume": "tsx --test src/ui/bootstrap-resume.test.ts",
     "test:image-attachment": "tsx --test src/attachment-reference.test.ts src/attachment-alignment.test.ts src/attachment-part-shape.test.ts",
-    "test:mcp-method-names": "tsx --test src/mcp-method-names.test.ts",
+    "test:mcp-method-names": "tsx --test src/mcp-method-names.test.ts src/send-and-wait.test.ts",
     "test:terminal": "tsx --test src/terminal-protocol.test.ts src/ui/terminal-socket.test.ts",
     "test:desk-app": "tsx --test src/desk-write.test.ts src/desk-app.test.ts src/ui/artifact-outbound.test.ts src/artifact-runtime.test.ts src/ui/desk-host.test.ts src/page-verb-parity.test.ts src/artifact-theme.test.ts src/desk-live-app.test.ts src/desk-promote.test.ts",
     "test:turn-stall": "tsx --test src/ui/turn-stall.test.ts",
