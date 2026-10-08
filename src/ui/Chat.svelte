@@ -633,7 +633,7 @@
     if (thinkingVisible || thinkingShowTimer !== null) return;
     thinkingShowTimer = setTimeout(() => {
       thinkingShowTimer = null;
-      if (progressEligible(turnState)) showThinking();
+      if (progressEligible(turnState) || piBusy) showThinking();
     }, THINKING_SHOW_DELAY_MS);
   }
   function noteAgentActivity() {
@@ -1521,6 +1521,7 @@
     if (responseRecoveryPending) return;
     if (!activeRequestId) {
       activeRequestId = requestId;
+      dispatchTurn({ type: "server-resumable", requestId });
       applyStatus("running");
     }
     responseRecoveryPending = true;
@@ -1655,6 +1656,7 @@
         activeRequestId = m.id;
         restoredActiveTurn = false;
         rememberActiveTurn(m.id, "remote-client");
+        dispatchTurn({ type: "adopt", requestId: m.id });
         applyStatus("running");
       }
       if (m.error) {

@@ -8,3 +8,7 @@ assert.match(routes, /app\.get\("\/api\/sessions\/:id\/transcript"/);
 assert.match(chat, /cf_agent_stream_resuming[\s\S]{0,600}loadHistoryBeneathLiveTurn\(currentSessionId\(\)\)/);
 assert.match(chat, /renderThinkHistory\(earlierTurnsOnly\(body\.result\.messages\), \{ beneathLiveTurn: true \}\)/);
 console.log("history-beneath-live-turn smoke ok");
+assert.match(chat, /rememberActiveTurn\(m\.id, "remote-client"\);\s*dispatchTurn\(\{ type: "adopt", requestId: m\.id \}\)/);
+assert.match(chat, /activeRequestId = requestId;\s*dispatchTurn\(\{ type: "server-resumable", requestId \}\)/);
+assert.match(chat, /if \(progressEligible\(turnState\) \|\| piBusy\) showThinking\(\)/);
+console.log("thinking state follows turns from other tabs ok");
