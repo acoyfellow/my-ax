@@ -188,6 +188,10 @@ export class MyAgent extends Think<Env> {
   override chatStreamStallTimeoutMs = 300_000;
   private readonly turnProgress = new TurnProgressTracker();
 
+  async transcript(): Promise<unknown[]> {
+    return [...this.messages];
+  }
+
   async messageTimes(): Promise<Record<string, number>> {
     const times: Record<string, number> = {};
     try {

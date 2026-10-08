@@ -451,6 +451,16 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     return c.json({ ok: true, result: { times } });
   });
 
+  app.get("/api/sessions/:id/transcript", async (c) => {
+    const identity = c.get("identity");
+    const id = c.req.param("id");
+    const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
+    if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
+    const stub = await getSessionAgent(c.env, identity.email, id);
+    const messages = await stub.transcript();
+    return c.json({ ok: true, result: { messages } });
+  });
+
   // GET /api/sessions/:id/entries?after=<conversation_entries.id>&limit=<n>
   // Stable monotonic D1 ids make this safe for idempotent external polling.
   app.get("/api/sessions/:id/entries", async (c) => {
