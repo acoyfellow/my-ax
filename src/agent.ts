@@ -24,7 +24,7 @@ import { getUserWorkspace, snapshotWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
-import { completeRecurringJobRun, recurringJobClientMessage, recurringJobIdFromClientMessageId } from "./recurring-job-run";
+import { completeRecurringJobRun, recurringJobClientMessage, recurringJobIdFromClientMessageId, sandboxOnlyForTurn } from "./recurring-job-run";
 import { claimRecurringJobRun, computeNextRun, runJobNow, scheduledJobRunPrompt, type JobRow } from "./jobs";
 import { deriveSessionTitle } from "./session-title";
 import type { CycleCostUsage } from "./cycle-costs";
@@ -221,6 +221,8 @@ export class MyAgent extends Think<Env> {
   // page.* codemode connector: in-flight page_call requests keyed by requestId,
   // resolved when the live client replies with a page_result frame (onMessage).
   private pendingPageCalls = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  // Set by getTools() at the start of each turn; true only for job turns.
+  private currentTurnSandboxOnly = false;
   private cycleStepUsage: Array<{ usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null }; finishReason?: string }> = [];
   private recipesUsedThisTurn = new RecipeUsageCollector();
   private recipesSavedThisTurn: unknown[] = [];
@@ -290,8 +292,9 @@ export class MyAgent extends Think<Env> {
   }
 
   async injectUserMessage(body: { content?: string; clientMsgId?: string; attachments?: Attachment[] }) {
-    const current = this.getConfig<MyAgentConfig>() ?? {};
-    this.configure<MyAgentConfig>({ ...current, sandboxOnly: Boolean(body.clientMsgId?.startsWith("job:")) });
+    // Job mode is decided per turn from the message id (see turnIsSandboxOnly),
+    // not saved here: a saved flag outlived the job turn and locked later owner
+    // turns out of My Machine, page and delegate tools.
     await this.onStart();
     const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity) throw new Error("session identity not seeded");
@@ -510,7 +513,7 @@ export class MyAgent extends Think<Env> {
     if (claim.status === "exhausted" && row.schedule_id) await this.cancelRecurringPrompt(row.schedule_id).catch(() => undefined);
     let error: string | null = null;
     try {
-      this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), sandboxOnly: true });
+      // The `job:` message id below is what makes this turn sandbox-only.
       await this.runTurn({
         mode: "submit",
         idempotencyKey: `job:${payload.jobId}:${now.getTime()}`,
@@ -567,9 +570,21 @@ export class MyAgent extends Think<Env> {
     return resolveMyAxModel(this.env, this.getConfig<MyAgentConfig>()?.model ?? defaultModelId(this.env)).model;
   }
 
+  /**
+   * True when the turn that is starting was triggered by a recurring job.
+   * Think appends the turn's user message inside the queued turn, right before
+   * inference calls getTools(), so the last user message is this turn's.
+   */
+  private turnIsSandboxOnly(): boolean {
+    return sandboxOnlyForTurn(this.messages);
+  }
+
   getTools() {
     const agent = this;
-    const sandboxOnly = agent.getConfig<MyAgentConfig>()?.sandboxOnly === true;
+    // Snapshot once per turn so a message queued mid-turn can't change what
+    // this turn's tools may reach.
+    const sandboxOnly = agent.turnIsSandboxOnly();
+    agent.currentTurnSandboxOnly = sandboxOnly;
     return {
       ...createThinkTools(() => agent.buildToolContext()),
       ...(sandboxOnly ? {} : createMyAxBrowserTools(agent.env, () => agent.identity(), () => agent.name)),
@@ -1074,7 +1089,7 @@ export class MyAgent extends Think<Env> {
     const env = this.env;
     const sessionId = this.name;
     const workingDirectory = WORKSPACE_HOME;
-    const sandboxOnly = this.getConfig<MyAgentConfig>()?.sandboxOnly === true;
+    const sandboxOnly = this.currentTurnSandboxOnly;
     return {
       workingDirectory,
       sandboxOnly,
