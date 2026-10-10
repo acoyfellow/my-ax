@@ -13,6 +13,9 @@ import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "..
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
+import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
+import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
+import type { ToolContext } from "../types";
 import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID, resolvePiModelChoice } from "./gateway-models";
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -59,6 +62,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       models.setProvider(this.ai.provider);
       installGatewayModels(models, this.env);
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
+      this.registry.install(machineToolsExtension(() => this.machineRunner()));
       return Harness.open(storage, { models, registry: this.registry }, context);
     },
     defaults: hasGatewayModels(this.env)
@@ -153,6 +157,16 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const chatId = this.state.chatId;
     if (!chatId) throw new Error("pi chat is not bound to a chat id");
     return chatId;
+  }
+
+  private machineRunner(): MachineToolRunner {
+    // machinectl tools only read env and identity from their context (same as
+    // the /api/machinectl/code route), and scope everything to the owner.
+    const context = { env: this.env, identity: this.identity() } as unknown as ToolContext;
+    return {
+      call: (args) => MACHINECTL_TOOL.execute(args, context),
+      code: (args) => MACHINECTL_CODE_TOOL.execute(args, context),
+    };
   }
 
   private async chatWorkspace(): Promise<ChatWorkspace> {
