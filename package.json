@@ -69,7 +69,7 @@
     "test:computer": "tsx --test src/computer-workspace.test.ts src/computer-retained-write-budget.test.ts src/computer-work-budget.test.ts src/work-code-call-collector.test.ts src/work-code-output.test.ts src/workspace-snapshot-classification.test.ts src/computer-id.test.ts src/named-computer-wiring.test.ts src/named-computer-restore.test.ts src/ui/named-computer-widget.test.ts src/routes/computers.test.ts && npm run test:computer:integration",
     "test:computer:integration": "node scripts/test-computer-integration.mjs",
     "test:dead-session": "tsx --test src/dead-session.test.ts",
-    "test:dead-session-scan": "tsx --test src/dead-session-scan.test.ts src/ui/local-queue.test.ts src/turn-watchdog.test.ts src/ui/tab-session.test.ts src/ui/turn-duration.test.ts",
+    "test:dead-session-scan": "tsx --test src/dead-session-scan.test.ts src/ui/local-queue.test.ts src/pi-engine/machine-tools.test.ts src/turn-watchdog.test.ts src/ui/tab-session.test.ts src/ui/turn-duration.test.ts",
     "test:memory-block": "tsx --test src/memory-block.test.ts",
     "test:notify": "tsx --test src/notify.test.ts",
     "test:push-decision-actions": "tsx --test src/push-decision-actions.test.ts",
