@@ -634,7 +634,7 @@
     if (thinkingVisible || thinkingShowTimer !== null) return;
     thinkingShowTimer = setTimeout(() => {
       thinkingShowTimer = null;
-      if (progressEligible(turnState) || piBusy) showThinking();
+      if (progressEligible(turnState) || piBusy || sessionTurnLocksComposer(remoteTurn)) showThinking();
     }, THINKING_SHOW_DELAY_MS);
   }
   function noteAgentActivity() {
@@ -669,6 +669,9 @@
       if (result && typeof result === "object") remoteTurn = result as SessionTurnState;
     } catch {}
   }
+  $effect(() => {
+    if (sessionTurnLocksComposer(remoteTurn)) scheduleThinking();
+  });
   const wsDown = $derived(wsState.conn !== "live");
   const sendStatus = $derived.by(() => {
     if (piBusy && !wsDown) return composerText.trim() || pendingAttachments.length ? "idle" : "running";

@@ -10,7 +10,7 @@ assert.match(chat, /renderThinkHistory\(earlierTurnsOnly\(body\.result\.messages
 console.log("history-beneath-live-turn smoke ok");
 assert.match(chat, /rememberActiveTurn\(m\.id, "remote-client"\);\s*dispatchTurn\(\{ type: "adopt", requestId: m\.id \}\)/);
 assert.match(chat, /activeRequestId = requestId;\s*dispatchTurn\(\{ type: "server-resumable", requestId \}\)/);
-assert.match(chat, /if \(progressEligible\(turnState\) \|\| piBusy\) showThinking\(\)/);
+assert.match(chat, /if \(progressEligible\(turnState\) \|\| piBusy \|\| sessionTurnLocksComposer\(remoteTurn\)\) showThinking\(\)/);
 console.log("thinking state follows turns from other tabs ok");
 assert.match(chat, /if \(agentIsBusy\(\) && ws\) \{\s*if \(composerText\.trim\(\)\) queueComposerText\(\);/);
 assert.match(chat, /aria-label="Queued messages"/);
