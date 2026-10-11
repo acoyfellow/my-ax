@@ -4,6 +4,7 @@
 
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
+import { withZdrSafeRequests } from "./zdr-request";
 import { createWorkersAI } from "workers-ai-provider";
 import { createRetryFetch } from "./gateway-retry-fetch";
 import type { Env } from "./types";
@@ -128,7 +129,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       baseURL: gateway.baseURL,
       apiKey: meta.gateway === "special" ? env.LLM_SPECIAL_GATEWAY_TOKEN! : "",
       headers: gateway.headers,
-      fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
+      fetch: withZdrSafeRequests(createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) })),
     }).responses(meta.upstreamId ?? modelId);
   }
 
