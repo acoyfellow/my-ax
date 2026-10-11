@@ -166,3 +166,5 @@ for (const [sel, span] of [['.safe-area-appbar {', 480], ['.safe-area-composer {
 
 console.log("✓ chat composer smoke: fixed frame, filling chat mount, device-adaptive composer padding");
 assertIncludes(chat, "if (progressEligible(turnState) || piBusy || sessionTurnLocksComposer(remoteTurn)) showThinking();", "an old-engine chat reopened mid-turn shows the thinking spinner from the server's turn state");
+assertIncludes(chat, "const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();", "new-engine updates only follow the latest message when the owner is already at the bottom or the chat is just opening");
+assertIncludes(chat, "if (followLatest) queueScrollToBottom();", "new-engine updates never force-scroll an owner who scrolled up");

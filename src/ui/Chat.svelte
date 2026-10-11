@@ -1170,6 +1170,7 @@
   }
   function renderPiTranscript() {
     if (!piTranscript) return;
+    const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();
     piBusy = piTranscript.busy;
     const sessionId = currentSessionId();
     const optimistic = messages.filter((message) => message.pending && message.role === "user");
@@ -1194,7 +1195,8 @@
     resumingExistingSession = false;
     sessionResumeVisible = false;
     if (messages.length) onboardingHidden = true;
-    queueScrollToBottom();
+    if (followLatest) queueScrollToBottom();
+    else syncScrollToBottom();
   }
   function onPiFrame(frame: any): boolean {
     if (!piTranscript) return false;
