@@ -18,3 +18,11 @@ test("stored conversations are left alone", () => {
   const body = JSON.stringify({ store: true, input: [{ type: "item_reference", id: "rs_ref" }] });
   assert.equal(dropUnresolvableReasoning(body), body);
 });
+
+test("a ZDR lookup error carries the shape of the request that caused it", async () => {
+  const { annotateZdrError } = await import("./zdr-request");
+  const failed = new Response(JSON.stringify({ error: { message: "Item with id 'rs_1' not found. Items are not persisted for Zero Data Retention organizations." } }), { status: 404 });
+  const body = JSON.stringify({ store: false, input: [{ role: "user" }, { type: "function_call" }] });
+  const text = await (await annotateZdrError(failed, body)).text();
+  assert.match(text, /\[request store=false prev=- items=\[user,function_call\]\]/);
+});
