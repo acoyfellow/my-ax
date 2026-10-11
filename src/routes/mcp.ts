@@ -17,8 +17,9 @@ import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from
 import { buildSessionTurnState } from "../session-turn";
 import { parseSendAndWaitArgs, sendAndWait } from "../send-and-wait";
 import { openPiChat } from "../pi-engine/routes";
+import { observeSessionTurns } from "../observe";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -306,6 +307,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   if (method === "send_and_wait") return sendAndWaitInSession(c, email, args);
   const sessionId = typeof args.sessionId === "string" ? args.sessionId : "";
   const session = await ownedSession(c, sessionId);
+  if (method === "observe_turn") return { sessionId, turns: await observeSessionTurns(c.env.DB, email, sessionId, clamp(args.turns, 1, 20)) };
   if (method === "get_session") return { session };
   if (method === "session_state" || method === "abort") {
     const stub = await getSessionAgent(c.env, email, sessionId);
@@ -448,6 +450,7 @@ const CODE_METHODS: Record<string, Method> = {
   jobsHistory: "jobs_history",
   workspaceList: "workspace_list",
   workspaceSnapshots: "workspace_snapshots",
+  observeTurn: "observe_turn",
   workspaceRestore: "workspace_restore",
   workspaceRead: "workspace_read",
   workspaceWrite: "workspace_write",
@@ -494,6 +497,7 @@ const CODE_TYPES = `declare const codemode: {
   jobsHistory(args: { id: string }): Promise<unknown>;
   workspaceList(args?: { path?: string; limit?: number }): Promise<unknown>;
   workspaceSnapshots(args?: { limit?: number }): Promise<{ snapshots: Array<{ backupId: string; name: string; sizeBytes: number | null; createdAt: string; latest: boolean }> }>;
+  observeTurn(args: { sessionId: string; turns?: number }): Promise<{ sessionId: string; turns: Array<{ startedAt: string; prompt: string; endedAt: string | null; status: string; model: string | null; tools: Array<{ at: string; tool: string; durationMs: number | null; ok: boolean; error: string | null }>; steps: Array<{ at: string; finishReason: string | null; inputTokens: number | null; outputTokens: number | null }> }> }>;
   workspaceRestore(args: { backupId: string }): Promise<{ backupId: string; savedCurrentAs: string | null }>;
   workspaceRead(args: { path: string; maxBytes?: number }): Promise<unknown>;
   workspaceWrite(args: { path: string; content: string }): Promise<unknown>;

@@ -1,3 +1,4 @@
+import { observeSessionTurns } from "./observe";
 import { Think } from "@cloudflare/think";
 import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
@@ -115,6 +116,7 @@ The user is authenticated upstream (typically Cloudflare Access). Their email is
 - Be thorough but concise. Show your work via tool calls — the user sees them.
 - When exploring an API or filesystem, call/look first, theorize second.
 - When unsure, reason before acting and verify with tools. Don't guess.
+- Before explaining why a turn stopped or a tool failed, call work_code with workspace.observe({}) and report what it shows (step finish reasons, tool errors, durations). Never guess at causes like context limits.
 - Prefer acting over asking, but when a real decision genuinely needs the human, use ask_user rather than stalling or guessing.
 - Voice in messages: direct, lowercase-first if it reads naturally, no exclamation marks unless something is genuinely surprising.`;
 
@@ -1148,6 +1150,7 @@ export class MyAgent extends Think<Env> {
         const result = await sandbox.listFiles(path, opts);
         return result.files.map((file) => ({ path: file.absolutePath, name: file.name, type: file.type, size: file.size }));
       },
+      observeTurns: (sessionId, turns) => observeSessionTurns(env.DB, identity.email, sessionId, turns),
       searchConversations: async (query, options) => {
         const built = buildConversationSearchQuery(query, identity.email, options);
         if (!built) return [];

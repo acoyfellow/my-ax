@@ -153,6 +153,7 @@ export interface ToolContext {
   readFile: (path: string, options?: { maxBytes?: number }) => Promise<string | null>;
   writeFile: (path: string, content: string) => Promise<void>;
   listFiles: (path: string, opts?: { recursive?: boolean; includeHidden?: boolean }) => Promise<Array<{ path: string; name?: string; type?: string; size?: number }>>;
+  observeTurns?: (sessionId: string, turns: number) => Promise<unknown>;
   searchConversations: (query: string, options?: ConversationSearchOptions) => Promise<Array<{ sessionId: string; ts: string; role: string; snippet: string }>>;
   /** Search the owner-scoped artifact library by reusable intent/title. */
   searchArtifacts: (query: string, limit?: number) => Promise<Array<{ id: string; sessionId: string; kind: string; title: string; sourceHash: string; createdAt: string; updatedAt: string; score: number }>>;
