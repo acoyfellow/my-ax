@@ -17,7 +17,7 @@ test("a turn lists its tool calls with durations and errors, and its model steps
   assert.deepEqual(turns[0].tools.map((tool) => [tool.durationMs, tool.ok]), [[227, true], [5179, false]]);
   assert.match(turns[0].tools[1].error ?? "", /exit code: 124/);
   assert.equal(turns[0].status, "completed");
-  assert.deepEqual(turns[0].steps.map((step) => step.finishReason), ["tool-calls"]);
+  assert.deepEqual(turns[0].usage.map((step) => step.finishReason), ["tool-calls"]);
   assert.equal(turns[1].status, "running");
-  assert.deepEqual(turns[1].steps.map((step) => step.finishReason), ["stop"]);
+  assert.deepEqual(turns[1].usage.map((step) => step.finishReason), ["stop"]);
 });

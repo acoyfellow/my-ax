@@ -9,7 +9,7 @@ export type ObservedTurn = {
   status: string;
   model: string | null;
   tools: ObservedToolCall[];
-  steps: Array<{ at: string; finishReason: string | null; inputTokens: number | null; outputTokens: number | null }>;
+  usage: Array<{ at: string; finishReason: string | null; inputTokens: number | null; outputTokens: number | null }>;
 };
 
 function parseMeta(raw: string | null): Record<string, unknown> {
@@ -32,7 +32,7 @@ export function buildObservedTurns(entries: readonly ObserveEntryRow[], steps: r
   let current: ObservedTurn | null = null;
   for (const row of [...entries].sort((a, b) => a.id - b.id)) {
     if (row.role === "user") {
-      current = { startedAt: row.ts, prompt: (row.content ?? "").slice(0, 200), endedAt: null, status: "running", model: null, tools: [], steps: [] };
+      current = { startedAt: row.ts, prompt: (row.content ?? "").slice(0, 200), endedAt: null, status: "running", model: null, tools: [], usage: [] };
       turns.push(current);
       continue;
     }
@@ -51,7 +51,7 @@ export function buildObservedTurns(entries: readonly ObserveEntryRow[], steps: r
     const turn = turns[index];
     const until = turns[index + 1]?.startedAt ?? "\uffff";
     for (const step of steps) {
-      if (step.ts >= turn.startedAt && step.ts < until) turn.steps.push({ at: step.ts, finishReason: step.finish_reason, inputTokens: step.input_tokens, outputTokens: step.output_tokens });
+      if (step.ts >= turn.startedAt && step.ts < until) turn.usage.push({ at: step.ts, finishReason: step.finish_reason, inputTokens: step.input_tokens, outputTokens: step.output_tokens });
     }
   }
   return turns;
