@@ -6,6 +6,8 @@ import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
 import { PiHarness } from "agents-pi/harness/pi";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { forkEntriesUpTo, type ForkEntry } from "./fork";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
@@ -209,6 +211,20 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async wait(operationId: string): Promise<PiChatWaitResult> {
     const result = await this.harness.wait(operationId);
     return { status: result.status, text: result.text, reason: result.reason };
+  }
+
+  async forkEntriesAt(entryId: number): Promise<ForkEntry[]> {
+    const entries: EntryRecord[] = await this.harness.messages();
+    return forkEntriesUpTo(entries, entryId);
+  }
+
+  async seedFromFork(entries: readonly ForkEntry[]): Promise<number> {
+    if ((await this.harness.messages()).length > 0) throw new Error("fork target already has messages");
+    const conversation = await this.harness.conversation("1");
+    await conversation.commit(async (tx) => {
+      for (const entry of entries) await tx.appendEntry(conversation.id, entry as never);
+    }, BACKGROUND_CONTEXT);
+    return entries.length;
   }
 
   async transcriptJson(): Promise<string> {

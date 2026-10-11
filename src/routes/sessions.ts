@@ -8,6 +8,7 @@ import { mintBridgeTicket } from "../bridge";
 import { clampEntriesLimit, pageConversationEntries, pageConversationEntriesDesc, parseEntriesCursor, parseEntriesBeforeCursor, type ConversationEntryRow } from "../session-entries";
 import { checkSequenceIntegrity, isSequenceNumber } from "../sequence-integrity";
 import { getSessionAgent } from "../agent-stub";
+import { forkPiChat } from "../pi-engine/routes";
 import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
@@ -380,8 +381,16 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const body: { atMessageId?: string } = await c.req.json<{ atMessageId?: string }>().catch(() => ({}));
     const atMessageId = body.atMessageId?.trim() ?? "";
     if (!atMessageId) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_FORK_POINT", message: "atMessageId is required" }, next_actions: [] }, 400);
-    const source = await c.env.DB.prepare("SELECT id, name FROM sessions WHERE id = ? AND owner_email = ?").bind(sourceId, identity.email).first<{ id: string; name: string }>();
+    const source = await c.env.DB.prepare("SELECT id, name, engine FROM sessions WHERE id = ? AND owner_email = ?").bind(sourceId, identity.email).first<{ id: string; name: string; engine: string | null }>();
     if (!source) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    if (source.engine === "pi") {
+      try {
+        const fork = await forkPiChat(c.env, identity.email, sourceId, source.name, atMessageId);
+        return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { sessionId: fork.sessionId, sourceSessionId: sourceId, atMessageId, name: fork.name, messageCount: fork.messageCount }, next_actions: [] }, 201);
+      } catch (error) {
+        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "FORK_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 409);
+      }
+    }
     let forkId: string | null = null;
     try {
       const sourceStub = await getSessionAgent(c.env, identity.email, sourceId);
