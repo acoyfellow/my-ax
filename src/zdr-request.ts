@@ -15,7 +15,22 @@ export function dropUnresolvableReasoning(body: string): string {
 
 export function withZdrSafeRequests(fetchImpl: typeof fetch): typeof fetch {
   return (async (url: RequestInfo | URL, init?: RequestInit) => {
-    if (init && typeof init.body === "string") return fetchImpl(url, { ...init, body: dropUnresolvableReasoning(init.body) });
+    if (init && typeof init.body === "string") {
+      const body = dropUnresolvableReasoning(init.body);
+      const response = await fetchImpl(url, { ...init, body });
+      if (response.status === 404 || response.status === 400) {
+        const text = await response.clone().text().catch(() => "");
+        if (text.includes("not persisted for Zero Data Retention")) console.error("zdr_missing_item", { error: text.slice(0, 300), input: describeInput(body) });
+      }
+      return response;
+    }
     return fetchImpl(url, init);
   }) as typeof fetch;
+}
+
+function describeInput(body: string): unknown {
+  try {
+    const parsed = JSON.parse(body) as { store?: unknown; previous_response_id?: unknown; input?: Array<Record<string, unknown>> };
+    return { store: parsed.store, previous: parsed.previous_response_id ?? null, items: (parsed.input ?? []).map((item) => ({ type: item.type ?? item.role, id: item.id, enc: typeof item.encrypted_content === "string" })) };
+  } catch { return "unparseable"; }
 }
