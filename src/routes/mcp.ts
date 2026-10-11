@@ -497,7 +497,7 @@ const CODE_TYPES = `declare const codemode: {
   jobsHistory(args: { id: string }): Promise<unknown>;
   workspaceList(args?: { path?: string; limit?: number }): Promise<unknown>;
   workspaceSnapshots(args?: { limit?: number }): Promise<{ snapshots: Array<{ backupId: string; name: string; sizeBytes: number | null; createdAt: string; latest: boolean }> }>;
-  observeTurn(args: { sessionId: string; turns?: number }): Promise<{ sessionId: string; turns: Array<{ startedAt: string; prompt: string; endedAt: string | null; status: string; model: string | null; tools: Array<{ at: string; tool: string; durationMs: number | null; ok: boolean; error: string | null }>; steps: Array<{ at: string; finishReason: string | null; inputTokens: number | null; outputTokens: number | null }> }> }>;
+  observeTurn(args: { sessionId: string; turns?: number }): Promise<{ sessionId: string; turns: Array<{ startedAt: string; prompt: string; endedAt: string | null; status: string; model: string | null; tools: Array<{ at: string; tool: string; durationMs: number | null; ok: boolean; error: string | null }>; usage: Array<{ at: string; finishReason: string | null; inputTokens: number | null; outputTokens: number | null }> }> }>;
   workspaceRestore(args: { backupId: string }): Promise<{ backupId: string; savedCurrentAs: string | null }>;
   workspaceRead(args: { path: string; maxBytes?: number }): Promise<unknown>;
   workspaceWrite(args: { path: string; content: string }): Promise<unknown>;

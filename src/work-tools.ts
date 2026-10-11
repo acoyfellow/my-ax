@@ -26,7 +26,7 @@ const WORKSPACE_METHODS = [
   { name: "preview_open", description: "Expose a workspace HTTP service through a temporary preview." },
   { name: "preview_list", description: "List active workspace previews." },
   { name: "preview_close", description: "Close a workspace preview." },
-  { name: "observe", description: "See what My AX actually did in a conversation: per turn, every tool call with duration and error, model steps with finish reason, and final status. Input: {sessionId?, turns?}; defaults to this conversation and the last 3 turns. Check this before explaining why a turn stopped or a tool failed." },
+  { name: "observe", description: "See what My AX actually did in a conversation: per turn, every tool call with duration and error, the turn's final finish reason and token usage, and its status. Input: {sessionId?, turns?}; defaults to this conversation and the last 3 turns. Check this before explaining why a turn stopped or a tool failed." },
 ] as const;
 
 export const SANDBOX_ONLY_WORK_CAPABILITIES = WORKSPACE_METHODS.map((method) => `workspace.${method.name}`);
