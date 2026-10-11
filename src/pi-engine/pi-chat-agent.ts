@@ -8,6 +8,9 @@ import type { Attachment } from "../types";
 import { PiHarness } from "agents-pi/harness/pi";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { forkEntriesUpTo, type ForkEntry } from "./fork";
+import { indexRowsFor, type ConversationMemory } from "./conversation-index";
+import { memoryToolsExtension } from "./memory-tools";
+import { buildConversationSearchQuery } from "../conversation-search";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
@@ -30,7 +33,7 @@ export const PI_ENGINE_DEFAULT_MODEL = "@cf/zai-org/glm-5.3";
 
 const PI_ENGINE_INSTRUCTIONS = [
   "You are My AX running on the Pi engine.",
-  `Each chat has its own Linux workspace with home ${WORKSPACE_HOME}. Use exec, read_file, write_file and list_files.`,
+  `Each chat has its own Linux workspace with home ${WORKSPACE_HOME}. Use exec, read_file, write_file and list_files. Use search_conversations and read_conversation for earlier chats.`,
   "Keep working until the task is done. There is no step limit.",
 ].join("\n");
 
@@ -65,6 +68,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       installGatewayModels(models, this.env);
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
       this.registry.install(machineToolsExtension(() => this.machineRunner()));
+      this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
       return Harness.open(storage, { models, registry: this.registry }, context);
     },
     defaults: hasGatewayModels(this.env)
@@ -90,6 +94,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     stream.start(async (events: readonly AgentEvent[]) => {
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events, entryTimes }));
+      if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
     });
     void stream.closed.finally(() => {
       if (this.eventStream === stream) this.eventStream = null;
@@ -305,6 +310,51 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     console.error("pi_turn_stuck_ended", { chatId: this.state.chatId, tools: view.tools.length });
     await this.harness.abort();
     this.broadcast(JSON.stringify({ type: "pi_error", message: STUCK_TURN_NOTE }));
+  }
+
+  private indexing: Promise<void> = Promise.resolve();
+
+  indexConversation(): Promise<void> {
+    this.indexing = this.indexing.then(() => this.indexNewEntries());
+    return this.indexing;
+  }
+
+  private async indexNewEntries(): Promise<void> {
+    const ownerEmail = this.state.ownerEmail;
+    const chatId = this.state.chatId;
+    if (!ownerEmail || !chatId) return;
+    const after = this.ctx.storage.kv.get<number>("indexed-through") ?? 0;
+    const entries = (await this.harness.messages()) as unknown as Array<{ id: number; kind: string; model?: unknown[] }>;
+    const rows = indexRowsFor(entries, after);
+    const times = this.entryTimes();
+    for (const row of rows) {
+      const ts = new Date(times[row.piEntryId] ?? Date.now()).toISOString();
+      const uiMessageId = `pi:${row.piEntryId}:${row.role}`;
+      await this.env.DB.prepare(
+        `INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sequence_number) + 1 FROM conversation_entries WHERE session_id = ? AND owner_email = ?), 1)
+         WHERE NOT EXISTS (SELECT 1 FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND role = ? AND ui_message_id = ?)`,
+      ).bind(chatId, ownerEmail, ts, row.role, row.tool, row.isError ? 1 : 0, row.content, JSON.stringify({ uiMessageId, engine: "pi" }), chatId, ownerEmail, chatId, ownerEmail, row.role, uiMessageId).run();
+    }
+    const last = entries.reduce((max, entry) => Math.max(max, entry.id), after);
+    if (last > after) this.ctx.storage.kv.put("indexed-through", last);
+  }
+
+  private conversationMemory(): ConversationMemory {
+    const email = this.identity().email;
+    return {
+      search: async (query, options) => {
+        const built = buildConversationSearchQuery(query, email, options);
+        if (!built) return [];
+        return (await this.env.DB.prepare(built.sql).bind(...built.params).all<{ sessionId: string; ts: string; role: string; snippet: string }>()).results ?? [];
+      },
+      read: async (sessionId, limit) => {
+        const rows = await this.env.DB.prepare(
+          "SELECT ts, role, tool, substr(content, 1, 4000) AS content FROM (SELECT id, ts, role, tool, content FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id DESC LIMIT ?) ORDER BY id ASC",
+        ).bind(sessionId, email, limit).all<{ ts: string; role: string; tool: string | null; content: string }>();
+        return rows.results ?? [];
+      },
+    };
   }
 
   async crash(): Promise<void> {
