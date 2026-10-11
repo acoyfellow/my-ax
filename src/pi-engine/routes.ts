@@ -3,6 +3,7 @@ import { getAgentByName } from "agents-pi";
 import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
+import { parseForkPoint } from "./fork";
 
 export const PI_CHAT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{7,62}$/;
 
@@ -27,6 +28,27 @@ async function ownedPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") 
   const stub = await getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
   await stub.bind({ email }, chatId);
   return stub;
+}
+
+export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceId: string, sourceName: string, atMessageId: string): Promise<{ sessionId: string; name: string; messageCount: number }> {
+  const owner = email.toLowerCase();
+  const entryId = parseForkPoint(atMessageId);
+  if (entryId === null) throw new Error("Fork point was not found in this conversation.");
+  const source = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, sourceId));
+  await source.bind({ email: owner }, sourceId);
+  const entries = await source.forkEntriesAt(entryId);
+  const forkId = crypto.randomUUID();
+  const name = `Fork · ${sourceName}`.slice(0, 200);
+  await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))").bind(forkId, name, owner).run();
+  try {
+    const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, forkId));
+    await target.bind({ email: owner }, forkId);
+    const messageCount = await target.seedFromFork(entries);
+    return { sessionId: forkId, name, messageCount };
+  } catch (error) {
+    await env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(forkId, owner).run().catch(() => undefined);
+    throw error;
+  }
 }
 
 export function registerPiEngineRoutes(app: Hono<AppEnv>) {
