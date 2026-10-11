@@ -15,8 +15,10 @@ import { getUserWorkspace } from "../workspace";
 import { listWorkspace, readWorkspace, workspaceSandboxLayer, writeWorkspace } from "../workspace-mcp-program";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
+import { parseSendAndWaitArgs, sendAndWait } from "../send-and-wait";
+import { openPiChat } from "../pi-engine/routes";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -295,6 +297,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
       cursor: hasMore && last && typeof last.updated_at === "string" ? last.updated_at : null,
     };
   }
+  if (method === "send_and_wait") return sendAndWaitInSession(c, email, args);
   const sessionId = typeof args.sessionId === "string" ? args.sessionId : "";
   const session = await ownedSession(c, sessionId);
   if (method === "get_session") return { session };
@@ -330,6 +333,43 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   await stub.injectUserMessage({ content, clientMsgId: `mcp:${crypto.randomUUID()}` });
   await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(sessionId, email).run();
   return { sessionId, injected: true };
+}
+
+async function sendAndWaitInSession(c: CoordinatorContext, email: string, args: Record<string, unknown>) {
+  const input = parseSendAndWaitArgs(args);
+  await ownedSession(c, input.sessionId);
+  const engine = await c.env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).first<{ engine: string | null }>();
+  if (engine?.engine === "pi") return sendAndWaitPi(c, email, input);
+  const stub = await getSessionAgent(c.env, email, input.sessionId);
+  await stub.seedIdentity(c.get("identity"));
+  return sendAndWait(input, {
+    latestEntryId: async () => {
+      const row = await c.env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(input.sessionId, email).first<{ id: number }>();
+      return Number(row?.id) || 0;
+    },
+    inject: async (content) => {
+      await stub.injectUserMessage({ content, clientMsgId: `mcp:${crypto.randomUUID()}` });
+      await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).run();
+    },
+    isRunning: async () => (await stub.sessionTurnState()).sessionStatus === "running",
+    entriesAfter: async (id) => {
+      const rows = await c.env.DB.prepare("SELECT id, role, content FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id > ? ORDER BY id ASC LIMIT 200").bind(input.sessionId, email, id).all<{ id: number; role: string; content: string | null }>();
+      return rows.results ?? [];
+    },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: () => Date.now(),
+  });
+}
+
+async function sendAndWaitPi(c: CoordinatorContext, email: string, input: { sessionId: string; content: string; timeoutMs: number }) {
+  const stub = await openPiChat(c.env, email, input.sessionId);
+  const receipt = await stub.submit(input.content, `mcp:${crypto.randomUUID()}`);
+  await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).run();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), input.timeoutMs); });
+  const result = await Promise.race([stub.wait(receipt.operationId), timeout]).finally(() => clearTimeout(timer));
+  if (!result) return { sessionId: input.sessionId, done: false, timedOut: true, assistantText: "", entryIds: [] };
+  return { sessionId: input.sessionId, done: result.status === "done", timedOut: false, assistantText: result.text ?? "", entryIds: [], ...(result.status !== "done" ? { status: result.status, reason: result.reason } : {}) };
 }
 
 async function askOwner(c: CoordinatorContext, args: Record<string, unknown>) {
@@ -386,6 +426,7 @@ const CODE_METHODS: Record<string, Method> = {
   getSession: "get_session",
   entries: "entries",
   inject: "inject",
+  sendAndWait: "send_and_wait",
   attentionList: "attention_list",
   attentionAcknowledge: "attention_acknowledge",
   recipesList: "recipes_list",
@@ -431,6 +472,7 @@ const CODE_TYPES = `declare const codemode: {
   getSession(args: { sessionId: string }): Promise<unknown>;
   entries(args: { sessionId: string; after?: number; limit?: number }): Promise<unknown>;
   inject(args: { sessionId: string; content: string }): Promise<unknown>;
+  sendAndWait(args: { sessionId: string; content: string; timeoutMs?: number }): Promise<{ sessionId: string; done: boolean; timedOut: boolean; assistantText: string; entryIds: number[] }>;
   attentionList(args?: { limit?: number }): Promise<unknown>;
   attentionAcknowledge(args: { id: string }): Promise<unknown>;
   recipesList(args?: {}): Promise<unknown>;
