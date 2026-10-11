@@ -608,6 +608,12 @@
   }
 
   async function surfaceStall(verdict: Extract<ReturnType<typeof evaluateTurnStall>, { kind: "stalled" }>) {
+    await refreshRemoteTurn();
+    if (sessionTurnLocksComposer(remoteTurn)) {
+      turnStallSurfaced = false;
+      lastTurnFrameAt = Date.now();
+      return;
+    }
     const turnError = await latestPersistedTurnError();
     if (turnError) {
       pushError(stallSurfaceText(verdict, turnError), { alreadyReported: true });
