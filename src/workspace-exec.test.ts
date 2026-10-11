@@ -32,3 +32,13 @@ test("glob search is rooted at the literal prefix of the pattern", () => {
   assert.equal(globSearchRoot("/home/user/a/b[0-9]/c", HOME), "/home/user/a");
   assert.equal(globSearchRoot("/etc/*", HOME), HOME);
 });
+
+test("a timeout is enforced inside the shell, so the sandbox session is never killed by its own timeout", async () => {
+  let sent: { cmd: string; opts: Record<string, unknown> } | undefined;
+  const sandbox = { exec: async (cmd: string, opts: Record<string, unknown>) => { sent = { cmd, opts }; return { stdout: "", stderr: "", exitCode: 124 }; } };
+  const result = await workspaceShellExec(async () => ({ sandbox, recycled: false }), "echo 'it' && sleep 30", { timeout: 5000 });
+  assert.equal(sent!.cmd, `timeout -k 2 5 bash -c 'echo '\\''it'\\'' && sleep 30'`);
+  assert.ok((sent!.opts.timeout as number) > 5000, "the sandbox timeout must be looser than the shell timeout");
+  assert.equal(result.exitCode, 124);
+  assert.match(result.error ?? "", /timed out after 5000ms/);
+});
