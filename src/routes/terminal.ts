@@ -3,7 +3,7 @@ import type { Hono } from "hono";
 import { Effect } from "effect";
 import type { AppEnv } from "../app-env";
 import { isWebSocketUpgrade, terminalDimensions } from "../terminal-protocol";
-import { getUserWorkspace, invalidateUserWorkspace, snapshotUserWorkspace } from "../workspace";
+import { getUserWorkspace, invalidateUserWorkspace, listWorkspaceSnapshots, restoreWorkspaceSnapshot, snapshotUserWorkspace } from "../workspace";
 import { persistBeforeWorkspaceDestroy } from "../workspace-recycle";
 
 export function registerTerminalRoutes(app: Hono<AppEnv>) {
@@ -14,6 +14,23 @@ export function registerTerminalRoutes(app: Hono<AppEnv>) {
       return c.json({ ok: true, command: c.req.path, result: { backupId: backup.id }, next_actions: [] });
     } catch (error) {
       return c.json({ ok: false, command: c.req.path, error: { code: "WORKSPACE_SNAPSHOT_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 502);
+    }
+  });
+
+  app.get("/api/workspace/snapshots", async (c) => {
+    const snapshots = await listWorkspaceSnapshots(c.env, c.get("identity"), Number(c.req.query("limit")) || 20);
+    return c.json({ ok: true, command: c.req.path, result: { snapshots }, next_actions: [] });
+  });
+
+  app.post("/api/workspace/restore", async (c) => {
+    const body = await c.req.json<{ backupId?: string }>().catch(() => ({} as { backupId?: string }));
+    const backupId = body.backupId?.trim() ?? "";
+    if (!backupId) return c.json({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: "backupId is required" }, next_actions: [] }, 400);
+    try {
+      const result = await restoreWorkspaceSnapshot(c.env, c.get("identity"), backupId);
+      return c.json({ ok: true, command: c.req.path, result, next_actions: [] });
+    } catch (error) {
+      return c.json({ ok: false, command: c.req.path, error: { code: "WORKSPACE_RESTORE_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 409);
     }
   });
 
