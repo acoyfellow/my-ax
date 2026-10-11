@@ -3,10 +3,10 @@ type InputItem = { type?: unknown };
 export function dropUnresolvableReasoning(body: string): string {
   let parsed: { store?: unknown; input?: unknown };
   try { parsed = JSON.parse(body); } catch { return body; }
-  if (parsed.store !== false || !Array.isArray(parsed.input)) return body;
+  if (!Array.isArray(parsed.input)) return body;
   const input = (parsed.input as InputItem[]).filter((item) => item?.type !== "item_reference" && item?.type !== "reasoning");
-  if (input.length === parsed.input.length) return body;
-  return JSON.stringify({ ...parsed, input });
+  if (parsed.store === false && input.length === parsed.input.length) return body;
+  return JSON.stringify({ ...parsed, store: false, input });
 }
 
 export function withZdrSafeRequests(fetchImpl: typeof fetch): typeof fetch {
