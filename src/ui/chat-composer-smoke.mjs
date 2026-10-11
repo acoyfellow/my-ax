@@ -30,7 +30,7 @@ assertNotIncludes(chat, 'class="voice-mode-interim"', "the old client-side inter
 assertNotIncludes(chat, '/entries?after=', "the chat screen never drains the D1 copy to draw a transcript");
 assertNotIncludes(chat, 'mergeTranscript(', "the chat screen never merges two transcript copies");
 assertNotIncludes(chat, 'function restoreD1History(', "the D1 transcript restore path is gone from the screen");
-assertIncludes(chat, 'messages = annotateTurnDurations(boundToSession(thinkViews, sessionId));', "a frozen Think chat draws its own replay as-is");
+assertIncludes(chat, 'messages = annotateTurnDurations(boundToSession([...thinkViews, ...liveViews], sessionId));', "a frozen Think chat draws its own replay as-is, plus only the live turn when opened mid-turn");
 // #10 webcam vision: camera capture routes through the shared upload path so a
 // frame becomes a normal (removable) attachment the agent can see.
 // Consolidated composer input: a single "+" menu (Add file / Camera) replaces the
@@ -165,3 +165,7 @@ for (const [sel, span] of [['.safe-area-appbar {', 480], ['.safe-area-composer {
 }
 
 console.log("✓ chat composer smoke: fixed frame, filling chat mount, device-adaptive composer padding");
+assertIncludes(chat, "if (progressEligible(turnState) || piBusy || sessionTurnLocksComposer(remoteTurn)) showThinking();", "an old-engine chat reopened mid-turn shows the thinking spinner from the server's turn state");
+assertIncludes(chat, "const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();", "new-engine updates only follow the latest message when the owner is already at the bottom or the chat is just opening");
+assertIncludes(chat, "if (followLatest) queueScrollToBottom();", "new-engine updates never force-scroll an owner who scrolled up");
+assertIncludes(chat, "await refreshRemoteTurn();\n    if (sessionTurnLocksComposer(remoteTurn)) {\n      turnStallSurfaced = false;", "the stall notice asks the server first and stays quiet while the server turn is still running");

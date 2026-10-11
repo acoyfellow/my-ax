@@ -5,6 +5,7 @@ import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { DESK_PREFERENCE_KEY, emptyDeskBoard, parseDeskBoard, removeDeskCard, upsertDeskCard, type DeskBoard } from "../desk-board";
 import { writeWithCompareAndSet } from "../desk-write";
+import { compareAndSetBoard, readVersionedBoard } from "../desk-board-store";
 import { DESK_APP_PREFERENCE_KEY, applyDeskAppWrite, emptyDeskApp, parseDeskApp, type DeskApp } from "../desk-app";
 import { describePromotion, promotionConfirmed, type ArtifactSummary, type PromotionPreview } from "../desk-promote";
 import { getOwnedArtifactRow } from "../artifacts";
@@ -21,7 +22,7 @@ async function readVersionedPreference<T>(
   if (!row?.value_json) return { value: fallback(), version: null };
   let value: T;
   try { value = parse(JSON.parse(row.value_json)); } catch { value = fallback(); }
-  return { value, version: row.updated_at ?? null };
+  return { value, version: row.value_json };
 }
 
 async function compareAndSetPreference(
@@ -40,7 +41,7 @@ async function compareAndSetPreference(
     return (inserted.meta?.changes ?? 0) > 0;
   }
   const updated = await env.DB.prepare(`UPDATE owner_preferences SET value_json = ?, updated_at = ?
-    WHERE owner_email = ? AND preference_key = ? AND updated_at = ?`)
+    WHERE owner_email = ? AND preference_key = ? AND value_json = ?`)
     .bind(payload, now, email, key, expectedVersion).run();
   return (updated.meta?.changes ?? 0) > 0;
 }
@@ -108,30 +109,6 @@ async function readBoard(env: AppEnv["Bindings"], email: string): Promise<DeskBo
     .bind(email, DESK_PREFERENCE_KEY).first<{ value_json: string }>();
   if (!row?.value_json) return emptyDeskBoard();
   try { return parseDeskBoard(JSON.parse(row.value_json)); } catch { return emptyDeskBoard(); }
-}
-
-async function readVersionedBoard(env: AppEnv["Bindings"], email: string): Promise<{ value: DeskBoard; version: string | null }> {
-  const row = await env.DB.prepare("SELECT value_json, updated_at FROM owner_preferences WHERE owner_email = ? AND preference_key = ?")
-    .bind(email, DESK_PREFERENCE_KEY).first<{ value_json: string; updated_at: string }>();
-  if (!row?.value_json) return { value: emptyDeskBoard(), version: null };
-  let value: DeskBoard;
-  try { value = parseDeskBoard(JSON.parse(row.value_json)); } catch { value = emptyDeskBoard(); }
-  return { value, version: row.updated_at ?? null };
-}
-
-async function compareAndSetBoard(env: AppEnv["Bindings"], email: string, board: DeskBoard, expectedVersion: string | null): Promise<boolean> {
-  const now = new Date().toISOString();
-  const payload = JSON.stringify(board);
-  if (expectedVersion === null) {
-    const inserted = await env.DB.prepare(`INSERT INTO owner_preferences(owner_email, preference_key, value_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner_email, preference_key) DO NOTHING`)
-      .bind(email, DESK_PREFERENCE_KEY, payload, now, now).run();
-    return (inserted.meta?.changes ?? 0) > 0;
-  }
-  const updated = await env.DB.prepare(`UPDATE owner_preferences SET value_json = ?, updated_at = ?
-    WHERE owner_email = ? AND preference_key = ? AND updated_at = ?`)
-    .bind(payload, now, email, DESK_PREFERENCE_KEY, expectedVersion).run();
-  return (updated.meta?.changes ?? 0) > 0;
 }
 
 async function broadcastBoard(env: AppEnv["Bindings"], email: string, board: DeskBoard): Promise<void> {

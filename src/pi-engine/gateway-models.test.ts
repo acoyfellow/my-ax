@@ -47,3 +47,38 @@ test("a refused Opus 5.5 reply is retried on the next model in the chain", async
   assert.deepEqual(calls, ["claude-opus-5-5", "claude-opus-5"]);
   assert.deepEqual(events, ["done"]);
 });
+
+test("a reply refused after it already streamed some text is retried on the next model, and only the retry is shown", async () => {
+  const { withRefusalFallback } = await import("./gateway-models");
+  const { createAssistantMessageEventStream } = await import("@earendil-works/pi-ai/utils/event-stream");
+  const calls: string[] = [];
+  const fakeModels = [{ id: "claude-opus-5-5" }, { id: "claude-opus-5" }];
+  const provider = {
+    id: "fake",
+    name: "fake",
+    auth: {},
+    getModels: () => fakeModels,
+    stream: () => { throw new Error("unused"); },
+    streamSimple: (model: { id: string }) => {
+      calls.push(model.id);
+      const stream = createAssistantMessageEventStream();
+      queueMicrotask(() => {
+        if (model.id === "claude-opus-5-5") {
+          stream.push({ type: "start", partial: { role: "assistant", content: [] } } as never);
+          stream.push({ type: "text_delta", delta: "I should use sandbox exec" } as never);
+          stream.push({ type: "error", reason: "error", error: { role: "assistant", content: [{ type: "text", text: "I should use sandbox exec" }], stopReason: "error", errorMessage: "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy." } } as never);
+        } else {
+          stream.push({ type: "done", reason: "stop", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } } as never);
+        }
+        stream.end();
+      });
+      return stream;
+    },
+  };
+  const wrapped = withRefusalFallback(provider as never);
+  const events: string[] = [];
+  for await (const event of wrapped.streamSimple(fakeModels[0] as never, { messages: [] } as never)) events.push(event.type);
+  assert.deepEqual(calls, ["claude-opus-5-5", "claude-opus-5"]);
+  assert.equal(events.includes("error"), false);
+  assert.equal(events.at(-1), "done");
+});

@@ -18,6 +18,21 @@ export function recurringJobIdFromClientMessageId(id: string | null | undefined)
   return recurringJobClientMessage(id)?.jobId ?? null;
 }
 
+/**
+ * A turn is sandbox-only (no My Machine, browser, page or delegate tools) only
+ * when the user message that started it came from a recurring job. Decided per
+ * turn from the transcript, never saved: a saved flag outlived the job turn and
+ * locked every later owner turn out of My Machine. Fails closed on any `job:` id.
+ */
+export function sandboxOnlyForTurn(messages: ReadonlyArray<{ role: string; id?: string }>): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "user") continue;
+    return typeof message.id === "string" && message.id.startsWith("job:");
+  }
+  return false;
+}
+
 export interface CompleteRecurringJobRunInput {
   jobId: string;
   ownerEmail: string;

@@ -6,6 +6,8 @@ import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
 import { PiHarness } from "agents-pi/harness/pi";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { forkEntriesUpTo, type ForkEntry } from "./fork";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
@@ -13,6 +15,9 @@ import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "..
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
+import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
+import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
+import type { ToolContext } from "../types";
 import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID, resolvePiModelChoice } from "./gateway-models";
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -59,6 +64,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       models.setProvider(this.ai.provider);
       installGatewayModels(models, this.env);
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
+      this.registry.install(machineToolsExtension(() => this.machineRunner()));
       return Harness.open(storage, { models, registry: this.registry }, context);
     },
     defaults: hasGatewayModels(this.env)
@@ -155,6 +161,16 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return chatId;
   }
 
+  private machineRunner(): MachineToolRunner {
+    // machinectl tools only read env and identity from their context (same as
+    // the /api/machinectl/code route), and scope everything to the owner.
+    const context = { env: this.env, identity: this.identity() } as unknown as ToolContext;
+    return {
+      call: (args) => MACHINECTL_TOOL.execute(args, context),
+      code: (args) => MACHINECTL_CODE_TOOL.execute(args, context),
+    };
+  }
+
   private async chatWorkspace(): Promise<ChatWorkspace> {
     const { sandbox } = await getUserWorkspace(this.env, this.identity(), { scope: { kind: "chat", chatId: this.chatId() } });
     return {
@@ -195,6 +211,20 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async wait(operationId: string): Promise<PiChatWaitResult> {
     const result = await this.harness.wait(operationId);
     return { status: result.status, text: result.text, reason: result.reason };
+  }
+
+  async forkEntriesAt(entryId: number): Promise<ForkEntry[]> {
+    const entries: EntryRecord[] = await this.harness.messages();
+    return forkEntriesUpTo(entries, entryId);
+  }
+
+  async seedFromFork(entries: readonly ForkEntry[]): Promise<number> {
+    if ((await this.harness.messages()).length > 0) throw new Error("fork target already has messages");
+    const conversation = await this.harness.conversation("1");
+    await conversation.commit(async (tx) => {
+      for (const entry of entries) await tx.appendEntry(conversation.id, entry as never);
+    }, BACKGROUND_CONTEXT);
+    return entries.length;
   }
 
   async transcriptJson(): Promise<string> {

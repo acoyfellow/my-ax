@@ -1,6 +1,10 @@
 import { Data, Effect } from "effect";
 
-export const DESK_WRITE_MAX_ATTEMPTS = 5;
+export const DESK_WRITE_MAX_ATTEMPTS = 12;
+
+function retryDelayMs(attempt: number): number {
+  return Math.min(400, 10 * 2 ** attempt) * (0.5 + Math.random());
+}
 
 export class DeskWriteConflict extends Error {
   constructor() {
@@ -41,6 +45,7 @@ export function writeWithCompareAndSet<T>(
         catch: (cause) => new DeskWriteIoError({ operation: "compare_and_set", cause }),
       });
       if (written) return { value: next, attempts: attempt };
+      if (attempt < maxAttempts) yield* Effect.sleep(retryDelayMs(attempt));
     }
     return yield* Effect.fail(new DeskWriteConflict());
   });

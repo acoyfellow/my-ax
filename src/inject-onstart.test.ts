@@ -14,11 +14,15 @@ test("RPC inject starts Think before submit so scheduled jobs do not Illegal inv
 });
 
 test("scheduled job injects mark the turn sandboxOnly so machine tools cannot run", () => {
+  // The job's `job:` clientMsgId becomes the turn's user message id; getTools()
+  // reads that per turn (sandboxOnlyForTurn). Nothing is saved to session config,
+  // so the next owner turn gets My Machine back.
   const start = agent.indexOf("async injectUserMessage");
   const end = agent.indexOf("async sessionTurnState");
   const slice = agent.slice(start, end);
-  assert.match(slice, /sandboxOnly: Boolean\(body\.clientMsgId\?\.startsWith\("job:"\)\)/);
-  assert.ok(slice.indexOf("sandboxOnly") < slice.indexOf("await this.onStart()"), "sandboxOnly must be set before Think starts");
+  assert.match(slice, /id: body\.clientMsgId \?\? crypto\.randomUUID\(\)/);
+  assert.doesNotMatch(slice, /configure<MyAgentConfig>\([^)]*sandboxOnly/);
+  assert.match(agent, /const sandboxOnly = agent\.turnIsSandboxOnly\(\);/);
 });
 
 test("getTools closes over the agent instance instead of relying on call-site this", () => {

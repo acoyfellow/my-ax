@@ -60,8 +60,11 @@ export const PI_REFUSAL_FALLBACK_CHAIN: Readonly<Record<string, string>> = {
 
 export function isRefusal(message: { stopReason?: string; errorMessage?: string; content?: unknown[] }): boolean {
   if (message.stopReason !== "error") return false;
-  if (Array.isArray(message.content) && message.content.length > 0) return false;
   return /usage policy|refus|violative/i.test(message.errorMessage ?? "");
+}
+
+function hasToolCall(message: { content?: unknown[] }): boolean {
+  return Array.isArray(message.content) && message.content.some((block) => typeof block === "object" && block !== null && (block as { type?: unknown }).type === "toolCall");
 }
 
 export function refusalFallbackModel(modelId: string): string | undefined {
@@ -79,7 +82,7 @@ export function withRefusalFallback(provider: Provider): Provider {
         const buffered: Parameters<typeof out.push>[0][] = [];
         let refused = false;
         for await (const event of provider.streamSimple(current, context, options)) {
-          if (event.type === "error" && isRefusal(event.error)) {
+          if (event.type === "error" && isRefusal(event.error) && !hasToolCall(event.error)) {
             const next = refusalFallbackModel(current.id);
             const nextModel = next ? provider.getModels().find((candidate) => candidate.id === next) : undefined;
             if (nextModel) {
