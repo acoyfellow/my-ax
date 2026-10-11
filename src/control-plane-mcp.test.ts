@@ -14,7 +14,7 @@ function methodList(text: string): string[] {
 
 test("coordinator catalog includes the control-plane methods", () => {
   const methods = methodList(source);
-  for (const method of ["session_state", "abort", "heal", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear"]) {
+  for (const method of ["session_state", "abort", "heal", "workspace_write", "workspace_snapshots", "workspace_restore", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear"]) {
     assert.ok(methods.includes(method), `missing ${method}`);
   }
 });

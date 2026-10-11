@@ -254,3 +254,28 @@ export async function seedUserWorkspaceFile(
     durationMs: Date.now() - started,
   };
 }
+
+export type WorkspaceSnapshotListing = { backupId: string; name: string; sizeBytes: number | null; createdAt: string; latest: boolean };
+
+export async function listWorkspaceSnapshots(env: Env, identity: AccessIdentity, limit = 20, scope: WorkspaceScope = OWNER_SCOPE): Promise<WorkspaceSnapshotListing[]> {
+  const latest = await latestSnapshotRow(env, identity, scope);
+  const rows = await env.DB.prepare(
+    "SELECT backup_id, name, size_bytes, created_at FROM workspace_snapshot_history WHERE workspace_key = ? ORDER BY id DESC LIMIT ?",
+  ).bind(workspaceSnapshotKey(identity.email, scope), Math.min(Math.max(limit, 1), 100)).all<{ backup_id: string; name: string | null; size_bytes: number | null; created_at: string }>();
+  return (rows.results ?? []).map((row) => ({ backupId: row.backup_id, name: row.name ?? "", sizeBytes: row.size_bytes, createdAt: row.created_at, latest: row.backup_id === latest?.backup_id }));
+}
+
+export async function restoreWorkspaceSnapshot(env: Env, identity: AccessIdentity, backupId: string, scope: WorkspaceScope = OWNER_SCOPE): Promise<{ backupId: string; savedCurrentAs: string | null }> {
+  const key = workspaceSnapshotKey(identity.email, scope);
+  const row = await env.DB.prepare(
+    "SELECT backup_id, backup_dir, size_bytes FROM workspace_snapshot_history WHERE workspace_key = ? AND backup_id = ? ORDER BY id DESC LIMIT 1",
+  ).bind(key, backupId).first<{ backup_id: string; backup_dir: string; size_bytes: number | null }>();
+  if (!row) throw new Error("snapshot not found for this workspace");
+  const saved = await snapshotWorkspace(env, identity, "before-restore", { scope });
+  const { sandbox } = await getUserWorkspace(env, identity, { scope });
+  verifyWorkspaceRestore({ backupId: row.backup_id, backupDir: row.backup_dir }, await sandbox.restoreBackup({ id: row.backup_id, dir: row.backup_dir }));
+  await Effect.runPromise(
+    publishWorkspaceSnapshot(key, { id: row.backup_id, dir: row.backup_dir }, row.size_bytes, "restored").pipe(Effect.provide(databaseLayer(env.DB))),
+  );
+  return { backupId: row.backup_id, savedCurrentAs: saved.published ? saved.backup.id : null };
+}

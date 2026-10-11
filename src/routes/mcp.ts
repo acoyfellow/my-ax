@@ -11,14 +11,14 @@ import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
 import { createDecision } from "./decisions";
 import { ownerDeskClear, ownerDeskGet, ownerDeskRemove, ownerDeskUpsert } from "./desk";
-import { getUserWorkspace } from "../workspace";
+import { getUserWorkspace, listWorkspaceSnapshots, restoreWorkspaceSnapshot } from "../workspace";
 import { listWorkspace, readWorkspace, workspaceSandboxLayer, writeWorkspace } from "../workspace-mcp-program";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
 import { parseSendAndWaitArgs, sendAndWait } from "../send-and-wait";
 import { openPiChat } from "../pi-engine/routes";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -214,6 +214,12 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     const stub = await getSessionAgent(c.env, email, sessionId);
     await stub.seedIdentity(c.get("identity"));
     return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
+  }
+  if (method === "workspace_snapshots") return { snapshots: await listWorkspaceSnapshots(c.env, c.get("identity"), clamp(args.limit, 20, 100)) };
+  if (method === "workspace_restore") {
+    const backupId = typeof args.backupId === "string" ? args.backupId.trim() : "";
+    if (!backupId) throw new Error("backupId is required");
+    return restoreWorkspaceSnapshot(c.env, c.get("identity"), backupId);
   }
   if (method === "workspace_list" || method === "workspace_read" || method === "workspace_write") {
     try {
@@ -441,6 +447,8 @@ const CODE_METHODS: Record<string, Method> = {
   jobsDelete: "jobs_delete",
   jobsHistory: "jobs_history",
   workspaceList: "workspace_list",
+  workspaceSnapshots: "workspace_snapshots",
+  workspaceRestore: "workspace_restore",
   workspaceRead: "workspace_read",
   workspaceWrite: "workspace_write",
   sessionState: "session_state",
@@ -485,6 +493,8 @@ const CODE_TYPES = `declare const codemode: {
   jobsRun(args: { id: string; idempotencyKey?: string }): Promise<unknown>; jobsDelete(args: { id: string }): Promise<unknown>;
   jobsHistory(args: { id: string }): Promise<unknown>;
   workspaceList(args?: { path?: string; limit?: number }): Promise<unknown>;
+  workspaceSnapshots(args?: { limit?: number }): Promise<{ snapshots: Array<{ backupId: string; name: string; sizeBytes: number | null; createdAt: string; latest: boolean }> }>;
+  workspaceRestore(args: { backupId: string }): Promise<{ backupId: string; savedCurrentAs: string | null }>;
   workspaceRead(args: { path: string; maxBytes?: number }): Promise<unknown>;
   workspaceWrite(args: { path: string; content: string }): Promise<unknown>;
   sessionState(args: { sessionId: string }): Promise<unknown>;
