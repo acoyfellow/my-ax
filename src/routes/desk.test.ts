@@ -41,7 +41,7 @@ function makeDeskApp() {
           }
           if (sql.includes("UPDATE owner_preferences SET value_json")) {
             const current = boards.get(boardKey(String(values[2])));
-            if (!current || current.version !== values[4]) return { meta: { changes: 0 } };
+            if (!current || current.valueJson !== values[4]) return { meta: { changes: 0 } };
             boards.set(boardKey(String(values[2])), { valueJson: String(values[0]), version: String(values[1]) });
             return { meta: { changes: 1 } };
           }
