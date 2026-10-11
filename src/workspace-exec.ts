@@ -50,8 +50,11 @@ export async function workspaceShellExec<S extends ExecCapable>(
   try {
     const workspace = await acquire();
     recycled = workspace.recycled;
-    const raw = await workspace.sandbox.exec(cmd, opts);
+    const requested = typeof opts.timeout === "number" && opts.timeout > 0 ? opts.timeout : undefined;
+    const bounded = requested ? shellBoundedCommand(cmd, requested) : undefined;
+    const raw = await workspace.sandbox.exec(bounded?.command ?? cmd, bounded ? { ...opts, timeout: bounded.sandboxTimeoutMs } : opts);
     result = { stdout: raw.stdout ?? "", stderr: raw.stderr ?? "", exitCode: raw.exitCode ?? (raw.success ? 0 : 1) };
+    if (bounded && result.exitCode === 124) result = { ...result, error: `Command timed out after ${requested}ms and was stopped; the workspace was not touched.` };
   } catch (error) {
     result = execFailureResult(error);
   }
@@ -69,4 +72,12 @@ export function globSearchRoot(absolutePattern: string, fallbackRoot: string): s
   const literal = absolutePattern.slice(0, firstGlob);
   const root = literal.slice(0, literal.lastIndexOf("/")) || "/";
   return root.startsWith(fallbackRoot) ? root : fallbackRoot;
+}
+
+export const IN_SHELL_TIMEOUT_GRACE_MS = 5_000;
+
+export function shellBoundedCommand(cmd: string, timeoutMs: number): { command: string; sandboxTimeoutMs: number } {
+  const seconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const quoted = `'${cmd.replace(/'/g, `'\\''`)}'`;
+  return { command: `timeout -k 2 ${seconds} bash -c ${quoted}`, sandboxTimeoutMs: seconds * 1000 + IN_SHELL_TIMEOUT_GRACE_MS };
 }
