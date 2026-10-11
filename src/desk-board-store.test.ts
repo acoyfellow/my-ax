@@ -41,3 +41,28 @@ test("a write whose expected board is stale is rejected even when the clock has 
     assert.equal(await compareAndSetBoard(env, "owner@example.com", upsertDeskCard(writerB.value, { id: "b", title: "B", status: "approved" }), writerB.version), false);
   });
 });
+
+test("six parallel upserts of different cards all land with no conflict error", async () => {
+  const env = sqliteD1();
+  const ids = ["c0", "c1", "c2", "c3", "c4", "c5"];
+  const slowEnv: DeskBoardDb = {
+    DB: {
+      prepare: (sql: string) => {
+        const inner = env.DB.prepare(sql);
+        return {
+          bind: (...params: unknown[]) => {
+            const bound = (inner as unknown as { bind: (...p: unknown[]) => { first: () => Promise<unknown>; run: () => Promise<unknown> } }).bind(...params);
+            return {
+              first: async () => { const row = await bound.first(); await new Promise((r) => setTimeout(r, 2)); return row; },
+              run: async () => { await new Promise((r) => setTimeout(r, 2)); return bound.run(); },
+            };
+          },
+        };
+      },
+    } as unknown as DeskBoardDb["DB"],
+  };
+  const results = await Promise.allSettled(ids.map((id) => upsert(slowEnv, { id, title: id, status: "pending" })));
+  assert.deepEqual(results.filter((r) => r.status === "rejected").map((r) => String((r as PromiseRejectedResult).reason)), []);
+  const { value } = await readVersionedBoard(env, "owner@example.com");
+  assert.deepEqual(value.cards.map((card) => card.id).sort(), ids);
+});
