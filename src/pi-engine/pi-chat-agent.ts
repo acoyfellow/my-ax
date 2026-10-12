@@ -215,6 +215,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   async wait(operationId: string): Promise<PiChatWaitResult> {
     const result = await this.harness.wait(operationId);
+    await this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) }));
     return { status: result.status, text: result.text, reason: result.reason };
   }
 
@@ -303,6 +304,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const signature = JSON.stringify([view.entries.length, view.partial, view.tools, view.queued, view.retry]);
     this.progressSample = nextProgressSample(this.progressSample, signature, now);
     const verdict = judgeTurn({ active: view.busy, lastProgressAt: this.progressSample.at, toolsRunning: view.tools.length }, now, turnLimitsFromEnv((this.env as { TURN_WATCHDOG_LIMIT_SECONDS?: string }).TURN_WATCHDOG_LIMIT_SECONDS));
+    await this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) }));
     if (verdict === "healthy") return;
     await this.disarmTurnWatchdog();
     this.progressSample = undefined;

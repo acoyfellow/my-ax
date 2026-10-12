@@ -18,3 +18,12 @@ test("new-engine entries become searchable user, assistant and tool rows, once e
   ]);
   assert.deepEqual(indexRowsFor(entries, 3).map((row) => row.piEntryId), [4, 5]);
 });
+
+test("indexing does not depend on a connected browser", async () => {
+  const { readFileSync } = await import("node:fs");
+  const agent = readFileSync(new URL("./pi-chat-agent.ts", import.meta.url), "utf8");
+  const watchdog = agent.slice(agent.indexOf("async checkTurnProgress()"), agent.indexOf("async crash()"));
+  assert.match(watchdog, /await this\.indexConversation\(\)/);
+  const wait = agent.slice(agent.indexOf("async wait(operationId"), agent.indexOf("async forkEntriesAt"));
+  assert.match(wait, /await this\.indexConversation\(\)/);
+});
