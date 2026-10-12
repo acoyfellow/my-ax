@@ -1,0 +1,21 @@
+src/pi-engine/conversation-index.test.ts
+  s_bddf4eb8848d16::t_150a55461a8a9e 21-29
+src/pi-engine/pi-chat-agent.ts
+  s_bddf4eb8848d16::t_398e3beceeb4f4 218,307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "408cfea43068b27f9408e29507ae09b1d3f0af51",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
