@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 
 test("system prompt treats reusable tools as an operational Pantry and searches by default for recurring work", () => {
@@ -20,6 +21,6 @@ test("system prompt requires postcondition evidence rather than equating visible
 });
 
 test("work_code description surfaces recipe-first behavior at tool-selection time", () => {
-  assert.match(workTools, /search codemode first and run a strong reusable-tool match by default/);
-  assert.match(workTools, /do not force weak matches for trivial work/);
+  assert.match(WORK_CODE_DESCRIPTION, /search codemode first and run a strong reusable-tool match by default/);
+  assert.match(WORK_CODE_DESCRIPTION, /do not force weak matches for trivial work/);
 });

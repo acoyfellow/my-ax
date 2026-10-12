@@ -5,6 +5,7 @@ import { promoteWorkCodeCandidates, type PromotionDependencies, type RecipeCreat
 import { SavedRecipeError } from "./saved-recipes";
 
 const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 
 type RecipeNotification = Parameters<PromotionDependencies["notifyOwner"]>[0];
@@ -164,11 +165,9 @@ test("executeWorkCode returns a reusableToolCandidate alongside suggestedRecipe 
 });
 
 test("work_code tool description explains the marker semantics and its narrow scope", () => {
-  const desc = workTools.match(/WORK_CODE_TOOL[\s\S]*?description:\s*"([^"]+)"/);
-  assert.ok(desc, "work_code description literal must be present");
-  assert.match(desc![1], /reusable-tool:/, "description must document the marker prefix");
-  assert.match(desc![1], /broadly reusable/, "description must explain the marker is for broadly reusable code");
-  assert.match(desc![1], /one-off|Never add the marker/, "description must warn against marking one-off commands");
+  assert.match(WORK_CODE_DESCRIPTION, /reusable-tool:/, "description must document the marker prefix");
+  assert.match(WORK_CODE_DESCRIPTION, /broadly reusable/, "description must explain the marker is for broadly reusable code");
+  assert.match(WORK_CODE_DESCRIPTION, /one-off|Never add the marker/, "description must warn against marking one-off commands");
 });
 
 test("public agent system prompt teaches the marker semantics", () => {
