@@ -12,7 +12,7 @@ export const WORKSPACE_METHODS = [
   { name: "preview_open", description: "Expose a workspace HTTP service through a temporary preview." },
   { name: "preview_list", description: "List active workspace previews." },
   { name: "preview_close", description: "Close a workspace preview." },
-  { name: "observe", description: "See what My AX actually did in a conversation: per turn, every tool call with duration and error, the turn's final finish reason and token usage, and its status. Input: {sessionId?, turns?}; defaults to this conversation and the last 3 turns. Check this before explaining why a turn stopped or a tool failed." },
+  { name: "observe", description: "See what My AX actually did in a conversation: per turn, every tool call with duration and error, the turn's final finish reason and token usage, and its status. Input: {sessionId?, turns?} for turns; {recent: true, kind?: 'step'|'workspace', sinceMinutes?} for raw events (every model step with its duration, and workspace container/restore/init/snapshot events with timings and errors). Defaults to this conversation and the last 3 turns. Check this before explaining why a turn stopped or a tool failed." },
 ] as const;
 
 export const PAGE_WORK_METHODS = [

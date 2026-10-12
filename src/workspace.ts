@@ -5,6 +5,7 @@ import type { Env } from "./types";
 import { Effect } from "effect";
 import { databaseLayer } from "./effect/database";
 import { publishWorkspaceSnapshot } from "./workspace-snapshot-program";
+import { recordObserveEvent } from "./observe-events";
 import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
@@ -110,16 +111,31 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     // backup before every tool call resurrects files intentionally deleted by
     // an earlier tool in the same turn. A /tmp marker survives calls within a
     // live container but disappears naturally when Sandbox recycles it.
+    const acquireStarted = Date.now();
     const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
     recycled = ready?.exitCode !== 0;
-    if (options?.restoreLatest !== false && ready?.exitCode !== 0) {
-      await restoreWithFallback(env, identity, scope, sandbox);
+    const note = async (name: string, started: number, outcome: string, message?: string) => recycled && recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name, durationMs: Date.now() - started, outcome, message }).catch(() => undefined);
+    await note("fresh-container", acquireStarted, ready ? "ok" : "unreachable", `scope ${scope.kind}`);
+    if (options?.restoreLatest !== false && recycled) {
+      const restoreStarted = Date.now();
+      try {
+        await restoreWithFallback(env, identity, scope, sandbox);
+        await note("restore", restoreStarted, "ok");
+      } catch (error) {
+        await note("restore", restoreStarted, "error", error instanceof Error ? error.message : String(error));
+        throw error;
+      }
     }
+    const initStarted = Date.now();
     const initialized = await sandbox.exec(workspaceInitCommand(WORKSPACE_HOME, READY_MARKER), {
       cwd: "/",
       timeout: 30_000,
       origin: "internal",
+    }).catch(async (error: unknown) => {
+      await note("init", initStarted, "error", error instanceof Error ? error.message : String(error));
+      throw error;
     });
+    await note("init", initStarted, initialized.exitCode === 0 ? "ok" : "error", initialized.exitCode === 0 ? undefined : initialized.stderr);
     if (initialized.exitCode !== 0) throw new Error(initialized.stderr || "Workspace initialization failed");
   })();
   preparing.set(id, promise);
@@ -164,6 +180,7 @@ export async function snapshotWorkspace(
   const decision = decideSnapshotPublish(previous?.size_bytes ?? null, knownSize);
   if (!decision.publish) {
     console.error("workspace_snapshot_shrink_refused", { email: identity.email, scope, previousBytes: decision.previousBytes, nextBytes: decision.nextBytes });
+    await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "snapshot", outcome: "shrink_refused", message: `${decision.previousBytes} -> ${decision.nextBytes} bytes` }).catch(() => undefined);
     return { published: false, reason: "shrink_refused", sizeBytes: knownSize, previousBytes: decision.previousBytes };
   }
   const backup = await sandbox.createBackup({

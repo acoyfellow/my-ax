@@ -1,4 +1,5 @@
 import { observeSessionTurns } from "./observe";
+import { recentObserveEvents, recordObserveEvent } from "./observe-events";
 import { Think } from "@cloudflare/think";
 import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
@@ -225,6 +226,7 @@ export class MyAgent extends Think<Env> {
   private pendingPageCalls = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   // Set by getTools() at the start of each turn; true only for job turns.
   private currentTurnSandboxOnly = false;
+  private lastStepAt: number | undefined;
   private cycleStepUsage: Array<{ usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null }; finishReason?: string }> = [];
   private recipesUsedThisTurn = new RecipeUsageCollector();
   private recipesSavedThisTurn: unknown[] = [];
@@ -1158,6 +1160,7 @@ export class MyAgent extends Think<Env> {
         return result.files.map((file) => ({ path: file.absolutePath, name: file.name, type: file.type, size: file.size }));
       },
       observeTurns: (sessionId, turns) => observeSessionTurns(env.DB, identity.email, sessionId, turns),
+      observeRecent: (options) => recentObserveEvents(env.DB, identity.email, options),
       searchConversations: async (query, options) => {
         const built = buildConversationSearchQuery(query, identity.email, options);
         if (!built) return [];
@@ -1300,6 +1303,7 @@ export class MyAgent extends Think<Env> {
     // replaced turn that never reached onChatResponse. Idempotent.
     await this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_before_turn_failed", { err: String(error) }));
     this.turnProgress.start();
+    this.lastStepAt = Date.now();
     await this.armTurnWatchdog();
     const identity = this.identity();
     if (identity) {
@@ -1423,6 +1427,11 @@ export class MyAgent extends Think<Env> {
 
   onStepFinish(ctx: { stepNumber: number; text: string; toolCalls: unknown[]; toolResults: unknown[]; finishReason: string; usage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null } }) {
     this.cycleStepUsage.push({ usage: ctx.usage, finishReason: ctx.finishReason });
+    const stepIdentity = this.identity();
+    const now = Date.now();
+    const stepMs = now - (this.lastStepAt ?? now);
+    this.lastStepAt = now;
+    if (stepIdentity) this.ctx.waitUntil(recordObserveEvent(this.env.DB, { ownerEmail: stepIdentity.email, sessionId: this.name, kind: "step", name: ctx.finishReason, durationMs: stepMs, outcome: `${ctx.toolCalls?.length ?? 0} tool calls`, message: `step ${ctx.stepNumber}, in ${ctx.usage?.inputTokens ?? "?"} / out ${ctx.usage?.outputTokens ?? "?"} tokens` }).catch(() => undefined));
     console.log("agent_step", {
       step: ctx.stepNumber,
       textBytes: ctx.text?.length ?? 0,
