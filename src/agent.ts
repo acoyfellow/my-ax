@@ -4,7 +4,7 @@ import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
 import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
-import { TURN_STEP_BATCH, turnStoppedMidWork } from "./turn-continuation";
+import { shouldAutoContinue, TURN_CUT_NOTE, TURN_STEP_BATCH } from "./turn-continuation";
 import { judgeTurn, turnLimitsFromEnv, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, TurnProgressTracker } from "./turn-watchdog";
 import { TURN_SNAPSHOT_COOLDOWN_MS } from "./workspace-policy";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
@@ -754,11 +754,13 @@ export class MyAgent extends Think<Env> {
     this.turnProgress.finish();
     const identity = this.identity();
     if (!identity) return;
-    const stoppedMidWork = turnStoppedMidWork({
+    const continuationsSoFar = this.ctx.storage.kv.get<number>("auto-continuations") ?? 0;
+    const continueVerdict = shouldAutoContinue({
       status: result.status,
       stepFinishReasons: this.cycleStepUsage.map((step) => step.finishReason),
       stepBatch: this.maxSteps,
-    });
+    }, continuationsSoFar);
+    this.ctx.storage.kv.put("auto-continuations", continueVerdict === "continue" ? continuationsSoFar + 1 : 0);
     await this.recordCurrentCycleCost(result).catch((error) => console.error("cycle_cost_record_failed", { sessionId: this.name, err: String(error) }));
     await this.logAcceptedUsers();
     const lastUser = [...this.messages].reverse().find((message) => message.role === "user");
@@ -843,8 +845,13 @@ export class MyAgent extends Think<Env> {
     } else {
       this.dirtyFsThisTurn = false;
     }
-    if (stoppedMidWork) {
+    if (continueVerdict === "continue") {
+      console.warn("turn_auto_continue", { sessionId: this.name, attempt: continuationsSoFar + 1 });
       await this.schedule(0, "continueTurnAfterStepBatch").catch((error) => console.error("turn_continuation_schedule_failed", { sessionId: this.name, err: String(error) }));
+    } else if (continueVerdict === "give-up") {
+      console.error("turn_auto_continue_exhausted", { sessionId: this.name });
+      await logAssistantMessage(this.env, identity, this.name, TURN_CUT_NOTE, { uiMessageId: `${result.message.id}:cut`, status: "error" }).catch(() => undefined);
+      this.broadcast(JSON.stringify({ type: "my_ax_turn_stuck", message: TURN_CUT_NOTE }));
     }
   }
 
