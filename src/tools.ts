@@ -15,6 +15,7 @@ import { issueSessionTitle } from "./session-title";
 import { computerPreviewSrc } from "./computer-id";
 import { getNamedComputer, snapshotNamedComputer } from "./named-computer";
 import { limitModelToolOutputWithSpill } from "./tool-output-limit";
+import { widgetToolName, widgetWording } from "./widget-names";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
 import { databaseLayer } from "./effect/database";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
@@ -254,14 +255,12 @@ export const OPEN_ISSUE_SESSION_TOOL: ToolDef = {
     if (!sessionId) {
       sessionId = crypto.randomUUID();
       await ctx.env.DB.prepare(
-        "INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))",
+        "INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))",
       ).bind(sessionId, name, email).run();
       created = true;
     }
-    const { getSessionAgent } = await import("./agent-stub");
-    const stub = await getSessionAgent(ctx.env, email, sessionId);
-    await stub.seedIdentity(ctx.identity);
-    await stub.injectUserMessage({ content, clientMsgId: `fanout:${number}:${created ? "open" : "continue"}:${Date.now()}` });
+    const { sessionControl } = await import("./session-control");
+    await (await sessionControl(ctx.env, ctx.identity, sessionId)).inject(content, `fanout:${number}:${created ? "open" : "continue"}:${Date.now()}`);
     return JSON.stringify({ ok: true, sessionId, name, created });
   },
 };
@@ -451,8 +450,8 @@ export function createThinkTools(context: () => ToolContext): ToolSet {
   const tools: Record<string, Tool<Record<string, unknown>, string>> = {};
   for (const definition of TOOLS) {
     if (sandboxOnly && definition.name === "cmux_observe") continue;
-    tools[definition.name] = tool<Record<string, unknown>, string, {}>({
-      description: definition.description,
+    tools[widgetToolName(definition.name)] = tool<Record<string, unknown>, string, {}>({
+      description: widgetWording(definition.description),
       inputSchema: jsonSchema<Record<string, unknown>>(definition.parameters as Parameters<typeof jsonSchema>[0]),
       execute: async (input: Record<string, unknown>) => {
         const toolContext = context();

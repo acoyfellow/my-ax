@@ -3,6 +3,7 @@ import type { FileInfo } from "@cloudflare/shell";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import { getUserWorkspace } from "./workspace";
+import type { WorkspaceScope } from "./workspace-policy";
 import { globSearchRoot } from "./workspace-exec";
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
 
@@ -19,6 +20,7 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
   constructor(
     private readonly env: Env,
     private readonly identity: () => AccessIdentity | undefined,
+    private readonly scope: WorkspaceScope = { kind: "owner" },
   ) {}
 
   private requireIdentity(): AccessIdentity {
@@ -35,7 +37,7 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
   }
 
   private async sandbox() {
-    return (await getUserWorkspace(this.env, this.requireIdentity())).sandbox;
+    return (await getUserWorkspace(this.env, this.requireIdentity(), { scope: this.scope })).sandbox;
   }
 
   private fileInfo(file: { name: string; absolutePath: string; type: "file" | "directory" | "symlink" | "other"; size: number; modifiedAt: string }): FileInfo {

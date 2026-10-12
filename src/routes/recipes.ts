@@ -177,7 +177,10 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const row = await service(c).get(c.req.param("id"));
       validateRecipeRunInput(input, JSON.parse(row.input_schema_json));
       if (!await requireOwnedSession(c.env, sessionId, c.get("identity").email)) throw new SavedRecipeError("NotFound", "session not found or not owned");
-      const agent = await getSessionAgent(c.env, c.get("identity").email, sessionId);
+      const { sessionEngineOf } = await import("../session-control");
+      const runnerId = (await sessionEngineOf(c.env, c.get("identity").email, sessionId)) === "pi" ? `recipes-${sessionId}` : sessionId;
+      const agent = await getSessionAgent(c.env, c.get("identity").email, runnerId);
+      await agent.seedIdentity(c.get("identity"));
       const result = await agent.runSavedRecipe({ recipeId: c.req.param("id"), input });
       return ok(c, command, result, 202);
     } catch (error) {

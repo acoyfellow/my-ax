@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 

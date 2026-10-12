@@ -16,6 +16,7 @@ export function toolNarrationPhrase(toolName: string): string {
     machinectl_call: "working on your computer",
     machinectl_code: "working on your computer",
     create_svelte_artifact: "building a small interactive view",
+    create_widget: "building a small interactive view",
     send_voice_message: "preparing an audio clip",
     search_conversations: "checking our past conversations",
     manage_jobs: "updating your scheduled jobs",

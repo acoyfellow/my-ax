@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 import { promoteWorkCodeCandidates, type PromotionDependencies, type RecipeCreateInput, type ReusableToolTrustMode } from "./reusable-tool-promotion";
 import { SavedRecipeError } from "./saved-recipes";
 
-const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
+import { PUBLIC_SYSTEM } from "./system-prompt";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 
 type RecipeNotification = Parameters<PromotionDependencies["notifyOwner"]>[0];
@@ -171,7 +172,7 @@ test("work_code tool description explains the marker semantics and its narrow sc
 });
 
 test("public agent system prompt teaches the marker semantics", () => {
-  const promptSlice = agent.slice(agent.indexOf("PUBLIC_SYSTEM"), agent.indexOf("PUBLIC_SYSTEM") + 5000);
+  const promptSlice = PUBLIC_SYSTEM;
   assert.match(promptSlice, /reusable-tool:/, "system prompt must show the marker prefix");
   assert.match(promptSlice, /broadly reusable/, "system prompt must explain the marker is for broadly reusable code");
   assert.match(promptSlice, /Settings\s*→\s*Reusable tools|Settings.*Reusable tools/, "system prompt should use the owner-facing Reusable tools destination");

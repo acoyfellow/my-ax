@@ -11,9 +11,8 @@ export { DEAD_SESSION_ATTENTION_KIND } from "./dead-session-detector";
 export function makeDeadSessionDeps(env: Env): DeadSessionDeps {
   return {
     reviveTurn: async (ownerEmail, sessionId, message, clientMsgId) => {
-      const stub = await getSessionAgent(env, ownerEmail, sessionId);
-      await stub.seedIdentity({ email: ownerEmail, sub: "system:auto-revive" });
-      await stub.injectUserMessage({ content: message, clientMsgId });
+      const { sessionControl } = await import("./session-control");
+      await (await sessionControl(env, { email: ownerEmail, sub: "system:auto-revive" } as Parameters<typeof sessionControl>[1], sessionId)).inject(message, clientMsgId);
     },
     settleRunningWithoutTurn: async (ownerEmail, sessionId) => {
       const stub = await getSessionAgent(env, ownerEmail, sessionId);

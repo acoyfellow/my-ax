@@ -18,6 +18,7 @@ import { buildSessionTurnState } from "../session-turn";
 import { parseSendAndWaitArgs, sendAndWait } from "../send-and-wait";
 import { openPiChat } from "../pi-engine/routes";
 import { observeSessionTurns } from "../observe";
+import { sessionControl, sessionEngineOf } from "../session-control";
 import { recentObserveEvents } from "../observe-events";
 
 const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
@@ -213,7 +214,8 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     if (!recipeId) throw new Error("recipeId is required");
     const input = args.input && typeof args.input === "object" && !Array.isArray(args.input) ? args.input as Record<string, unknown> : {};
     const callerCapabilities = Array.isArray(args.callerCapabilities) ? args.callerCapabilities.filter((capability): capability is string => typeof capability === "string") : undefined;
-    const stub = await getSessionAgent(c.env, email, sessionId);
+    const runnerId = (await sessionEngineOf(c.env, email, sessionId)) === "pi" ? `recipes-${sessionId}` : sessionId;
+    const stub = await getSessionAgent(c.env, email, runnerId);
     await stub.seedIdentity(c.get("identity"));
     return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
   }
@@ -312,10 +314,9 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   if (method === "observe_turn") return { sessionId, turns: await observeSessionTurns(c.env.DB, email, sessionId, clamp(args.turns, 1, 20)) };
   if (method === "get_session") return { session };
   if (method === "session_state" || method === "abort") {
-    const stub = await getSessionAgent(c.env, email, sessionId);
-    await stub.seedIdentity(c.get("identity"));
+    const control = await sessionControl(c.env, c.get("identity"), sessionId);
     if (method === "session_state") {
-      const live = await stub.sessionTurnState();
+      const live = await control.state();
       return buildSessionTurnState({
         sessionId,
         sessionStatus: typeof live.sessionStatus === "string" ? live.sessionStatus : String(session.status ?? "active"),
@@ -323,9 +324,10 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
         updatedAt: typeof session.updated_at === "string" ? session.updated_at : null,
       });
     }
-    return stub.abortActiveTurn();
+    return { ...(await control.abort()), sessionId };
   }
   if (method === "heal") {
+    if (await sessionEngineOf(c.env, email, sessionId) === "pi") return { sessionId, healed: false, reason: "new-engine chats keep their own history; nothing to heal" };
     const stub = await getSessionAgent(c.env, email, sessionId);
     await stub.seedIdentity(c.get("identity"));
     return stub.healStoredHistory();
@@ -338,9 +340,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   }
   const content = typeof args.content === "string" ? args.content.trim() : "";
   if (!content) throw new Error("content is required");
-  const stub = await getSessionAgent(c.env, email, sessionId);
-  await stub.seedIdentity(c.get("identity"));
-  await stub.injectUserMessage({ content, clientMsgId: `mcp:${crypto.randomUUID()}` });
+  await (await sessionControl(c.env, c.get("identity"), sessionId)).inject(content, `mcp:${crypto.randomUUID()}`);
   await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(sessionId, email).run();
   return { sessionId, injected: true };
 }

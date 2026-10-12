@@ -1523,10 +1523,10 @@
   function onOpen() {
     setConn("live");
     flushPendingSends();
+    sendVisibility();
     if (!piTranscript) {
       restoreActiveTurn();
       void refreshRemoteTurn();
-      sendVisibility();
       requestActiveResponseRecovery();
     }
     const pendingFirst = sessionStorage.getItem("my-ax-pending-first-message");

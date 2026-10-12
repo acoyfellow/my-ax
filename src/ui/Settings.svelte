@@ -82,7 +82,7 @@
       items: [
         { name: "Public browser", tools: "browser_open", description: "Open public pages with a screenshot and replay. No personal cookies." },
         { name: "Conversation recall", tools: "search_conversations", description: "Search your earlier My AX conversations." },
-        { name: "Interactive output", tools: "create_svelte_artifact", description: "Attach a sandboxed Svelte widget to the conversation." },
+        { name: "Interactive output", tools: "create_widget", description: "Attach a sandboxed Svelte widget to the conversation." },
       ],
     },
     {
@@ -1232,7 +1232,7 @@
 
       <div hidden={activeSection !== "computers"} class="space-y-4">
         <header class="flex items-start justify-between gap-3">
-          <div><h3 class="text-sm font-semibold text-fg">Computers</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Named Ubuntu desktops isolated from the shared Sandbox. Ask My AX to create_computer; the desktop embeds in chat like an artifact.</p></div>
+          <div><h3 class="text-sm font-semibold text-fg">Computers</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Named Ubuntu desktops isolated from the shared Sandbox. Ask My AX to create_computer; the desktop embeds in chat like a widget.</p></div>
           <button type="button" onclick={refreshComputers} class="job-action-button shrink-0 hover:border-brand/60" disabled={computersLoading}>Refresh</button>
         </header>
         {#if computersLoading && computers.length === 0}
@@ -1254,13 +1254,13 @@
 
       <div hidden={activeSection !== "artifacts"} class="space-y-4">
         <header class="flex items-start justify-between gap-3">
-          <div><h3 class="text-sm font-semibold text-fg">Artifact Library</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Reusable widgets, dashboards, forms, and visualizations generated in your conversations. They remain in this owner-scoped library even if the origin conversation is removed.</p></div>
+          <div><h3 class="text-sm font-semibold text-fg">Widget Library</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Reusable widgets, dashboards, forms, and visualizations generated in your conversations. They remain in this owner-scoped library even if the origin conversation is removed.</p></div>
           <button type="button" onclick={refreshArtifacts} class="job-action-button shrink-0 hover:border-brand/60" disabled={artifactsLoading}>Refresh</button>
         </header>
         {#if artifactsLoading && artifacts.length === 0}
-          <p class="text-xs text-fg-mut">Loading artifacts…</p>
+          <p class="text-xs text-fg-mut">Loading widgets…</p>
         {:else if visibleArtifacts.length === 0}
-          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No artifacts found</strong><p class="mt-1 text-xs text-fg-mut">Ask My AX to create a dashboard, calculator, form, visualization, or other interactive artifact.</p></section>
+          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No widgets found</strong><p class="mt-1 text-xs text-fg-mut">Ask My AX to create a dashboard, calculator, form, visualization, or other interactive widget.</p></section>
         {:else}
           <div class="grid gap-3 sm:grid-cols-2">
             {#each visibleArtifacts as artifact (artifact.id)}

@@ -105,9 +105,11 @@ export interface DelegateParent {
   notifyDelegateManyComplete?(results: DelegateResult[]): Promise<void>;
 }
 
+export const DELEGATE_MANY_DESCRIPTION = "Delegate independent read-only analysis tasks. Split the work into as many independent tasks as it has (up to 1000) and send them in ONE call; they run in parallel. Only do work sequentially when a later task needs an earlier result. Rate limits are handled by adaptive backoff, not by asking for fewer tasks. The parent must synthesize the retained child evidence.";
+
 export function createDelegateManyTool(parent: DelegateParent) {
   return tool({
-    description: "Delegate independent read-only analysis tasks. Split the work into as many independent tasks as it has (up to 1000) and send them in ONE call; they run in parallel. Only do work sequentially when a later task needs an earlier result. Rate limits are handled by adaptive backoff, not by asking for fewer tasks. The parent must synthesize the retained child evidence.",
+    description: DELEGATE_MANY_DESCRIPTION,
     inputSchema: delegateManyInputSchema,
     outputSchema: delegateManyOutputSchema,
     execute: async (input, context) => {

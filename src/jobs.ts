@@ -1,3 +1,4 @@
+import type { AccessIdentity } from "./auth";
 // Recurring prompt job helpers.
 //
 // Native agents `scheduleEvery()` alarms own recurrence inside each session
@@ -158,9 +159,9 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
   let error: string | undefined;
   const target = await resolveRecurringJobTargetSession(env, row, now);
   try {
-    const stub = await sessionAgent(env, row.owner_email, target.targetSessionId);
-    await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
-    await stub.injectUserMessage({ content: scheduledJobRunPrompt(row.prompt), clientMsgId: `job:${row.id}:${now.getTime()}:${claim.run_count}` });
+    const { sessionControl } = await import("./session-control");
+    const control = await sessionControl(env, { email: row.owner_email, sub: `job:${row.owner_email}` } as AccessIdentity, target.targetSessionId);
+    await control.inject(scheduledJobRunPrompt(row.prompt), `job:${row.id}:${now.getTime()}:${claim.run_count}`);
   } catch (e) {
     ok = false;
     error = e instanceof Error ? e.message : String(e);

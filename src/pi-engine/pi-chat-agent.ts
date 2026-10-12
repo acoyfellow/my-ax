@@ -9,7 +9,20 @@ import { PiHarness } from "agents-pi/harness/pi";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { forkEntriesUpTo, type ForkEntry } from "./fork";
 import { indexRowsFor, type ConversationMemory } from "./conversation-index";
-import { memoryToolsExtension } from "./memory-tools";
+import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
+import { sharedToolsExtension } from "./legacy-tools";
+import { ownerInstructionsExtension } from "./owner-instructions-tools";
+import { connectorToolsExtension, type ConnectorRunner } from "./connector-tools";
+import { createToolContext } from "../tool-context";
+import { PUBLIC_SYSTEM } from "../system-prompt";
+import { widgetWording } from "../widget-names";
+import { selectLivePageConnection, type PageConnectionState } from "../page-connection";
+import { createMyAxBrowserTools } from "../browser-tools";
+import { DEFAULT_OWNER_INSTRUCTIONS, getOwnerInstructions } from "../owner-instructions";
+import { Effect } from "effect";
+import type { ToolSet } from "ai";
+import { z } from "zod";
+import { DELEGATE_MANY_DESCRIPTION, delegateManyInputSchema } from "../delegate-many";
 import { buildConversationSearchQuery } from "../conversation-search";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
@@ -69,6 +82,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
       this.registry.install(machineToolsExtension(() => this.machineRunner()));
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
+      this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
+      this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
+      this.registry.install(connectorToolsExtension(() => this.connectorRunner()));
+      this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
       return Harness.open(storage, { models, registry: this.registry }, context);
     },
     defaults: hasGatewayModels(this.env)
@@ -109,8 +126,24 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {
     if (typeof message !== "string") return;
     await this.ensureEventStream();
-    let frame: { type?: string; text?: string; operationId?: string; attachments?: Attachment[]; model?: string } = {};
+    let frame: { type?: string; text?: string; operationId?: string; attachments?: Attachment[]; model?: string; [key: string]: unknown } = {};
     try { frame = JSON.parse(message); } catch { return; }
+    if (frame.type === "page_result") {
+      const result = frame as { requestId?: string; ok?: boolean; result?: unknown; error?: string };
+      const pending = result.requestId ? this.pendingPageCalls.get(result.requestId) : undefined;
+      if (pending && result.requestId) {
+        this.pendingPageCalls.delete(result.requestId);
+        clearTimeout(pending.timer);
+        if (result.ok) pending.resolve(result.result ?? null);
+        else pending.reject(new Error(result.error || "page verb failed"));
+      }
+      return;
+    }
+    if (frame.type === "my_ax_visibility") {
+      const visibility = frame as { visible?: boolean; standalone?: boolean; platform?: string; uaMobile?: boolean };
+      connection.setState({ ...((connection.state ?? {}) as Record<string, unknown>), chatVisible: visibility.visible === true, standalone: visibility.standalone === true, platform: typeof visibility.platform === "string" ? visibility.platform.slice(0, 80) : null, uaMobile: visibility.uaMobile === true });
+      return;
+    }
     if (frame.type === "pi_ping") {
       connection.send(JSON.stringify({ type: "pi_pong" }));
       return;
@@ -164,6 +197,74 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const chatId = this.state.chatId;
     if (!chatId) throw new Error("pi chat is not bound to a chat id");
     return chatId;
+  }
+
+  private pendingPageCalls = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+
+  private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
+    const target = selectLivePageConnection([...this.getConnections<PageConnectionState>()]);
+    if (!target) return Promise.reject(new Error("page_unavailable: no live Chat tab connected to this session"));
+    const requestId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const timeoutMs = Math.min(Math.max(opts?.timeoutMs ?? 10_000, 1000), 30_000);
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingPageCalls.delete(requestId);
+        reject(new Error(`page_timeout: verb ${verb} did not reply within ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.pendingPageCalls.set(requestId, { resolve, reject, timer });
+      try {
+        target.send(JSON.stringify({ type: "page_call", requestId, verb, args: args ?? {} }));
+      } catch (error) {
+        this.pendingPageCalls.delete(requestId);
+        clearTimeout(timer);
+        reject(new Error(`page_send_failed: ${String(error)}`));
+      }
+    });
+  }
+
+  private sharedToolContext(): ToolContext {
+    const identity = this.identity();
+    const chatId = this.chatId();
+    return createToolContext({
+      env: this.env,
+      identity,
+      sessionId: chatId,
+      scope: { kind: "chat", chatId },
+      sandboxOnly: false,
+      broadcast: (message) => this.broadcast(message),
+      callPage: (verb, args, opts) => this.callPage(verb, args, opts),
+      runSavedRecipe: async (body) => (await this.helperAgent()).runSavedRecipe(body),
+    });
+  }
+
+  private async helperAgent() {
+    const identity = this.identity();
+    const { getSessionAgent } = await import("../agent-stub");
+    const helper = await getSessionAgent(this.env, identity.email, `recipes-${this.chatId()}`);
+    await helper.seedIdentity(identity);
+    return helper;
+  }
+
+  private connectorRunner(): ConnectorRunner {
+    return {
+      list: async () => (await this.helperAgent()).connectorCatalog(),
+      call: async (serverId, toolName, args) => (await this.helperAgent()).connectorCall(serverId, toolName, args),
+    };
+  }
+
+  private sharedExtraTools(): ToolSet {
+    return {
+      ...createMyAxBrowserTools(this.env, () => this.identity(), () => this.chatId()),
+      delegate_many: {
+        description: DELEGATE_MANY_DESCRIPTION,
+        inputSchema: { jsonSchema: z.toJSONSchema(delegateManyInputSchema) },
+        execute: async (input: unknown, options: { toolCallId: string }) => (await this.helperAgent()).runDelegateMany(input, options.toolCallId),
+      } as unknown as ToolSet[string],
+    };
+  }
+
+  private async ownerInstructions(): Promise<string> {
+    return Effect.runPromise(getOwnerInstructions(this.env, this.identity().email)).catch(() => DEFAULT_OWNER_INSTRUCTIONS);
   }
 
   private machineRunner(): MachineToolRunner {
@@ -256,6 +357,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const times: Record<number, number> = {};
     for (const [key, value] of this.ctx.storage.kv.list<number>({ prefix: "entry-time:" })) times[Number(key.slice("entry-time:".length))] = value;
     return times;
+  }
+
+  async isBusy(): Promise<boolean> {
+    return this.harness.session().busy();
   }
 
   async live(): Promise<PiChatLiveView> {

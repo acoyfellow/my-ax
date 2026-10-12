@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { sandboxOnlyForTurn } from "./recurring-job-run";
 
 const source = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
-const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 
 test("work_code sandboxOnly turns withhold machine and keep factory page verbs", () => {
   assert.match(source, /export const SANDBOX_ONLY_WORK_CAPABILITIES = WORKSPACE_METHODS\.map/);
@@ -27,7 +27,7 @@ test("sandboxOnly is decided per turn, never saved to session config", () => {
   assert.doesNotMatch(agent, /configure<MyAgentConfig>\(\{[^}]*sandboxOnly/);
   assert.doesNotMatch(agent, /getConfig<MyAgentConfig>\(\)\?\.sandboxOnly/);
   assert.match(agent, /const sandboxOnly = agent\.turnIsSandboxOnly\(\);/);
-  assert.match(agent, /const sandboxOnly = this\.currentTurnSandboxOnly;/);
+  assert.match(agent, /sandboxOnly: this\.currentTurnSandboxOnly,/);
   assert.match(agent, /callPage: \(verb, args, opts\) => this\.callPage/);
 });
 

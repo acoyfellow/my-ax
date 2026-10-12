@@ -159,7 +159,7 @@
     {:else if error}
       <p class="notif-empty text-bad">{error}</p>
     {:else if board.cards.length === 0}
-      <p class="notif-empty">The desk is empty. An agent can build one with deskWrite: point it at an artifact for a full app, or write state for a simple board.</p>
+      <p class="notif-empty">The desk is empty. An agent can build one with deskWrite: point it at a widget for a full app, or write state for a simple board.</p>
     {:else}
       <ul class="notif-list">
         {#each board.cards as card (card.id)}

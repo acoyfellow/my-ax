@@ -10,6 +10,7 @@ const READ_ONLY_TOOL_NAMES = new Set<string>([
   "search_conversations",
   "notify_owner",
   "create_svelte_artifact",
+  "create_widget",
   "list_preview_services",
   "preview_service",
   "close_preview_service",

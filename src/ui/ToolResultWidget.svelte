@@ -116,7 +116,7 @@
   <section class="svelte-artifact-shell" data-fullscreen={fullscreen ? "1" : "0"}>
     <div class="tool-call__result tool-call__browser-summary" data-tool-widget="svelte-artifact">
       <strong>{widget.title}</strong>
-      <span>Interactive artifact</span>
+      <span>Interactive widget</span>
     </div>
     <div class="svelte-artifact-stage">
       {#if fullscreen}
@@ -124,19 +124,19 @@
         <button
           type="button"
           class="svelte-artifact-exit"
-          aria-label="Exit fullscreen artifact"
+          aria-label="Exit fullscreen widget"
           title="Exit fullscreen (Esc)"
           onclick={closeFullscreen}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
           <span>Exit</span>
         </button>
-        <button type="button" class="svelte-artifact-close-strip" aria-label="Close fullscreen artifact" onclick={closeFullscreen}>Close artifact</button>
+        <button type="button" class="svelte-artifact-close-strip" aria-label="Close fullscreen widget" onclick={closeFullscreen}>Close widget</button>
       {:else}
         <button
           type="button"
           class="svelte-artifact-fullscreen"
-          aria-label="Open artifact fullscreen"
+          aria-label="Open widget fullscreen"
           title="Fullscreen"
           onclick={openFullscreen}
         >

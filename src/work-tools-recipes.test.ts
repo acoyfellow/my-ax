@@ -6,7 +6,7 @@ import { intersectCapabilities, capabilitiesDropped } from "./capability-interse
 import { CODEMODE_METHODS, FACTORY_PAGE_METHODS, PAGE_WORK_METHODS, WORK_CODE_DESCRIPTION, WORK_SEARCH_DESCRIPTION, WORKSPACE_METHODS } from "./work-tools-catalog";
 
 const source = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
-const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 const runtime = readFileSync(new URL("./code-mode-runtime.ts", import.meta.url), "utf8");
 const runtimeWorker = readFileSync(new URL("./code-mode-runtime.worker.ts", import.meta.url), "utf8");
 const indexSource = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");

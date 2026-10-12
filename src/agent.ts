@@ -1,4 +1,5 @@
-import { observeSessionTurns } from "./observe";
+import { createToolContext } from "./tool-context";
+import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
 import { Think } from "@cloudflare/think";
 import { buildConversationSearchQuery } from "./conversation-search";
@@ -74,52 +75,6 @@ import { shouldSnapshotSandboxForToolCall } from "./workspace-snapshot-classific
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
 // agent discovers their tools at runtime; the model learns about them
 // from the native MCP tool descriptions, not from this prompt.
-const PUBLIC_SYSTEM = `You are the my-ax Agent, a research and analysis assistant.
-
-## Tools
-
-Computer work is exposed through two tools:
-- work_search discovers capabilities and helps choose the right place: workspace.* is the canonical persistent My AX Sandbox for files, shell commands, processes, and previews; machine.* is the user's connected physical machine and authenticated local state.
-- work_code executes one bounded async JavaScript function over { workspace, machine, page, codemode }. The same namespaces are available as globals. Prefer My AX Workspace for persistent cloud work and My Machine only for current local checkouts or authenticated state that has not moved into My AX. A codemode-shaped namespace is also exposed as codemode.search(query), codemode.describe(name), and codemode.run(name, input). Treat enabled reusable tools as the owner's operational Pantry: for multi-step, recurring, stateful, or easy-to-half-complete work, search codemode before inventing an ad-hoc procedure; describe a strong match when its contract is unclear; run it by default when it safely satisfies the request. Do not force a weak match or search for ordinary conversation and trivial one-step work. Reusable tools are projected from the owner-curated D1 compatibility store into a codemode-native shape with provenance "projected" and a synthetic execution id (cm_synth_<recipeId>); no native CodemodeRuntime promotion path is live yet, so every reusable tool today carries projected provenance. Reusable-tool runs create receipts that carry the codemode execution id and appear in Check-in. work_code may run owner-authenticated gh commands the owner just asked for (including gh issue create). Do not publish, open PRs, or comment unless the owner asked in this turn. Never print tokens. Reusable-tool candidates: when — and only when — the code you write is broadly reusable across future tasks (not a one-off shell command, not throwaway scratch, not tied to today's specific paths or values), begin the code with exactly one comment "// reusable-tool: <short meaningful name>". The owner controls whether marked candidates wait as Pending or are enabled automatically in Settings → Reusable tools; unmarked runs stay inline forever. When no strong match exists and you must write a genuinely reusable operational procedure, mark that implementation so it can become a future Pantry tool; do not mark ad-hoc shell/exec commands, quick file peeks, or scripts you would not want the owner to see enabled tomorrow.
-
-## Operational completion
-
-For actions that change external or interactive state, distinguish intent, attempted delivery, and verified completion. Never claim success merely because text is visible, a command was issued, or a tool returned an acknowledgement. After acting, inspect the relevant state and require a task-specific postcondition (for example, a CMUX prompt is submitted only when the live agent begins working or produces new output). If the postcondition is absent or ambiguous, report the action as unverified and either retry safely or ask for direction. Recurring monitors must not mistake typed-but-unsubmitted input for agent inactivity.
-
-## Coverage before absence
-
-A claim that something does not exist, is all paused, or is complete ("no active jobs", "none found", "all tests pass") must state how much was checked, for example "checked 30 of 30 jobs". A tool result marked INCOMPLETE RESULT, or a list with hasMore true, does not support such a claim: read the saved full output, page with offset, or say the check was partial.
-
-Other product tools:
-- Think's native read/write/edit/list/find/grep/delete tools operate on the same persistent My AX Workspace for simple one-step file operations. Use work_code when composition, processes, or My Machine are needed.
-- show_diff renders a read-only code review from two owner-authorized real-file reads. Call it with old and new source/path descriptors using workspace or machine; it reads both values server-side through the My AX Workspace or connected My Machine. Do not pass file text or source claims. path and title are safe display-only labels. Never use show_diff to write, apply, edit, open a URL, or access browser filesystem APIs.
-- browser_open opens a public web page in a real headless browser session with replay recording. Use it for public websites and rendered UI checks; do not claim authenticated browser access.
-- search_artifacts searches the owner’s reusable artifact library. Before creating an artifact, search for the intended purpose and reuse a strong match instead of generating another variant.
-- get_artifact reads the stored Svelte source for one owned artifact by id. Use it to inspect or revise a widget you already created.
-- create_svelte_artifact creates or reuses a durable interactive Svelte 5 artifact attached to this conversation when the user asks for a widget, visualization, dashboard, calculator, or interactive UI. Provide complete self-contained Svelte source with no external imports. Exact-source duplicates are automatically reused.
-- search_conversations searches earlier conversation memory indexed in D1 full-text search. When the user asks about previous discussions, use this — don't grep workspace files for chat memory.
-- ask_user asks the owner one multiple-choice question and pauses for their answer. Use it when you genuinely need a human decision (approval, a choice between options, missing direction) before continuing — especially when the user may be away. It pushes a notification; after calling it, stop and wait. The choice returns as a new user message.
-- desk_upsert writes one card to the owner's durable desk at /?action=desk. Use it whenever work should sit on that board instead of starting a new conversation. Always desk_upsert; if the PWA tab is open and page.listArtifactTools shows setBoard, also invoke that tool; wake with notify_owner href /?action=desk. Do not flatten Approve/Reject into notify_owner body text.
-- notify_owner sends an immediate one-off Web Push notification to the owner's subscribed My AX apps. When the owner explicitly asks to "send a push", "notify me now", or otherwise requests a one-time notification, call notify_owner exactly once and report its delivery receipt. Do not create a recurring job for a one-off push.
-- Any MCP servers the user has connected (Settings → Connectors) appear as native tools. Their names come from the MCP server's tools/list. If an MCP server needs re-authorization, tell the user to open Settings → Connectors and re-authorize, then STOP.
-- When mcp_code_mode is present, it contains only operator-approved read/query methods. Prefer it for multi-step search, pagination, filtering, and joins. Use native MCP tools for writes, approvals, or one simple call.
-
-## Memory & history
-
-Conversation memory is indexed in D1 full-text search; the model can recall it with search_conversations. Don't grep workspace files for chat memory and don't claim you have no memory of earlier conversations.
-
-## Identity & auth
-
-The user is authenticated upstream (typically Cloudflare Access). Their email is in the tool context — you can refer to them by their first name. Upstream credentials for MCP servers are brokered by the worker; you never see them.
-
-## Style
-
-- Be thorough but concise. Show your work via tool calls — the user sees them.
-- When exploring an API or filesystem, call/look first, theorize second.
-- When unsure, reason before acting and verify with tools. Don't guess.
-- Before explaining why a turn stopped or a tool failed, call work_code with workspace.observe({}) and report what it shows (step finish reasons, tool errors, durations). Never guess at causes like context limits.
-- Prefer acting over asking, but when a real decision genuinely needs the human, use ask_user rather than stalling or guessing.
-- Voice in messages: direct, lowercase-first if it reads naturally, no exclamation marks unless something is genuinely surprising.`;
 
 type MyAgentConfig = {
   identity?: AccessIdentity;
@@ -681,6 +636,30 @@ export class MyAgent extends Think<Env> {
     for (const mcp of configured) await register(mcp.id, mcp.upstream);
   }
 
+  async connectorCatalog(): Promise<Array<{ name: string; serverId: string; toolName: string; description: string; inputSchema: unknown }>> {
+    await this.ensureNativeMcp();
+    const servers = this.getMcpServers().servers;
+    return this.mcp.listTools().map((catalogTool) => ({
+      name: `${(servers[catalogTool.serverId]?.name ?? catalogTool.serverId).replace(/[^a-zA-Z0-9_]/g, "_")}__${catalogTool.name}`.slice(0, 64),
+      serverId: catalogTool.serverId,
+      toolName: catalogTool.name,
+      description: String(catalogTool.description ?? catalogTool.name),
+      inputSchema: catalogTool.inputSchema ?? { type: "object", properties: {} },
+    }));
+  }
+
+  async runDelegateMany(input: unknown, toolCallId: string): Promise<string> {
+    const delegate = createDelegateManyTool(this) as unknown as { execute: (input: unknown, options: { toolCallId: string; messages: unknown[] }) => Promise<unknown> };
+    const output = await delegate.execute(input, { toolCallId, messages: [] });
+    return typeof output === "string" ? output : JSON.stringify(output);
+  }
+
+  async connectorCall(serverId: string, toolName: string, args: Record<string, unknown>): Promise<string> {
+    await this.ensureNativeMcp();
+    const result = await this.mcp.callTool({ serverId, name: toolName, arguments: args });
+    return JSON.stringify(result);
+  }
+
   delegateIdentity(): AccessIdentity | undefined {
     return this.identity();
   }
@@ -1094,166 +1073,19 @@ export class MyAgent extends Think<Env> {
   }
 
   private buildToolContext(): ToolContext {
-    const config = this.getConfig<MyAgentConfig>();
-    const identity = config?.identity;
+    const identity = this.getConfig<MyAgentConfig>()?.identity;
     if (!identity) throw new Error("Think session identity not seeded before tool call.");
-    const env = this.env;
-    const sessionId = this.name;
-    const workingDirectory = WORKSPACE_HOME;
-    const sandboxOnly = this.currentTurnSandboxOnly;
-    return {
-      workingDirectory,
-      sandboxOnly,
-      notifyOwner: (input) => notifyOwner(env, identity.email, { ...input, sessionId }),
-      shellExec: (cmd, opts) => workspaceShellExec(() => getUserWorkspace(env, identity), cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout ?? 30_000, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } }),
-      processStart: async (cmd, opts) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        const process = await sandbox.startProcess(cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout, processId: opts?.processId, autoCleanup: false, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } });
-        return { id: process.id, pid: process.pid, command: process.command, status: process.status, startTime: process.startTime.toISOString(), endTime: process.endTime?.toISOString(), exitCode: process.exitCode, sessionId: process.sessionId };
-      },
-      processStatus: async (id) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        const process = await sandbox.getProcess(id);
-        if (!process) return null;
-        await process.getStatus();
-        const current = (await sandbox.getProcess(id)) ?? process;
-        return { id: current.id, pid: current.pid, command: current.command, status: current.status, startTime: current.startTime.toISOString(), endTime: current.endTime?.toISOString(), exitCode: current.exitCode, sessionId: current.sessionId };
-      },
-      processLogs: async (id) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        const process = await sandbox.getProcess(id);
-        if (!process) return null;
-        const logs = await sandbox.getProcessLogs(id);
-        return { processId: logs.processId, stdout: logs.stdout ?? "", stderr: logs.stderr ?? "" };
-      },
-      processCancel: async (id, signal) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        if (!(await sandbox.getProcess(id))) return false;
-        await sandbox.killProcess(id, signal ?? "SIGTERM");
-        return true;
-      },
-      runCode: async (code, options) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        const context = await sandbox.createCodeContext({ language: options?.language ?? "python", cwd: workingDirectory });
-        return sandbox.runCode(code, { context, timeout: options?.timeout, envVars: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config" } });
-      },
-      tunnelGet: async (port) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        return sandbox.tunnels.get(port);
-      },
-      tunnelList: async () => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        return sandbox.tunnels.list();
-      },
-      tunnelDestroy: async (port) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        await sandbox.tunnels.destroy(port);
-      },
-      readFile: async (path, options) => {
-        if (options?.maxBytes === undefined) return new SandboxThinkWorkspace(env, () => identity).readFile(path);
-        return readBoundedWorkspaceFile((await getUserWorkspace(env, identity)).sandbox, path, options.maxBytes);
-      },
-      writeFile: async (path, content) => new SandboxThinkWorkspace(env, () => identity).writeFile(path, content),
-      listFiles: async (path, opts) => {
-        const { sandbox } = await getUserWorkspace(env, identity);
-        const result = await sandbox.listFiles(path, opts);
-        return result.files.map((file) => ({ path: file.absolutePath, name: file.name, type: file.type, size: file.size }));
-      },
-      observeTurns: (sessionId, turns) => observeSessionTurns(env.DB, identity.email, sessionId, turns),
-      observeRecent: (options) => recentObserveEvents(env.DB, identity.email, options),
-      searchConversations: async (query, options) => {
-        const built = buildConversationSearchQuery(query, identity.email, options);
-        if (!built) return [];
-        const result = await env.DB.prepare(built.sql).bind(...built.params).all<{ sessionId: string; ts: string; role: string; snippet: string }>();
-        return result.results ?? [];
-      },
-      searchArtifacts: (query, limit = 10) => searchOwnedArtifacts(env, identity, query, limit),
-      getArtifact: async (id) => {
-        const manifest = await readOwnedSvelteArtifact(env, identity, id);
-        if (!manifest) return null;
-        return { id: manifest.id, title: manifest.title, source: manifest.source, sourceHash: manifest.sourceHash, createdAt: manifest.createdAt };
-      },
-      createSvelteArtifact: (input) => createSvelteArtifact(env, identity, sessionId, input),
-      sendVoiceMessage: async (input) => {
-        const clip = await createAudioMessage(env, identity, sessionId, input);
-        // Deliver a push deep-linking back to this conversation so the owner can
-        // open the inline player, mirroring artifact/ask_user delivery.
-        await notifyOwner(env, identity.email, {
-          kind: "session.update",
-          sessionId,
-          title: "my · ax voice message",
-          body: clip.title,
-          href: `/?session=${encodeURIComponent(sessionId)}`,
-        }).catch((error) => console.error("voice_message_push_failed", { sessionId, err: error instanceof Error ? error.message : String(error) }));
-        return clip;
-      },
-      listSavedRecipes: async () => {
-        // Dual-read from cm_snippets projection first, falling back to an
-        // in-memory projection of enabled saved_recipes when the
-        // projection table is empty (transition seam). Returns codemode-
-        // native shape so the snippet hook surface is consistent with the
-        // native runtime.
-        const snippets = await listSnippetsDualRead(env, identity.email);
-        // Mirror the authoritative capability list from saved_recipes
-        // where present, since cm_snippets records only connector names.
-        // The capability bound enforced at run time still comes from the
-        // saved_recipes row (intersected with caller grants), so this
-        // list is advisory metadata for the model only.
-        const recipes = await new SavedRecipeService(env, identity.email).list();
-        const recipeByName = new Map(recipes.filter((r) => r.status === "enabled").map((r) => [r.name, r] as const));
-        return snippets.flatMap((snippet) => {
-          const recipe = recipeByName.get(snippet.name);
-          const capabilities = recipe?.capabilities ?? snippet.capabilities;
-          if (hasRetiredRecipeCapability(capabilities)) return [];
-          return [{
-            id: snippet.sourceRecipeId ?? snippet.id,
-            name: snippet.name,
-            description: snippet.description,
-            inputSchema: snippet.inputSchema,
-            capabilities,
-            codemodeExecutionId: snippet.codemodeExecutionId,
-            sourceRecipeId: snippet.sourceRecipeId,
-            provenance: snippet.provenance,
-          }];
-        });
-      },
-      runSavedRecipe: async (input) => {
-        let recipeId = input.id?.trim();
-        if (!recipeId && input.name?.trim()) {
-          const name = input.name.trim();
-          const matches = (await new SavedRecipeService(env, identity.email).list()).filter((recipe) => recipe.status === "enabled" && recipe.name === name);
-          if (matches.length !== 1) throw new Error(matches.length ? `ambiguous recipe name: ${name}` : `saved recipe not found: ${name}`);
-          recipeId = matches[0].id;
-        }
-        if (!recipeId) throw new Error("recipe.run requires id or exact name");
-        // Forward the caller's capability bounds so runSavedRecipe can
-        // intersect (never widen) the snippet's declared capabilities
-        // against what the parent turn was allowed to do.
-        const result = await this.runSavedRecipe({
-          recipeId,
-          input: input.input ?? {},
-          callerCapabilities: input.callerCapabilities,
-          workCodeExecutionState: input.workCodeExecutionState,
-        });
-        const resultWithRecipe = result as { recipe?: { name?: string }; codemodeExecutionId?: string };
-        this.recipesUsedThisTurn.add({
-          recipeId,
-          name: resultWithRecipe?.recipe?.name ?? input.name ?? null,
-          codemodeExecutionId: resultWithRecipe?.codemodeExecutionId ?? null,
-        });
-        return result;
-      },
+    return createToolContext({
+      env: this.env,
+      identity,
+      sessionId: this.name,
+      scope: { kind: "owner" },
+      sandboxOnly: this.currentTurnSandboxOnly,
       broadcast: (message) => this.broadcast(message),
       callPage: (verb, args, opts) => this.callPage(verb, args, opts),
-      identity,
-      sessionId,
-      bridgeBaseUrl: env.BRIDGE_BASE_URL,
-      bridgeJwtSecret: env.BRIDGE_JWT_SECRET,
-      env,
-      // Lenient: never throw here for pure work_code. Connector-OAuth flows
-      // validate the origin at their point of use.
-      workerOrigin: resolveWorkerOrigin(env),
-    };
+      runSavedRecipe: (body) => this.runSavedRecipe(body),
+      onRecipeUsed: (usage) => this.recipesUsedThisTurn.add(usage),
+    });
   }
 
   private callPage(verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }): Promise<unknown> {
