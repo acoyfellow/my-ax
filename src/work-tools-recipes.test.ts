@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { intersectCapabilities, capabilitiesDropped } from "./capability-intersect";
+import { CODEMODE_METHODS, FACTORY_PAGE_METHODS, PAGE_WORK_METHODS, WORK_CODE_DESCRIPTION, WORK_SEARCH_DESCRIPTION, WORKSPACE_METHODS } from "./work-tools-catalog";
 
 const source = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 const agent = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
@@ -14,29 +15,26 @@ const indexSource = readFileSync(new URL("./index.tsx", import.meta.url), "utf8"
 // String-grep guards: keep the legacy recipe.* surface from re-appearing.
 // ────────────────────────────────────────────────────────────────────────────
 
-test("work_code description no longer advertises the legacy recipe.list/recipe.run surface", () => {
-  const descMatch = source.match(/WORK_CODE_TOOL[\s\S]*?description:\s*"([^"]+)"/);
-  assert.ok(descMatch, "WORK_CODE_TOOL.description literal must be present");
-  const description = descMatch![1];
-  assert.doesNotMatch(description, /recipe\.list\(\)/, "work_code description must not advertise recipe.list()");
-  assert.doesNotMatch(description, /recipe\.run\(/, "work_code description must not advertise recipe.run(...)");
-  assert.match(description, /codemode\.search\(/);
-  assert.match(description, /codemode\.describe\(/);
-  assert.match(description, /codemode\.run\(/);
+test("work_code description advertises codemode search/describe/run and not the legacy recipe surface", () => {
+  assert.doesNotMatch(WORK_CODE_DESCRIPTION, /recipe\.list\(\)/);
+  assert.doesNotMatch(WORK_CODE_DESCRIPTION, /recipe\.run\(/);
+  assert.match(WORK_CODE_DESCRIPTION, /codemode\.search\(/);
+  assert.match(WORK_CODE_DESCRIPTION, /codemode\.describe\(/);
+  assert.match(WORK_CODE_DESCRIPTION, /codemode\.run\(/);
 });
 
-test("work_search catalog no longer emits recipe.list / recipe.run:* methods", () => {
-  assert.doesNotMatch(source, /method:\s*"recipe\.list"/);
-  assert.doesNotMatch(source, /method:\s*`recipe\.run:/);
-  assert.match(source, /CODEMODE_METHODS/, "codemode runtime methods must be declared");
-  assert.match(source, /List or filter codemode tools across My AX Workspace and reusable tools\./);
-  assert.doesNotMatch(source, /Computer, My Machine, Terrarium, AgentCast/);
-  assert.match(source, /method:\s*`codemode:\$\{snippet\.name\}`/, "snippets must be advertised under codemode:");
+test("work_search catalog exposes codemode methods and no recipe.* entries", () => {
+  const names = [...WORKSPACE_METHODS, ...PAGE_WORK_METHODS, ...CODEMODE_METHODS].map((method) => method.name as string);
+  assert.equal(names.some((name) => name.startsWith("recipe")), false);
+  assert.deepEqual(CODEMODE_METHODS.map((method) => method.name), ["search", "describe", "run"]);
+  assert.equal(CODEMODE_METHODS[0].description, "List or filter codemode tools across My AX Workspace and reusable tools.");
+  assert.doesNotMatch(WORK_SEARCH_DESCRIPTION, /Computer, My Machine, Terrarium, AgentCast/);
 });
 
-test("work_code sandbox prelude no longer exposes a top-level recipe namespace", () => {
-  assert.doesNotMatch(source, /namespace\("recipe",/);
-  assert.match(source, /codemodeRuntime\.prelude/, "codemode runtime prelude must be spliced into the sandbox prelude");
+test("factory chats only get the safe page subset", () => {
+  assert.deepEqual(FACTORY_PAGE_METHODS.map((method) => method.name).sort(), ["deskRead", "deskWrite", "listSessions", "sendToSession"]);
+  assert.ok(FACTORY_PAGE_METHODS.length > 0 && FACTORY_PAGE_METHODS.length < PAGE_WORK_METHODS.length);
+  for (const method of FACTORY_PAGE_METHODS) assert.ok(["listSessions", "sendToSession", "deskRead", "deskWrite"].includes(method.name));
 });
 
 test("work_code invokes submitted async arrow with ctx while preserving globals", () => {

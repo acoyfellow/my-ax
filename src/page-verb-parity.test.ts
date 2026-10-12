@@ -13,7 +13,7 @@ function namesFrom(source: string, marker: string): string[] {
 test("the agent-facing page catalog matches the browser page verbs", async () => {
   const { PAGE_VERBS } = await import("./ui/page-registry");
   const browser = PAGE_VERBS.map((v) => v.name).sort();
-  const agent = namesFrom(readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8"), "const PAGE_WORK_METHODS");
+  const agent = namesFrom(readFileSync(new URL("./work-tools-catalog.ts", import.meta.url), "utf8"), "export const PAGE_WORK_METHODS");
   const missingForAgent = browser.filter((n) => !agent.includes(n));
   const phantom = agent.filter((n) => !browser.includes(n));
   assert.deepEqual(missingForAgent, [], `verbs the browser has but the agent cannot call: ${missingForAgent.join(", ")}`);
