@@ -1,0 +1,23 @@
+src/work-tools-catalog.ts
+  s_bddf4eb8848d16::t_7d952800e1817d 1-55
+src/work-tools-recipes.test.ts
+  s_bddf4eb8848d16::t_7dbac7ff49b469 6,18-23,26-31,34-37
+src/work-tools.ts
+  s_bddf4eb8848d16::t_1f4bf99c3eceb5 14,115,293
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e4844754d3333e31bdc586854a645bb0feb928a3",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
