@@ -45,7 +45,10 @@ function workspaceProvider(ctx: ToolContext) {
     run_code: async (input: any) => ctx.runCode(String(input?.code ?? ""), { language: input?.language === "typescript" ? "typescript" : "javascript", timeout: Number(input?.timeoutMs ?? CODE_MODE_EXECUTION_TIMEOUT_MS) }),
     preview_open: async (input: any) => ctx.tunnelGet(Number(input?.port)),
     preview_list: async () => ctx.tunnelList(),
-    observe: async (input: any) => ctx.observeTurns ? { turns: await ctx.observeTurns(String(input?.sessionId ?? ctx.sessionId), Number(input?.turns ?? 3)) } : { error: "observe is not available in this context" },
+    observe: async (input: any) => {
+      if (input?.recent && ctx.observeRecent) return { events: await ctx.observeRecent({ kind: input?.kind, sinceMinutes: input?.sinceMinutes, sessionId: input?.sessionId }) };
+      return ctx.observeTurns ? { turns: await ctx.observeTurns(String(input?.sessionId ?? ctx.sessionId), Number(input?.turns ?? 3)) } : { error: "observe is not available in this context" };
+    },
     preview_close: async (input: any) => { await ctx.tunnelDestroy(Number(input?.port)); return { closed: true, port: Number(input?.port) }; },
   };
 }

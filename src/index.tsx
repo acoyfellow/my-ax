@@ -22,6 +22,7 @@ import { deploymentVersionResponse } from "./deploy-version";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
+import { pruneObserveEvents } from "./observe-events";
 import { openPiChat, registerPiEngineRoutes } from "./pi-engine/routes";
 import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
 import { registerUploadRoutes } from "./routes/uploads";
@@ -728,5 +729,6 @@ export default {
   fetch: app.fetch,
   scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(scanDeadSessions(env));
+    ctx.waitUntil(pruneObserveEvents(env.DB).catch((error) => console.error("observe_prune_failed", { err: String(error) })));
   },
 };
