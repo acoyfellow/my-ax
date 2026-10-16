@@ -70,7 +70,18 @@ export function createScrollFollower(element: HTMLElement, onChange: (state: { f
     if (following) jump();
   };
 
-  const mutations = new MutationObserver(follow);
+  const countArrivals = (records: MutationRecord[]) => {
+    if (following) return;
+    const arrived = records.reduce((total, record) => total + [...record.addedNodes].filter((node) => node.parentNode === element && node.nodeType === Node.ELEMENT_NODE).length, 0);
+    if (arrived === 0) return;
+    unread += arrived;
+    publish();
+  };
+
+  const mutations = new MutationObserver((records) => {
+    countArrivals(records);
+    follow();
+  });
   const resizes = new ResizeObserver(follow);
 
   element.addEventListener("wheel", onWheel, { passive: true });
@@ -91,7 +102,6 @@ export function createScrollFollower(element: HTMLElement, onChange: (state: { f
     },
     noteArrival() {
       if (following) return;
-      unread += 1;
       publish();
     },
     dispose() {
