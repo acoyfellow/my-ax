@@ -1,0 +1,19 @@
+src/ui/Sessions.svelte
+  s_bddf4eb8848d16::t_1876e3b34afb4c 454-461,550
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "40745b7cdde5281c20b7e7fe95b01d7394a34085",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
