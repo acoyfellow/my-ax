@@ -3035,10 +3035,13 @@
             <div class="text-[11px] text-fg-mut">Sends as one message when the agent finishes. ↑ to edit.</div>
           </div>
         {/if}
+        {#if taskRunning && taskElapsedText}
+          <p data-task-timer class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-1.5 -mb-1 text-right text-[11px] font-mono text-brand select-none" aria-live="off">task {taskElapsedText}</p>
+        {/if}
         <form
           bind:this={formEl}
           onsubmit={onSubmit}
-          class="safe-area-composer relative w-full max-w-5xl mx-auto flex gap-2 items-end px-3 sm:px-6 lg:px-8 pt-2.5 sm:pt-3 pb-6"
+          class="safe-area-composer w-full max-w-5xl mx-auto flex gap-2 items-end px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3"
           autocomplete="off"
         >
           <button
@@ -3109,7 +3112,7 @@
                 onkeydown={onInputKeydown}
                 onpaste={onInputPaste}
                 rows={1}
-                placeholder="Message my ax"
+                placeholder={isMobileComposer() ? "Message my ax" : "Message my ax · Enter to send, Shift + Enter for new line"}
                 aria-describedby="composer-shortcut"
                 class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 aria-label="Message"
@@ -3200,10 +3203,7 @@
               </svg>
             {/if}
           </button>
-          {#if taskRunning && taskElapsedText}
-            <p data-task-timer class="absolute bottom-1 right-3 sm:right-6 lg:right-8 text-[11px] font-mono text-brand select-none" aria-live="off">task {taskElapsedText}</p>
-          {/if}
-          <p id="composer-shortcut" class="absolute bottom-1 left-3 sm:left-6 lg:left-8 text-[11px] text-fg-mut/70 select-none pointer-events-none">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
+          <p id="composer-shortcut" class="sr-only">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
         </form>
       </div>
     </div>
