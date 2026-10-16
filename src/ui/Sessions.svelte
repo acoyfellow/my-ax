@@ -451,6 +451,14 @@
     // Return focus to whatever opened us. chat.js still owns the hamburger.
     document.getElementById("sessions-button")?.focus();
   }
+  function dismissPanel() {
+    if (docked) {
+      dockOpen = false;
+      saveLayout();
+      return;
+    }
+    close();
+  }
   function toggle() {
     if (docked) {
       dockOpen = !dockOpen;
@@ -539,7 +547,7 @@
     <h2 class="text-sm font-semibold text-fg">Conversations</h2>
     <button
       type="button"
-      onclick={close}
+      onclick={dismissPanel}
       class="w-8 h-8 rounded-md flex items-center justify-center text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
       aria-label={docked ? "Hide conversations panel" : "Close sidebar"}
     >
