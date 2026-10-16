@@ -277,7 +277,8 @@
 }
 @keyframes session-resume-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .session-resume-spinner { animation-duration: 1.8s; }
+  .session-resume-spinner { animation: none; }
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
 /* Agent-thinking indicator (#agent-thinking).

@@ -25,6 +25,7 @@
   import { boundToSession, fillChronologicalTimestampsWithFlags } from "./transcript-merge";
   import { ownerVisibleTranscript } from "../compaction-summary";
   import { createReconnectingSocket } from "./reconnecting-socket";
+  import { createScrollFollower, type ScrollFollower } from "./scroll-follow";
   import { isTransientClientError } from "../transient-client-errors";
   import { createPendingSendQueue, RECONNECTING_SEND_ERROR } from "./pending-send";
   import { accessReauthenticationHref, responseRequiresAuthentication } from "./auth-recovery";
@@ -231,6 +232,8 @@
   let resumingExistingSession = $state(false);
   let thinkingVisible = $state(false);
   let scrollToBottomVisible = $state(false);
+  let unreadWhileAway = $state(0);
+  let scrollFollower: ScrollFollower | null = null;
   let pendingDecision = $state<{ id: string; question: string; href: string } | null>(null);
   let terminalOpen = $state(false);
 
@@ -239,6 +242,33 @@
   let composerText = $state("");
   let pendingAttachments = $state<Attachment[]>([]);
   const DEPLOY_REFRESH_DRAFT_KEY = "my-ax-deploy-refresh-draft";
+  const DRAFT_KEY_PREFIX = "my-ax-draft:";
+  const DRAFT_MAX_AGE_MS = 60 * 60 * 1000;
+
+  function draftKey(): string {
+    return `${DRAFT_KEY_PREFIX}${readTabSession() ?? "new"}`;
+  }
+
+  function saveDraft() {
+    try {
+      if (!composerText && pendingAttachments.length === 0) localStorage.removeItem(draftKey());
+      else localStorage.setItem(draftKey(), JSON.stringify({ at: Date.now(), text: composerText, attachments: pendingAttachments }));
+    } catch {}
+  }
+
+  function restoreDraft() {
+    try {
+      const raw = localStorage.getItem(draftKey());
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { at?: number; text?: string; attachments?: Attachment[] };
+      if (!draft.at || Date.now() - draft.at > DRAFT_MAX_AGE_MS) {
+        localStorage.removeItem(draftKey());
+        return;
+      }
+      if (!composerText && typeof draft.text === "string") composerText = draft.text;
+      if (!pendingAttachments.length && Array.isArray(draft.attachments)) pendingAttachments = draft.attachments;
+    } catch {}
+  }
   let deployRefreshPending = $state(false);
 
   function restoreDeployRefreshDraft() {
@@ -679,6 +709,7 @@
     if (sessionTurnLocksComposer(remoteTurn)) scheduleThinking();
   });
   const wsDown = $derived(wsState.conn !== "live");
+  const composerEmptyIdle = $derived(!composerText.trim() && pendingAttachments.length === 0 && !piBusy && !(composerLocked && wsState.status !== "done") && wsState.conn !== "offline");
   const sendStatus = $derived.by(() => {
     if (piBusy && !wsDown) return composerText.trim() || pendingAttachments.length ? "idle" : "running";
     if (wsDown && !composerLocked) return "offline";
@@ -754,19 +785,32 @@
 
   // ── Scroll helpers ─────────────────────────────────────────────────
   function isLogPinned() {
-    if (!logEl) return true;
-    return logEl.scrollHeight - logEl.clientHeight - logEl.scrollTop < 80;
+    return scrollFollower ? scrollFollower.following() : true;
   }
   function syncScrollToBottom() {
     scrollToBottomVisible = !isLogPinned();
   }
   function queueScrollToBottom() {
-    if (!logEl) return;
+    if (!logEl || !isLogPinned()) return;
     requestAnimationFrame(() => {
-      if (logEl) logEl.scrollTop = logEl.scrollHeight;
-      syncScrollToBottom();
+      if (logEl && isLogPinned()) logEl.scrollTop = logEl.scrollHeight;
     });
   }
+  function pinToLatest() {
+    scrollFollower?.pin();
+  }
+  $effect(() => {
+    if (!logEl) return;
+    const follower = createScrollFollower(logEl, ({ following, unread }) => {
+      scrollToBottomVisible = !following;
+      unreadWhileAway = unread;
+    });
+    scrollFollower = follower;
+    return () => {
+      follower.dispose();
+      if (scrollFollower === follower) scrollFollower = null;
+    };
+  });
   async function revealResumedHistoryAtBottom() {
     // Render history behind the loading veil, jump to the latest message with
     // smooth scrolling explicitly disabled, then reveal the conversation.
@@ -976,6 +1020,7 @@
     const wasPinned = isLogPinned();
     messages = [...messages, m];
     if (wasPinned) queueScrollToBottom();
+    else if (role === "assistant") scrollFollower?.noteArrival();
     return m;
   }
 
@@ -2117,9 +2162,8 @@
 
   function queueSendUntilOpen(text: string) {
     if (pendingSends.size() > 0) return;
-    pendingSends.enqueue(makeClientMsgId(), text, () => {
-      pushError(RECONNECTING_SEND_ERROR, { alreadyReported: true });
-    });
+    pushError(RECONNECTING_SEND_ERROR, { alreadyReported: true });
+    pendingSends.enqueue(makeClientMsgId(), text, () => undefined);
   }
 
   function flushPendingSends() {
@@ -2181,7 +2225,7 @@
         sessionId: currentSessionId(),
       },
     ];
-    queueScrollToBottom();
+    pinToLatest();
 
     if (piTranscript) sendPiMessage(text, outgoingAttachments, clientMsgId);
     else sendThinkMessage(text, outgoingAttachments, clientMsgId);
@@ -2364,6 +2408,12 @@
     }
   });
 
+  $effect(() => {
+    void composerText;
+    void pendingAttachments;
+    saveDraft();
+  });
+
   // A detected deployment waits for durable turn/voice work to become idle.
   $effect(() => {
     void wsState.status;
@@ -2391,6 +2441,11 @@
     // required by browser permission and audio playback policies.
     localStorage.setItem("my-ax-voice-mode", "0");
     restoreDeployRefreshDraft();
+    restoreDraft();
+    void tick().then(() => {
+      autoGrow();
+      if (!voiceEnabled && matchMedia("(pointer: fine)").matches) inputEl?.focus({ preventScroll: true });
+    });
     void loadStarters();
     bootstrap();
     connectionWatchdogId = setInterval(() => {
@@ -2699,7 +2754,7 @@
       {/if}
       <main
         bind:this={logEl}
-        class="relative flex-1 min-w-0 overflow-x-hidden overflow-y-auto overscroll-x-none touch-pan-y px-3 sm:px-6 lg:px-8 py-4 sm:py-6 scroll-smooth"
+        class="relative flex-1 min-w-0 overflow-x-hidden overflow-y-auto overscroll-x-none touch-pan-y px-3 sm:px-6 lg:px-8 py-4 sm:py-6"
         tabindex={-1}
         aria-live="polite"
         aria-label="Conversation"
@@ -2712,8 +2767,9 @@
               <img src="/static/brand/wordmark.svg" alt="my · ax" class="block dark:hidden h-[38px] sm:h-[56px] w-auto" />
               <img src="/static/brand/wordmark-dark.svg" alt="my · ax" class="hidden dark:block h-[38px] sm:h-[56px] w-auto" />
             </h1>
+            <p class="mt-4 text-base text-fg">What should we get done?</p>
             <div class="mt-6 sm:mt-8 grid sm:grid-cols-2 gap-2 text-left">
-              {#each prompts as p (p.title)}
+              {#each prompts.slice(0, 5) as p (p.title)}
                 <button type="button" class="prompt-card" onclick={() => pickPrompt(p.prompt)}>
                   <span class="prompt-card__title">{p.title}</span>
                   <span class="prompt-card__hint">{p.hint}</span>
@@ -2890,15 +2946,13 @@
       {#if scrollToBottomVisible}
         <button
           type="button"
-          onclick={() => {
-            if (logEl) logEl.scrollTo({ top: logEl.scrollHeight, behavior: "smooth" });
-            syncScrollToBottom();
-          }}
-          class="fixed z-20 right-5 bottom-28 sm:bottom-24 rounded-full ring ring-line bg-bg/95 shadow-raise w-11 h-11 text-fg text-xl hover:ring-brand/60"
-          aria-label="Scroll to latest message"
-          title="Scroll to bottom"
+          onclick={pinToLatest}
+          class="fixed z-20 right-5 bottom-28 sm:bottom-24 rounded-full ring ring-line bg-bg/95 shadow-raise min-w-11 h-11 px-3 text-fg text-sm hover:ring-brand/60 flex items-center gap-1"
+          aria-label={unreadWhileAway > 0 ? `Scroll to latest message, ${unreadWhileAway} unread` : "Scroll to latest message"}
+          title="Scroll to latest"
         >
-          ↓
+          <span aria-hidden="true" class="text-xl leading-none">↓</span>
+          {#if unreadWhileAway > 0}<span data-unread-count>{unreadWhileAway}</span>{/if}
         </button>
       {/if}
 
@@ -2990,7 +3044,8 @@
                 onkeydown={onInputKeydown}
                 onpaste={onInputPaste}
                 rows={1}
-                placeholder="…"
+                placeholder="Message my ax"
+                aria-describedby="composer-shortcut"
                 class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 aria-label="Message"
               ></textarea>
@@ -3060,14 +3115,14 @@
             type="submit"
             onclick={wsState.conn === "offline" ? retryConnection : onSendClick}
             data-status={sendStatus}
-            disabled={wsState.conn === "reconnecting" || (sendStatus === "offline" && wsState.conn !== "offline")}
+            disabled={composerEmptyIdle || wsState.conn === "reconnecting" || (sendStatus === "offline" && wsState.conn !== "offline")}
             class="flex-none flex items-center justify-center rounded-lg w-11 h-11 transition-all duration-150 border border-transparent
               data-[status=idle]:bg-brand/10 data-[status=idle]:text-brand data-[status=idle]:border-brand/25 data-[status=idle]:hover:bg-brand/20 data-[status=idle]:hover:border-brand/40 data-[status=idle]:active:bg-brand/25
               data-[status=thinking]:bg-brand data-[status=thinking]:text-white data-[status=thinking]:hover:bg-brand/90
               data-[status=running]:bg-brand data-[status=running]:text-white data-[status=running]:hover:bg-brand/90
               data-[status=offline]:bg-surface-1 data-[status=offline]:text-fg-mut/50 data-[status=offline]:cursor-not-allowed"
-            aria-label={wsState.conn === "offline" ? "Offline — tap to retry" : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send message"}
-            title={sendStatus === "offline" ? (wsState.conn === "reconnecting" ? "Reconnecting…" : "Offline — tap to retry") : sendStatus === "thinking" || sendStatus === "running" ? "Stop the agent" : "Send (⌘↵)"}
+            aria-label={wsState.conn === "offline" ? "Offline — tap to retry" : sendStatus === "thinking" || sendStatus === "running" ? "Cancel message" : composerEmptyIdle ? "Message requires text" : "Send message"}
+            title={sendStatus === "offline" ? (wsState.conn === "reconnecting" ? "Reconnecting…" : "Offline — tap to retry") : sendStatus === "thinking" || sendStatus === "running" ? "Cancel message (Esc)" : composerEmptyIdle ? "Message requires text" : "Send (Enter)"}
           >
             {#if sendStatus === "idle" || sendStatus === "offline"}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3081,6 +3136,7 @@
             {/if}
           </button>
         </form>
+        <p id="composer-shortcut" class="mt-1 px-1 text-[11px] text-fg-mut/70 select-none">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
       </div>
     </div>
 
