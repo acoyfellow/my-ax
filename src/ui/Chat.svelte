@@ -232,6 +232,8 @@
   let resumingExistingSession = $state(false);
   let thinkingVisible = $state(false);
   let scrollToBottomVisible = $state(false);
+  let taskStartedAt = $state<number | null>(null);
+  let taskNow = $state(Date.now());
   let unreadWhileAway = $state(0);
   let scrollFollower: ScrollFollower | null = null;
   let pendingDecision = $state<{ id: string; question: string; href: string } | null>(null);
@@ -245,11 +247,15 @@
   const DRAFT_KEY_PREFIX = "my-ax-draft:";
   const DRAFT_MAX_AGE_MS = 60 * 60 * 1000;
 
+  let draftRestored = false;
+
   function draftKey(): string {
-    return `${DRAFT_KEY_PREFIX}${readTabSession() ?? "new"}`;
+    const fromUrl = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("session");
+    return `${DRAFT_KEY_PREFIX}${fromUrl || readTabSession() || "new"}`;
   }
 
   function saveDraft() {
+    if (!draftRestored) return;
     try {
       if (!composerText && pendingAttachments.length === 0) localStorage.removeItem(draftKey());
       else localStorage.setItem(draftKey(), JSON.stringify({ at: Date.now(), text: composerText, attachments: pendingAttachments }));
@@ -267,7 +273,9 @@
       }
       if (!composerText && typeof draft.text === "string") composerText = draft.text;
       if (!pendingAttachments.length && Array.isArray(draft.attachments)) pendingAttachments = draft.attachments;
-    } catch {}
+    } catch {} finally {
+      draftRestored = true;
+    }
   }
   let deployRefreshPending = $state(false);
 
@@ -951,6 +959,21 @@
     const day = d.getDate();
     return `${month} ${day} · ${time}`;
   }
+  function editUserMessage(message: MessageView) {
+    composerText = message.content;
+    void tick().then(() => {
+      autoGrow();
+      inputEl?.focus();
+      inputEl?.setSelectionRange(composerText.length, composerText.length);
+    });
+  }
+
+  function retryUserMessage(message: MessageView) {
+    if (agentIsBusy() || !message.content.trim()) return;
+    composerText = message.content;
+    void tick().then(() => formEl?.requestSubmit());
+  }
+
   async function forkFromMessage(message: MessageView) {
     const sessionId = readTabSession();
     if (!sessionId || message.pending || message.streaming || forkingMessageId) return;
@@ -1219,6 +1242,21 @@
       flushingQueue = false;
     });
   }
+  const piToolStarts = new Map<string, number>();
+  const piToolEnds = new Map<string, number>();
+  function piToolStart(id: string): number {
+    const known = piToolStarts.get(id);
+    if (known !== undefined) return known;
+    const now = Date.now();
+    piToolStarts.set(id, now);
+    return now;
+  }
+  function piToolElapsed(id: string, state: string): string {
+    const started = piToolStart(id);
+    if (state === "pending") return formatElapsed(Date.now() - started);
+    if (!piToolEnds.has(id)) piToolEnds.set(id, Date.now());
+    return formatElapsed(piToolEnds.get(id)! - started);
+  }
   function renderPiTranscript() {
     if (!piTranscript) return;
     const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();
@@ -1231,7 +1269,7 @@
       content: message.content,
       parts: message.parts.map((part) => part.kind === "text"
         ? { kind: "text" as const, text: part.text, rendered: message.streaming ? undefined : renderMarkdown(part.text) }
-        : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: Date.now(), elapsedText: "", result: part.tool.result, isError: part.tool.isError } }),
+        : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: piToolStart(part.tool.id), elapsedText: piToolElapsed(part.tool.id, part.tool.state), result: part.tool.result, isError: part.tool.isError } }),
       reasoning: message.reasoning,
       timestamp: message.timestamp,
       endedAt: message.endedAt,
@@ -1245,7 +1283,7 @@
     bootstrapPending = false;
     resumingExistingSession = false;
     sessionResumeVisible = false;
-    if (messages.length) onboardingHidden = true;
+    onboardingHidden = messages.length > 0;
     if (followLatest) queueScrollToBottom();
     else syncScrollToBottom();
   }
@@ -1514,6 +1552,7 @@
     if (previousSessionId && previousSessionId !== session.sessionId) void stopVoiceMode();
     writeTabSession(session.sessionId);
     setActiveSession(session.sessionId, session.name);
+    window.dispatchEvent(new Event("my-ax:sessions-refresh"));
     return session.sessionId;
   }
 
@@ -2378,7 +2417,7 @@
       // Only tick the actively-streaming message. A pending tool on a
       // non-streaming message is stale (history/orphan) and must not spin a
       // forever-climbing RUNNING timer.
-      if (!m.streaming) return m;
+      if (!m.streaming && !(piTranscript && piBusy)) return m;
       const pending = m.parts.some((p) => p.kind === "tool" && p.tool.state === "pending");
       if (!pending) return m;
       anyPending = true;
@@ -2412,6 +2451,24 @@
     void composerText;
     void pendingAttachments;
     saveDraft();
+  });
+
+  const taskRunning = $derived(sendStatus === "thinking" || sendStatus === "running");
+  const taskElapsedText = $derived(taskStartedAt === null ? "" : formatTurnDuration(taskNow - taskStartedAt));
+  const IDLE_TITLE = "My Agent Experience";
+  $effect(() => {
+    if (!taskRunning) {
+      taskStartedAt = null;
+      document.title = IDLE_TITLE;
+      return;
+    }
+    if (taskStartedAt === null) taskStartedAt = Date.now();
+    taskNow = Date.now();
+    const ticker = setInterval(() => { taskNow = Date.now(); }, 1000);
+    return () => clearInterval(ticker);
+  });
+  $effect(() => {
+    if (taskRunning && taskElapsedText) document.title = `Working · task ${taskElapsedText} · my ax`;
   });
 
   // A detected deployment waits for durable turn/voice work to become idle.
@@ -2806,7 +2863,15 @@
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     {/if}
                   </button>
-                  <button type="button" onclick={() => forkFromMessage(m)} disabled={forkingMessageId !== null} class="inline-flex h-5 w-5 items-center justify-center rounded text-fg-mut/60 hover:bg-surface-2 hover:text-fg disabled:cursor-wait disabled:opacity-70" aria-label={forkingMessageId === m.id ? "Forking conversation" : "Fork conversation from this message"} title={forkingMessageId === m.id ? "Forking…" : "Fork from here"} aria-busy={forkingMessageId === m.id}>
+                  {#if m.role === "user"}
+                    <button type="button" onclick={() => retryUserMessage(m)} disabled={agentIsBusy()} class="inline-flex h-5 w-5 items-center justify-center rounded text-fg-mut/60 hover:bg-surface-2 hover:text-fg disabled:opacity-40" aria-label={agentIsBusy() ? "Retry is available when the agent is idle" : "Retry this message"} title="Retry">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+                    </button>
+                    <button type="button" onclick={() => editUserMessage(m)} class="inline-flex h-5 w-5 items-center justify-center rounded text-fg-mut/60 hover:bg-surface-2 hover:text-fg" aria-label="Edit this message" title="Edit">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                    </button>
+                  {/if}
+                  <button type="button" onclick={() => forkFromMessage(m)} disabled={forkingMessageId !== null} class="inline-flex h-5 w-5 items-center justify-center rounded text-fg-mut/60 hover:bg-surface-2 hover:text-fg disabled:cursor-wait disabled:opacity-70" aria-label={forkingMessageId === m.id ? "Forking conversation" : "Branch off: fork conversation from this message"} title={forkingMessageId === m.id ? "Forking…" : "Branch off from here"} aria-busy={forkingMessageId === m.id}>
                     {#if forkingMessageId === m.id}
                       <svg class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
                     {:else}
@@ -2973,7 +3038,7 @@
         <form
           bind:this={formEl}
           onsubmit={onSubmit}
-          class="safe-area-composer w-full max-w-5xl mx-auto flex gap-2 items-end px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3"
+          class="safe-area-composer relative w-full max-w-5xl mx-auto flex gap-2 items-end px-3 sm:px-6 lg:px-8 pt-2.5 sm:pt-3 pb-6"
           autocomplete="off"
         >
           <button
@@ -3135,8 +3200,11 @@
               </svg>
             {/if}
           </button>
+          {#if taskRunning && taskElapsedText}
+            <p data-task-timer class="absolute bottom-1 right-3 sm:right-6 lg:right-8 text-[11px] font-mono text-brand select-none" aria-live="off">task {taskElapsedText}</p>
+          {/if}
+          <p id="composer-shortcut" class="absolute bottom-1 left-3 sm:left-6 lg:left-8 text-[11px] text-fg-mut/70 select-none pointer-events-none">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
         </form>
-        <p id="composer-shortcut" class="mt-1 px-1 text-[11px] text-fg-mut/70 select-none">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
       </div>
     </div>
 

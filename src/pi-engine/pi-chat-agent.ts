@@ -104,11 +104,25 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private eventStream: AgentEventStream | null = null;
 
+  private publishedRunning: boolean | null = null;
+
+  private async publishRunStatus(running: boolean): Promise<void> {
+    if (this.publishedRunning === running) return;
+    this.publishedRunning = running;
+    const ownerEmail = this.state?.ownerEmail;
+    const chatId = this.state?.chatId;
+    if (!ownerEmail || !chatId) return;
+    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status IN ('active', 'running')")
+      .bind(running ? "running" : "active", chatId, ownerEmail.toLowerCase()).run()
+      .catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
+  }
+
   private async ensureEventStream(): Promise<void> {
     if (this.eventStream) return;
     const stream = await this.harness.session().events();
     this.eventStream = stream;
     stream.start(async (events: readonly AgentEvent[]) => {
+      this.ctx.waitUntil(this.publishRunStatus(stream.snapshot.run !== undefined));
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events, entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));

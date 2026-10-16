@@ -79,7 +79,7 @@
 
 <div class="h-full flex flex-col">
   <AppShell {identityEmail} />
-  <div class="flex-1 min-h-0 flex flex-col">
+  <div class="flex-1 min-h-0 flex flex-col" style="padding-left: var(--sessions-dock-width, 0px)">
     <Chat />
   </div>
 </div>

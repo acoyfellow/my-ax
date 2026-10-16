@@ -29,7 +29,10 @@ export function createScrollFollower(element: HTMLElement, onChange: (state: { f
     programmatic = true;
     element.scrollTop = element.scrollHeight;
     requestAnimationFrame(() => {
-      programmatic = false;
+      if (following) element.scrollTop = element.scrollHeight;
+      requestAnimationFrame(() => {
+        programmatic = false;
+      });
     });
   };
 

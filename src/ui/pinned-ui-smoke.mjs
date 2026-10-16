@@ -9,7 +9,7 @@ const s = readFileSync(new URL("./Sessions.svelte", import.meta.url), "utf8");
 function has(needle, label) { if (!s.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`); }
 
 // Grouping
-has('splitPinned(sessions).pinned', "pinned group derived from the shared session list");
+has('splitPinned(visibleSessions).pinned', "pinned group derived from the searched session list");
 has('>Pinned</div>', "a visible Pinned group header");
 has('data-pinned={row.pinned === 1 ? "1" : "0"}', "rows expose their pinned state for styling/tests");
 // Pin/unpin action -> server

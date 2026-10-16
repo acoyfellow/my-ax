@@ -18,6 +18,8 @@
   import { onMount } from "svelte";
   import { captureTitleEpoch, readTabSession, writeTabSession, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
+  import { groupByTime, matchesTitle, runStateOf } from "./session-groups";
+  import { DEFAULT_LAYOUT, LAYOUT_STORAGE_KEY, PANEL_DEFAULT_WIDTH, canDock, clampPanelWidth, parseLayout } from "./side-panel-layout";
 
   type SessionRow = {
     id: string;
@@ -33,6 +35,59 @@
   const PAGE_SIZE = 50;
 
   let open = $state(false);
+  let viewportWidth = $state(typeof window === "undefined" ? 1280 : window.innerWidth);
+  let docked = $derived(canDock(viewportWidth));
+  let dockOpen = $state(DEFAULT_LAYOUT.open);
+  let panelWidth = $state(DEFAULT_LAYOUT.width);
+  let shown = $derived(docked ? dockOpen : open);
+  let resizing = false;
+
+  function saveLayout() {
+    try { localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({ open: dockOpen, width: panelWidth })); } catch {}
+  }
+
+  function publishDock() {
+    document.documentElement.style.setProperty("--sessions-dock-width", docked && dockOpen ? `${panelWidth}px` : "0px");
+  }
+
+  $effect(() => {
+    void docked;
+    void dockOpen;
+    void panelWidth;
+    publishDock();
+  });
+
+  function startResize(event: PointerEvent) {
+    if (!docked) return;
+    event.preventDefault();
+    resizing = true;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  function moveResize(event: PointerEvent) {
+    if (!resizing) return;
+    panelWidth = clampPanelWidth(event.clientX, window.innerWidth);
+  }
+
+  function endResize() {
+    if (!resizing) return;
+    resizing = false;
+    saveLayout();
+  }
+
+  function resetWidth() {
+    panelWidth = clampPanelWidth(PANEL_DEFAULT_WIDTH, window.innerWidth);
+    saveLayout();
+  }
+
+  function resizeByKey(event: KeyboardEvent) {
+    const step = event.shiftKey ? 40 : 10;
+    if (event.key === "ArrowLeft") panelWidth = clampPanelWidth(panelWidth - step, window.innerWidth);
+    else if (event.key === "ArrowRight") panelWidth = clampPanelWidth(panelWidth + step, window.innerWidth);
+    else return;
+    event.preventDefault();
+    saveLayout();
+  }
   let sessions = $state<SessionRow[]>([]);
   let cursor = $state<string | null>(null);
   let loading = $state(true);
@@ -41,8 +96,11 @@
   let currentId = $derived(sessionState.id);
   // Pinned/unpinned split (server order is authoritative; splitPinned is a
   // defensive re-sort). See ./pinned-reorder.ts.
-  let pinnedRows = $derived(splitPinned(sessions).pinned);
-  let unpinnedRows = $derived(splitPinned(sessions).unpinned);
+  let searchQuery = $state("");
+  let visibleSessions = $derived(sessions.filter((row) => matchesTitle(row.name || "Untitled", searchQuery)));
+  let pinnedRows = $derived(splitPinned(visibleSessions).pinned);
+  let unpinnedRows = $derived(splitPinned(visibleSessions).unpinned);
+  let unpinnedGroups = $derived(groupByTime(unpinnedRows, (row) => parseServerTime(row.updated_at), new Date()));
   let pinAnnounce = $state("");
 
   let scrollEl = $state<HTMLDivElement | undefined>(undefined);
@@ -94,7 +152,7 @@
   }
 
   function sessionSignalLabel(signal: SessionSignal): string {
-    if (signal === "running") return "Agent is running";
+    if (signal === "running") return "Response in progress";
     if (signal === "reconnecting") return "Reconnecting";
     if (signal === "error") return "Last turn failed";
     if (signal === "offline") return "Disconnected";
@@ -104,6 +162,17 @@
   // ── data ──────────────────────────────────────────────────────────
   function uniqueSessions(rows: SessionRow[]): SessionRow[] {
     return [...new Map(rows.map((row) => [row.id, row])).values()];
+  }
+
+  async function refreshQuietly() {
+    try {
+      const r = await fetch(`/api/sessions?limit=${PAGE_SIZE}`, { credentials: "include" });
+      if (!r.ok) return;
+      const d = await r.json();
+      const fresh = uniqueSessions(d?.result?.sessions ?? []);
+      const freshIds = new Set(fresh.map((row) => row.id));
+      sessions = [...fresh, ...sessions.filter((row) => !freshIds.has(row.id))];
+    } catch {}
   }
 
   async function refresh() {
@@ -361,6 +430,12 @@
 
   // ── open/close ────────────────────────────────────────────────────
   function openSidebar() {
+    if (docked) {
+      dockOpen = true;
+      saveLayout();
+      refresh();
+      return;
+    }
     open = true;
     // chat.js checks this attribute before letting global Esc trigger
     // the chat-cancel handler.
@@ -370,33 +445,57 @@
     setTimeout(scrollActiveIntoView, 240);
   }
   function close() {
+    if (docked) return;
     open = false;
     document.documentElement.removeAttribute("data-svelte-sessions-open");
     // Return focus to whatever opened us. chat.js still owns the hamburger.
     document.getElementById("sessions-button")?.focus();
   }
   function toggle() {
+    if (docked) {
+      dockOpen = !dockOpen;
+      saveLayout();
+      if (dockOpen) refresh();
+      return;
+    }
     if (open) close();
     else openSidebar();
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && open) close();
+    if (e.key === "Escape" && open && !docked) close();
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      toggle();
+    }
+  }
+
+  function onViewportResize() {
+    viewportWidth = window.innerWidth;
+    if (docked) panelWidth = clampPanelWidth(panelWidth, viewportWidth);
   }
 
   onMount(() => {
+    const saved = parseLayout(localStorage.getItem(LAYOUT_STORAGE_KEY));
+    dockOpen = saved.open;
+    panelWidth = clampPanelWidth(saved.width, window.innerWidth);
+    viewportWidth = window.innerWidth;
+    window.addEventListener("resize", onViewportResize, { passive: true });
     // Eager-fetch so opening the drawer reveals an already-rendered list.
     refresh();
     window.addEventListener("my-ax:sessions-open", openSidebar);
     window.addEventListener("my-ax:sessions-close", close);
     window.addEventListener("my-ax:sessions-toggle", toggle);
     window.addEventListener("my-ax:sessions-refresh", refresh);
+    const statusPoll = setInterval(() => { if (shown && document.visibilityState === "visible") void refreshQuietly(); }, 4000);
     document.addEventListener("keydown", handleKeydown);
     return () => {
       window.removeEventListener("my-ax:sessions-open", openSidebar);
       window.removeEventListener("my-ax:sessions-close", close);
       window.removeEventListener("my-ax:sessions-toggle", toggle);
       window.removeEventListener("my-ax:sessions-refresh", refresh);
+      clearInterval(statusPoll);
+      window.removeEventListener("resize", onViewportResize);
       document.removeEventListener("keydown", handleKeydown);
     };
   });
@@ -405,27 +504,34 @@
 <!-- Backdrop -->
 <div
   class="fixed inset-0 z-40 bg-black/60 transition-opacity duration-150"
-  class:opacity-100={open}
-  class:opacity-0={!open}
-  class:pointer-events-auto={open}
-  class:pointer-events-none={!open}
+  class:opacity-100={open && !docked}
+  class:opacity-0={!open || docked}
+  class:pointer-events-auto={open && !docked}
+  class:pointer-events-none={!open || docked}
   aria-hidden="true"
   onclick={close}
 ></div>
 
 <!-- Drawer -->
 <aside
-  role="dialog"
-  aria-modal="true"
+  role={docked ? "complementary" : "dialog"}
+  aria-modal={docked ? undefined : "true"}
   aria-label="Conversations"
+  id="sessions-panel"
+  data-docked={docked ? "1" : "0"}
+  data-open={shown ? "1" : "0"}
   tabindex={-1}
-  class="fixed z-50 top-0 bottom-0 left-0 w-[88vw] max-w-[360px] md:w-80 bg-bg-alt border-r border-line shadow-2xl transition-all duration-200 flex flex-col"
-  class:translate-x-0={open}
-  class:-translate-x-full={!open}
-  class:opacity-100={open}
-  class:opacity-0={!open}
-  class:pointer-events-auto={open}
-  class:pointer-events-none={!open}
+  style={docked ? `width:${panelWidth}px` : undefined}
+  class={docked
+    ? "fixed z-30 top-[52px] bottom-0 left-0 bg-bg-alt border-r border-line flex flex-col"
+    : "fixed z-50 top-0 bottom-0 left-0 w-[88vw] max-w-[360px] bg-bg-alt border-r border-line shadow-2xl transition-all duration-200 flex flex-col"}
+  class:hidden={docked && !dockOpen}
+  class:translate-x-0={shown}
+  class:-translate-x-full={!shown}
+  class:opacity-100={shown}
+  class:opacity-0={!shown}
+  class:pointer-events-auto={shown}
+  class:pointer-events-none={!shown}
 >
   <header
     class="safe-area-appbar flex-none flex items-center justify-between px-4 py-3 border-b border-line min-h-[48px]"
@@ -435,7 +541,7 @@
       type="button"
       onclick={close}
       class="w-8 h-8 rounded-md flex items-center justify-center text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
-      aria-label="Close sidebar"
+      aria-label={docked ? "Hide conversations panel" : "Close sidebar"}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="18" y1="6" x2="6" y2="18" />
@@ -458,6 +564,13 @@
       </svg>
       <span>New conversation</span>
     </button>
+    <input
+      type="search"
+      bind:value={searchQuery}
+      placeholder="Search conversations"
+      aria-label="Search conversations"
+      class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg placeholder:text-fg-mut/70 focus:outline-none focus:border-brand/60"
+    />
   </div>
 
   <div
@@ -508,6 +621,7 @@
           ></span>
           <div
             class="session-row__main"
+            data-run-state={runStateOf(signal)}
             tabindex="0"
             role="button"
             aria-label={`Switch to ${title}`}
@@ -598,13 +712,18 @@
             {@render sessionRowItem(row, true, i, pinnedRows.length)}
           {/each}
         </ul>
-        {#if unpinnedRows.length > 0}<div class="session-group-header" aria-hidden="true">Recent</div>{/if}
       {/if}
-      <ul class="flex flex-col gap-0.5" aria-live="polite">
-        {#each unpinnedRows as row (row.id)}
-          {@render sessionRowItem(row, false, 0, 0)}
-        {/each}
-      </ul>
+      {#each unpinnedGroups as bucket (bucket.group)}
+        <h3 class="session-group-header">{bucket.group}</h3>
+        <ul class="flex flex-col gap-0.5" aria-label={`${bucket.group} conversations`}>
+          {#each bucket.rows as row (row.id)}
+            {@render sessionRowItem(row, false, 0, 0)}
+          {/each}
+        </ul>
+      {/each}
+      {#if visibleSessions.length === 0}
+        <p class="px-3 py-4 text-center text-xs text-fg-mut">No conversation matches “{searchQuery}”.</p>
+      {/if}
       {#if cursor}
         <div class="px-2 pt-2">
           <button
@@ -619,6 +738,24 @@
       {/if}
     {/if}
   </div>
+  {#if docked}
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize conversations panel"
+      aria-valuenow={panelWidth}
+      tabindex="0"
+      data-resize-handle
+      title="Drag to resize, double-click to reset"
+      class="absolute top-0 bottom-0 -right-1 w-2 cursor-col-resize hover:bg-brand/30 focus:bg-brand/30 focus:outline-none"
+      onpointerdown={startResize}
+      onpointermove={moveResize}
+      onpointerup={endResize}
+      onpointercancel={endResize}
+      ondblclick={resetWidth}
+      onkeydown={resizeByKey}
+    ></div>
+  {/if}
 </aside>
 
 <style>
