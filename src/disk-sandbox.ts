@@ -33,7 +33,7 @@ export class DiskSandbox extends Sandbox {
       const image = managedImage(container);
       if (snapshotId && image) {
         ctx.storage.kv.put(RESTORED_FROM_KEY, snapshotId);
-        return start({ ...rest, instance: computerSize(env), containerSnapshot: { id: snapshotId } } as StartOptions);
+        return start({ ...rest, instance: computerSize(env), containerSnapshot: { id: snapshotId } } as unknown as StartOptions);
       }
       ctx.storage.kv.delete(RESTORED_FROM_KEY);
       return start(image ? ({ ...rest, instance: computerSize(env), image } as StartOptions) : options);
