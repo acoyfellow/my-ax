@@ -93,7 +93,8 @@
   "containers": [
     {
       "class_name": "Sandbox",
-      "image": "./Dockerfile",
+      "scheduling_policy": "durable_object",
+      "images": { "computer": { "dockerfile": "./Dockerfile" } },
       "name": "my-ax-sandbox",
       "max_instances": 50,
       // Conservative public default for personal deployments. Private wrappers
