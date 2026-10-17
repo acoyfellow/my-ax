@@ -70,7 +70,7 @@ export { VoiceThinkAgent } from "./voice-think-agent";
 export { UserAgent, DeskHub } from "./user-agent";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
-export { Sandbox } from "@cloudflare/sandbox";
+export { DiskSandbox as Sandbox } from "./disk-sandbox";
 export { Sandbox as NamedComputer } from "@cloudflare/sandbox";
 export { ComputerWorkspace } from "./computer-workspace";
 export { PiChatAgent } from "./pi-engine/pi-chat-agent";

@@ -4,7 +4,8 @@ import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
 import { parseForkPoint } from "./fork";
-import { listWorkspaceSnapshots } from "../workspace";
+import { copyWorkspaceDisk, listWorkspaceSnapshots } from "../workspace";
+import type { AccessIdentity } from "../auth";
 
 export const PI_CHAT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{7,62}$/;
 
@@ -45,6 +46,7 @@ export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceI
     const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, forkId));
     await target.bind({ email: owner }, forkId);
     const messageCount = await target.seedFromFork(entries);
+    await copyWorkspaceDisk(env, { email: owner } as AccessIdentity, { kind: "chat", chatId: sourceId }, { kind: "chat", chatId: forkId }).catch((error: unknown) => console.error("pi_fork_disk_copy_failed", { err: String(error) }));
     return { sessionId: forkId, name, messageCount };
   } catch (error) {
     await env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(forkId, owner).run().catch(() => undefined);

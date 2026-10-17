@@ -162,6 +162,25 @@ export async function snapshotUserWorkspace(
   return outcome.backup;
 }
 
+type DiskSandboxStub = { saveDisk(name: string): Promise<{ id: string; size: number } | null>; bootFrom(snapshotId: string): Promise<void>; bootSnapshot(): Promise<string | null> };
+
+function diskStub(env: Env, identity: AccessIdentity, scope: WorkspaceScope): DiskSandboxStub {
+  return handle(env, identity, scope) as unknown as DiskSandboxStub;
+}
+
+export async function saveWorkspaceDisk(env: Env, identity: AccessIdentity, scope: WorkspaceScope, name: string): Promise<{ id: string; size: number } | null> {
+  const saved = await diskStub(env, identity, scope).saveDisk(`my-ax-${name}-${Date.now()}`);
+  if (saved) await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "ok", message: `${saved.id} ${saved.size} bytes` }).catch(() => undefined);
+  return saved;
+}
+
+export async function copyWorkspaceDisk(env: Env, identity: AccessIdentity, from: WorkspaceScope, to: WorkspaceScope): Promise<string | null> {
+  const saved = await saveWorkspaceDisk(env, identity, from, "fork").catch(() => null);
+  const snapshotId = saved?.id ?? await diskStub(env, identity, from).bootSnapshot();
+  if (snapshotId) await diskStub(env, identity, to).bootFrom(snapshotId);
+  return snapshotId;
+}
+
 export async function snapshotWorkspace(
   env: Env,
   identity: AccessIdentity,

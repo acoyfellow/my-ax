@@ -27,7 +27,7 @@ import { buildConversationSearchQuery } from "../conversation-search";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
-import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "../workspace";
+import { getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
@@ -496,6 +496,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async recycleWorkspace(): Promise<{ snapshot: string; destroyed: boolean }> {
     const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };
+    await saveWorkspaceDisk(this.env, identity, scope, "recycle");
     const outcome = await snapshotWorkspace(this.env, identity, "recycle", { scope });
     if (!outcome.published) throw new Error(`snapshot not published: ${outcome.reason}`);
     const { sandbox } = await getUserWorkspace(this.env, identity, { scope });
@@ -507,6 +508,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async snapshotWorkspaceAfterTurn(): Promise<void> {
     const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };
+    await saveWorkspaceDisk(this.env, identity, scope, "turn").catch((error: unknown) => console.error("pi_disk_snapshot_after_turn_failed", { chatId: scope.chatId, err: String(error) }));
     const outcome = await snapshotWorkspace(this.env, identity, "turn", { scope, respectCooldown: true }).catch((error: unknown) => {
       console.error("pi_workspace_snapshot_after_turn_failed", { chatId: scope.chatId, err: String(error) });
       return null;
