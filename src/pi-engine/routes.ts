@@ -4,6 +4,7 @@ import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
 import { parseForkPoint } from "./fork";
+import { listWorkspaceSnapshots } from "../workspace";
 
 export const PI_CHAT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{7,62}$/;
 
@@ -124,6 +125,14 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     } catch (error) {
       return c.json({ ok: false, error: { code: "RECYCLE_FAILED", message: error instanceof Error ? error.message : String(error) } }, 502);
     }
+  });
+
+  app.get("/api/pi/chats/:id/workspace/snapshots", async (c) => {
+    const chatId = c.req.param("id");
+    const stub = await ownedPiChat(c, chatId).catch(() => null);
+    if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const snapshots = await listWorkspaceSnapshots(c.env, c.get("identity"), 20, { kind: "chat", chatId });
+    return c.json({ ok: true, result: { snapshots } });
   });
 
   app.post("/api/pi/chats/:id/abort", async (c) => {
