@@ -4,6 +4,14 @@ const BOOT_SNAPSHOT_KEY = "boot-snapshot";
 const RESTORED_FROM_KEY = "restored-from";
 const COMPUTER_IMAGE = "computer";
 
+type ComputerSize = "lite" | "standard-1" | "standard-2" | "standard-3" | "standard-4";
+const COMPUTER_SIZES: readonly ComputerSize[] = ["lite", "standard-1", "standard-2", "standard-3", "standard-4"];
+
+function computerSize(env: unknown): ComputerSize {
+  const requested = (env as { SANDBOX_INSTANCE?: string }).SANDBOX_INSTANCE;
+  return COMPUTER_SIZES.find((size) => size === requested) ?? "standard-1";
+}
+
 function managedImage(container: Container): string | null {
   const images = (container as { images?: Record<string, string> }).images;
   return images?.[COMPUTER_IMAGE] ?? null;
@@ -25,10 +33,10 @@ export class DiskSandbox extends Sandbox {
       const image = managedImage(container);
       if (snapshotId && image) {
         ctx.storage.kv.put(RESTORED_FROM_KEY, snapshotId);
-        return start({ ...rest, containerSnapshot: { id: snapshotId } } as StartOptions);
+        return start({ ...rest, instance: computerSize(env), containerSnapshot: { id: snapshotId } } as StartOptions);
       }
       ctx.storage.kv.delete(RESTORED_FROM_KEY);
-      return start(image ? ({ ...rest, image } as StartOptions) : options);
+      return start(image ? ({ ...rest, instance: computerSize(env), image } as StartOptions) : options);
     };
   }
 
