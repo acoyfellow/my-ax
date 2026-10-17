@@ -29,7 +29,7 @@ import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
 import { getUserWorkspace, invalidateUserWorkspace, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
-import { workspaceSandboxId } from "../workspace-policy";
+import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
 import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
 import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
@@ -107,8 +107,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   private publishedRunning: boolean | null = null;
 
   private async publishRunStatus(running: boolean): Promise<void> {
+    const finished = this.publishedRunning === true && !running;
     if (this.publishedRunning === running) return;
     this.publishedRunning = running;
+    if (finished) await this.schedule(0, "snapshotWorkspaceAfterTurn", undefined, { idempotent: true }).catch((error: unknown) => console.error("pi_turn_snapshot_schedule_failed", { err: String(error) }));
     const ownerEmail = this.state?.ownerEmail;
     const chatId = this.state?.chatId;
     if (!ownerEmail || !chatId) return;
@@ -381,6 +383,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const stream = await this.harness.session().events();
     const snapshot = stream.snapshot;
     await stream.stop();
+    if (snapshot.run === undefined && this.publishedRunning !== false) {
+      this.publishedRunning = true;
+      this.ctx.waitUntil(this.publishRunStatus(false));
+    }
     const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
     return {
       busy: snapshot.run !== undefined,
@@ -427,7 +433,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     if (verdict === "healthy") return;
     await this.disarmTurnWatchdog();
     this.progressSample = undefined;
-    if (verdict === "idle") return;
+    if (verdict === "idle") {
+      this.publishedRunning = true;
+      await this.publishRunStatus(false);
+      return;
+    }
     console.error("pi_turn_stuck_ended", { chatId: this.state.chatId, tools: view.tools.length });
     await this.harness.abort();
     this.broadcast(JSON.stringify({ type: "pi_error", message: STUCK_TURN_NOTE }));
@@ -492,6 +502,18 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     await sandbox.destroy();
     invalidateUserWorkspace(identity, scope);
     return { snapshot: outcome.backup.id, destroyed: true };
+  }
+
+  async snapshotWorkspaceAfterTurn(): Promise<void> {
+    const identity = this.identity();
+    const scope = { kind: "chat" as const, chatId: this.chatId() };
+    const outcome = await snapshotWorkspace(this.env, identity, "turn", { scope, respectCooldown: true }).catch((error: unknown) => {
+      console.error("pi_workspace_snapshot_after_turn_failed", { chatId: scope.chatId, err: String(error) });
+      return null;
+    });
+    if (outcome && !outcome.published && outcome.reason === "cooldown") {
+      await this.schedule(Math.ceil(TURN_SNAPSHOT_COOLDOWN_MS / 1000), "snapshotWorkspaceAfterTurn", undefined, { idempotent: true });
+    }
   }
 
   async sandboxId(): Promise<string> {
