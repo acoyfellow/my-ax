@@ -134,7 +134,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private publishCurrentRunStatus(): Promise<void> {
     this.publishing = this.publishing.then(async () => {
-      const running = (await this.harness.pending()).length > 0;
+      const running = await this.harness.session().busy();
       await this.publishRunStatus(running);
     }).catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
     return this.publishing;
