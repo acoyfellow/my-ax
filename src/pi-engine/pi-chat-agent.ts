@@ -69,6 +69,15 @@ function hasGatewayModels(env: Env): boolean {
   return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
 }
 
+export function lastTurnFailed(entries: readonly unknown[]): boolean {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index] as { kind?: string; model?: readonly { role?: string; stopReason?: string }[] };
+    if (entry.kind === "pi.user") return false;
+    if (entry.kind === "pi.assistant") return entry.model?.some((message) => message.role === "assistant" && message.stopReason === "error") ?? false;
+  }
+  return false;
+}
+
 export class PiChatAgent extends Agent<Env, PiChatState> {
   initialState: PiChatState = {};
   ai = createAI({ binding: this.env.AI });
@@ -106,7 +115,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private publishedRunning: boolean | null = null;
 
-  private async publishRunStatus(running: boolean): Promise<void> {
+  private async publishRunStatus(running: boolean, entries?: readonly unknown[]): Promise<void> {
     const finished = this.publishedRunning === true && !running;
     if (this.publishedRunning === running) return;
     this.publishedRunning = running;
@@ -114,8 +123,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const ownerEmail = this.state?.ownerEmail;
     const chatId = this.state?.chatId;
     if (!ownerEmail || !chatId) return;
-    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status IN ('active', 'running')")
-      .bind(running ? "running" : "active", chatId, ownerEmail.toLowerCase()).run()
+    const status = running ? "running" : lastTurnFailed(entries ?? (await this.live()).entries) ? "error" : "active";
+    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status IN ('active', 'running', 'error')")
+      .bind(status, chatId, ownerEmail.toLowerCase()).run()
       .catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
   }
 
@@ -124,7 +134,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const stream = await this.harness.session().events();
     this.eventStream = stream;
     stream.start(async (events: readonly AgentEvent[]) => {
-      this.ctx.waitUntil(this.publishRunStatus(stream.snapshot.run !== undefined));
+      this.ctx.waitUntil(this.publishRunStatus(stream.snapshot.run !== undefined, stream.snapshot.entries));
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events, entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
@@ -193,8 +203,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       mimeType: attachment.mime || "image/png",
     })));
     const content = images.length ? [{ type: "text" as const, text: text || "Describe the attached image." }, ...images] : text;
+    await this.ensureEventStream();
     const receipt = await this.harness.submit(content, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
     this.progressSample = undefined;
+    this.publishedRunning = false;
+    await this.publishRunStatus(true);
     await this.armTurnWatchdog();
     return { operationId: receipt.operationId, accepted: receipt.accepted };
   }
@@ -385,7 +398,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     await stream.stop();
     if (snapshot.run === undefined && this.publishedRunning !== false) {
       this.publishedRunning = true;
-      this.ctx.waitUntil(this.publishRunStatus(false));
+      this.ctx.waitUntil(this.publishRunStatus(false, snapshot.entries));
     }
     const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
     return {
@@ -435,7 +448,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     this.progressSample = undefined;
     if (verdict === "idle") {
       this.publishedRunning = true;
-      await this.publishRunStatus(false);
+      await this.publishRunStatus(false, view.entries);
       return;
     }
     console.error("pi_turn_stuck_ended", { chatId: this.state.chatId, tools: view.tools.length });

@@ -115,49 +115,39 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  function formatSessionTime(iso: string | null | undefined): string {
-    const d = parseServerTime(iso);
-    if (!d) return "—";
-    const diff = Math.max(0, Date.now() - d.getTime());
-    const sec = Math.floor(diff / 1000);
-    if (sec < 60) return `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 10) return `${min}m ago`;
-    const now = new Date();
-    const sameDay =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-    return d.toLocaleString(
-      undefined,
-      sameDay
-        ? { hour: "numeric", minute: "2-digit" }
-        : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
-    );
-  }
-
-  type SessionSignal = "idle" | "running" | "reconnecting" | "error" | "offline";
+  type SessionSignal = "idle" | "running" | "error";
 
   function sessionSignal(row: SessionRow, active: boolean): SessionSignal {
-    if (active) {
-      if (wsState.conn === "offline") return "offline";
-      if (wsState.conn === "reconnecting") return "reconnecting";
-      if (wsState.status === "thinking" || wsState.status === "running") return "running";
-    }
+    if (active && (wsState.status === "thinking" || wsState.status === "running")) return "running";
     const status = (row.status || "active").toLowerCase();
     if (status === "running" || status === "thinking") return "running";
     if (status === "error" || status === "failed") return "error";
-    if (status === "offline") return "offline";
     return "idle";
   }
 
   function sessionSignalLabel(signal: SessionSignal): string {
     if (signal === "running") return "Response in progress";
-    if (signal === "reconnecting") return "Reconnecting";
     if (signal === "error") return "Last turn failed";
-    if (signal === "offline") return "Disconnected";
-    return "Ready";
+    return "Idle";
   }
+
+  function shortSessionTime(iso: string | null | undefined): string {
+    const d = parseServerTime(iso);
+    if (!d) return "";
+    const min = Math.floor(Math.max(0, Date.now() - d.getTime()) / 60000);
+    if (min < 1) return "now";
+    if (min < 60) return `${min}m`;
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  let menuFor = $state<string | null>(null);
+  function toggleMenu(event: Event, id: string) {
+    event.stopPropagation();
+    menuFor = menuFor === id ? null : id;
+  }
+  function closeMenu() { menuFor = null; }
 
   // ── data ──────────────────────────────────────────────────────────
   function uniqueSessions(rows: SessionRow[]): SessionRow[] {
@@ -541,44 +531,20 @@
   class:pointer-events-auto={shown}
   class:pointer-events-none={!shown}
 >
-  <header
-    class="safe-area-appbar flex-none flex items-center justify-between px-4 py-3 border-b border-line min-h-[48px]"
-  >
-    <h2 class="text-sm font-semibold text-fg">Conversations</h2>
-    <button
-      type="button"
-      onclick={dismissPanel}
-      class="w-8 h-8 rounded-md flex items-center justify-center text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors"
-      aria-label={docked ? "Hide conversations panel" : "Close sidebar"}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="18" y1="6" x2="6" y2="18" />
-        <line x1="6" y1="6" x2="18" y2="18" />
-      </svg>
-    </button>
-  </header>
-
-  <div class="flex-none px-3 pt-3 pb-2">
-    <button
-      type="button"
-      onclick={newConversation}
-      class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-brand text-white text-sm font-semibold px-3 py-2.5 min-h-[40px] shadow-sm hover:bg-brand/90 active:bg-brand/80 transition-colors"
-      aria-label="New conversation"
-      title="New conversation"
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-      <span>New conversation</span>
-    </button>
-    <input
-      type="search"
-      bind:value={searchQuery}
-      placeholder="Search conversations"
-      aria-label="Search conversations"
-      class="mt-2 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg placeholder:text-fg-mut/70 focus:outline-none focus:border-brand/60"
-    />
+  <div class="safe-area-appbar flex-none flex flex-col gap-2 p-2.5">
+    <div class="flex items-center gap-1">
+      <button type="button" onclick={newConversation} class="sessions-new flex-1" aria-label="New conversation" title="New conversation">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        <span>New conversation</span>
+      </button>
+      <button type="button" onclick={dismissPanel} class="sessions-icon" aria-label={docked ? "Hide conversations panel" : "Close sidebar"} title={docked ? "Hide (⌘B)" : "Close"}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
+      </button>
+    </div>
+    <label class="sessions-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" bind:value={searchQuery} placeholder="Search" aria-label="Search conversations" />
+    </label>
   </div>
 
   <div
@@ -602,17 +568,60 @@
         Send a message to start one.
       </div>
     {:else}
+      {#snippet rowMenu(row: SessionRow, title: string, pinnedGroup: boolean, indexInGroup: number, groupTotal: number)}
+        <div class="session-row__actions">
+          <button
+            type="button"
+            class="session-row__more"
+            aria-label={`More actions for ${title}`}
+            aria-haspopup="menu"
+            aria-expanded={menuFor === row.id}
+            onclick={(e) => toggleMenu(e, row.id)}
+          >⋯</button>
+          {#if pinnedGroup}
+            <button
+              type="button"
+              class="session-row__reorder"
+              aria-label={`Reorder ${title}. Use arrow up and down to move; ${indexInGroup + 1} of ${groupTotal}.`}
+              title="Reorder (↑/↓)"
+              onkeydown={(e) => {
+                if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); reorderPinnedByKey(row, "up"); }
+                else if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); reorderPinnedByKey(row, "down"); }
+              }}
+              onclick={(e) => e.stopPropagation()}
+            ></button>
+          {/if}
+          {#if menuFor === row.id}
+            <div class="session-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                class="session-row__pin"
+                data-pinned={row.pinned === 1 ? "1" : "0"}
+                aria-pressed={row.pinned === 1}
+                aria-label={row.pinned === 1 ? `Unpin ${title}` : `Pin ${title}`}
+                onclick={(e) => { e.stopPropagation(); closeMenu(); togglePin(row); }}
+              >{row.pinned === 1 ? "Unpin" : "Pin"}</button>
+              <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>Rename</button>
+              <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>Export markdown</a>
+              <hr />
+              <button type="button" role="menuitem" class="danger" aria-label={`Delete ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); del(row); }}>Delete</button>
+            </div>
+          {/if}
+        </div>
+      {/snippet}
+
       {#snippet sessionRowItem(row: SessionRow, pinnedGroup: boolean, indexInGroup: number, groupTotal: number)}
         {@const title = row.name || "Untitled"}
         {@const active = row.id === currentId}
-        {@const meta = formatSessionTime(row.updated_at)}
         {@const signal = sessionSignal(row, active)}
         {@const fullTime = parseServerTime(row.updated_at)?.toLocaleString() || ""}
         <li
-          class="session-row"
+          class={pinnedGroup ? "session-row session-tile" : "session-row"}
           data-session-id={row.id}
           data-active={active ? "1" : "0"}
           data-pinned={row.pinned === 1 ? "1" : "0"}
+          data-menu-open={menuFor === row.id ? "1" : "0"}
           data-drag-over={pinnedGroup && dragOverId === row.id ? "1" : "0"}
           data-dragging={pinnedGroup && dragId === row.id ? "1" : "0"}
           draggable={pinnedGroup ? true : undefined}
@@ -621,109 +630,38 @@
           ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}
           ondragend={pinnedGroup ? onPinDragEnd : undefined}
         >
-          <span
-            class="session-row__signal"
-            data-signal={signal}
-            aria-label={sessionSignalLabel(signal)}
-            title={sessionSignalLabel(signal)}
-          ></span>
+          <span class="session-row__signal" data-signal={signal} role="img" aria-label={sessionSignalLabel(signal)} title={sessionSignalLabel(signal)}></span>
           <div
             class="session-row__main"
             data-run-state={runStateOf(signal)}
             tabindex="0"
             role="button"
             aria-label={`Switch to ${title}`}
+            title={`${title} · ${fullTime}`}
             onclick={() => switchTo(row.id)}
             onkeydown={(e) => {
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); switchTo(row.id); }
             }}
           >
             <span class="session-row__title">{title}</span>
-            <span class="session-row__meta" title={`${fullTime} · ${row.id}`}>{meta} · {row.id.slice(0, 8)}</span>
+            <span class="session-row__meta">{shortSessionTime(row.updated_at)}</span>
           </div>
-          <div class="session-row__actions">
-            <button
-              type="button"
-              class="session-row__pin"
-              data-pinned={row.pinned === 1 ? "1" : "0"}
-              aria-pressed={row.pinned === 1}
-              aria-label={row.pinned === 1 ? `Unpin ${title}` : `Pin ${title}`}
-              title={row.pinned === 1 ? "Unpin" : "Pin to top"}
-              onclick={(e) => { e.stopPropagation(); togglePin(row); }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={row.pinned === 1 ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 21.5 12 17.5 5.5 21.5 7 14.5 2 9.5 9 9" />
-              </svg>
-            </button>
-            {#if pinnedGroup}
-              <button
-                type="button"
-                class="session-row__reorder"
-                aria-label={`Reorder ${title}. Use arrow up and down to move; ${indexInGroup + 1} of ${groupTotal}.`}
-                title="Reorder (↑/↓)"
-                onkeydown={(e) => {
-                  if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); reorderPinnedByKey(row, "up"); }
-                  else if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); reorderPinnedByKey(row, "down"); }
-                }}
-                onclick={(e) => e.stopPropagation()}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
-                  <circle cx="4" cy="6" r="0.5" /><circle cx="4" cy="12" r="0.5" /><circle cx="4" cy="18" r="0.5" />
-                </svg>
-              </button>
-            {/if}
-            <button
-              type="button"
-              class="session-row__rename"
-              aria-label={`Rename ${title}`}
-              title="Rename"
-              onclick={(e) => { e.stopPropagation(); rename(row); }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-            </button>
-            <a
-              class="session-row__export"
-              href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`}
-              aria-label={`Export ${title}`}
-              title="Export markdown"
-              onclick={(e) => e.stopPropagation()}
-            >
-              ↓
-            </a>
-            <button
-              type="button"
-              class="session-row__delete"
-              aria-label={`Delete ${title}`}
-              title="Delete"
-              onclick={(e) => { e.stopPropagation(); del(row); }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6M14 11v6" />
-                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-              </svg>
-            </button>
-          </div>
+          {@render rowMenu(row, title, pinnedGroup, indexInGroup, groupTotal)}
         </li>
       {/snippet}
 
       <div class="sr-only" aria-live="polite" role="status">{pinAnnounce}</div>
       {#if pinnedRows.length > 0}
-        <div class="session-group-header" aria-hidden="true">Pinned</div>
-        <ul class="flex flex-col gap-0.5" aria-label="Pinned conversations">
+        <ul class="session-tiles" aria-label="Pinned conversations">
           {#each pinnedRows as row, i (row.id)}
             {@render sessionRowItem(row, true, i, pinnedRows.length)}
           {/each}
         </ul>
+        <div class="session-sep" aria-hidden="true"></div>
       {/if}
       {#each unpinnedGroups as bucket (bucket.group)}
         <h3 class="session-group-header">{bucket.group}</h3>
-        <ul class="flex flex-col gap-0.5" aria-label={`${bucket.group} conversations`}>
+        <ul class="flex flex-col" aria-label={`${bucket.group} conversations`}>
           {#each bucket.rows as row (row.id)}
             {@render sessionRowItem(row, false, 0, 0)}
           {/each}
@@ -766,178 +704,65 @@
   {/if}
 </aside>
 
+<svelte:window onclick={closeMenu} />
+
 <style>
-  :global(.session-row) {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 6px;
-    min-height: 44px;
-    color: var(--fg);
-    cursor: pointer;
-    transition: background-color 80ms;
-    position: relative;
-  }
-  :global(.session-row:hover) {
-    background: var(--color-surface-1);
-  }
-  :global(.session-row[data-active="1"]) {
-    background: rgba(246, 130, 31, 0.10);
-    color: var(--fg);
-  }
-  :global(.session-row[data-active="1"] .session-row__title) {
-    color: var(--brand);
-    font-weight: 500;
-  }
-  :global(.session-row__signal) {
-    flex: 0 0 auto;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--good);
-    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 12%, transparent);
-  }
-  :global(.session-row__signal[data-signal="idle"]) {
-    color: var(--good);
-    background: currentColor;
-  }
-  :global(.session-row__signal[data-signal="error"]) {
-    color: var(--bad);
-    background: currentColor;
-  }
-  :global(.session-row__signal[data-signal="offline"]) {
-    color: var(--fg-mut);
-    background: currentColor;
-    opacity: 0.65;
-  }
-  :global(.session-row__signal[data-signal="reconnecting"]) {
-    color: var(--warn);
-    background: currentColor;
-  }
-  :global(.session-row__signal[data-signal="running"]) {
-    color: var(--brand);
-    /* Conventional circular ring spinner: a full ring with one bright arc
-       that rotates, instead of the previous conic-gradient wedge that read
-       as a "Pac-Man" mouth. */
-    background: transparent;
-    box-shadow: none;
-    box-sizing: border-box;
-    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-top-color: currentColor;
-    animation: session-signal-spin 700ms linear infinite;
-  }
-  @keyframes session-signal-spin {
-    to { transform: rotate(360deg); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    :global(.session-row__signal[data-signal="running"]) {
-      animation-duration: 1.8s;
-    }
-  }
-  :global(.session-row__main) {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  :global(.session-row__title) {
-    font-size: 13px;
-    line-height: 1.3;
-    color: var(--fg);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  :global(.session-row__meta) {
-    font-size: 10px;
-    color: var(--fg-mut);
-    line-height: 1.2;
-  }
-  :global(.session-row__actions) {
-    flex-shrink: 0;
-    display: flex;
-    gap: 2px;
-    align-items: center;
-  }
-  :global(.session-row__rename),
-  :global(.session-row__export),
-  :global(.session-row__delete),
-  :global(.session-row__pin),
-  :global(.session-row__reorder) {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    border: none;
-    background: transparent;
-    color: var(--fg-mut);
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 80ms, background-color 80ms, color 80ms;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-  }
-  :global(.session-row:hover .session-row__rename),
-  :global(.session-row:hover .session-row__export),
-  :global(.session-row:hover .session-row__delete),
-  :global(.session-row:hover .session-row__pin),
-  :global(.session-row:hover .session-row__reorder),
-  :global(.session-row:focus-within .session-row__rename),
-  :global(.session-row:focus-within .session-row__export),
-  :global(.session-row:focus-within .session-row__delete),
-  :global(.session-row:focus-within .session-row__pin),
-  :global(.session-row:focus-within .session-row__reorder) {
-    opacity: 1;
-  }
-  /* A pinned row keeps its star visible (filled) so its state is always clear. */
-  :global(.session-row[data-pinned="1"] .session-row__pin) { opacity: 1; color: var(--color-brand); }
-  :global(.session-row__pin:hover),
-  :global(.session-row__reorder:hover) {
-    background: var(--color-surface-2);
-    color: var(--fg);
-  }
-  :global(.session-row__rename:hover) {
-    background: var(--color-surface-2);
-    color: var(--fg);
-  }
-  :global(.session-row__delete:hover) {
-    background: rgba(239, 68, 68, 0.15);
-    color: rgb(248, 113, 113);
-  }
-  /* Pinned group: a subtle left accent + header. */
-  :global(.session-row[data-pinned="1"]) {
-    border-left: 2px solid color-mix(in srgb, var(--color-brand) 55%, transparent);
-    background: color-mix(in srgb, var(--color-brand) 4%, transparent);
-  }
-  /* Drag-and-drop feedback for the pinned group. */
+  .sessions-new { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: var(--fg); }
+  .sessions-new:hover { background: var(--color-surface-1); }
+  .sessions-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--fg-mut); }
+  .sessions-icon:hover { background: var(--color-surface-2); color: var(--fg); }
+  .sessions-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--color-surface-1); color: var(--fg-mut); }
+  .sessions-search:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 55%, transparent); }
+  .sessions-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 13px; color: var(--fg); appearance: none; }
+  .sessions-search input::placeholder { color: var(--fg-mut); }
+  .session-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 4px 8px; }
+  .session-sep { height: 1px; background: var(--line); margin: 2px 8px 2px; }
+
+  :global(.session-row) { position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 7px; color: var(--fg); cursor: pointer; }
+  :global(.session-row:hover) { background: var(--color-surface-1); }
+  :global(.session-row[data-active="1"]) { background: var(--bg); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.04); }
+  :global(.session-row__main) { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 100%; outline: none; }
+  :global(.session-row__title) { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :global(.session-row__meta) { font-size: 11.5px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  :global(.session-row__main:focus-visible) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 6px; }
+
+  :global(.session-tile) { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0; height: 56px; padding: 8px 10px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); box-shadow: none; }
+  :global(.session-tile:hover) { background: var(--bg); border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
+  :global(.session-tile[data-active="1"]) { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
+  :global(.session-tile .session-row__main) { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 2px; }
+  :global(.session-tile .session-row__title) { flex: none; width: 100%; font-weight: 500; font-size: 13px; padding-right: 14px; }
+  :global(.session-tile .session-row__signal) { position: absolute; top: 10px; right: 10px; }
+  :global(.session-tile .session-row__actions) { position: absolute; right: 4px; bottom: 4px; }
+
+  :global(.session-row__signal) { flex: none; width: 7px; height: 7px; border-radius: 999px; background: color-mix(in srgb, var(--fg-mut) 45%, transparent); }
+  :global(.session-row__signal[data-signal="error"]) { background: var(--bad); }
+  :global(.session-row__signal[data-signal="running"]) { width: 10px; height: 10px; background: transparent; box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--good) 25%, transparent); border-top-color: var(--good); animation: session-signal-spin 700ms linear infinite; }
+  :global(.session-tile .session-row__signal[data-signal="running"]) { top: 9px; right: 9px; }
+  @keyframes session-signal-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { :global(.session-row__signal[data-signal="running"]) { animation-duration: 1.8s; } }
+
+  :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
+  :global(.session-tiles > li:nth-child(odd) .session-menu) { right: auto; left: -2px; }
+  :global(.session-row__more) { display: grid; width: 22px; height: 22px; border-radius: 5px; place-items: center; color: var(--fg-mut); font-size: 15px; line-height: 1; opacity: 0; }
+  :global(.session-row__more:hover) { background: var(--color-surface-2); color: var(--fg); }
+  :global(.session-row:hover .session-row__more), :global(.session-row:focus-within .session-row__more), :global(.session-row[data-menu-open="1"] .session-row__more) { opacity: 1; }
+  :global(.session-row:not(.session-tile) .session-row__actions) { position: absolute; right: 6px; top: 5px; }
+  :global(.session-row:not(.session-tile):hover .session-row__meta), :global(.session-row:not(.session-tile):focus-within .session-row__meta), :global(.session-row:not(.session-tile)[data-menu-open="1"] .session-row__meta) { visibility: hidden; }
+  :global(.session-row__reorder) { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  :global(.session-row__reorder:focus-visible) { position: static; width: 22px; height: 22px; opacity: 1; border-radius: 5px; box-shadow: 0 0 0 2px var(--brand); }
+
+  :global(.session-menu) { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 172px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28); cursor: default; }
+  :global(.session-menu > button), :global(.session-menu > a) { display: flex; align-items: center; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--fg); text-decoration: none; text-align: left; }
+  :global(.session-menu > button:hover), :global(.session-menu > a:hover) { background: var(--color-surface-1); }
+  :global(.session-menu > .danger) { color: var(--bad); }
+  :global(.session-menu > hr) { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+
   :global(.session-row[data-dragging="1"]) { opacity: 0.45; }
-  :global(.session-row[data-drag-over="1"]) {
-    box-shadow: inset 0 2px 0 0 var(--color-brand);
-  }
-  :global(.session-row[data-pinned="1"] .session-row__reorder) { cursor: grab; }
-  .session-group-header {
-    padding: 8px 10px 3px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--fg-mut);
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0);
-    white-space: nowrap; border: 0;
-  }
+  :global(.session-row[data-drag-over="1"]) { box-shadow: inset 0 2px 0 0 var(--brand); }
+  .session-group-header { padding: 12px 10px 4px; font-size: 11px; font-weight: 600; color: var(--fg-mut); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   @media (max-width: 767px) {
-    :global(.session-row__rename),
-    :global(.session-row__export),
-    :global(.session-row__delete),
-    :global(.session-row__pin),
-    :global(.session-row__reorder) { opacity: 0.6; }
-    :global(.session-row[data-pinned="1"] .session-row__pin) { opacity: 1; }
+    :global(.session-row__more) { opacity: 1; }
+    :global(.session-row:not(.session-tile) .session-row__meta) { visibility: hidden; }
   }
 </style>

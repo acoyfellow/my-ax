@@ -30,8 +30,8 @@ assertIncludes(settings, '>Approve &amp; enable</button>', "pending reusable too
 assertIncludes(settings, 'recipe.status !== "enabled"', "unapproved reusable tools stay unrunnable");
 assertIncludes(settings, 'class="job-action-button min-h-[44px]', "reusable-tool actions keep mobile-sized labeled controls");
 assertIncludes(appShell, 'if (title === sessionState.title) return cancelRename();', "unchanged conversation rename does not PATCH");
-assertIncludes(sessions, 'return "reconnecting";', "session row distinguishes reconnecting from agent running");
-assertIncludes(sessions, 'return "Reconnecting";', "session reconnecting label is honest about transport state");
+assertIncludes(sessions, 'type SessionSignal = "idle" | "running" | "error";', "session rows show only idle, running, or failed");
+assertIncludes(sessions, 'if (status === "running" || status === "thinking") return "running";', "non-selected rows spin from the server run status, not the open socket");
 assertIncludes(reconnectingSocket, 'return !manuallyClosed && socket === candidate;', "reconnecting transport gates every callback on the current, non-retired socket");
 assertIncludes(reconnectingSocket, 'if (retryTimer !== null) dependencies.cancel(retryTimer);', "manual close cancels any scheduled reconnect timer");
 assertIncludes(sessions, 'if (id === readTabSession()) {', "sidebar no-op switch compares against this tab's live session, not a stale snapshot");

@@ -10,10 +10,10 @@ function has(needle, label) { if (!s.includes(needle)) throw new Error(`${label}
 
 // Grouping
 has('splitPinned(visibleSessions).pinned', "pinned group derived from the searched session list");
-has('>Pinned</div>', "a visible Pinned group header");
+has('<ul class="session-tiles" aria-label="Pinned conversations">', "pinned conversations render as their own tile group");
 has('data-pinned={row.pinned === 1 ? "1" : "0"}', "rows expose their pinned state for styling/tests");
 // Pin/unpin action -> server
-has('/api/sessions/${encodeURIComponent(row.id)}/pin', "star action posts to the pin endpoint");
+has('/api/sessions/${encodeURIComponent(row.id)}/pin', "pin menu action posts to the pin endpoint");
 has('body: JSON.stringify({ pinned: nextPinned })', "pin action sends the boolean pinned state");
 has('aria-pressed={row.pinned === 1}', "pin toggle exposes its pressed state");
 // Reorder -> server, keyboard accessible
@@ -24,7 +24,7 @@ has('e.key === "ArrowUp"', "reorder handle moves up with ArrowUp");
 has('e.key === "ArrowDown"', "reorder handle moves down with ArrowDown");
 // a11y live region
 has('aria-live="polite" role="status">{pinAnnounce}', "an aria-live region announces pin/reorder changes");
-has('class="session-row__reorder"', "pinned rows render a reorder handle");
+has('class="session-row__reorder"', "pinned tiles render a keyboard reorder handle");
 // HTML5 drag-and-drop (C4): pointer parity, reuses planReorder + /rank.
 has('draggable={pinnedGroup ? true : undefined}', "pinned rows are draggable (pointer reorder)");
 has('ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}', "pinned rows accept drops");
@@ -33,4 +33,4 @@ has('void sendReorder(moved, plan.beforeId)', "drop persists the reorder via the
 // Optimistic + reconcile
 has('refresh();', "server refresh reconciles optimistic pin/reorder changes");
 
-console.log("✓ pinned UI smoke: pinned group + star pin/unpin + accessible keyboard reorder + aria-live, server-authoritative");
+console.log("✓ pinned UI smoke: pinned group + menu pin/unpin + accessible keyboard reorder + aria-live, server-authoritative");
