@@ -123,10 +123,21 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const ownerEmail = this.state?.ownerEmail;
     const chatId = this.state?.chatId;
     if (!ownerEmail || !chatId) return;
-    const status = running ? "running" : lastTurnFailed(entries ?? (await this.live()).entries) ? "error" : "active";
+    const status = running ? "running" : lastTurnFailed(entries ?? await this.currentEntries()) ? "error" : "active";
+    console.info("pi_run_status_published", { chatId, status });
     await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status IN ('active', 'running', 'error')")
       .bind(status, chatId, ownerEmail.toLowerCase()).run()
       .catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
+  }
+
+  private publishing: Promise<void> = Promise.resolve();
+
+  private publishCurrentRunStatus(): Promise<void> {
+    this.publishing = this.publishing.then(async () => {
+      const running = (await this.harness.pending()).length > 0;
+      await this.publishRunStatus(running);
+    }).catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
+    return this.publishing;
   }
 
   private async ensureEventStream(): Promise<void> {
@@ -134,7 +145,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const stream = await this.harness.session().events();
     this.eventStream = stream;
     stream.start(async (events: readonly AgentEvent[]) => {
-      this.ctx.waitUntil(this.publishRunStatus(stream.snapshot.run !== undefined, stream.snapshot.entries));
+      this.ctx.waitUntil(this.publishCurrentRunStatus());
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events, entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
@@ -206,8 +217,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     await this.ensureEventStream();
     const receipt = await this.harness.submit(content, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
     this.progressSample = undefined;
-    this.publishedRunning = false;
-    await this.publishRunStatus(true);
+    await this.publishCurrentRunStatus();
     await this.armTurnWatchdog();
     return { operationId: receipt.operationId, accepted: receipt.accepted };
   }
@@ -387,6 +397,13 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return times;
   }
 
+  private async currentEntries(): Promise<readonly unknown[]> {
+    const stream = await this.harness.session().events();
+    const entries = [...stream.snapshot.entries];
+    await stream.stop();
+    return entries;
+  }
+
   async isBusy(): Promise<boolean> {
     return this.harness.session().busy();
   }
@@ -395,10 +412,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const stream = await this.harness.session().events();
     const snapshot = stream.snapshot;
     await stream.stop();
-    if (snapshot.run === undefined && this.publishedRunning !== false) {
-      this.publishedRunning = true;
-      this.ctx.waitUntil(this.publishRunStatus(false, snapshot.entries));
-    }
+    this.ctx.waitUntil(this.publishCurrentRunStatus());
     const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
     return {
       busy: snapshot.run !== undefined,
