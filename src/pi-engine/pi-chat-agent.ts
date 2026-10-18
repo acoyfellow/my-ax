@@ -30,6 +30,7 @@ import type { Env } from "../types";
 import { getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
+import { lastTurnFailed } from "./last-turn-failed";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
 import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
 import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
@@ -67,15 +68,6 @@ export type PiChatLiveView = {
 
 function hasGatewayModels(env: Env): boolean {
   return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
-}
-
-export function lastTurnFailed(entries: readonly unknown[]): boolean {
-  for (let index = entries.length - 1; index >= 0; index--) {
-    const entry = entries[index] as { kind?: string; model?: readonly { role?: string; stopReason?: string }[] };
-    if (entry.kind === "pi.user") return false;
-    if (entry.kind === "pi.assistant") return entry.model?.some((message) => message.role === "assistant" && message.stopReason === "error") ?? false;
-  }
-  return false;
 }
 
 export class PiChatAgent extends Agent<Env, PiChatState> {
