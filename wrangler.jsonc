@@ -95,7 +95,7 @@
       "class_name": "Sandbox",
       "scheduling_policy": "durable_object",
       "images": { "computer": { "dockerfile": "./Dockerfile" } },
-      "name": "my-ax-sandbox"
+      "name": "my-ax-disk"
     },
     {
       "class_name": "NamedComputer",
