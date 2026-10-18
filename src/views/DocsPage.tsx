@@ -16,7 +16,7 @@ const DIFFERENTIATORS: Array<{ title: string; body: string }> = [
   { title: "It runs in your own account", body: "My AX is single-tenant and single-operator. You deploy it into your own Cloudflare account, behind your own Access login. One verified identity owns every conversation, record, and tool call. No shared service holds your data." },
   { title: "One agent, one work surface", body: "work_search and work_code give the agent one way to act across its persistent Sandbox, a machine you connect, its live browser UI, and a codemode namespace. The agent picks the correct place for each task." },
   { title: "Inner runs cannot widen their authority", body: "When the agent runs a saved tool inside a turn, its capabilities are the intersection of the tool's declared needs and the caller's current grants. The set can only narrow, never widen. This is capability-based security, the same model as Sandstorm." },
-  { title: "It builds instruments and then drives them", body: "The agent can build a UI with create_svelte_artifact, and that artifact can register its own tools. The agent then calls those tools to steer the artifact on a later turn. It builds an instrument once and operates it, instead of rebuilding it each time." },
+  { title: "It builds instruments and then drives them", body: "The agent can build a UI with create_svelte_artifact, and that widget can register its own tools. The agent then calls those tools to steer the artifact on a later turn. It builds an instrument once and operates it, instead of rebuilding it each time." },
   { title: "Bounded actions return a verified receipt", body: "A recurring run and a reusable-tool run write start and terminal events. A bridged tool call writes an audit receipt. You read the receipt instead of trusting a claim." },
   { title: "You leave; it reports back", body: "You give the agent a task and close the tab. It works while you are away. Check-in composes one view from Attention, jobs, and run receipts: what needs you, what is running, what finished or failed. You return to that view." },
 ];
@@ -80,10 +80,10 @@ const GUIDES: Array<{ anchor: string; goal: string; steps: string[]; result: str
     steps: [
       "Ask the agent to build a UI, for example a status dashboard.",
       "The agent compiles a Svelte component and renders it in a sandboxed iframe.",
-      "The artifact registers its own tools on the next turn.",
-      "Ask the agent to change the UI; it calls those tools to steer the artifact in place.",
+      "The widget registers its own tools on the next turn.",
+      "Ask the agent to change the UI; it calls those tools to steer the widget in place.",
     ],
-    result: "An artifact the agent built once and can drive later, without rebuilding it.",
+    result: "A widget the agent built once and can drive later, without rebuilding it.",
   },
   {
     anchor: "guide-connector",
@@ -112,7 +112,7 @@ const LIMITS: Array<{ surface: string; bound: string }> = [
   { surface: "Work Code Mode", bound: "Source limited to 32,000 bytes. 60-second wall-clock. No ambient network." },
   { surface: "Workspace", bound: "One persistent /home/user per owner. Recycle fails closed if a snapshot cannot be published." },
   { surface: "Machine", bound: "Runs as the companion's OS account. Terminal-equivalent. No privilege separation added." },
-  { surface: "Page (live UI)", bound: "Works only while a chat tab is connected. Artifact tools are capped and schema-validated." },
+  { surface: "Page (live UI)", bound: "Works only while a chat tab is connected. Widget tools are capped and schema-validated." },
 ];
 
 const ENDPOINTS: Array<{ path: string; use: string }> = [

@@ -47,7 +47,7 @@ function widgetStorageKey(identity: AccessIdentity, sessionId: string, id: strin
 
 function assertSelfContainedSource(source: string): void {
   if (/<script\b[^>]*\bmodule\s*=/i.test(source) || /<script\b[^>]*\bcontext\s*=\s*["']module["']/i.test(source)) {
-    throw new Error("Artifact source cannot use module scripts.");
+    throw new Error("Widget source cannot use module scripts.");
   }
 
   const scripts = source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi);
@@ -56,7 +56,7 @@ function assertSelfContainedSource(source: string): void {
     // Keep the first artifact slice self-contained: no static/dynamic module
     // imports or CommonJS require calls in instance scripts.
     if (/(?:^|[;\n}]\s*)import\s+(?:["'{*\w])|\bimport\s*\(|\brequire\s*\(/m.test(body)) {
-      throw new Error("Artifact source cannot import external modules.");
+      throw new Error("Widget source cannot import external modules.");
     }
   }
 }
@@ -69,8 +69,8 @@ async function sha256(input: string): Promise<string> {
 export async function createSvelteArtifact(env: Env, identity: AccessIdentity, sessionId: string, input: { title: string; source: string }) {
   const title = input.title.trim().slice(0, MAX_TITLE_CHARS);
   const source = input.source.trim().replace(/\r\n?/g, "\n");
-  if (!title) throw new Error("Artifact title is required.");
-  if (!source) throw new Error("Artifact source is empty.");
+  if (!title) throw new Error("Widget title is required.");
+  if (!source) throw new Error("Widget source is empty.");
   const sourceBytes = new TextEncoder().encode(source).byteLength;
   if (sourceBytes > MAX_SOURCE_BYTES) throw new Error(`Artifact source exceeds ${MAX_SOURCE_BYTES} bytes.`);
 
@@ -79,7 +79,7 @@ export async function createSvelteArtifact(env: Env, identity: AccessIdentity, s
   const ownerEmail = normalizedEmail(identity);
   const owned = await env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?")
     .bind(sessionId, ownerEmail).first<{ id: string }>();
-  if (!owned) throw new Error("Artifact conversation was not found or is not owned by the current user.");
+  if (!owned) throw new Error("Widget conversation was not found or is not owned by the current user.");
 
   const sourceHash = await sha256(source);
   const existing = await env.DB.prepare("SELECT id, title FROM artifacts WHERE owner_email = ? AND source_hash = ? ORDER BY created_at DESC LIMIT 1")
@@ -175,7 +175,7 @@ export async function searchOwnedArtifacts(env: Env, identity: AccessIdentity, q
 export async function renameOwnedArtifact(env: Env, identity: AccessIdentity, id: string, titleInput: string): Promise<boolean> {
   if (!ARTIFACT_ID_RE.test(id)) return false;
   const title = titleInput.trim().slice(0, MAX_TITLE_CHARS);
-  if (!title) throw new Error("Artifact title is required.");
+  if (!title) throw new Error("Widget title is required.");
   const result = await env.DB.prepare("UPDATE artifacts SET title = ?, updated_at = ? WHERE id = ? AND owner_email = ?")
     .bind(title, new Date().toISOString(), id, normalizedEmail(identity)).run();
   return Number(result.meta.changes ?? 0) > 0;

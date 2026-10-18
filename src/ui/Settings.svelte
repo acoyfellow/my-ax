@@ -58,7 +58,7 @@
   const sections = [
     { id: "general" as const, label: "General", hint: "Model, app, notifications" },
     { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
-    { id: "artifacts" as const, label: "Artifacts", hint: "Reusable widgets and dashboards" },
+    { id: "artifacts" as const, label: "Widgets", hint: "Reusable widgets and dashboards" },
     { id: "computers" as const, label: "Computers", hint: "Named Ubuntu desktops" },
     { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
@@ -190,9 +190,9 @@
     try {
       const response = await fetch("/api/artifacts?limit=200", { credentials: "include" });
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message || "Artifact library request failed");
+      if (!response.ok) throw new Error(body?.error?.message || "Widget library request failed");
       artifacts = body?.result?.artifacts ?? [];
-    } catch (error) { artifactStatus = "Could not load artifacts: " + (error instanceof Error ? error.message : String(error)); }
+    } catch (error) { artifactStatus = "Could not load widgets: " + (error instanceof Error ? error.message : String(error)); }
     finally { artifactsLoading = false; }
   }
   async function refreshComputers() {
@@ -232,19 +232,19 @@
   }
   function openArtifactConversation(artifact: LibraryArtifact) { closeDrawer(); window.location.href = "/?session=" + encodeURIComponent(artifact.sessionId); }
   async function renameArtifact(artifact: LibraryArtifact) {
-    const title = window.prompt("Rename artifact", artifact.title)?.trim();
+    const title = window.prompt("Rename widget", artifact.title)?.trim();
     if (!title || title === artifact.title) return;
     const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
     const body = await response.json();
     if (!response.ok) { artifactStatus = body?.error?.message || "Rename failed"; return; }
-    await refreshArtifacts(); artifactStatus = "Artifact renamed.";
+    await refreshArtifacts(); artifactStatus = "Widget renamed.";
   }
   async function deleteArtifact(artifact: LibraryArtifact) {
-    if (!window.confirm("Delete ‘" + artifact.title + "’ from your artifact library?")) return;
+    if (!window.confirm("Delete ‘" + artifact.title + "’ from your widget library?")) return;
     const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "DELETE", credentials: "include" });
     const body = await response.json();
     if (!response.ok) { artifactStatus = body?.error?.message || "Delete failed"; return; }
-    artifacts = artifacts.filter((item) => item.id !== artifact.id); artifactStatus = "Artifact deleted.";
+    artifacts = artifacts.filter((item) => item.id !== artifact.id); artifactStatus = "Widget deleted.";
   }
 
   async function refreshOwnerInstructions() {
