@@ -496,13 +496,20 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async recycleWorkspace(): Promise<{ snapshot: string; destroyed: boolean }> {
     const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };
-    await saveWorkspaceDisk(this.env, identity, scope, "recycle").catch((error: unknown) => console.error("pi_disk_snapshot_on_recycle_failed", { chatId: scope.chatId, err: String(error) }));
-    const outcome = await snapshotWorkspace(this.env, identity, "recycle", { scope });
-    if (!outcome.published) throw new Error(`snapshot not published: ${outcome.reason}`);
+    const disk = await saveWorkspaceDisk(this.env, identity, scope, "recycle").catch((error: unknown) => {
+      console.error("pi_disk_snapshot_on_recycle_failed", { chatId: scope.chatId, err: String(error) });
+      return null;
+    });
+    const outcome = await snapshotWorkspace(this.env, identity, "recycle", { scope }).catch((error: unknown) => {
+      if (!disk) throw error;
+      console.error("pi_directory_backup_on_recycle_failed", { chatId: scope.chatId, err: String(error) });
+      return null;
+    });
+    if (!disk && outcome && !outcome.published) throw new Error(`snapshot not published: ${outcome.reason}`);
     const { sandbox } = await getUserWorkspace(this.env, identity, { scope });
     await sandbox.destroy();
     invalidateUserWorkspace(identity, scope);
-    return { snapshot: outcome.backup.id, destroyed: true };
+    return { snapshot: disk?.id ?? (outcome?.published ? outcome.backup.id : ""), destroyed: true };
   }
 
   async snapshotWorkspaceAfterTurn(): Promise<void> {

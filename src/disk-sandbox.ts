@@ -1,6 +1,21 @@
 import { Sandbox } from "@cloudflare/sandbox";
 
 const BOOT_SNAPSHOT_KEY = "boot-snapshot";
+const RESTORED_FROM_KEY = "restored-from";
+const COMPUTER_IMAGE = "computer";
+
+type ComputerSize = "lite" | "standard-1" | "standard-2" | "standard-3" | "standard-4";
+const COMPUTER_SIZES: readonly ComputerSize[] = ["lite", "standard-1", "standard-2", "standard-3", "standard-4"];
+
+function computerSize(env: unknown): ComputerSize {
+  const requested = (env as { SANDBOX_INSTANCE?: string }).SANDBOX_INSTANCE;
+  return COMPUTER_SIZES.find((size) => size === requested) ?? "standard-1";
+}
+
+function managedImage(container: Container): string | null {
+  const images = (container as { images?: Record<string, string> }).images;
+  return images?.[COMPUTER_IMAGE] ?? null;
+}
 
 type StartOptions = Parameters<Container["start"]>[0];
 
@@ -14,9 +29,14 @@ export class DiskSandbox extends Sandbox {
     const start = container.start.bind(container);
     container.start = (options?: StartOptions) => {
       const snapshotId = ctx.storage.kv.get<string>(BOOT_SNAPSHOT_KEY);
-      if (!snapshotId || !options) return start(options);
-      const { image: _image, ...rest } = options as StartOptions & { image?: string };
-      return start({ ...rest, containerSnapshot: { id: snapshotId } } as StartOptions);
+      const { image: _image, containerSnapshot: _snapshot, ...rest } = (options ?? { enableInternet: true }) as StartOptions & { image?: string; containerSnapshot?: unknown };
+      const image = managedImage(container);
+      if (snapshotId && image) {
+        ctx.storage.kv.put(RESTORED_FROM_KEY, snapshotId);
+        return start({ ...rest, instance: computerSize(env), containerSnapshot: { id: snapshotId } } as unknown as StartOptions);
+      }
+      ctx.storage.kv.delete(RESTORED_FROM_KEY);
+      return start(image ? ({ ...rest, instance: computerSize(env), image } as StartOptions) : options);
     };
   }
 
@@ -30,6 +50,15 @@ export class DiskSandbox extends Sandbox {
 
   async bootFrom(snapshotId: string): Promise<void> {
     this.ctx.storage.kv.put(BOOT_SNAPSHOT_KEY, snapshotId);
+  }
+
+  async diskState(): Promise<{ managed: boolean; bootSnapshot: string | null; restoredFrom: string | null }> {
+    const container = this.ctx.container;
+    return {
+      managed: container ? managedImage(container) !== null : false,
+      bootSnapshot: this.ctx.storage.kv.get<string>(BOOT_SNAPSHOT_KEY) ?? null,
+      restoredFrom: this.ctx.storage.kv.get<string>(RESTORED_FROM_KEY) ?? null,
+    };
   }
 
   async bootSnapshot(): Promise<string | null> {

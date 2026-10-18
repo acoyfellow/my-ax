@@ -162,7 +162,12 @@ export async function snapshotUserWorkspace(
   return outcome.backup;
 }
 
-type DiskSandboxStub = { saveDisk(name: string): Promise<{ id: string; size: number } | null>; bootFrom(snapshotId: string): Promise<void>; bootSnapshot(): Promise<string | null> };
+type DiskState = { managed: boolean; bootSnapshot: string | null; restoredFrom: string | null };
+type DiskSandboxStub = { saveDisk(name: string): Promise<{ id: string; size: number } | null>; bootFrom(snapshotId: string): Promise<void>; bootSnapshot(): Promise<string | null>; diskState(): Promise<DiskState> };
+
+export function workspaceDiskState(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<DiskState> {
+  return diskStub(env, identity, scope).diskState();
+}
 
 function diskStub(env: Env, identity: AccessIdentity, scope: WorkspaceScope): DiskSandboxStub {
   return handle(env, identity, scope) as unknown as DiskSandboxStub;
