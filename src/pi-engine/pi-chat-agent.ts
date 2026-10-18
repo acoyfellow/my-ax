@@ -339,8 +339,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async submit(text: string, operationId?: string): Promise<PiChatSubmitResult> {
-    const receipt = await this.harness.submit(text, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
-    return { operationId: receipt.operationId, accepted: receipt.accepted };
+    return this.submitInput(text, [], operationId);
   }
 
   async wait(operationId: string): Promise<PiChatWaitResult> {
