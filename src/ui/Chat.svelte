@@ -188,6 +188,11 @@
   }
   const savedSnapshots = new PiSnapshotStore(typeof localStorage === "undefined" ? null : localStorage);
   function fetchPiLive(sessionId: string): Promise<PiSnapshot | null> {
+    const early = (window as unknown as { __MY_AX_EARLY_LIVE__?: { id: string; promise: Promise<any> } }).__MY_AX_EARLY_LIVE__;
+    if (early?.id === sessionId) {
+      delete (window as unknown as { __MY_AX_EARLY_LIVE__?: unknown }).__MY_AX_EARLY_LIVE__;
+      return early.promise.then((body) => (Array.isArray(body?.result?.entries) ? (body.result as PiSnapshot) : null));
+    }
     return fetch(`/api/pi/chats/${encodeURIComponent(sessionId)}/live`, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
       .then((body) => (Array.isArray(body?.result?.entries) ? (body.result as PiSnapshot) : null))
