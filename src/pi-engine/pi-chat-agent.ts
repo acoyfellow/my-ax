@@ -31,6 +31,7 @@ import { getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotW
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
 import { lastTurnFailed } from "./last-turn-failed";
+import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
 import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
 import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
@@ -65,6 +66,8 @@ export type PiChatLiveView = {
   retry: { at: number; error: string } | null;
   entryTimes: Record<number, number>;
 };
+
+export type PiChatSlimView = PiChatLiveView & { olderCount: number };
 
 function hasGatewayModels(env: Env): boolean {
   return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
@@ -117,17 +120,17 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     if (!ownerEmail || !chatId) return;
     const status = running ? "running" : lastTurnFailed(entries ?? await this.currentEntries()) ? "error" : "active";
     console.info("pi_run_status_published", { chatId, status });
-    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status IN ('active', 'running', 'error')")
-      .bind(status, chatId, ownerEmail.toLowerCase()).run()
+    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = CASE WHEN ? = 'running' THEN datetime('now') ELSE updated_at END WHERE id = ? AND owner_email = ? AND status IN ('active', 'running', 'error') AND status != ?")
+      .bind(status, status, chatId, ownerEmail.toLowerCase(), status).run()
       .catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
   }
 
   private publishing: Promise<void> = Promise.resolve();
 
-  private publishCurrentRunStatus(): Promise<void> {
+  private publishCurrentRunStatus(entries?: readonly unknown[]): Promise<void> {
     this.publishing = this.publishing.then(async () => {
       const running = await this.harness.session().busy();
-      await this.publishRunStatus(running);
+      await this.publishRunStatus(running, entries);
     }).catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
     return this.publishing;
   }
@@ -139,7 +142,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     stream.start(async (events: readonly AgentEvent[]) => {
       this.ctx.waitUntil(this.publishCurrentRunStatus());
       const entryTimes = this.recordEntryTimes(events);
-      this.broadcast(JSON.stringify({ type: "pi_events", events, entryTimes }));
+      this.broadcast(JSON.stringify({ type: "pi_events", events: events.map(slimEvent), entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
     });
     void stream.closed.finally(() => {
@@ -149,7 +152,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   async onConnect(connection: Connection): Promise<void> {
     await this.ensureEventStream();
-    connection.send(JSON.stringify({ type: "pi_snapshot", view: await this.live() }));
+    connection.send(JSON.stringify({ type: "pi_snapshot", view: await this.slimLive() }));
   }
 
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {
@@ -400,11 +403,29 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return this.harness.session().busy();
   }
 
+  async slimLive(): Promise<PiChatSlimView> {
+    const view = await this.live();
+    const slim = slimEntries(view.entries as SlimmableEntry[]);
+    return { ...view, entries: slim.entries, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
+  }
+
+  async entriesPage(before: number, limit: number): Promise<{ entries: unknown[]; olderCount: number }> {
+    const entries = (await this.live()).entries as SlimmableEntry[];
+    const end = entries.findIndex((entry) => entry.id >= before);
+    const stop = end < 0 ? entries.length : end;
+    const start = Math.max(0, stop - Math.min(Math.max(limit, 1), 200));
+    return { entries: entries.slice(start, stop).map(slimEntry), olderCount: start };
+  }
+
+  async fullEntry(id: number): Promise<unknown | null> {
+    return ((await this.live()).entries as SlimmableEntry[]).find((entry) => entry.id === id) ?? null;
+  }
+
   async live(): Promise<PiChatLiveView> {
     const stream = await this.harness.session().events();
     const snapshot = stream.snapshot;
     await stream.stop();
-    this.ctx.waitUntil(this.publishCurrentRunStatus());
+    this.ctx.waitUntil(this.publishCurrentRunStatus(snapshot.entries));
     const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
     return {
       busy: snapshot.run !== undefined,

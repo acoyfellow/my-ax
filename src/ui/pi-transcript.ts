@@ -17,7 +17,7 @@ export type PiChatMessage = {
 };
 
 type ModelMessage = Record<string, unknown>;
-export type PiEntry = { id: number; kind: string; model?: ModelMessage[] };
+export type PiEntry = { id: number; kind: string; model?: ModelMessage[]; clipped?: true };
 export type PiSnapshot = {
   busy: boolean;
   model: string;
@@ -26,6 +26,7 @@ export type PiSnapshot = {
   tools: Array<{ callId: string; output?: string }>;
   queued: number;
   entryTimes?: Record<string, number>;
+  olderCount?: number;
 };
 
 function textOf(content: unknown): string {
@@ -53,6 +54,7 @@ export class PiTranscript {
   busy = false;
   model = "";
   queued = 0;
+  olderCount = 0;
   private liveOutput = new Map<string, string>();
   private entryTimes = new Map<number, number>();
 
@@ -65,12 +67,38 @@ export class PiTranscript {
     this.recordEntryTimes(snapshot.entryTimes);
     this.entries.clear();
     for (const entry of snapshot.entries) this.entries.set(entry.id, entry);
+    if (snapshot.olderCount !== undefined) this.olderCount = snapshot.olderCount;
     this.partial = snapshot.partial;
     this.busy = snapshot.busy;
     this.model = snapshot.model;
     this.queued = snapshot.queued;
     this.liveOutput.clear();
     for (const tool of snapshot.tools) if (tool.output) this.liveOutput.set(tool.callId, tool.output);
+  }
+
+  oldestEntryId(): number | null {
+    let oldest: number | null = null;
+    for (const id of this.entries.keys()) if (oldest === null || id < oldest) oldest = id;
+    return oldest;
+  }
+
+  prependEntries(entries: readonly PiEntry[], olderCount: number): void {
+    for (const entry of entries) if (!this.entries.has(entry.id)) this.entries.set(entry.id, entry);
+    this.olderCount = olderCount;
+  }
+
+  replaceEntry(entry: PiEntry): void {
+    if (this.entries.has(entry.id)) this.entries.set(entry.id, entry);
+  }
+
+  clippedEntryIdsForTool(callId: string): number[] {
+    const ids: number[] = [];
+    for (const entry of this.entries.values()) {
+      if (!entry.clipped) continue;
+      const mentions = (entry.model ?? []).some((message) => message.toolCallId === callId || (Array.isArray(message.content) && (message.content as Array<Record<string, unknown>>).some((block) => block.type === "toolCall" && block.id === callId)));
+      if (mentions) ids.push(entry.id);
+    }
+    return ids;
   }
 
   applyEvents(events: ReadonlyArray<Record<string, unknown>>): void {

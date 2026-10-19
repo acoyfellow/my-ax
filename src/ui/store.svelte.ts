@@ -35,6 +35,10 @@ export function storedSessionEngine(id: string | null): SessionEngine {
   if (!id || typeof localStorage === "undefined") return "think";
   return localStorage.getItem(SESSION_ENGINE_KEY_PREFIX + id) === "pi" ? "pi" : "think";
 }
+export function knowsSessionEngine(id: string): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(SESSION_ENGINE_KEY_PREFIX + id) !== null;
+}
 export function rememberSessionEngine(id: string, engine: SessionEngine) {
   try { localStorage.setItem(SESSION_ENGINE_KEY_PREFIX + id, engine); } catch {}
   if (sessionState.id === id) sessionState.engine = engine;

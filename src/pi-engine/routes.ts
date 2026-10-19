@@ -105,8 +105,25 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
   app.get("/api/pi/chats/:id/live", async (c) => {
     const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
     if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
-    const view: unknown = JSON.parse(JSON.stringify(await stub.live()));
+    const view: unknown = JSON.parse(JSON.stringify(await stub.slimLive()));
     return c.json({ ok: true, result: view } as Record<string, unknown>);
+  });
+
+  app.get("/api/pi/chats/:id/entries", async (c) => {
+    const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
+    if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const before = Number(c.req.query("before") ?? Number.MAX_SAFE_INTEGER);
+    const limit = Number(c.req.query("limit") ?? 80);
+    const page: unknown = JSON.parse(JSON.stringify(await stub.entriesPage(Number.isFinite(before) ? before : Number.MAX_SAFE_INTEGER, Number.isFinite(limit) ? limit : 80)));
+    return c.json({ ok: true, result: page } as Record<string, unknown>);
+  });
+
+  app.get("/api/pi/chats/:id/entries/:entryId", async (c) => {
+    const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
+    if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const entry: unknown = JSON.parse(JSON.stringify(await stub.fullEntry(Number(c.req.param("entryId")))));
+    if (!entry) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "entry not found" } }, 404);
+    return c.json({ ok: true, result: { entry } } as Record<string, unknown>);
   });
 
   app.get("/api/pi/chats/:id", async (c) => {

@@ -4,6 +4,7 @@
   // transcript rendering, composer, attachments, voice, and tool results.
 
   import { onMount, tick } from "svelte";
+  import { TranscriptCache } from "./transcript-cache";
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
@@ -65,6 +66,7 @@
     isTitleEpochCurrent,
     storedSessionEngine,
     rememberSessionEngine,
+    knowsSessionEngine,
     readTabSession,
     writeTabSession,
   } from "@my-ax/store";
@@ -159,6 +161,47 @@
   }
   function setToolOpen(id: string, open: boolean) {
     if (toolOpen[id] !== open) toolOpen[id] = open;
+    if (open) void loadFullToolEntries(id);
+  }
+  const fullEntryRequests = new Set<string>();
+  async function loadFullToolEntries(toolId: string) {
+    const transcript = piTranscript;
+    const sessionId = currentSessionId();
+    if (!transcript || !sessionId) return;
+    const ids = transcript.clippedEntryIdsForTool(toolId).filter((id) => !fullEntryRequests.has(`${sessionId}:${id}`));
+    if (!ids.length) return;
+    for (const id of ids) fullEntryRequests.add(`${sessionId}:${id}`);
+    const entries = await Promise.all(ids.map(async (id) => {
+      const response = await fetch(`/api/pi/chats/${encodeURIComponent(sessionId)}/entries/${id}`, { credentials: "include" }).catch(() => null);
+      const body = await response?.json().catch(() => null);
+      return body?.result?.entry ?? null;
+    }));
+    if (piTranscript !== transcript) return;
+    for (const entry of entries) if (entry) transcript.replaceEntry(entry);
+    renderPiTranscript();
+  }
+  const transcriptCache = new TranscriptCache<MessageView>(12);
+  let piOlderCount = $state(0);
+  let loadingOlderEntries = $state(false);
+  async function loadOlderPiEntries() {
+    const transcript = piTranscript;
+    const sessionId = currentSessionId();
+    const before = transcript?.oldestEntryId();
+    if (!transcript || !sessionId || before === null || before === undefined || loadingOlderEntries) return;
+    loadingOlderEntries = true;
+    try {
+      const response = await fetch(`/api/pi/chats/${encodeURIComponent(sessionId)}/entries?before=${before}&limit=80`, { credentials: "include" });
+      const body = await response.json().catch(() => null);
+      if (piTranscript !== transcript || !Array.isArray(body?.result?.entries)) return;
+      const log = logEl;
+      const fromBottom = log ? log.scrollHeight - log.scrollTop : 0;
+      transcript.prependEntries(body.result.entries, Number(body.result.olderCount ?? 0));
+      renderPiTranscript();
+      await tick();
+      if (log) log.scrollTop = log.scrollHeight - fromBottom;
+    } finally {
+      loadingOlderEntries = false;
+    }
   }
 
   function groupParts(parts: Part[]): RenderBlock[] {
@@ -1261,6 +1304,7 @@
     if (!piTranscript) return;
     const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();
     piBusy = piTranscript.busy;
+    piOlderCount = piTranscript.olderCount;
     const sessionId = currentSessionId();
     const optimistic = messages.filter((message) => message.pending && message.role === "user");
     const rendered: MessageView[] = piTranscript.messages().map((message) => ({
@@ -1279,6 +1323,7 @@
     }));
     const confirmedUserTexts = new Set(rendered.filter((message) => message.role === "user").map((message) => message.content));
     messages = annotateTurnDurations([...rendered, ...optimistic.filter((message) => !confirmedUserTexts.has(message.content))]);
+    if (sessionId) transcriptCache.write(sessionId, rendered);
     if (piTranscript.busy !== (wsState.status === "running" || wsState.status === "thinking")) applyStatus(piTranscript.busy ? "running" : "idle");
     bootstrapPending = false;
     resumingExistingSession = false;
@@ -1441,7 +1486,8 @@
   // history via cf_agent_chat_messages. Avoids the re-download/re-parse jank.
   function switchToSession(id: string) {
     if (!id || id === readTabSession()) return;
-    void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
+    if (knowsSessionEngine(id)) switchToSessionKnownEngine(id);
+    else void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
   }
 
   function switchToSessionKnownEngine(id: string) {
@@ -1455,13 +1501,15 @@
     streamingMsgId = null;
     responseRecoveryPending = false;
     dispatchTurn({ type: "session-switch" });
-    messages = [];
+    const cachedTranscript = transcriptCache.read(id);
+    messages = cachedTranscript ?? [];
     thinkMessages = [];
     toastBus.pending = [];
     applyStatus("idle");
     onboardingHidden = true;
     resumingExistingSession = true;
-    sessionResumeVisible = true;
+    sessionResumeVisible = cachedTranscript === null;
+    if (cachedTranscript) queueScrollToBottom();
     // Clear the leaving session's active-turn latch so a retired turn cannot
     // pin "thinking" the next time that conversation is opened.
     forgetActiveTurn();
@@ -2836,7 +2884,13 @@
           </div>
         {/if}
 
-        <!-- Messages -->
+        {#if piTranscript && piOlderCount > 0}
+          <div class="msg-older">
+            <button type="button" class="msg-older__button" onclick={loadOlderPiEntries} disabled={loadingOlderEntries}>
+              {loadingOlderEntries ? "Loading…" : "Show earlier messages"}
+            </button>
+          </div>
+        {/if}
         {#each messages as m (m.id)}
           <article
             class={`msg msg-${m.role} min-w-0 overflow-x-hidden` + (m.role === "tool" ? " msg-tool-compact" : "")}
