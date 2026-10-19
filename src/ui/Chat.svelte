@@ -4,7 +4,7 @@
   // transcript rendering, composer, attachments, voice, and tool results.
 
   import { onMount, tick } from "svelte";
-  import { TranscriptCache } from "./transcript-cache";
+  import { PiSnapshotStore } from "./snapshot-store";
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
@@ -180,7 +180,16 @@
     for (const entry of entries) if (entry) transcript.replaceEntry(entry);
     renderPiTranscript();
   }
-  const transcriptCache = new TranscriptCache<MessageView>(12);
+  const savedSnapshots = new PiSnapshotStore(typeof localStorage === "undefined" ? null : localStorage);
+  function showSavedSnapshot(sessionId: string): boolean {
+    const saved = savedSnapshots.read(sessionId);
+    if (!saved || !piTranscript) return false;
+    piTranscript.applySnapshot(saved);
+    renderPiTranscript();
+    queueScrollToBottom();
+    return true;
+  }
+  let savingSnapshots = false;
   let piOlderCount = $state(0);
   let loadingOlderEntries = $state(false);
   async function loadOlderPiEntries() {
@@ -1238,6 +1247,7 @@
   }
   function chatSocketUrl(sessionId: string) {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    savingSnapshots = false;
     if (isPiSession(sessionId)) {
       piTranscript = new PiTranscript();
       return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
@@ -1323,7 +1333,7 @@
     }));
     const confirmedUserTexts = new Set(rendered.filter((message) => message.role === "user").map((message) => message.content));
     messages = annotateTurnDurations([...rendered, ...optimistic.filter((message) => !confirmedUserTexts.has(message.content))]);
-    if (sessionId) transcriptCache.write(sessionId, rendered);
+    if (sessionId && savingSnapshots) savedSnapshots.write(sessionId, piTranscript.toSnapshot());
     if (piTranscript.busy !== (wsState.status === "running" || wsState.status === "thinking")) applyStatus(piTranscript.busy ? "running" : "idle");
     bootstrapPending = false;
     resumingExistingSession = false;
@@ -1336,6 +1346,7 @@
     if (!piTranscript) return false;
     lastTurnFrameAt = Date.now();
     if (frame.type === "pi_snapshot") {
+      savingSnapshots = true;
       piTranscript.applySnapshot(frame.view as PiSnapshot);
       renderPiTranscript();
       return true;
@@ -1476,8 +1487,9 @@
       return;
     }
     prepareVoiceClientForSession(sessionId);
-    await learnSessionEngine(sessionId);
+    if (!knowsSessionEngine(sessionId)) await learnSessionEngine(sessionId);
     ws = makeReconnectingSocket(chatSocketUrl(sessionId));
+    if (showSavedSnapshot(sessionId)) { bootstrapPending = false; sessionResumeVisible = false; }
     void refreshPendingDecision(sessionId);
   }
 
@@ -1501,15 +1513,13 @@
     streamingMsgId = null;
     responseRecoveryPending = false;
     dispatchTurn({ type: "session-switch" });
-    const cachedTranscript = transcriptCache.read(id);
-    messages = cachedTranscript ?? [];
+    messages = [];
     thinkMessages = [];
     toastBus.pending = [];
     applyStatus("idle");
     onboardingHidden = true;
     resumingExistingSession = true;
-    sessionResumeVisible = cachedTranscript === null;
-    if (cachedTranscript) queueScrollToBottom();
+    sessionResumeVisible = true;
     // Clear the leaving session's active-turn latch so a retired turn cannot
     // pin "thinking" the next time that conversation is opened.
     forgetActiveTurn();
@@ -1523,6 +1533,7 @@
     void proto;
     setConn("reconnecting");
     ws = makeReconnectingSocket(chatSocketUrl(id));
+    if (showSavedSnapshot(id)) sessionResumeVisible = false;
   }
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";

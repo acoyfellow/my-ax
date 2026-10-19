@@ -1,3 +1,5 @@
+const SAVED_ENTRY_LIMIT = 80;
+
 export type PiToolState = "pending" | "done" | "error";
 
 export type PiChatPart =
@@ -74,6 +76,14 @@ export class PiTranscript {
     this.queued = snapshot.queued;
     this.liveOutput.clear();
     for (const tool of snapshot.tools) if (tool.output) this.liveOutput.set(tool.callId, tool.output);
+  }
+
+  toSnapshot(): PiSnapshot {
+    const entryTimes: Record<string, number> = {};
+    for (const [id, at] of this.entryTimes) entryTimes[String(id)] = at;
+    const ordered = [...this.entries.values()].sort((a, b) => a.id - b.id);
+    const kept = ordered.slice(-SAVED_ENTRY_LIMIT);
+    return { busy: false, model: this.model, entries: kept, partial: null, tools: [], queued: 0, entryTimes, olderCount: this.olderCount + ordered.length - kept.length };
   }
 
   oldestEntryId(): number | null {
