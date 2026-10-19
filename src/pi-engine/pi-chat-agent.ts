@@ -153,8 +153,13 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async onConnect(connection: Connection): Promise<void> {
+    const started = Date.now();
+    const cached = this.cachedSlimView !== null;
     await this.ensureEventStream();
-    connection.send(JSON.stringify({ type: "pi_snapshot", view: await this.slimLive() }));
+    const streamed = Date.now();
+    const view = await this.slimLive();
+    connection.send(JSON.stringify({ type: "pi_snapshot", view }));
+    console.info("pi_connect_timing", { cached, streamMs: streamed - started, viewMs: Date.now() - streamed });
   }
 
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {
