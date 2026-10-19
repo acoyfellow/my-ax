@@ -22,14 +22,20 @@ export async function openPiChat(env: AppEnv["Bindings"], ownerEmail: string, ch
   return stub;
 }
 
-async function ownedPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") => { email: string } }, chatId: string) {
+async function ownedUnboundPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") => { email: string } }, chatId: string) {
   if (!PI_CHAT_ID_PATTERN.test(chatId)) throw new Error("invalid chat id");
   const email = c.get("identity").email.toLowerCase();
-  const row = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
-  if (!row) return null;
-  const stub = await getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
-  await stub.bind({ email }, chatId);
-  return stub;
+  const owned = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
+  const opened = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
+  const [row, stub] = await Promise.all([owned, opened]);
+  return row ? { stub, email } : null;
+}
+
+async function ownedPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") => { email: string } }, chatId: string) {
+  const owned = await ownedUnboundPiChat(c, chatId);
+  if (!owned) return null;
+  await owned.stub.bind({ email: owned.email }, chatId);
+  return owned.stub;
 }
 
 export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceId: string, sourceName: string, atMessageId: string): Promise<{ sessionId: string; name: string; messageCount: number }> {
@@ -103,9 +109,9 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
   app.get("/api/pi/models", (c) => c.json({ ok: true, result: { models: PI_ENGINE_MODEL_CHOICES } }));
 
   app.get("/api/pi/chats/:id/live", async (c) => {
-    const stub = await ownedPiChat(c, c.req.param("id")).catch(() => null);
-    if (!stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
-    const view: unknown = JSON.parse(JSON.stringify(await stub.slimLive()));
+    const owned = await ownedUnboundPiChat(c, c.req.param("id")).catch(() => null);
+    if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const view: unknown = JSON.parse(JSON.stringify(await owned.stub.slimLiveFor({ email: owned.email }, c.req.param("id"))));
     return c.json({ ok: true, result: view } as Record<string, unknown>);
   });
 

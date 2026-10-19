@@ -405,6 +405,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return this.harness.session().busy();
   }
 
+  async slimLiveFor(identity: { email: string }, chatId: string): Promise<PiChatSlimView> {
+    this.bind(identity, chatId);
+    return this.slimLive();
+  }
+
   async slimLive(): Promise<PiChatSlimView> {
     const view = await this.live();
     const slim = slimEntries(view.entries as SlimmableEntry[]);
