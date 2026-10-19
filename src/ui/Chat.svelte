@@ -189,6 +189,19 @@
     queueScrollToBottom();
     return true;
   }
+  let prefetchStarted = false;
+  async function prefetchRecentChats() {
+    if (prefetchStarted) return;
+    prefetchStarted = true;
+    const body = await fetch("/api/sessions?limit=16", { credentials: "include" }).then((response) => response.json()).catch(() => null);
+    const rows: Array<{ id: string; engine?: string }> = body?.result?.sessions ?? [];
+    for (const row of rows) {
+      if (row.engine !== "pi" || savedSnapshots.read(row.id)) continue;
+      rememberSessionEngine(row.id, "pi");
+      const live = await fetch(`/api/pi/chats/${encodeURIComponent(row.id)}/live`, { credentials: "include" }).then((response) => response.json()).catch(() => null);
+      if (live?.result?.entries) savedSnapshots.write(row.id, { ...live.result, busy: false, partial: null, tools: [] });
+    }
+  }
   let savingSnapshots = false;
   let piOlderCount = $state(0);
   let loadingOlderEntries = $state(false);
@@ -1347,6 +1360,7 @@
     lastTurnFrameAt = Date.now();
     if (frame.type === "pi_snapshot") {
       savingSnapshots = true;
+      setTimeout(() => void prefetchRecentChats(), 1500);
       piTranscript.applySnapshot(frame.view as PiSnapshot);
       renderPiTranscript();
       return true;

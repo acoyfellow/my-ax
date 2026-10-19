@@ -6,7 +6,7 @@ const INDEX_KEY = "my-ax-pi-snapshot-index";
 type KeyValueStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export class PiSnapshotStore {
-  constructor(private readonly storage: KeyValueStore | null, private readonly capacity = 8) {}
+  constructor(private readonly storage: KeyValueStore | null, private readonly capacity = 24) {}
 
   read(sessionId: string): PiSnapshot | null {
     try {

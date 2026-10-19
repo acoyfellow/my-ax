@@ -67,7 +67,7 @@ export type PiChatLiveView = {
   entryTimes: Record<number, number>;
 };
 
-export type PiChatSlimView = PiChatLiveView & { olderCount: number; timing?: string };
+export type PiChatSlimView = PiChatLiveView & { olderCount: number };
 
 function hasGatewayModels(env: Env): boolean {
   return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
@@ -416,19 +416,17 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   private cachedSlimView: PiChatSlimView | null = null;
 
   async slimLive(): Promise<PiChatSlimView> {
-    const started = Date.now();
     await this.ensureEventStream();
-    const streamed = Date.now();
     if (this.cachedSlimView && this.eventStream) {
       this.ctx.waitUntil(this.publishCurrentRunStatus());
       const entryTimes = this.entryTimes();
-      return { ...this.cachedSlimView, entryTimes, timing: `hit;dur=0, stream;dur=${streamed - started}, times;dur=${Date.now() - streamed}` };
+      return { ...this.cachedSlimView, entryTimes };
     }
     const view = await this.live();
     const slim = slimEntries(view.entries as SlimmableEntry[]);
     const slimView = { ...view, entries: slim.entries, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
     if (this.eventStream) this.cachedSlimView = slimView;
-    return { ...slimView, timing: `miss;dur=0, stream;dur=${streamed - started}, build;dur=${Date.now() - streamed}` };
+    return slimView;
   }
 
   async entriesPage(before: number, limit: number): Promise<{ entries: unknown[]; olderCount: number }> {
