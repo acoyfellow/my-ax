@@ -416,11 +416,16 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   private cachedSlimView: PiChatSlimView | null = null;
 
   async slimLive(): Promise<PiChatSlimView> {
+    const started = Date.now();
     await this.ensureEventStream();
+    const streamed = Date.now();
     if (this.cachedSlimView && this.eventStream) {
       this.ctx.waitUntil(this.publishCurrentRunStatus());
-      return { ...this.cachedSlimView, entryTimes: this.entryTimes() };
+      const entryTimes = this.entryTimes();
+      console.info("pi_slim_timing", { hit: true, streamMs: streamed - started, timesMs: Date.now() - streamed });
+      return { ...this.cachedSlimView, entryTimes };
     }
+    console.info("pi_slim_timing", { hit: false, streamMs: streamed - started, hasStream: Boolean(this.eventStream) });
     const view = await this.live();
     const slim = slimEntries(view.entries as SlimmableEntry[]);
     const slimView = { ...view, entries: slim.entries, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
