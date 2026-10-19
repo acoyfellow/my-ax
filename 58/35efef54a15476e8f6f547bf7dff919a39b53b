@@ -1,0 +1,39 @@
+package.json
+  s_bddf4eb8848d16::t_6472121f631b53 72
+src/pi-engine/pi-chat-agent.ts
+  s_bddf4eb8848d16::t_7229fea61bd245 34,70-71,123-124,130,133,145,155,406-423,428
+src/pi-engine/routes.ts
+  s_bddf4eb8848d16::t_96c2c652c12b31 108,112-128
+src/pi-engine/slim-entries.test.ts
+  s_bddf4eb8848d16::t_815089eac04b94 1-59
+src/pi-engine/slim-entries.ts
+  s_bddf4eb8848d16::t_34bbdb10632362 1-118
+src/styles/app.css
+  s_bddf4eb8848d16::t_ca632e90912265 247-249
+src/ui/Chat.svelte
+  s_bddf4eb8848d16::t_74e2d4e203a37c 7,69,164-204,1307,1326,1489-1490,1504-1505,1511-1512,2887-2893
+src/ui/pi-transcript.ts
+  s_bddf4eb8848d16::t_8ca92486d4805d 20,29,57,70,79-103
+src/ui/store.svelte.ts
+  s_bddf4eb8848d16::t_c3c586b8c9b7d2 38-41
+src/ui/transcript-cache.test.ts
+  s_bddf4eb8848d16::t_e245844624e0e9 1-27
+src/ui/transcript-cache.ts
+  s_bddf4eb8848d16::t_1e803ff9bdbe07 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5835efef54a15476e8f6f547bf7dff919a39b53b",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
