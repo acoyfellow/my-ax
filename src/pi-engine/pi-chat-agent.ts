@@ -218,7 +218,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   bind(identity: { email: string }, chatId: string): void {
-    this.setState({ ownerEmail: identity.email.toLowerCase(), chatId });
+    const ownerEmail = identity.email.toLowerCase();
+    if (this.state?.ownerEmail === ownerEmail && this.state?.chatId === chatId) return;
+    this.setState({ ownerEmail, chatId });
   }
 
   private identity(): AccessIdentity {
@@ -422,9 +424,12 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async live(): Promise<PiChatLiveView> {
+    const started = Date.now();
     const stream = await this.harness.session().events();
+    const opened = Date.now();
     const snapshot = stream.snapshot;
     await stream.stop();
+    console.info("pi_live_timing", { openMs: opened - started, stopMs: Date.now() - opened, entries: snapshot.entries.length });
     this.ctx.waitUntil(this.publishCurrentRunStatus(snapshot.entries));
     const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
     return {
