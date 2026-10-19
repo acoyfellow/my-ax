@@ -114,10 +114,13 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     const email = c.get("identity").email.toLowerCase();
     const ownership = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
     const loading = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)).then((stub) => stub.slimLiveFor({ email }, chatId));
-    const [row, live] = await Promise.all([ownership, loading.catch(() => null)]);
-    if (!row || !live) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
-    const view: unknown = JSON.parse(JSON.stringify(live));
-    return c.json({ ok: true, result: view } as Record<string, unknown>);
+    const started = Date.now();
+    const ownershipTimed = ownership.then((value) => ({ value, ms: Date.now() - started }));
+    const loadingTimed = loading.then((value) => ({ value, ms: Date.now() - started })).catch(() => ({ value: null, ms: Date.now() - started }));
+    const [row, live] = await Promise.all([ownershipTimed, loadingTimed]);
+    if (!row.value || !live.value) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    c.header("Server-Timing", `d1;dur=${row.ms}, chat;dur=${live.ms}`);
+    return c.json({ ok: true, result: live.value } as Record<string, unknown>);
   });
 
   app.get("/api/pi/chats/:id/entries", async (c) => {
