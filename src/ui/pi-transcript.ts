@@ -101,6 +101,20 @@ export class PiTranscript {
     if (this.entries.has(entry.id)) this.entries.set(entry.id, entry);
   }
 
+  clippedEntryIdsForMessage(messageId: string): number[] {
+    const match = /^pi-(\d+)-/.exec(messageId);
+    if (!match) return [];
+    const first = Number(match[1]);
+    const ordered = [...this.entries.values()].sort((a, b) => a.id - b.id);
+    const ids: number[] = [];
+    for (const entry of ordered) {
+      if (entry.id < first) continue;
+      if (entry.id > first && entry.kind === "pi.user") break;
+      if (entry.clipped) ids.push(entry.id);
+    }
+    return ids;
+  }
+
   clippedEntryIdsForTool(callId: string): number[] {
     const ids: number[] = [];
     for (const entry of this.entries.values()) {

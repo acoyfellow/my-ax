@@ -419,12 +419,13 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     await this.ensureEventStream();
     if (this.cachedSlimView && this.eventStream) {
       this.ctx.waitUntil(this.publishCurrentRunStatus());
-      const entryTimes = this.entryTimes();
-      return { ...this.cachedSlimView, entryTimes };
+      return this.cachedSlimView;
     }
     const view = await this.live();
     const slim = slimEntries(view.entries as SlimmableEntry[]);
-    const slimView = { ...view, entries: slim.entries, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
+    const sentIds = new Set(slim.entries.map((entry) => entry.id));
+    const entryTimes = Object.fromEntries(Object.entries(view.entryTimes).filter(([id]) => sentIds.has(Number(id))));
+    const slimView = { ...view, entries: slim.entries, entryTimes, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
     if (this.eventStream) this.cachedSlimView = slimView;
     return slimView;
   }

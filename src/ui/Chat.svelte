@@ -165,10 +165,16 @@
   }
   const fullEntryRequests = new Set<string>();
   async function loadFullToolEntries(toolId: string) {
+    await loadFullEntries((transcript) => transcript.clippedEntryIdsForTool(toolId));
+  }
+  async function loadFullMessageEntries(messageId: string) {
+    await loadFullEntries((transcript) => transcript.clippedEntryIdsForMessage(messageId));
+  }
+  async function loadFullEntries(pick: (transcript: PiTranscript) => number[]) {
     const transcript = piTranscript;
     const sessionId = currentSessionId();
     if (!transcript || !sessionId) return;
-    const ids = transcript.clippedEntryIdsForTool(toolId).filter((id) => !fullEntryRequests.has(`${sessionId}:${id}`));
+    const ids = pick(transcript).filter((id) => !fullEntryRequests.has(`${sessionId}:${id}`));
     if (!ids.length) return;
     for (const id of ids) fullEntryRequests.add(`${sessionId}:${id}`);
     const entries = await Promise.all(ids.map(async (id) => {
@@ -181,6 +187,24 @@
     renderPiTranscript();
   }
   const savedSnapshots = new PiSnapshotStore(typeof localStorage === "undefined" ? null : localStorage);
+  function fetchPiLive(sessionId: string): Promise<PiSnapshot | null> {
+    return fetch(`/api/pi/chats/${encodeURIComponent(sessionId)}/live`, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => (Array.isArray(body?.result?.entries) ? (body.result as PiSnapshot) : null))
+      .catch(() => null);
+  }
+  function applyEarlySnapshot(sessionId: string, pending: Promise<PiSnapshot | null>) {
+    const transcript = piTranscript;
+    void pending.then((view) => {
+      if (!view || !transcript || piTranscript !== transcript || savingSnapshots || readTabSession() !== sessionId) return;
+      transcript.applySnapshot(view);
+      renderPiTranscript();
+      savedSnapshots.write(sessionId, transcript.toSnapshot());
+    });
+  }
+  function fetchLiveSnapshot(sessionId: string) {
+    applyEarlySnapshot(sessionId, fetchPiLive(sessionId));
+  }
   function showSavedSnapshot(sessionId: string): boolean {
     const saved = savedSnapshots.read(sessionId);
     if (!saved || !piTranscript) return false;
@@ -1500,10 +1524,15 @@
       setConn("live");
       return;
     }
-    prepareVoiceClientForSession(sessionId);
-    if (!knowsSessionEngine(sessionId)) await learnSessionEngine(sessionId);
+    const early = knowsSessionEngine(sessionId) && !isPiSession(sessionId) ? null : fetchPiLive(sessionId);
+    if (!knowsSessionEngine(sessionId)) {
+      const view = await early;
+      if (view) rememberSessionEngine(sessionId, "pi");
+      else await learnSessionEngine(sessionId);
+    }
     ws = makeReconnectingSocket(chatSocketUrl(sessionId));
     if (showSavedSnapshot(sessionId)) { bootstrapPending = false; sessionResumeVisible = false; }
+    else if (piTranscript && early) applyEarlySnapshot(sessionId, early);
     void refreshPendingDecision(sessionId);
   }
 
@@ -1539,7 +1568,9 @@
     forgetActiveTurn();
     writeTabSession(id);
     setActiveSession(id);
-    prepareVoiceClientForSession(id);
+    voiceActivation.clear();
+    voiceClient = null;
+    voiceReady = false;
     void refreshPendingDecision(id);
     void refreshActiveSessionTitle(id);
     void refreshRemoteTurn(id);
@@ -1548,6 +1579,7 @@
     setConn("reconnecting");
     ws = makeReconnectingSocket(chatSocketUrl(id));
     if (showSavedSnapshot(id)) sessionResumeVisible = false;
+    else if (piTranscript) fetchLiveSnapshot(id);
   }
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -2960,7 +2992,7 @@
                 {/if}
               </header>
               {#if m.role === "assistant" && m.reasoning}
-                <details class="msg-reasoning">
+                <details class="msg-reasoning" ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
                   <summary>Thinking</summary>
                   <pre class="msg-reasoning__body">{m.reasoning}</pre>
                 </details>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SLIM_TEXT_LIMIT, slimEntries, slimEntry } from "./slim-entries";
+import { SLIM_TEXT_LIMIT, SLIM_THINKING_LIMIT, slimEntries, slimEntry } from "./slim-entries";
 
 const long = "x".repeat(SLIM_TEXT_LIMIT * 3);
 
@@ -11,10 +11,16 @@ test("long tool output is clipped and the entry is marked clipped", () => {
   assert.equal(entry.clipped, true);
 });
 
-test("thinking keeps its text but loses the signature", () => {
+test("short thinking keeps its text but loses the signature", () => {
   const entry = slimEntry({ id: 2, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "thinking", thinking: "hmm", thinkingSignature: long }] }] });
   assert.deepEqual(entry.model![0].content, [{ type: "thinking", thinking: "hmm" }]);
   assert.equal(entry.clipped, undefined);
+});
+
+test("long thinking is cut to a preview and the entry is marked clipped", () => {
+  const entry = slimEntry({ id: 8, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "thinking", thinking: long }] }] });
+  assert.equal((entry.model![0].content as Array<{ thinking: string }>)[0].thinking.length, SLIM_THINKING_LIMIT);
+  assert.equal(entry.clipped, true);
 });
 
 test("long tool call arguments are clipped", () => {
@@ -48,12 +54,16 @@ test("bulky metadata the page never reads is dropped", () => {
   assert.deepEqual(entry, { id: 6, kind: "pi.assistant", model: [{ role: "assistant", stopReason: "stop", timestamp: 5, content: [] }] });
 });
 
-test("JSON tool output stays valid JSON so widgets still render", () => {
-  const output = JSON.stringify({ kind: "svelte-artifact", id: "w1", log: long, src: "data:image/png;base64," + long });
+test("widget tool output keeps its short fields so the widget still renders", () => {
+  const output = JSON.stringify({ kind: "svelte-artifact", artifactId: "w1", src: "/api/artifacts/w1/preview", title: "Counter", log: long });
   const entry = slimEntry({ id: 7, kind: "pi.tool", model: [{ role: "toolResult", content: [{ type: "text", text: output }] }] });
   const parsed = JSON.parse((entry.model![0].content as Array<{ text: string }>)[0].text);
-  assert.equal(parsed.kind, "svelte-artifact");
-  assert.equal(parsed.log.length, SLIM_TEXT_LIMIT);
-  assert.equal(parsed.src.length, output.length - JSON.stringify({ kind: "svelte-artifact", id: "w1", log: long, src: "" }).length);
+  assert.deepEqual(parsed, { kind: "svelte-artifact", artifactId: "w1", src: "/api/artifacts/w1/preview", title: "Counter" });
   assert.equal(entry.clipped, true);
+});
+
+test("other long JSON output becomes a short preview", () => {
+  const output = JSON.stringify({ rows: [long] });
+  const entry = slimEntry({ id: 9, kind: "pi.tool", model: [{ role: "toolResult", content: [{ type: "text", text: output }] }] });
+  assert.equal((entry.model![0].content as Array<{ text: string }>)[0].text.length, SLIM_TEXT_LIMIT);
 });

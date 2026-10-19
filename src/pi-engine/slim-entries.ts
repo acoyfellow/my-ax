@@ -1,5 +1,6 @@
-export const SLIM_TEXT_LIMIT = 600;
-export const SLIM_ENTRY_WINDOW = 80;
+export const SLIM_TEXT_LIMIT = 300;
+export const SLIM_THINKING_LIMIT = 240;
+export const SLIM_ENTRY_WINDOW = 60;
 
 type Block = Record<string, unknown>;
 type ModelMessage = Record<string, unknown>;
@@ -10,26 +11,27 @@ function clip(text: string): { text: string; clipped: boolean } {
   return { text: text.slice(0, SLIM_TEXT_LIMIT), clipped: true };
 }
 
-function clipJsonValue(value: unknown, state: { clipped: boolean }): unknown {
-  if (typeof value === "string") {
-    if (value.startsWith("data:")) return value;
-    const result = clip(value);
-    state.clipped ||= result.clipped;
-    return result.text;
+const WIDGET_FIELD_LIMIT = 400;
+
+function widgetFields(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.kind !== "string") return null;
+  const kept: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(record)) {
+    if (typeof field === "string" && field.length <= WIDGET_FIELD_LIMIT) kept[key] = field;
+    else if (typeof field === "number" || typeof field === "boolean") kept[key] = field;
   }
-  if (Array.isArray(value)) return value.map((item) => clipJsonValue(item, state));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clipJsonValue(item, state)]));
-  return value;
+  return kept;
 }
 
 function clipToolOutput(text: string): { text: string; clipped: boolean } {
   if (text.length <= SLIM_TEXT_LIMIT) return { text, clipped: false };
   const trimmed = text.trimStart();
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+  if (trimmed.startsWith("{")) {
     try {
-      const state = { clipped: false };
-      const clipped = clipJsonValue(JSON.parse(text), state);
-      return { text: state.clipped ? JSON.stringify(clipped) : text, clipped: state.clipped };
+      const widget = widgetFields(JSON.parse(text));
+      if (widget) return { text: JSON.stringify(widget), clipped: true };
     } catch {}
   }
   return clip(text);
@@ -52,7 +54,9 @@ function slimArguments(args: unknown): { value: unknown; clipped: boolean } {
 function slimBlock(block: Block, role: unknown): { block: Block; clipped: boolean } {
   if (block.type === "thinking") {
     const { thinkingSignature: _signature, ...rest } = block;
-    return { block: rest, clipped: false };
+    const thinking = typeof rest.thinking === "string" ? rest.thinking : "";
+    if (thinking.length <= SLIM_THINKING_LIMIT) return { block: rest, clipped: false };
+    return { block: { ...rest, thinking: thinking.slice(0, SLIM_THINKING_LIMIT) }, clipped: true };
   }
   if (block.type === "image") return { block: { type: "image", mimeType: block.mimeType, omitted: true }, clipped: true };
   if (block.type === "text" && role === "toolResult" && typeof block.text === "string") {
