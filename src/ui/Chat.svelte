@@ -1290,6 +1290,7 @@
   function chatSocketUrl(sessionId: string) {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     savingSnapshots = false;
+    piOlderCount = 0;
     if (isPiSession(sessionId)) {
       piTranscript = new PiTranscript();
       return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
@@ -2946,7 +2947,7 @@
           </div>
         {/if}
 
-        {#if piTranscript && piOlderCount > 0}
+        {#if piOlderCount > 0}
           <div class="msg-older">
             <button type="button" class="msg-older__button" onclick={loadOlderPiEntries} disabled={loadingOlderEntries}>
               {loadingOlderEntries ? "Loading…" : "Show earlier messages"}
