@@ -109,9 +109,14 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
   app.get("/api/pi/models", (c) => c.json({ ok: true, result: { models: PI_ENGINE_MODEL_CHOICES } }));
 
   app.get("/api/pi/chats/:id/live", async (c) => {
-    const owned = await ownedUnboundPiChat(c, c.req.param("id")).catch(() => null);
-    if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
-    const view: unknown = JSON.parse(JSON.stringify(await owned.stub.slimLiveFor({ email: owned.email }, c.req.param("id"))));
+    const chatId = c.req.param("id");
+    if (!PI_CHAT_ID_PATTERN.test(chatId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const email = c.get("identity").email.toLowerCase();
+    const ownership = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
+    const loading = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)).then((stub) => stub.slimLiveFor({ email }, chatId));
+    const [row, live] = await Promise.all([ownership, loading.catch(() => null)]);
+    if (!row || !live) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const view: unknown = JSON.parse(JSON.stringify(live));
     return c.json({ ok: true, result: view } as Record<string, unknown>);
   });
 
