@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { getAgentByName } from "agents-pi";
+import type { PiChatSlimView } from "./pi-chat-agent";
 import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
@@ -112,15 +113,17 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     const chatId = c.req.param("id");
     if (!PI_CHAT_ID_PATTERN.test(chatId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
     const email = c.get("identity").email.toLowerCase();
-    const ownership = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
-    const loading = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)).then((stub) => stub.slimLiveFor({ email }, chatId));
     const started = Date.now();
+    let stubAt = 0;
+    const ownership = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
+    const loading = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)).then((stub) => { stubAt = Date.now() - started; return stub.slimLiveFor({ email }, chatId); });
     const ownershipTimed = ownership.then((value) => ({ value, ms: Date.now() - started }));
-    const loadingTimed = loading.then((value) => ({ value, ms: Date.now() - started })).catch(() => ({ value: null, ms: Date.now() - started }));
+    const loadingTimed = loading.then((value): { value: PiChatSlimView | null; ms: number } => ({ value, ms: Date.now() - started })).catch(() => ({ value: null, ms: Date.now() - started }));
     const [row, live] = await Promise.all([ownershipTimed, loadingTimed]);
     if (!row.value || !live.value) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
-    c.header("Server-Timing", `d1;dur=${row.ms}, chat;dur=${live.ms}`);
-    return c.json({ ok: true, result: live.value } as Record<string, unknown>);
+    const { timing, ...view } = live.value;
+    c.header("Server-Timing", `d1;dur=${row.ms}, wake;dur=${stubAt}, chat;dur=${live.ms}, ${timing ?? ""}`);
+    return c.json({ ok: true, result: JSON.parse(JSON.stringify(view)) } as Record<string, unknown>);
   });
 
   app.get("/api/pi/chats/:id/entries", async (c) => {
