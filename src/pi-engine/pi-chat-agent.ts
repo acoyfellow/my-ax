@@ -140,12 +140,14 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const stream = await this.harness.session().events();
     this.eventStream = stream;
     stream.start(async (events: readonly AgentEvent[]) => {
+      this.cachedSlimView = null;
       this.ctx.waitUntil(this.publishCurrentRunStatus());
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events: events.map(slimEvent), entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
     });
     void stream.closed.finally(() => {
+      this.cachedSlimView = null;
       if (this.eventStream === stream) this.eventStream = null;
     });
   }
@@ -410,10 +412,19 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return this.slimLive();
   }
 
+  private cachedSlimView: PiChatSlimView | null = null;
+
   async slimLive(): Promise<PiChatSlimView> {
+    await this.ensureEventStream();
+    if (this.cachedSlimView && this.eventStream) {
+      this.ctx.waitUntil(this.publishCurrentRunStatus());
+      return { ...this.cachedSlimView, entryTimes: this.entryTimes() };
+    }
     const view = await this.live();
     const slim = slimEntries(view.entries as SlimmableEntry[]);
-    return { ...view, entries: slim.entries, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
+    const slimView = { ...view, entries: slim.entries, olderCount: slim.olderCount, partial: view.partial ? slimEvent({ message: view.partial }).message ?? null : null };
+    if (this.eventStream) this.cachedSlimView = slimView;
+    return slimView;
   }
 
   async entriesPage(before: number, limit: number): Promise<{ entries: unknown[]; olderCount: number }> {
@@ -429,12 +440,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async live(): Promise<PiChatLiveView> {
-    const started = Date.now();
     const stream = await this.harness.session().events();
-    const opened = Date.now();
     const snapshot = stream.snapshot;
     await stream.stop();
-    console.info("pi_live_timing", { openMs: opened - started, stopMs: Date.now() - opened, entries: snapshot.entries.length });
     this.ctx.waitUntil(this.publishCurrentRunStatus(snapshot.entries));
     const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
     return {
