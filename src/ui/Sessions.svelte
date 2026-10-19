@@ -88,9 +88,21 @@
     event.preventDefault();
     saveLayout();
   }
-  let sessions = $state<SessionRow[]>([]);
+  const SAVED_SESSIONS_KEY = "my-ax-sessions-list";
+  function savedSessions(): SessionRow[] {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) ?? "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveSessions(rows: SessionRow[]) {
+    try { localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(rows.slice(0, PAGE_SIZE))); } catch {}
+  }
+  let sessions = $state<SessionRow[]>(typeof localStorage === "undefined" ? [] : savedSessions());
   let cursor = $state<string | null>(null);
-  let loading = $state(true);
+  let loading = $state(sessions.length === 0);
   let loadingMore = $state(false);
   let errorText = $state<string | null>(null);
   let currentId = $derived(sessionState.id);
@@ -166,7 +178,7 @@
   }
 
   async function refresh() {
-    loading = true;
+    loading = sessions.length === 0;
     errorText = null;
     cursor = null;
     const titleEpoch = captureTitleEpoch();
@@ -178,6 +190,7 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       const d = await r.json();
       sessions = uniqueSessions(d?.result?.sessions ?? []);
+      saveSessions(sessions);
       const active = sessions.find((row) => row.id === requestedId);
       // Chat bootstrap can choose the latest server session while this eager
       // sidebar fetch is in flight. Do not let a stale pre-bootstrap null reset

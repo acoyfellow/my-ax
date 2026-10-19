@@ -147,7 +147,7 @@ export type ConnState = "offline" | "reconnecting" | "live";
 export type AgentStatus = "idle" | "thinking" | "running" | "done";
 
 export const wsState = $state({
-  conn: "offline" as ConnState,
+  conn: "reconnecting" as ConnState,
   status: "idle" as AgentStatus,
 });
 

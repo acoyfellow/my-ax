@@ -1478,7 +1478,7 @@
   }
 
   async function bootstrap() {
-    setConn("offline");
+    setConn("reconnecting");
     showOAuthCallbackToast();
     const sessionId = await sessionForBootstrap();
     sessionGeneration.activate(sessionId);

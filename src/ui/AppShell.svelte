@@ -51,7 +51,7 @@
     wsState.conn === "live"
       ? "connected"
       : wsState.conn === "reconnecting"
-        ? "reconnecting…"
+        ? "connecting…"
         : "offline",
   );
 </script>
