@@ -1,0 +1,57 @@
+.gitignore
+  s_46448aabb2fde9::t_1f50acba25f59f 57
+package.json
+  s_fc002e6ac2c2f5::t_4fd661b35855fd 59
+scripts/proof-cold-restore-fixture.sh
+  s_3a287577ef0d27::t_2fc7644f38f265 1-16
+scripts/proof-cold-restore-live.sh
+  s_3a287577ef0d27::t_85d23f90ff3a9d 1-14
+scripts/proof-cold-restore-local.sh
+  s_3a287577ef0d27::t_3f69ea99365104 1-17
+scripts/proof-cold-restore-reinstall.sh
+  s_3a287577ef0d27::t_d4cbd0f058a8bd 1-21
+scripts/prove-cold-restore.mjs
+  s_3a287577ef0d27::t_d362dd8d1b0588 1-105
+src/cold-restore-probe.test.ts
+  s_3a287577ef0d27::t_4d986ddad0a92a 1-96
+src/cold-restore-probe.ts
+  s_3a287577ef0d27::t_d6239a3910bf85 1-200
+src/routes/system.test.ts
+  s_3a287577ef0d27::t_8c2f44e2516484 1-83
+src/routes/system.ts
+  s_3a287577ef0d27::t_2a15dae54f7c6e 15-16,21
+src/workspace.ts
+  s_3a287577ef0d27::t_7f3f24f4e978dd 8,90,97,180-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "11c922f89316ed5cefd8aa0c1b01e0fb051caa35",
+  "prompts": {},
+  "sessions": {
+    "s_3a287577ef0d27": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f17f7-b570-7a6a-9f50-817745d03cdb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_fc002e6ac2c2f5": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0aab9-f490-72e1-8d73-920246e8faec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
