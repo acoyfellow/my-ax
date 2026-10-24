@@ -1,0 +1,23 @@
+package.json
+  s_46448aabb2fde9::t_37137180e86cc3 20
+src/web-search-binding.test.ts
+  s_46448aabb2fde9::t_e92ee63bc3420e 1-27
+src/web-search.ts
+  s_46448aabb2fde9::t_a647f6ce0f9cc4 28,35-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8af59b534cac70c68a00ddf8ea77f7cc86f7b405",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
