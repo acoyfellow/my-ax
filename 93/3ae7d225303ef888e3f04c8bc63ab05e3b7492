@@ -1,0 +1,23 @@
+package.json
+  s_46448aabb2fde9::t_38bd646a422780 157
+src/think-workspace-read.test.ts
+  s_46448aabb2fde9::t_8946bb2f46bc14 1-18
+src/think-workspace.ts
+  s_46448aabb2fde9::t_1ad3778783767e 3,20-24,77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "933ae7d225303ef888e3f04c8bc63ab05e3b7492",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
