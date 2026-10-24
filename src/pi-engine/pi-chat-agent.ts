@@ -493,12 +493,12 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   private progressSample: ProgressSample | undefined;
 
   private async armTurnWatchdog(): Promise<void> {
-    if (this.getSchedules().some((schedule) => schedule.callback === "checkTurnProgress")) return;
+    if ((await this.listSchedules()).some((schedule) => schedule.callback === "checkTurnProgress")) return;
     await this.scheduleEvery(TURN_WATCHDOG_INTERVAL_SECONDS, "checkTurnProgress").catch((error) => console.error("pi_turn_watchdog_arm_failed", { err: String(error) }));
   }
 
   private async disarmTurnWatchdog(): Promise<void> {
-    for (const schedule of this.getSchedules().filter((candidate) => candidate.callback === "checkTurnProgress")) {
+    for (const schedule of (await this.listSchedules()).filter((candidate) => candidate.callback === "checkTurnProgress")) {
       await this.cancelSchedule(schedule.id);
     }
   }
