@@ -42,3 +42,31 @@ test("a timeout is enforced inside the shell, so the sandbox session is never ki
   assert.equal(result.exitCode, 124);
   assert.match(result.error ?? "", /timed out after 5000ms/);
 });
+
+test("a dead sandbox error is recognised", async () => {
+  const { isDeadSandboxError } = await import("./workspace-exec");
+  assert.equal(isDeadSandboxError(new Error("Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.")), true);
+  assert.equal(isDeadSandboxError(new Error("WebSocket upgrade failed: 500 Internal Server Error")), true);
+  assert.equal(isDeadSandboxError(new Error("Session 'sandbox-chat-x' shell exited (exit code: 1)")), true);
+  assert.equal(isDeadSandboxError(new Error("ENOENT: no such file")), false);
+});
+
+test("a dead sandbox is reset once and the call is retried", async () => {
+  const { withSandboxRecovery } = await import("./workspace-exec");
+  let calls = 0;
+  let resets = 0;
+  const outcome = await withSandboxRecovery(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("this Durable Object instance is no longer active");
+    return "alive";
+  }, async () => { resets += 1; });
+  assert.deepEqual(outcome, { value: "alive", reset: true });
+  assert.equal(resets, 1);
+});
+
+test("an ordinary error is not retried", async () => {
+  const { withSandboxRecovery } = await import("./workspace-exec");
+  let resets = 0;
+  await assert.rejects(withSandboxRecovery(async () => { throw new Error("bad input"); }, async () => { resets += 1; }), /bad input/);
+  assert.equal(resets, 0);
+});
