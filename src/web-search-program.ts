@@ -16,7 +16,7 @@ export type PublicWebSearchResult = {
 export type PublicWebSearchResponse = {
   results: PublicWebSearchResult[];
   truncated: boolean;
-  error?: "web_search_unavailable" | "web_search_failed";
+  error?: "web_search_unavailable" | "web_search_failed" | "web_search_empty_query";
 };
 
 type CloudflareSearchItem = {
@@ -38,6 +38,11 @@ export type PerformWebSearchOptions = {
 };
 
 class WebSearchError extends Data.TaggedError("WebSearchError")<{ cause: unknown }> {}
+
+export function describeSearchFailure(cause: unknown): string {
+  const message = cause instanceof Error ? `${cause.name}: ${cause.message}` : typeof cause === "string" ? cause : JSON.stringify(cause) ?? String(cause);
+  return message.replace(/(bearer|token|secret|authorization)([\s:=]+)(bearer\s+)?\S+/gi, "$1$2[redacted]").slice(0, 500);
+}
 
 function clampMaxResults(value: number | undefined): number {
   if (!Number.isFinite(value)) return DEFAULT_MAX_RESULTS;
@@ -102,6 +107,9 @@ export function performWebSearch(query: string, options: PerformWebSearchOptions
       }
       return { results, truncated };
     }),
-    Effect.catchTag("WebSearchError", () => Effect.succeed<PublicWebSearchResponse>({ results: [], truncated: false, error: "web_search_failed" })),
+    Effect.catchTag("WebSearchError", ({ cause }) => {
+      console.error("web_search_failed", { detail: describeSearchFailure(cause) });
+      return Effect.succeed<PublicWebSearchResponse>({ results: [], truncated: false, error: "web_search_failed" });
+    }),
   );
 }

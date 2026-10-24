@@ -11,3 +11,12 @@ export function assertSeedablePath(path: string): asserts path is string {
     throw new Error("path must not contain traversal segments");
   }
 }
+
+export function resolveWorkspacePath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed === "" || trimmed === "." || trimmed === "./") return WORKSPACE_HOME;
+  if (trimmed === "~") return WORKSPACE_HOME;
+  if (trimmed.startsWith("~/")) return `${WORKSPACE_HOME}/${trimmed.slice(2)}`;
+  if (trimmed.startsWith("/")) return trimmed;
+  return `${WORKSPACE_HOME}/${trimmed.replace(/^(\.\/)+/, "")}`;
+}
