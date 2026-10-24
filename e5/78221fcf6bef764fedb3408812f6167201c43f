@@ -1,0 +1,21 @@
+package.json
+  s_46448aabb2fde9::t_c8c896f74a948e 157
+src/pi-engine/pi-chat-agent.ts
+  s_46448aabb2fde9::t_96e028ec164c95 84,95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e578221fcf6bef764fedb3408812f6167201c43f",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
