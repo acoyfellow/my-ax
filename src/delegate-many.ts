@@ -16,6 +16,7 @@ import {
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
+import { thinkWorkspaceFor } from "./think-workspace-fs";
 import { ReadOnlyDelegateWorkspace, requireDelegateIdentity, splitDelegateRunInput } from "./read-only-delegate-workspace";
 
 export {
@@ -62,11 +63,10 @@ export function asAgentToolFailure(result: RunAgentToolResult): AgentToolFailure
 /** A run-scoped read-only Think facet. It deliberately has no delegation tool. */
 export class ReadOnlyDelegateAgent extends Think<Env> {
   maxSteps = 8;
-  workspaceBash = false;
-  override workspace = new ReadOnlyDelegateWorkspace(
+  override workspace = thinkWorkspaceFor(new ReadOnlyDelegateWorkspace(
     () => this.getConfig<{ identity?: AccessIdentity }>()?.identity,
     (identity) => new SandboxThinkWorkspace(this.env, () => identity),
-  );
+  ));
   override async startAgentToolRun(input: unknown, options: { runId: string }) {
     const { task, identity } = splitDelegateRunInput(input);
     this.configure<{ identity?: AccessIdentity }>({ ...(this.getConfig<{ identity?: AccessIdentity }>() ?? {}), identity });

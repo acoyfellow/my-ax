@@ -56,6 +56,7 @@ function makeDeskApp() {
     get() {
       return {
         async setName() {},
+        async __unsafe_ensureInitialized() {},
         async broadcastDeskBoard(sessionIds: string[], board: DeskBoard) { broadcasts.push({ sessionIds, board }); },
       };
     },

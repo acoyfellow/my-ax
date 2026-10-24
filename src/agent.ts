@@ -20,6 +20,7 @@ import { DEFAULT_MODEL_ID, defaultModelId, findModel } from "./models";
 import { gatewayAuthenticationFailure } from "./model-auth";
 import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
+import { thinkWorkspaceFor } from "./think-workspace-fs";
 import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotWorkspace } from "./workspace";
@@ -187,10 +188,7 @@ export class MyAgent extends Think<Env> {
   /** Native agents MCP registrations are per-session DO, but bearer tokens
    * remain per-user in OAuthClientDO. Lazily hydrate once per isolate and
    * expose each discovered MCP tool directly to Think. */
-  // Keep the generic Think workspace bash tool off: my-ax already exposes
-  // real shell/process tools for its remote Sandbox-backed /home/user.
-  workspaceBash = false;
-  override workspace = new SandboxThinkWorkspace(this.env, () => this.getConfig<MyAgentConfig>()?.identity);
+  override workspace = thinkWorkspaceFor(new SandboxThinkWorkspace(this.env, () => this.getConfig<MyAgentConfig>()?.identity));
 
   seedIdentity(identity: AccessIdentity) {
     this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), identity });

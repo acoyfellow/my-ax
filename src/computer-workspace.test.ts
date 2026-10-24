@@ -331,7 +331,7 @@ test("non-workspace work code does not classify as a Sandbox snapshot mutation",
 
 test("legacy Computer storage stays bound but has no product API", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { dependencies: Record<string, string> };
-  assert.equal(packageJson.dependencies["@cloudflare/computer"], "0.1.1");
+  assert.equal(packageJson.dependencies["@cloudflare/computer"], "0.5.1");
   const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   const config = parse(wrangler, [], { allowTrailingComma: true }) as Record<string, any>;
   const environments = ["production", ...Object.keys(config.env ?? {})];
