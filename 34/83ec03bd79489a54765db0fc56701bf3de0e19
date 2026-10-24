@@ -1,0 +1,21 @@
+src/pi-engine/pi-harness-wake.test.ts
+  s_46448aabb2fde9::t_7a98550fc5ce8a 15-19
+src/voice-think-agent.ts
+  s_46448aabb2fde9::t_a6c7c89e4c913d 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3483ec03bd79489a54765db0fc56701bf3de0e19",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
