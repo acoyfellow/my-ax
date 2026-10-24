@@ -76,6 +76,7 @@ function hasGatewayModels(env: Env): boolean {
 }
 
 export class PiChatAgent extends Agent<Env, PiChatState> {
+  static options = { sendIdentityOnConnect: false };
   initialState: PiChatState = {};
   ai = createAI({ binding: this.env.AI });
   registry = createRegistry();
