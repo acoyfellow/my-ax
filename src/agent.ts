@@ -1,17 +1,16 @@
 import { createToolContext } from "./tool-context";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
-import { Think } from "@cloudflare/think";
+import { Think, type Session } from "@cloudflare/think";
 import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
-import { Session } from "agents/experimental/memory/session";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { shouldAutoContinue, TURN_CUT_NOTE, TURN_STEP_BATCH } from "./turn-continuation";
 import { judgeTurn, turnLimitsFromEnv, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, TurnProgressTracker } from "./turn-watchdog";
 import { TURN_SNAPSHOT_COOLDOWN_MS } from "./workspace-policy";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { Effect } from "effect";
-import { createCompactFunction } from "agents/experimental/memory/utils";
+import { createCompactFunction } from "agents/sessions";
 import type { ChatRecoveryExhaustedContext, ChatResponseResult, ToolCallResultContext } from "@cloudflare/think";
 import type { Env } from "./types";
 import { resolveMyAxModel } from "./llm";
@@ -21,6 +20,7 @@ import { DEFAULT_MODEL_ID, defaultModelId, findModel } from "./models";
 import { gatewayAuthenticationFailure } from "./model-auth";
 import type { AccessIdentity } from "./auth";
 import { SandboxThinkWorkspace } from "./think-workspace";
+import { thinkWorkspaceFor } from "./think-workspace-fs";
 import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
 import { getUserWorkspace, snapshotWorkspace } from "./workspace";
@@ -188,10 +188,7 @@ export class MyAgent extends Think<Env> {
   /** Native agents MCP registrations are per-session DO, but bearer tokens
    * remain per-user in OAuthClientDO. Lazily hydrate once per isolate and
    * expose each discovered MCP tool directly to Think. */
-  // Keep the generic Think workspace bash tool off: my-ax already exposes
-  // real shell/process tools for its remote Sandbox-backed /home/user.
-  workspaceBash = false;
-  override workspace = new SandboxThinkWorkspace(this.env, () => this.getConfig<MyAgentConfig>()?.identity);
+  override workspace = thinkWorkspaceFor(new SandboxThinkWorkspace(this.env, () => this.getConfig<MyAgentConfig>()?.identity));
 
   seedIdentity(identity: AccessIdentity) {
     this.configure<MyAgentConfig>({ ...(this.getConfig<MyAgentConfig>() ?? {}), identity });

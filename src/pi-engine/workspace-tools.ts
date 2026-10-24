@@ -24,7 +24,7 @@ export function clipToolOutput(text: string): string {
 }
 
 function textResult(text: string) {
-  return { content: [{ type: "text" as const, text: clipToolOutput(text) }] };
+  return { output: [{ type: "text" as const, text: clipToolOutput(text) }] };
 }
 
 export function chatWorkspaceExtension(workspace: () => Promise<ChatWorkspace>, instructions: string) {

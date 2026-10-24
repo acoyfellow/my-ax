@@ -5,7 +5,7 @@ import { clipToolOutput } from "./workspace-tools";
 import { PI_MEMORY_INSTRUCTIONS, type ConversationMemory } from "./conversation-index";
 
 function textResult(text: string) {
-  return { content: [{ type: "text" as const, text: clipToolOutput(text) }] };
+  return { output: [{ type: "text" as const, text: clipToolOutput(text) }] };
 }
 
 export function memoryToolsExtension(memory: () => ConversationMemory) {

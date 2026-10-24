@@ -13,7 +13,7 @@ export const PI_SHARED_TOOL_EXCLUDE = new Set(["search_conversations"]);
 type AnyToolRegistration = Parameters<typeof defineExtension>[0]["tools"] extends ReadonlyArray<infer T> | undefined ? T : never;
 
 function textResult(text: string) {
-  return { content: [{ type: "text" as const, text }] };
+  return { output: [{ type: "text" as const, text }] };
 }
 
 function piToolFromDef(definition: ToolDef, context: () => ToolContext): AnyToolRegistration {

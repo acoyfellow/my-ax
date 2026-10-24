@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { WorkspaceLike } from "@cloudflare/think/tools/workspace";
+import type { WorkspaceLike } from "./think-workspace-fs";
 import type { AccessIdentity } from "./auth";
 import { DelegateCapabilityError, ReadOnlyDelegateWorkspace, splitDelegateRunInput } from "./read-only-delegate-workspace";
 

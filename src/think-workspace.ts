@@ -1,4 +1,4 @@
-import type { WorkspaceLike } from "@cloudflare/think/tools/workspace";
+import type { WorkspaceLike } from "./think-workspace-fs";
 import type { FileInfo } from "@cloudflare/shell";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
