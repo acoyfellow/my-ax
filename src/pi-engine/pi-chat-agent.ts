@@ -593,6 +593,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async snapshotWorkspaceAfterTurn(): Promise<void> {
+    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
+  }
+
+  private async publishTurnSnapshot(): Promise<void> {
     const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };
     await saveWorkspaceDisk(this.env, identity, scope, "turn").catch((error: unknown) => console.error("pi_disk_snapshot_after_turn_failed", { chatId: scope.chatId, err: String(error) }));

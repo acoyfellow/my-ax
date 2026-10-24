@@ -834,6 +834,10 @@ export class MyAgent extends Think<Env> {
   }
 
   async snapshotWorkspaceAfterTurn() {
+    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
+  }
+
+  private async publishTurnSnapshot() {
     const identity = this.identity();
     if (!identity) return;
     const outcome = await snapshotWorkspace(this.env, identity, "turn", { respectCooldown: true }).catch((error) => {
