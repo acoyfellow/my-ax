@@ -5,6 +5,7 @@ import {
   SANDBOX_ID_MAX_LENGTH,
   TURN_SNAPSHOT_COOLDOWN_MS,
   decideSnapshotPublish,
+  homeLooksWiped,
   shouldRestoreDirectoryBackup,
   turnSnapshotDue,
   workspaceSandboxId,
@@ -54,10 +55,20 @@ test("turn snapshots are rate-limited per workspace", () => {
   assert.equal(turnSnapshotDue(1_000, 1_000 + TURN_SNAPSHOT_COOLDOWN_MS), true);
 });
 
-test("a container booted from a disk snapshot keeps its disk instead of restoring an older home backup", () => {
-  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: "snap-1" }), false);
+test("a disk boot with a healthy home keeps its disk instead of restoring an older home backup", () => {
+  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: "snap-1", homeBytes: 100_000_000, lastBackupBytes: 108_000_000 }), false);
 });
 
-test("a container booted from the plain image restores the latest home backup", () => {
-  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: null }), true);
+test("a disk boot with an empty home restores the last good home backup", () => {
+  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: "snap-1", homeBytes: 15_716, lastBackupBytes: 107_945_388 }), true);
+});
+
+test("a plain image boot restores the latest home backup", () => {
+  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: null, homeBytes: null, lastBackupBytes: 107_945_388 }), true);
+});
+
+test("an empty home after a restore is reported as wiped, not ok", () => {
+  assert.equal(homeLooksWiped(0, 107_945_388), true);
+  assert.equal(homeLooksWiped(90_000_000, 107_945_388), false);
+  assert.equal(homeLooksWiped(null, 107_945_388), false);
 });
