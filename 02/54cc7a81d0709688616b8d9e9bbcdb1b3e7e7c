@@ -1,0 +1,31 @@
+package-lock.json
+  s_46448aabb2fde9::t_36d5f2b12ae69b 49,7067-7073
+package.json
+  s_46448aabb2fde9::t_c7aa6321a5c340 197
+src/pi-engine/connector-tools.ts
+  s_46448aabb2fde9::t_0438ec980dd858 14
+src/pi-engine/legacy-tools.ts
+  s_46448aabb2fde9::t_3c46bfd42b8f4d 16
+src/pi-engine/machine-tools.ts
+  s_46448aabb2fde9::t_4566d42129c304 27
+src/pi-engine/memory-tools.ts
+  s_46448aabb2fde9::t_7fd63fcfd32bcf 8
+src/pi-engine/workspace-tools.ts
+  s_46448aabb2fde9::t_17ac11a1148952 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0254cc7a81d0709688616b8d9e9bbcdb1b3e7e7c",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
