@@ -954,12 +954,12 @@ export class MyAgent extends Think<Env> {
   }
 
   private async armTurnWatchdog(): Promise<void> {
-    if (this.getSchedules().some((schedule) => schedule.callback === "checkTurnProgress")) return;
+    if ((await this.listSchedules()).some((schedule) => schedule.callback === "checkTurnProgress")) return;
     await this.scheduleEvery(TURN_WATCHDOG_INTERVAL_SECONDS, "checkTurnProgress").catch((error) => console.error("turn_watchdog_arm_failed", { sessionId: this.name, err: String(error) }));
   }
 
   private async disarmTurnWatchdog(): Promise<void> {
-    for (const schedule of this.getSchedules().filter((candidate) => candidate.callback === "checkTurnProgress")) {
+    for (const schedule of (await this.listSchedules()).filter((candidate) => candidate.callback === "checkTurnProgress")) {
       await this.cancelSchedule(schedule.id);
     }
   }
