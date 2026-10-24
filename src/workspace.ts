@@ -1,5 +1,5 @@
 import { getSandbox, type DirectoryBackup, type Sandbox } from "@cloudflare/sandbox";
-import { workspaceInitCommand } from "./workspace-init";
+import { readyMarkerCheckCommand, workspaceInitCommand } from "./workspace-init";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
 import { Effect } from "effect";
@@ -123,7 +123,7 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     // an earlier tool in the same turn. A /tmp marker survives calls within a
     // live container but disappears naturally when Sandbox recycles it.
     const acquireStarted = Date.now();
-    const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
+    const ready = await sandbox.exec(readyMarkerCheckCommand(READY_MARKER), { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
     recycled = ready?.exitCode !== 0;
     const note = async (name: string, started: number, outcome: string, message?: string) => recycled && recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name, durationMs: Date.now() - started, outcome, message }).catch(() => undefined);
     await note("fresh-container", acquireStarted, ready ? "ok" : "unreachable", `scope ${scope.kind}`);
