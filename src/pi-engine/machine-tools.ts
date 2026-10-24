@@ -24,7 +24,7 @@ export const PI_MACHINE_INSTRUCTIONS = [
 ].join("\n");
 
 function textResult(text: string) {
-  return { content: [{ type: "text" as const, text: clipToolOutput(text) }] };
+  return { output: [{ type: "text" as const, text: clipToolOutput(text) }] };
 }
 
 export function machineToolsExtension(runner: () => MachineToolRunner) {

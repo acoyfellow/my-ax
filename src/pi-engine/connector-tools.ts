@@ -11,7 +11,7 @@ export type ConnectorRunner = {
 export const PI_CONNECTOR_INSTRUCTIONS = "Connectors: the owner's connected MCP servers (Settings → Connectors). Call connector_list to see the tools they publish, then connector_call with {tool, arguments} using a name from that list.";
 
 function textResult(text: string) {
-  return { content: [{ type: "text" as const, text: clipToolOutput(text) }] };
+  return { output: [{ type: "text" as const, text: clipToolOutput(text) }] };
 }
 
 export function connectorToolsExtension(runner: () => ConnectorRunner) {
