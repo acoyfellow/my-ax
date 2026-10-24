@@ -1,0 +1,45 @@
+package.json
+  s_46448aabb2fde9::t_2431a4ff1085ea 91
+src/agent.ts
+  s_46448aabb2fde9::t_7109ec813ee2a0 23,191
+src/computer-workspace.test.ts
+  s_46448aabb2fde9::t_1b32693d49c181 334
+src/delegate-many.ts
+  s_46448aabb2fde9::t_070bcbcba8af97 19,66,69
+src/read-only-delegate-workspace.test.ts
+  s_46448aabb2fde9::t_d09304ed464b17 3
+src/read-only-delegate-workspace.ts
+  s_46448aabb2fde9::t_7faf1d8a300f44 1
+src/routes/desk.test.ts
+  s_46448aabb2fde9::t_3491849b3c07b6 59
+src/think-workspace-fs.test.ts
+  s_f7374b7771809b::t_95f9e19fbf3e72 1-61
+src/think-workspace-fs.ts
+  s_46448aabb2fde9::t_1522ebd6400508 1-188
+src/think-workspace.ts
+  s_46448aabb2fde9::t_ebd5b3c5ff8f5a 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2d6f1bad87d7b0a8634afaca91d2c90a10e10fc6",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_f7374b7771809b": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16e2e-0b32-7646-9744-b0e4a1f10da3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
