@@ -1,0 +1,29 @@
+package.json
+  s_bddf4eb8848d16::t_5cc8b2d7115bdb 72
+src/pi-engine/fork.test.ts
+  s_bddf4eb8848d16::t_ca6cc955b13ec8 1-25
+src/pi-engine/fork.ts
+  s_bddf4eb8848d16::t_8dd1197c45a17c 1-22
+src/pi-engine/pi-chat-agent.ts
+  s_bddf4eb8848d16::t_69e0c358512723 9-10,216-229
+src/pi-engine/routes.ts
+  s_bddf4eb8848d16::t_7bbc77f9e20f6a 6,33-53
+src/routes/sessions.ts
+  s_bddf4eb8848d16::t_6397e792214510 11,384,386-393
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f94e52a6d3fe2badf4e6b8f82636a51f7bda0bc6",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}

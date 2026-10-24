@@ -1,0 +1,19 @@
+src/pi-engine/pi-chat-agent.ts
+  s_bddf4eb8848d16::t_d0dd071c5cd8e2 221-223,427,429,432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2a9ad1c3b82a1cce11bc7efebe7969dd1db03d35",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}

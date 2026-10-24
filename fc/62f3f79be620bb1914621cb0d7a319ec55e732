@@ -1,0 +1,21 @@
+src/ui/Chat.svelte
+  s_bddf4eb8848d16::t_9883502a349b80 636,1524,1659
+src/ui/history-beneath-live-turn-smoke.mjs
+  s_bddf4eb8848d16::t_c0f230f8df3cf1 11-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fc62f3f79be620bb1914621cb0d7a319ec55e732",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}

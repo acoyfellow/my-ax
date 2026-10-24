@@ -1,0 +1,25 @@
+src/control-plane-mcp.test.ts
+  s_bddf4eb8848d16::t_e7c6bf72556c5a 17
+src/routes/mcp.ts
+  s_bddf4eb8848d16::t_2a4570e36f09cb 14,21,218-223,450-451,496-497
+src/routes/terminal.ts
+  s_bddf4eb8848d16::t_e9a3fe47c35d12 6,20-36
+src/workspace.ts
+  s_bddf4eb8848d16::t_0e27b4e4a4c251 257-281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3dc6c1fc6b96fd72e5c7c83a1f38177eb01d69a6",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}

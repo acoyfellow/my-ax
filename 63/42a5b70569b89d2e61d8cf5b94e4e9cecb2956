@@ -1,0 +1,27 @@
+package.json
+  s_bddf4eb8848d16::t_4b88a92fbc075b 72
+src/desk-board-store.test.ts
+  s_bddf4eb8848d16::t_d9de5862ad7e9b 1-43
+src/desk-board-store.ts
+  s_bddf4eb8848d16::t_8fa56c0664436b 1-27
+src/routes/desk.test.ts
+  s_bddf4eb8848d16::t_7105c32790a558 44
+src/routes/desk.ts
+  s_bddf4eb8848d16::t_b2367afa384617 8,25,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6342a5b70569b89d2e61d8cf5b94e4e9cecb2956",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}

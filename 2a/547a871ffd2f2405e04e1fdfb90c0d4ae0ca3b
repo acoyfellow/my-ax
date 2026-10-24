@@ -1,0 +1,81 @@
+src/agent.ts
+  s_bddf4eb8848d16::t_b60c8e2d5355bc 1-2,639-662,1076,1078-1083,1086-1088
+src/dead-session.ts
+  s_bddf4eb8848d16::t_567d10f136144e 14-15
+src/delegate-many.ts
+  s_bddf4eb8848d16::t_8d4cdb889c661a 108-109,112
+src/jobs.ts
+  s_bddf4eb8848d16::t_eacdcba511f767 1,162-164
+src/operational-recipe-defaults.test.ts
+  s_bddf4eb8848d16::t_b80964d96cc808 5
+src/pi-engine/connector-tools.ts
+  s_bddf4eb8848d16::t_8c11055596fee3 1-44
+src/pi-engine/legacy-tools.ts
+  s_bddf4eb8848d16::t_776188c116dd43 1-58
+src/pi-engine/memory-tools.ts
+  s_bddf4eb8848d16::t_6a7713adb27286 37-62
+src/pi-engine/owner-instructions-tools.ts
+  s_bddf4eb8848d16::t_dbd7c9f4f1bf6c 1-5
+src/pi-engine/pi-chat-agent.ts
+  s_bddf4eb8848d16::t_f681ab6031248b 12-25,85-88,129,131-146,202-269,362-365
+src/publication-authority.test.ts
+  s_bddf4eb8848d16::t_7a5294def3c391 5
+src/reusable-tool-promotion.test.ts
+  s_bddf4eb8848d16::t_33297b4f4d7818 7,9,175
+src/routes/decisions.ts
+  s_bddf4eb8848d16::t_3328a8506c493d 9,122
+src/routes/mcp.ts
+  s_bddf4eb8848d16::t_453a264fcfa935 21,217-218,317,319,327,330,343
+src/routes/recipes.ts
+  s_bddf4eb8848d16::t_25bfcdeb19a42c 180-183
+src/session-control.ts
+  s_bddf4eb8848d16::t_a5dd863a81a6eb 1-39
+src/system-prompt.ts
+  s_bddf4eb8848d16::t_e46441a8678df6 1-46
+src/think-workspace.ts
+  s_87bb0cc3d5fc34::t_9e19a64bc8b04b 6,23,40
+src/tool-context.ts
+  s_bddf4eb8848d16::t_59bcea007ca014 1-170
+src/tools.ts
+  s_bddf4eb8848d16::t_2e5350a6b69a2d 18,258,262-263,453-454
+src/ui/Chat.svelte
+  s_bddf4eb8848d16::t_b3806ae8bb1c29 1526
+src/ui/Desk.svelte
+  s_bddf4eb8848d16::t_cafe285af9eda3 162
+src/ui/Settings.svelte
+  s_bddf4eb8848d16::t_326751dd180e70 85,1235,1257,1261,1263
+src/ui/ToolResultWidget.svelte
+  s_bddf4eb8848d16::t_0d74a6a2fb0369 119,127,134,139
+src/voice-narration.ts
+  s_bddf4eb8848d16::t_328377b88faade 19
+src/work-sandbox-only.test.ts
+  s_bddf4eb8848d16::t_f0d4abed1ebe5c 7,30
+src/work-tools-recipes.test.ts
+  s_bddf4eb8848d16::t_bdf48d72e3185e 9
+src/workspace-snapshot-classification.ts
+  s_bddf4eb8848d16::t_471598ad63197a 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2a547a871ffd2f2405e04e1fdfb90c0d4ae0ca3b",
+  "prompts": {},
+  "sessions": {
+    "s_87bb0cc3d5fc34": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12ab1-4f16-71b5-98b4-fa9e4f420c7f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}

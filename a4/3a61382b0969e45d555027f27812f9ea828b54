@@ -1,0 +1,35 @@
+package.json
+  s_bddf4eb8848d16::t_73c6fef199de09 72
+src/ui/Chat.svelte
+  s_bddf4eb8848d16::t_72a93b6385adba 74,676,1129-1167,1991-1995,2007-2010,2123-2126,2187-2194,2896-2907
+src/ui/history-beneath-live-turn-smoke.mjs
+  s_bddf4eb8848d16::t_f289a03cf75627 15-18
+src/ui/local-queue.test.ts
+  s_d58794dec92dc7::t_b05b3a50ec6714 1-51
+src/ui/local-queue.ts
+  s_d58794dec92dc7::t_86dc70e993003d 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a43a61382b0969e45d555027f27812f9ea828b54",
+  "prompts": {},
+  "sessions": {
+    "s_bddf4eb8848d16": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0de5b-f971-75f6-97ad-8153da509084",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_d58794dec92dc7": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a115e6-5bb3-75ac-b511-2988f1aebfad",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
