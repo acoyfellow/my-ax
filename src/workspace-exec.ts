@@ -31,6 +31,29 @@ function field<T>(error: unknown, name: string, guard: (value: unknown) => value
 const isString = (value: unknown): value is string => typeof value === "string";
 const isNumber = (value: unknown): value is number => typeof value === "number";
 
+const DEAD_SANDBOX_PATTERNS = [
+  /durable object instance is no longer active/i,
+  /websocket upgrade failed: 5\d\d/i,
+  /shell exited \(exit code: \d+\)/i,
+  /container (is )?not (running|ready)/i,
+  /network connection lost/i,
+];
+
+export function isDeadSandboxError(error: unknown): boolean {
+  const text = errorText(error);
+  return DEAD_SANDBOX_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+export async function withSandboxRecovery<T>(run: () => Promise<T>, reset: () => Promise<void>): Promise<{ value: T; reset: boolean }> {
+  try {
+    return { value: await run(), reset: false };
+  } catch (error) {
+    if (!isDeadSandboxError(error)) throw error;
+    await reset();
+    return { value: await run(), reset: true };
+  }
+}
+
 export function execFailureResult(error: unknown): WorkspaceExecResult {
   return {
     stdout: field(error, "stdout", isString) ?? "",
