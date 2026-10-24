@@ -9,7 +9,7 @@ import { recordObserveEvent } from "./observe-events";
 import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
-import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, shouldRestoreDirectoryBackup, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
+import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, homeLooksWiped, shouldRestoreDirectoryBackup, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
 export { WORKSPACE_HOME, assertSeedablePath };
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const READY_MARKER = "/tmp/my-ax-workspace-ready";
@@ -96,6 +96,12 @@ async function restoreWithFallback(env: Env, identity: AccessIdentity, scope: Wo
   if (candidates.length) console.error("workspace.restore_unavailable_continuing", { email: identity.email, scope, tried: candidates.map((candidate) => candidate.backupId) });
 }
 
+async function measureHomeBytes(sandbox: ReturnType<typeof handle>): Promise<number | null> {
+  const measured = await sandbox.exec(workspaceSizeCommand(), { cwd: "/", timeout: 20_000, origin: "internal" }).catch(() => null);
+  const bytes = Number.parseInt(measured?.stdout?.trim() ?? "", 10);
+  return Number.isFinite(bytes) ? bytes : null;
+}
+
 async function diskBootSource(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<string | null> {
   const state = await diskStub(env, identity, scope).diskState().catch(() => null);
   return state?.managed ? state.restoredFrom : null;
@@ -122,12 +128,18 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     const note = async (name: string, started: number, outcome: string, message?: string) => recycled && recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name, durationMs: Date.now() - started, outcome, message }).catch(() => undefined);
     await note("fresh-container", acquireStarted, ready ? "ok" : "unreachable", `scope ${scope.kind}`);
     const restoredFromDiskSnapshot = recycled ? await diskBootSource(env, identity, scope) : null;
-    if (restoredFromDiskSnapshot) await note("restore", acquireStarted, "skipped", `booted from disk snapshot ${restoredFromDiskSnapshot}`);
-    if (options?.restoreLatest !== false && recycled && shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot })) {
+    const lastBackupBytes = recycled ? (await latestSnapshotRow(env, identity, scope).catch(() => null))?.size_bytes ?? null : null;
+    const bootHomeBytes = restoredFromDiskSnapshot ? await measureHomeBytes(sandbox) : null;
+    const restoreNeeded = shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot, homeBytes: bootHomeBytes, lastBackupBytes });
+    if (restoredFromDiskSnapshot && !restoreNeeded) await note("restore", acquireStarted, "skipped", `booted from disk snapshot ${restoredFromDiskSnapshot} with ${bootHomeBytes} bytes in home`);
+    if (options?.restoreLatest !== false && recycled && restoreNeeded) {
       const restoreStarted = Date.now();
       try {
         await restoreWithFallback(env, identity, scope, sandbox);
-        await note("restore", restoreStarted, "ok");
+        const restoredHomeBytes = await measureHomeBytes(sandbox);
+        const wiped = homeLooksWiped(restoredHomeBytes, lastBackupBytes);
+        await note("restore", restoreStarted, wiped ? "empty" : "ok", `${restoredHomeBytes} bytes in home, last backup ${lastBackupBytes} bytes`);
+        if (wiped) await note("reset", restoreStarted, "error", `home has ${restoredHomeBytes} bytes after restore; last good backup was ${lastBackupBytes} bytes`);
       } catch (error) {
         await note("restore", restoreStarted, "error", error instanceof Error ? error.message : String(error));
         throw error;
@@ -181,6 +193,12 @@ function diskStub(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Di
 }
 
 export async function saveWorkspaceDisk(env: Env, identity: AccessIdentity, scope: WorkspaceScope, name: string): Promise<{ id: string; size: number } | null> {
+  const lastBackupBytes = (await latestSnapshotRow(env, identity, scope).catch(() => null))?.size_bytes ?? null;
+  const homeBytes = await measureHomeBytes(handle(env, identity, scope));
+  if (homeLooksWiped(homeBytes, lastBackupBytes)) {
+    await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "shrink_refused", message: `${lastBackupBytes} -> ${homeBytes} bytes in home` }).catch(() => undefined);
+    return null;
+  }
   const saved = await diskStub(env, identity, scope).saveDisk(`my-ax-${name}-${Date.now()}`);
   if (saved) await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "ok", message: `${saved.id} ${saved.size} bytes` }).catch(() => undefined);
   return saved;

@@ -61,8 +61,18 @@ export function turnSnapshotDue(lastSnapshotAtMs: number | null, nowMs: number):
   return lastSnapshotAtMs === null || nowMs - lastSnapshotAtMs >= TURN_SNAPSHOT_COOLDOWN_MS;
 }
 
-export type BootSource = { restoredFromDiskSnapshot: string | null };
+export type BootSource = {
+  restoredFromDiskSnapshot: string | null;
+  homeBytes: number | null;
+  lastBackupBytes: number | null;
+};
+
+export function homeLooksWiped(homeBytes: number | null, lastBackupBytes: number | null): boolean {
+  if (homeBytes === null || lastBackupBytes === null) return false;
+  return !decideSnapshotPublish(lastBackupBytes, homeBytes).publish;
+}
 
 export function shouldRestoreDirectoryBackup(boot: BootSource): boolean {
-  return boot.restoredFromDiskSnapshot === null;
+  if (boot.restoredFromDiskSnapshot === null) return true;
+  return homeLooksWiped(boot.homeBytes, boot.lastBackupBytes);
 }
