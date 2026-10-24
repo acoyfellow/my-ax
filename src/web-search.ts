@@ -24,7 +24,7 @@ export function createPublicWebSearchTool(options: PublicWebSearchToolOptions = 
     },
     execute: async (args, ctx) => {
       const query = typeof args.query === "string" ? args.query.trim() : "";
-      if (!query) return JSON.stringify({ results: [], truncated: false, error: "web_search_failed" });
+      if (!query) return JSON.stringify({ results: [], truncated: false, error: "web_search_empty_query" });
       const webSearch = ctx.env.WEBSEARCH;
       const fetch = options.fetch ?? (typeof webSearch?.search === "function"
         ? (input: string) => webSearch.search({ query: input })

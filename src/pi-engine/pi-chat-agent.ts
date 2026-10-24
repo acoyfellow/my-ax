@@ -27,6 +27,7 @@ import { buildConversationSearchQuery } from "../conversation-search";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
+import { resolveWorkspacePath } from "../workspace-path";
 import { getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
@@ -324,16 +325,17 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
         return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", exitCode: result.exitCode ?? -1 };
       },
       readFile: async (path) => {
-        const file = await sandbox.readFile(path);
+        const file = await sandbox.readFile(resolveWorkspacePath(path));
         return (file as unknown as { content?: string }).content ?? "";
       },
       writeFile: async (path, content) => {
-        const parent = path.slice(0, path.lastIndexOf("/")) || WORKSPACE_HOME;
+        const target = resolveWorkspacePath(path);
+        const parent = target.slice(0, target.lastIndexOf("/")) || WORKSPACE_HOME;
         await sandbox.exec(`mkdir -p ${JSON.stringify(parent)}`, { cwd: "/", timeout: 30_000 });
-        await sandbox.writeFile(path, content);
+        await sandbox.writeFile(target, content);
       },
       listFiles: async (path) => {
-        const result = await sandbox.listFiles(path);
+        const result = await sandbox.listFiles(resolveWorkspacePath(path));
         return result.files.map((file) => `${file.type === "directory" ? "d" : "-"} ${file.absolutePath}`);
       },
     };
@@ -341,7 +343,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private toolEnv(): Record<string, string> {
     const token = this.env.GITHUB_TOKEN?.trim();
-    return token ? { GH_TOKEN: token, GITHUB_TOKEN: token } : {};
+    const home = { HOME: WORKSPACE_HOME };
+    return token ? { ...home, GH_TOKEN: token, GITHUB_TOKEN: token } : home;
   }
 
   async setModel(provider: string, id: string): Promise<void> {

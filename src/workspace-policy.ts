@@ -60,3 +60,9 @@ export function decideSnapshotPublish(previousBytes: number | null, nextBytes: n
 export function turnSnapshotDue(lastSnapshotAtMs: number | null, nowMs: number): boolean {
   return lastSnapshotAtMs === null || nowMs - lastSnapshotAtMs >= TURN_SNAPSHOT_COOLDOWN_MS;
 }
+
+export type BootSource = { restoredFromDiskSnapshot: string | null };
+
+export function shouldRestoreDirectoryBackup(boot: BootSource): boolean {
+  return boot.restoredFromDiskSnapshot === null;
+}

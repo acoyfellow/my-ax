@@ -5,6 +5,7 @@ import {
   SANDBOX_ID_MAX_LENGTH,
   TURN_SNAPSHOT_COOLDOWN_MS,
   decideSnapshotPublish,
+  shouldRestoreDirectoryBackup,
   turnSnapshotDue,
   workspaceSandboxId,
   workspaceSnapshotKey,
@@ -51,4 +52,12 @@ test("turn snapshots are rate-limited per workspace", () => {
   assert.equal(turnSnapshotDue(null, 0), true);
   assert.equal(turnSnapshotDue(1_000, 1_000 + TURN_SNAPSHOT_COOLDOWN_MS - 1), false);
   assert.equal(turnSnapshotDue(1_000, 1_000 + TURN_SNAPSHOT_COOLDOWN_MS), true);
+});
+
+test("a container booted from a disk snapshot keeps its disk instead of restoring an older home backup", () => {
+  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: "snap-1" }), false);
+});
+
+test("a container booted from the plain image restores the latest home backup", () => {
+  assert.equal(shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot: null }), true);
 });

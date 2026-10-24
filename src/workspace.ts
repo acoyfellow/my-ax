@@ -9,7 +9,7 @@ import { recordObserveEvent } from "./observe-events";
 import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
-import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
+import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, shouldRestoreDirectoryBackup, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
 export { WORKSPACE_HOME, assertSeedablePath };
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const READY_MARKER = "/tmp/my-ax-workspace-ready";
@@ -96,6 +96,11 @@ async function restoreWithFallback(env: Env, identity: AccessIdentity, scope: Wo
   if (candidates.length) console.error("workspace.restore_unavailable_continuing", { email: identity.email, scope, tried: candidates.map((candidate) => candidate.backupId) });
 }
 
+async function diskBootSource(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<string | null> {
+  const state = await diskStub(env, identity, scope).diskState().catch(() => null);
+  return state?.managed ? state.restoredFrom : null;
+}
+
 export async function getUserWorkspace(env: Env, identity: AccessIdentity, options?: { restoreLatest?: boolean; scope?: WorkspaceScope }) {
   const scope = options?.scope ?? OWNER_SCOPE;
   const id = key(identity, scope);
@@ -116,7 +121,9 @@ export async function getUserWorkspace(env: Env, identity: AccessIdentity, optio
     recycled = ready?.exitCode !== 0;
     const note = async (name: string, started: number, outcome: string, message?: string) => recycled && recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name, durationMs: Date.now() - started, outcome, message }).catch(() => undefined);
     await note("fresh-container", acquireStarted, ready ? "ok" : "unreachable", `scope ${scope.kind}`);
-    if (options?.restoreLatest !== false && recycled) {
+    const restoredFromDiskSnapshot = recycled ? await diskBootSource(env, identity, scope) : null;
+    if (restoredFromDiskSnapshot) await note("restore", acquireStarted, "skipped", `booted from disk snapshot ${restoredFromDiskSnapshot}`);
+    if (options?.restoreLatest !== false && recycled && shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot })) {
       const restoreStarted = Date.now();
       try {
         await restoreWithFallback(env, identity, scope, sandbox);
