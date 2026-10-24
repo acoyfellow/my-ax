@@ -12,3 +12,8 @@ test("the Pi chat socket does not send the owner-scoped instance name to clients
   const { PiChatAgent } = await import("./pi-chat-agent");
   assert.equal((PiChatAgent as unknown as { options?: { sendIdentityOnConnect?: boolean } }).options?.sendIdentityOnConnect, false);
 });
+
+test("the voice socket does not send the owner-scoped instance name to clients", async () => {
+  const { VoiceThinkAgent } = await import("../voice-think-agent");
+  assert.equal((VoiceThinkAgent as unknown as { options?: { sendIdentityOnConnect?: boolean } }).options?.sendIdentityOnConnect, false);
+});
