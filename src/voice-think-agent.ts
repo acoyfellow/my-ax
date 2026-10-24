@@ -59,6 +59,7 @@ export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, ses
 }
 
 export class VoiceThinkAgent extends VoiceAgent<Env> {
+  static options = { ...VoiceAgent.options, sendIdentityOnConnect: false };
   transcriber = new WorkersAIFluxSTT(this.env.AI, { keyterms: [...VOICE_STT_KEYTERMS] });
   tts = new WorkersAITTS(this.env.AI, { speaker: "asteria" });
 
