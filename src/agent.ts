@@ -1,10 +1,9 @@
 import { createToolContext } from "./tool-context";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
-import { Think } from "@cloudflare/think";
+import { Think, type Session } from "@cloudflare/think";
 import { buildConversationSearchQuery } from "./conversation-search";
 import { applyIssueContext } from "./issue-context";
-import { Session } from "agents/sessions";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { shouldAutoContinue, TURN_CUT_NOTE, TURN_STEP_BATCH } from "./turn-continuation";
 import { judgeTurn, turnLimitsFromEnv, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, TurnProgressTracker } from "./turn-watchdog";
