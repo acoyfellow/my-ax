@@ -1,5 +1,6 @@
 import type { WorkspaceLike } from "./think-workspace-fs";
 import type { FileInfo } from "@cloudflare/shell";
+import { collectFile } from "@cloudflare/sandbox";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import { getUserWorkspace } from "./workspace";
@@ -16,6 +17,11 @@ import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
  * adapter makes Think's native read/write/edit/list/find/grep/delete tools use
  * exactly that same workstation as shell_exec and the other workspace tools.
  */
+export async function fileStreamBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const { content } = await collectFile(stream);
+  return typeof content === "string" ? new TextEncoder().encode(content) : content;
+}
+
 export class SandboxThinkWorkspace implements WorkspaceLike {
   constructor(
     private readonly env: Env,
@@ -68,9 +74,7 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
 
   async readFileBytes(path: string): Promise<Uint8Array | null> {
     try {
-      const stream = await (await this.sandbox()).readFileStream(this.path(path));
-      const buffer = await new Response(stream).arrayBuffer();
-      return new Uint8Array(buffer);
+      return await fileStreamBytes(await (await this.sandbox()).readFileStream(this.path(path)));
     } catch {
       return null;
     }
