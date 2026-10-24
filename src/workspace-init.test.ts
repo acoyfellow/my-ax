@@ -4,13 +4,15 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { workspaceInitCommand, WORKSPACE_ALIAS_PATH } from "./workspace-init";
+import { readyMarkerCheckCommand, workspaceInitCommand, WORKSPACE_ALIAS_PATH } from "./workspace-init";
 
 function runInit(root: string) {
   const home = join(root, "home-user");
   const alias = join(root, "workspace");
   const marker = join(root, "ready");
-  const command = workspaceInitCommand(home, marker).replaceAll(WORKSPACE_ALIAS_PATH, alias);
+  const bootId = join(root, "boot_id");
+  writeFileSync(bootId, "boot-test\n");
+  const command = workspaceInitCommand(home, marker, bootId).replaceAll(WORKSPACE_ALIAS_PATH, alias);
   execFileSync("sh", ["-c", command]);
   return { home, alias, marker };
 }
@@ -48,4 +50,37 @@ test("a write through /workspace lands in the durable home", () => {
   const { home, alias } = runInit(root);
   writeFileSync(join(alias, "note.txt"), "through alias");
   assert.equal(readFileSync(join(home, "note.txt"), "utf8"), "through alias");
+});
+
+function bootIdFile(root: string, value: string): string {
+  const path = join(root, "boot_id");
+  writeFileSync(path, `${value}\n`);
+  return path;
+}
+
+function markerIsCurrent(marker: string, bootId: string): boolean {
+  try {
+    execFileSync("sh", ["-c", readyMarkerCheckCommand(marker, bootId)]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test("the ready marker is current only for the boot that wrote it", () => {
+  const root = mkdtempSync(join(tmpdir(), "ws-init-"));
+  const bootId = bootIdFile(root, "boot-a");
+  const home = join(root, "home-user");
+  const marker = join(root, "ready");
+  execFileSync("sh", ["-c", workspaceInitCommand(home, marker, bootId).replaceAll(WORKSPACE_ALIAS_PATH, join(root, "workspace"))]);
+  assert.equal(markerIsCurrent(marker, bootId), true);
+  writeFileSync(bootId, "boot-b\n");
+  assert.equal(markerIsCurrent(marker, bootId), false);
+});
+
+test("a marker restored from a disk snapshot of an earlier boot is not current", () => {
+  const root = mkdtempSync(join(tmpdir(), "ws-init-"));
+  const marker = join(root, "ready");
+  writeFileSync(marker, "");
+  assert.equal(markerIsCurrent(marker, bootIdFile(root, "boot-new")), false);
 });
