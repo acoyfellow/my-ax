@@ -1,0 +1,23 @@
+src/workspace-init.test.ts
+  s_46448aabb2fde9::t_317d783d6b21b6 7,13-15,54-86
+src/workspace-init.ts
+  s_46448aabb2fde9::t_7def464253b134 2,4-8,16
+src/workspace.ts
+  s_46448aabb2fde9::t_7cbd2644676a05 2,126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95a8df4318204b2c19388feb23019426ec749db7",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
