@@ -157,9 +157,9 @@
     "test:recovered-orphans": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test proof/plan-program.test.ts proof/terminal-gh-probe-program.test.mjs proof/terminal-live-client-program.test.mjs proof/terminal-upgrade-probe-program.test.mjs scripts/loop-disagree.test.mjs scripts/verify-public-clean.test.mjs src/artifacts.test.ts src/cmux-observer.test.ts src/compaction-summary.test.ts src/desk-live.test.ts src/error-meta.test.ts src/inject-onstart.test.ts src/mcp-probe.test.ts src/model-auth.test.ts src/notification-session.test.ts src/owner-instructions-wiring.test.ts src/owner-instructions.test.ts src/pantry-client.test.ts src/recurring-job-limits.test.ts src/routes/desk.test.ts src/routes/sessions.test.ts src/sequence-integrity.test.ts src/session-entries.test.ts src/session-fork.test.ts src/session-title.test.ts src/suggest-recipe-name.test.ts src/turn-visible-receipt.test.ts src/ui/assistant-visible.test.ts src/ui/auth-recovery.test.ts src/ui/browser-replay-fallback.test.ts src/ui/chat-outbound-whitespace.test.ts src/ui/check-in-display-href.test.ts src/ui/owner-error.test.ts src/ui/transcript-merge.test.ts src/ui/voice-activation.test.ts src/ui/voice-lifecycle-source.test.ts src/web-search.test.ts src/work-sandbox-only.test.ts src/workspace-durability.test.ts src/workspace-recycle.test.ts src/workspace-write-path.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.39",
-    "@ai-sdk/openai": "4.0.41",
-    "@ai-sdk/react": "4.0.69",
+    "@ai-sdk/anthropic": "4.0.87",
+    "@ai-sdk/openai": "4.0.101",
+    "@ai-sdk/react": "4.0.156",
     "@cloudflare/codemode": "0.5.1",
     "@cloudflare/computer": "0.5.1",
     "@cloudflare/puppeteer": "^1.4.0",
@@ -174,7 +174,7 @@
     "@pierre/theme": "1.1.0",
     "agents": "0.30.1",
     "agents-pi": "npm:agents@0.30.1",
-    "ai": "7.0.66",
+    "ai": "7.0.152",
     "cloudterm": "github:acoyfellow/cloudterm#v0.0.9",
     "effect": "4.0.0-rc.112",
     "hono": "^4.13.9",
@@ -183,7 +183,7 @@
     "rrweb-player": "1.0.0-alpha.4",
     "svelte": "5.56.3",
     "svelte-hono": "0.1.2",
-    "workers-ai-provider": "4.0.0",
+    "workers-ai-provider": "4.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
