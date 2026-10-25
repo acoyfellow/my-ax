@@ -1,4 +1,5 @@
 import { createToolContext } from "./tool-context";
+import { scheduleBackupRetry } from "./turn-snapshot-schedule";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
 import { Think, type Session } from "@cloudflare/think";
@@ -7,7 +8,6 @@ import { applyIssueContext } from "./issue-context";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { shouldAutoContinue, TURN_CUT_NOTE, TURN_STEP_BATCH } from "./turn-continuation";
 import { judgeTurn, turnLimitsFromEnv, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, TurnProgressTracker } from "./turn-watchdog";
-import { TURN_SNAPSHOT_COOLDOWN_MS } from "./workspace-policy";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { Effect } from "effect";
 import { createCompactFunction } from "agents/sessions";
@@ -837,6 +837,10 @@ export class MyAgent extends Think<Env> {
     this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
   }
 
+  async retryWorkspaceBackupAfterCooldown() {
+    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
+  }
+
   private async publishTurnSnapshot() {
     const identity = this.identity();
     if (!identity) return;
@@ -845,7 +849,7 @@ export class MyAgent extends Think<Env> {
       return null;
     });
     if (outcome && !outcome.published && outcome.reason === "cooldown") {
-      await this.schedule(Math.ceil(TURN_SNAPSHOT_COOLDOWN_MS / 1000), "snapshotWorkspaceAfterTurn", undefined, { idempotent: true });
+      await scheduleBackupRetry((delay, callback, payload, options) => this.schedule(delay, callback as keyof this, payload, options));
     }
   }
 

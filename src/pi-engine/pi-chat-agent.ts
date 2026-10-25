@@ -32,7 +32,8 @@ import { recoveringWorkspaceExec } from "../workspace-exec";
 import { destroyUserWorkspace, getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace, type UserSandbox } from "../workspace";
 import { useWorkspace, type WorkspaceAccess } from "../workspace-access";
 import { WORKSPACE_HOME } from "../workspace-path";
-import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
+import { workspaceSandboxId } from "../workspace-policy";
+import { scheduleBackupRetry, scheduleTurnSnapshot } from "../turn-snapshot-schedule";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
@@ -118,7 +119,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const finished = this.publishedRunning === true && !running;
     if (this.publishedRunning === running) return;
     this.publishedRunning = running;
-    if (finished) await this.schedule(0, "snapshotWorkspaceAfterTurn", undefined, { idempotent: true }).catch((error: unknown) => console.error("pi_turn_snapshot_schedule_failed", { err: String(error) }));
+    if (finished) await scheduleTurnSnapshot((delay, callback, payload, options) => this.schedule(delay, callback as keyof this, payload, options)).catch((error: unknown) => console.error("pi_turn_snapshot_schedule_failed", { err: String(error) }));
     const ownerEmail = this.state?.ownerEmail;
     const chatId = this.state?.chatId;
     if (!ownerEmail || !chatId) return;
@@ -606,6 +607,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
   }
 
+  async retryWorkspaceBackupAfterCooldown(): Promise<void> {
+    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
+  }
+
   private async publishTurnSnapshot(): Promise<void> {
     const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };
@@ -615,7 +620,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       return null;
     });
     if (outcome && !outcome.published && outcome.reason === "cooldown") {
-      await this.schedule(Math.ceil(TURN_SNAPSHOT_COOLDOWN_MS / 1000), "snapshotWorkspaceAfterTurn", undefined, { idempotent: true });
+      await scheduleBackupRetry((delay, callback, payload, options) => this.schedule(delay, callback as keyof this, payload, options));
     }
   }
 
