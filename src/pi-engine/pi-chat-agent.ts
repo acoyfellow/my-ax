@@ -35,6 +35,9 @@ import { compactionFinished } from "../workspace-save-policy";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
+import { siblingWorkspaceExtension } from "./sibling-tools";
+import { createWorkspaceDirectory } from "../workspace-directory";
+import { forkPiChat, openPiChat } from "./routes";
 import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
 import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
 import type { ToolContext } from "../types";
@@ -87,6 +90,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       models.setProvider(this.ai.provider);
       installGatewayModels(models, this.env);
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
+      this.registry.install(siblingWorkspaceExtension(() => createWorkspaceDirectory(this.env, this.identity().email, { openChat: openPiChat, forkChat: forkPiChat, workspace: workspaceFor }), () => this.chatId()));
       this.registry.install(machineToolsExtension(() => this.machineRunner()));
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
