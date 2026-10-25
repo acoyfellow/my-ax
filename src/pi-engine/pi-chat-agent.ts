@@ -28,7 +28,7 @@ import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
 import { resolveWorkspacePath } from "../workspace-path";
-import { withSandboxRecovery } from "../workspace-exec";
+import { execTreatingShellExitAsResult, withSandboxRecovery } from "../workspace-exec";
 import { getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
@@ -339,7 +339,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       exec: async (command, timeoutMs) => {
         const run = async () => {
           const current = (await getUserWorkspace(this.env, this.identity(), { scope })).sandbox;
-          return current.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() });
+          return execTreatingShellExitAsResult(() => current.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() }));
         };
         const { value: result, reset } = await withSandboxRecovery(run, () => this.resetDeadChatSandbox());
         const note = reset ? "[workspace was unreachable and was reset to a fresh container restored from the last snapshot; background processes from before were stopped]\n" : "";

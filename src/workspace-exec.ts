@@ -34,7 +34,6 @@ const isNumber = (value: unknown): value is number => typeof value === "number";
 const DEAD_SANDBOX_PATTERNS = [
   /durable object instance is no longer active/i,
   /websocket upgrade failed: 5\d\d/i,
-  /shell exited \(exit code: \d+\)/i,
   /container (is )?not (running|ready)/i,
   /network connection lost/i,
 ];
@@ -42,6 +41,30 @@ const DEAD_SANDBOX_PATTERNS = [
 export function isDeadSandboxError(error: unknown): boolean {
   const text = errorText(error);
   return DEAD_SANDBOX_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+const SHELL_EXITED_PATTERN = /shell exited \(exit code: (\d+|unknown)\)/i;
+
+export function shellExitCode(error: unknown): number | undefined {
+  const match = SHELL_EXITED_PATTERN.exec(errorText(error));
+  if (!match) return undefined;
+  return match[1] === "unknown" ? -1 : Number(match[1]);
+}
+
+export interface ShellExitedResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export async function execTreatingShellExitAsResult<T>(run: () => Promise<T>): Promise<T | ShellExitedResult> {
+  try {
+    return await run();
+  } catch (error) {
+    const exitCode = shellExitCode(error);
+    if (exitCode === undefined) throw error;
+    return { stdout: "", stderr: `[the command ended the shell with exit code ${exitCode}; the workspace and its files are unchanged and the next command starts a fresh shell]\n`, exitCode };
+  }
 }
 
 export async function withSandboxRecovery<T>(run: () => Promise<T>, reset: () => Promise<void>): Promise<{ value: T; reset: boolean }> {
