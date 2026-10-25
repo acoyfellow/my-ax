@@ -47,7 +47,7 @@ test("a dead sandbox error is recognised", async () => {
   const { isDeadSandboxError } = await import("./workspace-exec");
   assert.equal(isDeadSandboxError(new Error("Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.")), true);
   assert.equal(isDeadSandboxError(new Error("WebSocket upgrade failed: 500 Internal Server Error")), true);
-  assert.equal(isDeadSandboxError(new Error("Session 'sandbox-chat-x' shell exited (exit code: 1)")), true);
+  assert.equal(isDeadSandboxError(new Error("Session 'sandbox-chat-x' shell exited (exit code: 1)")), false);
   assert.equal(isDeadSandboxError(new Error("ENOENT: no such file")), false);
 });
 
@@ -62,6 +62,21 @@ test("a dead sandbox is reset once and the call is retried", async () => {
   }, async () => { resets += 1; });
   assert.deepEqual(outcome, { value: "alive", reset: true });
   assert.equal(resets, 1);
+});
+
+test("a command that ends the shell is returned as its exit code without resetting or re-running", async () => {
+  const { withSandboxRecovery, execTreatingShellExitAsResult } = await import("./workspace-exec");
+  let calls = 0;
+  let resets = 0;
+  const outcome = await withSandboxRecovery(() => execTreatingShellExitAsResult(async () => {
+    calls += 1;
+    throw new Error(`Session "sandbox-chat-x" ended because its shell exited (exit code: 2). Session-local state has been lost.`);
+  }), async () => { resets += 1; });
+  assert.equal(resets, 0);
+  assert.equal(calls, 1);
+  assert.equal(outcome.reset, false);
+  assert.equal((outcome.value as { exitCode: number }).exitCode, 2);
+  assert.match((outcome.value as { stderr: string }).stderr, /files are unchanged/);
 });
 
 test("an ordinary error is not retried", async () => {
