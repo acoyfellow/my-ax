@@ -3,7 +3,8 @@ import type { FileInfo } from "@cloudflare/shell";
 import { collectFile } from "@cloudflare/sandbox";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
-import { getUserWorkspace } from "./workspace";
+import { userWorkspaceAccess, type UserSandbox } from "./workspace";
+import { useWorkspace, type WorkspaceOperationKind } from "./workspace-access";
 import type { WorkspaceScope } from "./workspace-policy";
 import { globSearchRoot } from "./workspace-exec";
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
@@ -42,8 +43,8 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
     return absolute;
   }
 
-  private async sandbox() {
-    return (await getUserWorkspace(this.env, this.requireIdentity(), { scope: this.scope })).sandbox;
+  private withSandbox<T>(kind: WorkspaceOperationKind, operation: (sandbox: UserSandbox) => Promise<T>): Promise<T> {
+    return useWorkspace(userWorkspaceAccess(this.env, this.requireIdentity(), this.scope), kind, operation);
   }
 
   private fileInfo(file: { name: string; absolutePath: string; type: "file" | "directory" | "symlink" | "other"; size: number; modifiedAt: string }): FileInfo {
@@ -62,7 +63,7 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
 
   async readFile(path: string): Promise<string | null> {
     try {
-      const result = await (await this.sandbox()).readFile(this.path(path));
+      const result = await this.withSandbox("idempotent", (sandbox) => sandbox.readFile(this.path(path)));
       const content = (result as { content?: string | Uint8Array }).content;
       if (typeof content === "string") return content;
       if (content instanceof Uint8Array) return new TextDecoder().decode(content);
@@ -74,22 +75,22 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
 
   async readFileBytes(path: string): Promise<Uint8Array | null> {
     try {
-      return await fileStreamBytes(await (await this.sandbox()).readFileStream(this.path(path)));
+      return await this.withSandbox("idempotent", async (sandbox) => fileStreamBytes(await sandbox.readFileStream(this.path(path))));
     } catch {
       return null;
     }
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    await (await this.sandbox()).writeFile(this.path(path), content);
+    await this.withSandbox("idempotent", (sandbox) => sandbox.writeFile(this.path(path), content));
   }
 
   async mkdir(path: string, opts?: { recursive?: boolean }): Promise<void> {
-    await (await this.sandbox()).mkdir(this.path(path), { recursive: opts?.recursive ?? true });
+    await this.withSandbox("idempotent", (sandbox) => sandbox.mkdir(this.path(path), { recursive: opts?.recursive ?? true }));
   }
 
   async readDir(dir: string, opts?: { limit?: number; offset?: number }): Promise<FileInfo[]> {
-    const result = await (await this.sandbox()).listFiles(this.path(dir), { recursive: false, includeHidden: true });
+    const result = await this.withSandbox("idempotent", (sandbox) => sandbox.listFiles(this.path(dir), { recursive: false, includeHidden: true }));
     const start = opts?.offset ?? 0;
     const end = opts?.limit === undefined ? undefined : start + opts.limit;
     return result.files.slice(start, end).map((file) => this.fileInfo(file));
@@ -97,10 +98,10 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
 
   async glob(pattern: string): Promise<FileInfo[]> {
     const rootPattern = this.path(pattern);
-    const { stdout } = await (await this.sandbox()).exec(
+    const { stdout } = await this.withSandbox("idempotent", (sandbox) => sandbox.exec(
       `find ${JSON.stringify(globSearchRoot(rootPattern, WORKSPACE_HOME))} -path ${JSON.stringify(rootPattern)} -print | head -500`,
       { cwd: WORKSPACE_HOME, timeout: 30_000 },
-    );
+    ));
     const matches = stdout.split("\n").map((value) => value.trim()).filter(Boolean);
     const infos: FileInfo[] = [];
     for (const matched of matches) {
@@ -114,7 +115,7 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
     const absolute = this.path(path);
     const parent = absolute.slice(0, absolute.lastIndexOf("/")) || "/";
     try {
-      const result = await (await this.sandbox()).listFiles(parent, { recursive: false, includeHidden: true });
+      const result = await this.withSandbox("idempotent", (sandbox) => sandbox.listFiles(parent, { recursive: false, includeHidden: true }));
       const file = result.files.find((entry) => entry.absolutePath === absolute);
       return file ? this.fileInfo(file) : null;
     } catch {
@@ -127,12 +128,12 @@ export class SandboxThinkWorkspace implements WorkspaceLike {
     if (absolute === WORKSPACE_HOME) throw new Error("Refusing to delete the workspace root.");
     if (opts?.recursive) {
       const flags = opts.force ? "-rf" : "-r";
-      const result = await (await this.sandbox()).exec(`rm ${flags} -- ${JSON.stringify(absolute)}`, { cwd: WORKSPACE_HOME, timeout: 30_000 });
+      const result = await this.withSandbox("idempotent", (sandbox) => sandbox.exec(`rm ${flags} -- ${JSON.stringify(absolute)}`, { cwd: WORKSPACE_HOME, timeout: 30_000 }));
       if (!result.success && !opts.force) throw new Error(result.stderr || `Failed to delete ${absolute}`);
       return;
     }
     try {
-      await (await this.sandbox()).deleteFile(absolute);
+      await this.withSandbox("idempotent", (sandbox) => sandbox.deleteFile(absolute));
     } catch (error) {
       if (!opts?.force) throw error;
     }

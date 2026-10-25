@@ -7,7 +7,8 @@ import { recentObserveEvents } from "./observe-events";
 import { buildConversationSearchQuery } from "./conversation-search";
 import { workspaceShellExec } from "./workspace-exec";
 import { SandboxThinkWorkspace } from "./think-workspace";
-import { getUserWorkspace, WORKSPACE_HOME } from "./workspace";
+import { getUserWorkspace, userWorkspaceAccess, WORKSPACE_HOME } from "./workspace";
+import { acquireWithOneReset, useWorkspace } from "./workspace-access";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
@@ -31,18 +32,18 @@ export type ToolContextHost = {
 export function createToolContext(host: ToolContextHost): ToolContext {
   const { env, identity, sessionId, scope, sandboxOnly } = host;
   const workingDirectory = WORKSPACE_HOME;
+  const access = userWorkspaceAccess(env, identity, scope);
   return {
       workingDirectory,
       sandboxOnly,
       notifyOwner: (input) => notifyOwner(env, identity.email, { ...input, sessionId }),
-      shellExec: (cmd, opts) => workspaceShellExec(() => getUserWorkspace(env, identity, { scope }), cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout ?? 30_000, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } }),
+      shellExec: (cmd, opts) => workspaceShellExec(async () => { await acquireWithOneReset(access); return getUserWorkspace(env, identity, { scope }); }, cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout ?? 30_000, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } }),
       processStart: async (cmd, opts) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
-        const process = await sandbox.startProcess(cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout, processId: opts?.processId, autoCleanup: false, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } });
+        const process = await useWorkspace(access, "side-effecting", (sandbox) => sandbox.startProcess(cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout, processId: opts?.processId, autoCleanup: false, env: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...opts?.env } }));
         return { id: process.id, pid: process.pid, command: process.command, status: process.status, startTime: process.startTime.toISOString(), endTime: process.endTime?.toISOString(), exitCode: process.exitCode, sessionId: process.sessionId };
       },
       processStatus: async (id) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+        const sandbox = await acquireWithOneReset(access);
         const process = await sandbox.getProcess(id);
         if (!process) return null;
         await process.getStatus();
@@ -50,43 +51,42 @@ export function createToolContext(host: ToolContextHost): ToolContext {
         return { id: current.id, pid: current.pid, command: current.command, status: current.status, startTime: current.startTime.toISOString(), endTime: current.endTime?.toISOString(), exitCode: current.exitCode, sessionId: current.sessionId };
       },
       processLogs: async (id) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+        const sandbox = await acquireWithOneReset(access);
         const process = await sandbox.getProcess(id);
         if (!process) return null;
         const logs = await sandbox.getProcessLogs(id);
         return { processId: logs.processId, stdout: logs.stdout ?? "", stderr: logs.stderr ?? "" };
       },
       processCancel: async (id, signal) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+        const sandbox = await acquireWithOneReset(access);
         if (!(await sandbox.getProcess(id))) return false;
         await sandbox.killProcess(id, signal ?? "SIGTERM");
         return true;
       },
-      runCode: async (code, options) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+      runCode: async (code, options) => useWorkspace(access, "side-effecting", async (sandbox) => {
         const context = await sandbox.createCodeContext({ language: options?.language ?? "python", cwd: workingDirectory });
         return sandbox.runCode(code, { context, timeout: options?.timeout, envVars: { ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config" } });
-      },
+      }),
       tunnelGet: async (port) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+        const sandbox = await acquireWithOneReset(access);
         return sandbox.tunnels.get(port);
       },
       tunnelList: async () => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+        const sandbox = await acquireWithOneReset(access);
         return sandbox.tunnels.list();
       },
       tunnelDestroy: async (port) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
+        const sandbox = await acquireWithOneReset(access);
         await sandbox.tunnels.destroy(port);
       },
       readFile: async (path, options) => {
-        if (options?.maxBytes === undefined) return new SandboxThinkWorkspace(env, () => identity, scope).readFile(path);
-        return readBoundedWorkspaceFile((await getUserWorkspace(env, identity, { scope })).sandbox, path, options.maxBytes);
+        const maxBytes = options?.maxBytes;
+        if (maxBytes === undefined) return new SandboxThinkWorkspace(env, () => identity, scope).readFile(path);
+        return useWorkspace(access, "idempotent", (sandbox) => readBoundedWorkspaceFile(sandbox, path, maxBytes));
       },
       writeFile: async (path, content) => new SandboxThinkWorkspace(env, () => identity, scope).writeFile(path, content),
       listFiles: async (path, opts) => {
-        const { sandbox } = await getUserWorkspace(env, identity, { scope });
-        const result = await sandbox.listFiles(path, opts);
+        const result = await useWorkspace(access, "idempotent", (sandbox) => sandbox.listFiles(path, opts));
         return result.files.map((file) => ({ path: file.absolutePath, name: file.name, type: file.type, size: file.size }));
       },
       observeTurns: (sessionId, turns) => observeSessionTurns(env.DB, identity.email, sessionId, turns),

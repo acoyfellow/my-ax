@@ -7,6 +7,7 @@ import { databaseLayer } from "./effect/database";
 import { publishWorkspaceSnapshot } from "./workspace-snapshot-program";
 import { recordObserveEvent } from "./observe-events";
 import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
+import type { WorkspaceAccess } from "./workspace-access";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
 import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, homeLooksWiped, shouldRestoreDirectoryBackup, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
@@ -43,6 +44,18 @@ export function invalidateUserWorkspace(identity: AccessIdentity, scope: Workspa
 export async function destroyUserWorkspace(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): Promise<void> {
   invalidateUserWorkspace(identity, scope);
   await handle(env, identity, scope).destroy();
+}
+
+export type UserSandbox = ReturnType<typeof handle>;
+
+export function userWorkspaceAccess(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): WorkspaceAccess<UserSandbox> {
+  return {
+    acquire: async () => (await getUserWorkspace(env, identity, { scope })).sandbox,
+    destroy: async () => {
+      console.warn("workspace_dead_resetting", { scope: scope.kind });
+      await destroyUserWorkspace(env, identity, scope).catch((error: unknown) => console.error("workspace_destroy_failed", { err: String(error) }));
+    },
+  };
 }
 
 type SnapshotRow = { backup_id: string; backup_dir: string; size_bytes: number | null; updated_at: string };
