@@ -1,4 +1,5 @@
-import { getSandbox, type Sandbox } from "@cloudflare/sandbox";
+import type { Sandbox } from "@cloudflare/sandbox";
+import { sandboxStub } from "./workspace-object";
 import type { AccessIdentity } from "./auth";
 import { computerSandboxName, normalizeComputerId, shouldRestoreComputerSnapshot } from "./computer-id";
 export { computerPreviewSrc } from "./computer-id";
@@ -16,10 +17,7 @@ function namespace(env: Env): DurableObjectNamespace<Sandbox> {
 }
 
 function handle(env: Env, identity: AccessIdentity, computerId: string) {
-  return getSandbox(namespace(env), computerSandboxName(identity.email, computerId), {
-    containerTimeouts: { instanceGetTimeoutMS: 120_000, portReadyTimeoutMS: 240_000 },
-    transport: "rpc",
-  });
+  return sandboxStub(namespace(env), computerSandboxName(identity.email, computerId));
 }
 
 async function latestSnapshot(env: Env, identity: AccessIdentity, computerId: string) {

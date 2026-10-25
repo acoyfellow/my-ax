@@ -11,7 +11,7 @@ import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
 import { createDecision } from "./decisions";
 import { ownerDeskClear, ownerDeskGet, ownerDeskRemove, ownerDeskUpsert } from "./desk";
-import { getUserWorkspace, listWorkspaceSnapshots, restoreWorkspaceSnapshot } from "../workspace";
+import { listWorkspaceSnapshots, restoreWorkspaceSnapshot, workspaceFor } from "../workspace";
 import { listWorkspace, readWorkspace, workspaceSandboxLayer, writeWorkspace } from "../workspace-mcp-program";
 import { getOwnedArtifactRow, listOwnedArtifacts, readOwnedSvelteArtifact } from "../artifacts";
 import { buildSessionTurnState } from "../session-turn";
@@ -228,8 +228,8 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   }
   if (method === "workspace_list" || method === "workspace_read" || method === "workspace_write") {
     try {
-      const { sandbox } = await getUserWorkspace(c.env, c.get("identity"));
-      const layer = workspaceSandboxLayer(sandbox);
+      const workspace = await workspaceFor(c.env, c.get("identity"));
+      const layer = workspaceSandboxLayer({ exec: (command, options) => workspace.shell(command, options), writeFile: (path, content) => workspace.write(path, content) });
       if (method === "workspace_list") {
         return await Effect.runPromise(listWorkspace(typeof args.path === "string" ? args.path : undefined, clamp(args.limit, 80, 200)).pipe(Effect.provide(layer)));
       }

@@ -28,9 +28,7 @@ import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
 import { resolveWorkspacePath } from "../workspace-path";
-import { recoveringWorkspaceExec } from "../workspace-exec";
-import { destroyUserWorkspace, getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace, type UserSandbox } from "../workspace";
-import { useWorkspace, type WorkspaceAccess } from "../workspace-access";
+import { saveWorkspaceDisk, snapshotWorkspace, workspaceFor, type WorkspaceStub } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { scheduleBackupRetry, scheduleTurnSnapshot } from "../turn-snapshot-schedule";
@@ -325,46 +323,25 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     };
   }
 
-  private async resetDeadChatSandbox(): Promise<void> {
-    const scope = { kind: "chat" as const, chatId: this.chatId() };
-    console.warn("pi_chat_sandbox_dead_resetting", { chatId: scope.chatId });
-    await destroyUserWorkspace(this.env, this.identity(), scope).catch((error: unknown) => console.error("pi_chat_sandbox_destroy_failed", { err: String(error) }));
+  private chatScope() {
+    return { kind: "chat" as const, chatId: this.chatId() };
   }
 
-  private chatWorkspaceAccess(): WorkspaceAccess<UserSandbox> {
-    const scope = { kind: "chat" as const, chatId: this.chatId() };
-    return {
-      acquire: async () => (await getUserWorkspace(this.env, this.identity(), { scope })).sandbox,
-      destroy: () => this.resetDeadChatSandbox(),
-    };
+  private chatWorkspaceObject(): Promise<WorkspaceStub> {
+    return workspaceFor(this.env, this.identity(), this.chatScope());
   }
 
   private async chatWorkspace(): Promise<ChatWorkspace> {
-    const access = this.chatWorkspaceAccess();
     return {
       exec: async (command, timeoutMs) => {
-        const result = await recoveringWorkspaceExec({
-          acquire: access.acquire,
-          exec: (sandbox) => sandbox.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() }),
-          destroy: access.destroy,
-        });
+        const result = await (await this.chatWorkspaceObject()).shell(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() });
         return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
       },
-      readFile: async (path) => {
-        const file = await useWorkspace(access, "idempotent", (sandbox) => sandbox.readFile(resolveWorkspacePath(path)));
-        return (file as unknown as { content?: string }).content ?? "";
-      },
-      writeFile: async (path, content) => {
-        const target = resolveWorkspacePath(path);
-        const parent = target.slice(0, target.lastIndexOf("/")) || WORKSPACE_HOME;
-        await useWorkspace(access, "idempotent", async (sandbox) => {
-          await sandbox.exec(`mkdir -p ${JSON.stringify(parent)}`, { cwd: "/", timeout: 30_000 });
-          await sandbox.writeFile(target, content);
-        });
-      },
+      readFile: async (path) => (await this.chatWorkspaceObject()).read(resolveWorkspacePath(path)),
+      writeFile: async (path, content) => (await this.chatWorkspaceObject()).write(resolveWorkspacePath(path), content),
       listFiles: async (path) => {
-        const result = await useWorkspace(access, "idempotent", (sandbox) => sandbox.listFiles(resolveWorkspacePath(path)));
-        return result.files.map((file) => `${file.type === "directory" ? "d" : "-"} ${file.absolutePath}`);
+        const files = await (await this.chatWorkspaceObject()).list(resolveWorkspacePath(path));
+        return files.map((file) => `${file.type === "directory" ? "d" : "-"} ${file.absolutePath}`);
       },
     };
   }
@@ -597,9 +574,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       return null;
     });
     if (!disk && outcome && !outcome.published) throw new Error(`snapshot not published: ${outcome.reason}`);
-    const { sandbox } = await getUserWorkspace(this.env, identity, { scope });
-    await sandbox.destroy();
-    invalidateUserWorkspace(identity, scope);
+    await (await workspaceFor(this.env, identity, scope)).stopContainer();
     return { snapshot: disk?.id ?? (outcome?.published ? outcome.backup.id : ""), destroyed: true };
   }
 
