@@ -23,6 +23,7 @@ import { thinkWorkspaceFor } from "./think-workspace-fs";
 import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
 import { snapshotWorkspace } from "./workspace";
+import { publishWorkspaceChange } from "./workspace-hub-client";
 import { WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";
@@ -787,6 +788,7 @@ export class MyAgent extends Think<Env> {
         href: `/?session=${encodeURIComponent(this.name)}`,
       }).catch((error) => console.error("turn_completion_push_failed", { sessionId: this.name, err: String(error) }));
     }
+    this.ctx.waitUntil(publishWorkspaceChange(this.env, identity.email, { kind: "workspace.status", workspaceId: this.name, status: result.status === "error" ? "error" : "active" }));
     await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
       .bind(result.status === "error" ? "error" : "active", this.name, identity.email)
       .run()
@@ -1108,6 +1110,7 @@ export class MyAgent extends Think<Env> {
     await this.armTurnWatchdog();
     const identity = this.identity();
     if (identity) {
+      this.ctx.waitUntil(publishWorkspaceChange(this.env, identity.email, { kind: "workspace.status", workspaceId: this.name, status: "running" }));
       await this.env.DB.prepare("UPDATE sessions SET status = 'running', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
         .bind(this.name, identity.email)
         .run()

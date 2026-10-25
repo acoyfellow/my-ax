@@ -69,6 +69,7 @@ export { MyAgent } from "./agent";
 export { ReadOnlyDelegateAgent } from "./delegate-many";
 export { VoiceThinkAgent } from "./voice-think-agent";
 export { UserAgent, DeskHub } from "./user-agent";
+export { WorkspaceHub } from "./workspace-hub";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
 export { WorkspaceObject as Sandbox } from "./workspace-object";

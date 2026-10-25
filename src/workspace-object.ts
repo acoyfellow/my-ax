@@ -5,6 +5,7 @@ import { createWorkspaceLifecycle, LOST_MID_COMMAND_NOTE, WorkspaceLost, type Op
 import { execTreatingShellExitAsResult } from "./workspace-exec";
 import { createSaveQueue, type SaveBoundary } from "./workspace-save-policy";
 import { recordObserveEvent } from "./observe-events";
+import { publishWorkspaceChange } from "./workspace-hub-client";
 import type { BackgroundProcessInfo } from "./types";
 import { workspaceSandboxId, type WorkspaceScope } from "./workspace-policy";
 
@@ -71,6 +72,7 @@ export class WorkspaceObject extends DiskSandbox {
     const binding = this.binding();
     if (!binding) return;
     console.warn("workspace_lost", { scope: binding.scope.kind, reason });
+    await publishWorkspaceChange(this.env, binding.ownerEmail, { kind: "workspace.lost", workspaceId: binding.scope.kind === "chat" ? binding.scope.chatId : "owner", reason });
     await recordObserveEvent(this.db(), { ownerEmail: binding.ownerEmail, sessionId: binding.scope.kind === "chat" ? binding.scope.chatId : null, kind: "workspace", name: "lost", outcome: "error", message: reason }).catch(() => undefined);
   }
 

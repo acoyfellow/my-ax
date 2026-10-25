@@ -1,6 +1,7 @@
 import type { AppEnv } from "./app-env";
 import { assertSeedablePath, resolveWorkspacePath } from "./workspace-path";
 import type { WorkspaceScope } from "./workspace-policy";
+import type { WorkspaceChange } from "./workspace-hub-client";
 
 export type WorkspaceEntry = { id: string; name: string; engine: string; status: string; updatedAt: string };
 
@@ -15,6 +16,7 @@ export type SiblingFiles = { read(path: string): Promise<string>; write(path: st
 export type SiblingChat = { submit(text: string, operationId?: string): Promise<unknown> };
 
 export type DirectoryDeps = {
+  publish?: (change: WorkspaceChange) => Promise<void>;
   openChat: (env: Bindings, ownerEmail: string, chatId: string) => Promise<SiblingChat>;
   workspace: (env: Bindings, identity: { email: string }, scope: WorkspaceScope) => Promise<SiblingFiles>;
   forkChat: (env: Bindings, ownerEmail: string, sourceId: string, sourceName: string, atMessageId: string) => Promise<{ sessionId: string; name: string; messageCount: number }>;
@@ -64,6 +66,7 @@ export function createWorkspaceDirectory(env: Bindings, ownerEmail: string, deps
       const target = await entry(toId);
       if (target.engine !== "pi") throw new Error(`workspace ${toId} cannot receive messages`);
       await (await deps.openChat(env, owner, toId)).submit(siblingMessage(fromId, text), operationId);
+      await deps.publish?.({ kind: "workspace.message", workspaceId: toId, from: fromId });
       return { delivered: true, to: toId };
     },
     fork: async (sourceId: string, atMessageId: string) => {
@@ -73,7 +76,9 @@ export function createWorkspaceDirectory(env: Bindings, ownerEmail: string, deps
     },
     readFile: async (id: string, path: string): Promise<string> => (await files(id)).read(siblingPath(path)),
     writeFile: async (id: string, path: string, content: string): Promise<{ written: number }> => {
-      await (await files(id)).write(siblingPath(path), content);
+      const target = siblingPath(path);
+      await (await files(id)).write(target, content);
+      await deps.publish?.({ kind: "workspace.file", workspaceId: id, path: target });
       return { written: content.length };
     },
   };
