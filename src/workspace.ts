@@ -40,6 +40,11 @@ export function invalidateUserWorkspace(identity: AccessIdentity, scope: Workspa
   preparing.delete(key(identity, scope));
 }
 
+export async function destroyUserWorkspace(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): Promise<void> {
+  invalidateUserWorkspace(identity, scope);
+  await handle(env, identity, scope).destroy();
+}
+
 type SnapshotRow = { backup_id: string; backup_dir: string; size_bytes: number | null; updated_at: string };
 
 async function latestSnapshotRow(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<SnapshotRow | null> {
