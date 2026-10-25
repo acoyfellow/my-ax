@@ -96,6 +96,30 @@ test("shell exec in jobs and the Think engine recovers from a wedged container a
   assert.deepEqual(state.ran, ["exec echo alive"]);
 });
 
+test("Pi chat exec whose container dies mid-command resets once and does not re-run the command", async () => {
+  const { recoveringWorkspaceExec } = await import("./workspace-exec");
+  let runs = 0;
+  let destroys = 0;
+  const result = await recoveringWorkspaceExec({
+    acquire: async () => "sandbox",
+    exec: async () => { runs += 1; throw new Error("Connection closed: this Durable Object instance is no longer active."); },
+    destroy: async () => { destroys += 1; },
+  });
+  assert.equal(runs, 1);
+  assert.equal(destroys, 1);
+  assert.equal(result.exitCode, -1);
+  assert.match(result.stderr, /was not re-run/);
+});
+
+test("Pi chat exec recovers from a wedged container at acquire and runs the command once", async () => {
+  const { recoveringWorkspaceExec } = await import("./workspace-exec");
+  const { state, access } = wedgedThenHealthy();
+  const result = await recoveringWorkspaceExec({ acquire: access.acquire, exec: (sandbox) => sandbox.exec("echo alive"), destroy: access.destroy });
+  assert.equal(result.stdout, "alive\n");
+  assert.equal(state.destroyed, 1);
+  assert.deepEqual(state.ran, ["exec echo alive"]);
+});
+
 test("an ordinary error is surfaced without resetting the container", async () => {
   const { useWorkspace } = await import("./workspace-access");
   let destroyed = 0;
