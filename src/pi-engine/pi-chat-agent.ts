@@ -29,7 +29,8 @@ import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
 import { resolveWorkspacePath } from "../workspace-path";
 import { recoveringWorkspaceExec } from "../workspace-exec";
-import { destroyUserWorkspace, getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
+import { destroyUserWorkspace, getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace, type UserSandbox } from "../workspace";
+import { useWorkspace, type WorkspaceAccess } from "../workspace-access";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
 import { lastTurnFailed } from "./last-turn-failed";
@@ -329,33 +330,39 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     await destroyUserWorkspace(this.env, this.identity(), scope).catch((error: unknown) => console.error("pi_chat_sandbox_destroy_failed", { err: String(error) }));
   }
 
-  private async chatWorkspace(): Promise<ChatWorkspace> {
+  private chatWorkspaceAccess(): WorkspaceAccess<UserSandbox> {
     const scope = { kind: "chat" as const, chatId: this.chatId() };
-    const acquire = async () => (await getUserWorkspace(this.env, this.identity(), { scope })).sandbox;
-    let cached: Awaited<ReturnType<typeof acquire>> | undefined;
-    const current = async () => (cached ??= await acquire());
+    return {
+      acquire: async () => (await getUserWorkspace(this.env, this.identity(), { scope })).sandbox,
+      destroy: () => this.resetDeadChatSandbox(),
+    };
+  }
+
+  private async chatWorkspace(): Promise<ChatWorkspace> {
+    const access = this.chatWorkspaceAccess();
     return {
       exec: async (command, timeoutMs) => {
         const result = await recoveringWorkspaceExec({
-          acquire,
+          acquire: access.acquire,
           exec: (sandbox) => sandbox.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() }),
-          destroy: async () => { cached = undefined; await this.resetDeadChatSandbox(); },
+          destroy: access.destroy,
         });
         return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
       },
       readFile: async (path) => {
-        const file = await (await current()).readFile(resolveWorkspacePath(path));
+        const file = await useWorkspace(access, "idempotent", (sandbox) => sandbox.readFile(resolveWorkspacePath(path)));
         return (file as unknown as { content?: string }).content ?? "";
       },
       writeFile: async (path, content) => {
         const target = resolveWorkspacePath(path);
         const parent = target.slice(0, target.lastIndexOf("/")) || WORKSPACE_HOME;
-        const sandbox = await current();
-        await sandbox.exec(`mkdir -p ${JSON.stringify(parent)}`, { cwd: "/", timeout: 30_000 });
-        await sandbox.writeFile(target, content);
+        await useWorkspace(access, "idempotent", async (sandbox) => {
+          await sandbox.exec(`mkdir -p ${JSON.stringify(parent)}`, { cwd: "/", timeout: 30_000 });
+          await sandbox.writeFile(target, content);
+        });
       },
       listFiles: async (path) => {
-        const result = await (await current()).listFiles(resolveWorkspacePath(path));
+        const result = await useWorkspace(access, "idempotent", (sandbox) => sandbox.listFiles(resolveWorkspacePath(path)));
         return result.files.map((file) => `${file.type === "directory" ? "d" : "-"} ${file.absolutePath}`);
       },
     };

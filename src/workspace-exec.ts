@@ -83,11 +83,28 @@ export interface RecoveringExecDeps<S> {
   destroy: () => Promise<void>;
 }
 
+const RESET_NOTE = "[workspace was unreachable and was reset to a fresh container restored from the last snapshot; background processes from before were stopped]\n";
+const DIED_MID_COMMAND_NOTE = "[the workspace container died while this command was running and was reset to a fresh container from the last snapshot; the command was not re-run because it may have partially completed. Check its effects before running it again.]\n";
+
 export async function recoveringWorkspaceExec<S>(deps: RecoveringExecDeps<S>): Promise<{ stdout: string; stderr: string; exitCode: number; reset: boolean }> {
-  const run = async () => execTreatingShellExitAsResult(async () => deps.exec(await deps.acquire()));
-  const { value, reset } = await withSandboxRecovery(run, deps.destroy);
-  const note = reset ? "[workspace was unreachable and was reset to a fresh container restored from the last snapshot; background processes from before were stopped]\n" : "";
-  return { stdout: value.stdout ?? "", stderr: `${note}${value.stderr ?? ""}`, exitCode: value.exitCode ?? -1, reset };
+  let reset = false;
+  let sandbox: S;
+  try {
+    sandbox = await deps.acquire();
+  } catch (error) {
+    if (!isDeadSandboxError(error)) throw error;
+    await deps.destroy();
+    reset = true;
+    sandbox = await deps.acquire();
+  }
+  try {
+    const value = await execTreatingShellExitAsResult(() => deps.exec(sandbox));
+    return { stdout: value.stdout ?? "", stderr: `${reset ? RESET_NOTE : ""}${value.stderr ?? ""}`, exitCode: value.exitCode ?? -1, reset };
+  } catch (error) {
+    if (!isDeadSandboxError(error)) throw error;
+    await deps.destroy();
+    return { stdout: "", stderr: DIED_MID_COMMAND_NOTE, exitCode: -1, reset: true };
+  }
 }
 
 export function execFailureResult(error: unknown): WorkspaceExecResult {
