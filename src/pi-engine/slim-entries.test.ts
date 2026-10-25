@@ -67,3 +67,10 @@ test("other long JSON output becomes a short preview", () => {
   const entry = slimEntry({ id: 9, kind: "pi.tool", model: [{ role: "toolResult", content: [{ type: "text", text: output }] }] });
   assert.equal((entry.model![0].content as Array<{ text: string }>)[0].text.length, SLIM_TEXT_LIMIT);
 });
+
+test("a slimmed image keeps its upload key so the transcript can show a thumbnail", () => {
+  const slim = slimEntry({ id: 1, kind: "pi.user", model: [{ role: "user", content: [{ type: "text", text: "look" }, { type: "image", data: "AAAA", mimeType: "image/jpeg", uploadKey: "u/abc.jpg" }] }] });
+  const image = (slim.model![0]!.content as Array<Record<string, unknown>>)[1]!;
+  assert.equal(image.data, undefined);
+  assert.equal(image.uploadKey, "u/abc.jpg");
+});

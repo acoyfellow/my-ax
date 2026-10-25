@@ -13,6 +13,8 @@ export type PiChatMessage = {
   parts: PiChatPart[];
   reasoning?: string;
   attachments?: Array<{ key: string; mime?: string }>;
+  /** Images the user sent; uploadKey is missing for images sent before it was recorded. */
+  images?: Array<{ uploadKey?: string; mime?: string }>;
   timestamp?: number;
   endedAt?: number;
   streaming: boolean;
@@ -35,6 +37,16 @@ function textOf(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.map((block) => (block && typeof block === "object" && (block as { type?: string }).type === "text" ? String((block as { text?: unknown }).text ?? "") : "")).join("");
+}
+
+function imagesOf(content: unknown): Array<{ uploadKey?: string; mime?: string }> {
+  if (!Array.isArray(content)) return [];
+  return (content as Array<Record<string, unknown>>)
+    .filter((block) => block?.type === "image")
+    .map((block) => ({
+      ...(typeof block.uploadKey === "string" && block.uploadKey ? { uploadKey: block.uploadKey } : {}),
+      ...(typeof block.mimeType === "string" ? { mime: block.mimeType } : {}),
+    }));
 }
 
 function assistantParts(message: ModelMessage): { parts: PiChatPart[]; reasoning: string } {
@@ -196,7 +208,8 @@ export class PiTranscript {
         const id = `pi-${entry.id}-${index}`;
         const timestamp = typeof message.timestamp === "number" ? message.timestamp : undefined;
         if (entry.kind === "pi.user" && message.role === "user") {
-          out.push({ id, role: "user", content: textOf(message.content), parts: [], timestamp, streaming: false });
+          const images = imagesOf(message.content);
+          out.push({ id, role: "user", content: textOf(message.content), parts: [], ...(images.length ? { images } : {}), timestamp, streaming: false });
         } else if (message.role === "assistant") {
           const { parts, reasoning } = assistantParts(message);
           for (const part of parts) if (part.kind === "tool") tools.set(part.tool.id, part.tool);
