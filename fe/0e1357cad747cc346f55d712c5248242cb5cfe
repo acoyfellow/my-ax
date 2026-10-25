@@ -1,0 +1,31 @@
+src/pi-engine/pi-chat-agent.ts
+  s_46448aabb2fde9::t_48e7bff2899a25 31-32,329,334-336,339-344,347,353,358
+src/workspace-exec.ts
+  s_46448aabb2fde9::t_f088ec873549b2 80-92
+src/workspace.ts
+  s_22f58a34a51a74::t_c558da885e3b02 43-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fe0e1357cad747cc346f55d712c5248242cb5cfe",
+  "prompts": {},
+  "sessions": {
+    "s_22f58a34a51a74": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a15a0f-aff7-7046-bdba-4834f07bc42a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
