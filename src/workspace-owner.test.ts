@@ -189,3 +189,98 @@ test("workspaces save only at pause, compaction and fork, not after every turn",
   assert.match(think, /compactThenSave\(/);
   assert.match(object, /saves\.save\("pause"/);
 });
+
+type SessionRow = { id: string; name: string; engine: string; status: string; updated_at: string; owner_email: string };
+
+function fakeDb(rows: SessionRow[]) {
+  return {
+    prepare: (sql: string) => ({
+      bind: (...args: unknown[]) => ({
+        first: async () => {
+          const [id, owner] = args as [string, string];
+          return rows.find((row) => row.id === id && row.owner_email === owner && row.status !== "archived") ?? null;
+        },
+        all: async () => {
+          const [owner, limit] = args as [string, number];
+          return { results: rows.filter((row) => row.owner_email === owner && row.status !== "archived").slice(0, limit) };
+        },
+        run: async () => ({ sql }),
+      }),
+    }),
+  };
+}
+
+async function directoryFixture() {
+  const { createWorkspaceDirectory } = await import("./workspace-directory");
+  const rows: SessionRow[] = [
+    { id: "chat-a", name: "A", engine: "pi", status: "active", updated_at: "2026-10-25", owner_email: "me@x.test" },
+    { id: "chat-b", name: "B", engine: "pi", status: "active", updated_at: "2026-10-25", owner_email: "me@x.test" },
+    { id: "chat-stranger", name: "S", engine: "pi", status: "active", updated_at: "2026-10-25", owner_email: "them@x.test" },
+  ];
+  const disks = new Map<string, Map<string, string>>();
+  const submitted: Array<{ chatId: string; text: string }> = [];
+  const forked: string[] = [];
+  const directory = createWorkspaceDirectory({ DB: fakeDb(rows) } as never, "Me@x.test", {
+    workspace: async (_env, _identity, scope) => {
+      const key = scope.kind === "owner" ? "owner" : scope.chatId;
+      if (!disks.has(key)) disks.set(key, new Map());
+      const disk = disks.get(key)!;
+      return { read: async (path: string) => disk.get(path) ?? "", write: async (path: string, content: string) => { disk.set(path, content); } };
+    },
+    openChat: async (_env, _owner, chatId) => ({ submit: async (text: string) => { submitted.push({ chatId, text }); return { ok: true }; } }),
+    forkChat: async (_env, _owner, sourceId) => { forked.push(sourceId); return { sessionId: `${sourceId}-fork`, name: "fork", messageCount: 3 }; },
+  });
+  return { directory, disks, submitted, forked };
+}
+
+test("the directory lists the owner's workspaces and none of anyone else's", async () => {
+  const { directory } = await directoryFixture();
+  const ids = (await directory.list()).map((entry) => entry.id);
+  assert.deepEqual(ids, ["owner", "chat-a", "chat-b"]);
+});
+
+test("one workspace messages a sibling, which receives it as a new turn naming the sender", async () => {
+  const { directory, submitted } = await directoryFixture();
+  await directory.message("chat-a", "chat-b", "please run the tests");
+  assert.deepEqual(submitted, [{ chatId: "chat-b", text: "[message from workspace chat-a]\nplease run the tests" }]);
+});
+
+test("a file written into a sibling workspace lands only in that sibling, under /home/user", async () => {
+  const { directory, disks } = await directoryFixture();
+  await directory.writeFile("chat-b", "shared/plan.md", "step 1");
+  assert.equal(await directory.readFile("chat-b", "shared/plan.md"), "step 1");
+  assert.equal(disks.get("chat-b")?.get("/home/user/shared/plan.md"), "step 1");
+  assert.equal(disks.get("chat-a"), undefined);
+});
+
+test("sibling file paths cannot escape /home/user", async () => {
+  const { directory } = await directoryFixture();
+  await assert.rejects(directory.writeFile("chat-b", "/etc/passwd", "x"), /inside \/home\/user/);
+  await assert.rejects(directory.readFile("chat-b", "/home/user/../../etc/passwd"), /traversal|inside/);
+});
+
+test("another owner's workspace cannot be messaged, read, written or forked", async () => {
+  const { WorkspaceNotOwned } = await import("./workspace-directory");
+  const { directory, submitted, disks, forked } = await directoryFixture();
+  await assert.rejects(directory.message("chat-a", "chat-stranger", "hi"), WorkspaceNotOwned);
+  await assert.rejects(directory.readFile("chat-stranger", "a.txt"), WorkspaceNotOwned);
+  await assert.rejects(directory.writeFile("chat-stranger", "a.txt", "x"), WorkspaceNotOwned);
+  await assert.rejects(directory.fork("chat-stranger", "1"), WorkspaceNotOwned);
+  assert.equal(submitted.length, 0);
+  assert.equal(disks.size, 0);
+  assert.equal(forked.length, 0);
+});
+
+test("a sibling can be forked through the directory", async () => {
+  const { directory, forked } = await directoryFixture();
+  const result = await directory.fork("chat-a", "5");
+  assert.equal(result.sessionId, "chat-a-fork");
+  assert.deepEqual(forked, ["chat-a"]);
+});
+
+test("Pi chats get the sibling workspace tools and the API exposes the directory", async () => {
+  const pi = await readFile(new URL("./pi-engine/pi-chat-agent.ts", import.meta.url), "utf8");
+  const index = await readFile(new URL("./index.tsx", import.meta.url), "utf8");
+  assert.match(pi, /siblingWorkspaceExtension\(/);
+  assert.match(index, /registerWorkspaceDirectoryRoutes\(app\)/);
+});
