@@ -58,7 +58,7 @@ function slimBlock(block: Block, role: unknown): { block: Block; clipped: boolea
     if (thinking.length <= SLIM_THINKING_LIMIT) return { block: rest, clipped: false };
     return { block: { ...rest, thinking: thinking.slice(0, SLIM_THINKING_LIMIT) }, clipped: true };
   }
-  if (block.type === "image") return { block: { type: "image", mimeType: block.mimeType, omitted: true }, clipped: true };
+  if (block.type === "image") return { block: { type: "image", mimeType: block.mimeType, omitted: true, ...(typeof block.uploadKey === "string" ? { uploadKey: block.uploadKey } : {}) }, clipped: true };
   if (block.type === "text" && role === "toolResult" && typeof block.text === "string") {
     const result = clipToolOutput(block.text);
     return { block: { ...block, text: result.text }, clipped: result.clipped };

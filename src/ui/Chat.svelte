@@ -306,6 +306,8 @@
     parts: Part[];
     reasoning?: string;
     attachments?: Attachment[];
+    /** Images the message carried, including ones too old to have a thumbnail. */
+    imageCount?: number;
     timestamp?: number;
     /** True if `timestamp` was interpolated (guessed from neighbors, not
      *  observed). Interpolated timestamps must not reorder past real anchors. */
@@ -1353,6 +1355,11 @@
     if (!piToolEnds.has(id)) piToolEnds.set(id, Date.now());
     return formatElapsed(piToolEnds.get(id)! - started);
   }
+  function piImageAttachments(images: Array<{ uploadKey?: string; mime?: string }> | undefined): Attachment[] | undefined {
+    const shown = (images ?? []).filter((image) => image.uploadKey);
+    if (!shown.length) return undefined;
+    return shown.map((image) => ({ id: image.uploadKey!, kind: "image" as const, mime: image.mime || "image/png", key: image.uploadKey!, bytes: 0 }));
+  }
   function renderPiTranscript() {
     if (!piTranscript) return;
     const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();
@@ -1368,14 +1375,26 @@
         ? { kind: "text" as const, text: part.text, rendered: message.streaming ? undefined : renderMarkdown(part.text) }
         : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: piToolStart(part.tool.id), elapsedText: piToolElapsed(part.tool.id, part.tool.state), result: part.tool.result, isError: part.tool.isError } }),
       reasoning: message.reasoning,
+      attachments: piImageAttachments(message.images),
+      imageCount: message.images?.length,
       timestamp: message.timestamp,
       endedAt: message.endedAt,
       streaming: message.streaming,
       pending: false,
       sessionId,
     }));
-    const confirmedUserTexts = new Set(rendered.filter((message) => message.role === "user").map((message) => message.content));
-    messages = annotateTurnDurations([...rendered, ...optimistic.filter((message) => !confirmedUserTexts.has(message.content))]);
+    // Match each confirmed user message to its optimistic copy (an image-only
+    // send comes back with the server's default text) and keep that copy's
+    // upload thumbnails, so the thumb never blinks out when the echo arrives.
+    const pendingUsers = [...optimistic];
+    for (const view of rendered) {
+      if (view.role !== "user") continue;
+      const index = pendingUsers.findIndex((pending) => pending.content === view.content || (!pending.content.trim() && view.content === "Describe the attached image."));
+      if (index < 0) continue;
+      const [match] = pendingUsers.splice(index, 1);
+      if (match?.attachments?.length && !view.attachments?.length) view.attachments = match.attachments;
+    }
+    messages = annotateTurnDurations([...rendered, ...pendingUsers]);
     if (sessionId && savingSnapshots) savedSnapshots.write(sessionId, piTranscript.toSnapshot());
     if (piTranscript.busy !== (wsState.status === "running" || wsState.status === "thinking")) applyStatus(piTranscript.busy ? "running" : "idle");
     bootstrapPending = false;
@@ -3018,6 +3037,8 @@
                         />
                       {/each}
                     </div>
+                  {:else if m.imageCount}
+                    <div class="mb-2 inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-fg-mut">{m.imageCount === 1 ? "1 image" : `${m.imageCount} images`}</div>
                   {/if}{m.content}</div>
               {:else if m.role === "assistant"}
                 {#if m.parts.length === 0 && !m.streaming}

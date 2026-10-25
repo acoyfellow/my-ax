@@ -69,3 +69,11 @@ test("a turn's end uses the time each entry was written, not the step start", ()
   const [, agent] = transcript.messages();
   assert.equal(agent!.endedAt, 61_000);
 });
+
+test("a user message lists the images it carried, with upload keys when recorded", () => {
+  const t = new PiTranscript();
+  t.applySnapshot({ busy: false, model: "m", entries: [{ id: 1, kind: "pi.user", model: [{ role: "user", content: [{ type: "text", text: "look" }, { type: "image", mimeType: "image/jpeg", omitted: true, uploadKey: "u/abc.jpg" }, { type: "image", mimeType: "image/png", omitted: true }] }] }], partial: null, tools: [], queued: 0 });
+  const [user] = t.messages();
+  assert.equal(user!.content, "look");
+  assert.deepEqual(user!.images, [{ uploadKey: "u/abc.jpg", mime: "image/jpeg" }, { mime: "image/png" }]);
+});

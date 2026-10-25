@@ -213,6 +213,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       type: "image" as const,
       data: bytesToBase64(await readUploadBytes(this.env, this.identity(), attachment)),
       mimeType: attachment.mime || "image/png",
+      // Kept beside the image so the transcript can show a thumbnail from the
+      // upload after the slim view drops the image bytes. Providers read only
+      // data and mimeType, so this never reaches the model.
+      uploadKey: attachment.key,
     })));
     const content = images.length ? [{ type: "text" as const, text: text || "Describe the attached image." }, ...images] : text;
     await this.ensureEventStream();
