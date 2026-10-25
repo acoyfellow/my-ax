@@ -15,7 +15,7 @@ import { callableConnectors } from "./connectors";
 function isVoiceEnabled(env: Env): boolean {
   return String((env as unknown as Record<string, unknown>).VOICE_ENABLED ?? "") === "1";
 }
-import { getUserWorkspace } from "./workspace";
+import { workspaceFor, WORKSPACE_HOME } from "./workspace";
 import { BetaPage } from "./views/BetaPage";
 import type { AppEnv } from "./app-env";
 import { deploymentVersionResponse } from "./deploy-version";
@@ -70,7 +70,7 @@ export { VoiceThinkAgent } from "./voice-think-agent";
 export { UserAgent, DeskHub } from "./user-agent";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
-export { DiskSandbox as Sandbox } from "./disk-sandbox";
+export { WorkspaceObject as Sandbox } from "./workspace-object";
 export { Sandbox as NamedComputer } from "@cloudflare/sandbox";
 export { ComputerWorkspace } from "./computer-workspace";
 export { PiChatAgent } from "./pi-engine/pi-chat-agent";
@@ -361,14 +361,15 @@ app.get("/api/system", async (c) => {
   // Per-user shell numbers: disk usage, file count. Short timeout so the
   // drawer doesn't hang on a cold-starting container.
   try {
-    const handle = await getUserWorkspace(c.env, identity);
+    const workspace = await workspaceFor(c.env, identity);
+    const handle = { home: WORKSPACE_HOME };
     // Run two cheap queries concurrently. `du -sb` is bytes; `find ... | wc -l`
     // counts files. Both should finish in well under 1s on a warm sandbox.
     const [duRes, findRes] = await Promise.allSettled([
-      handle.sandbox.exec(`du -sb ${handle.home} 2>/dev/null | head -1`, {
+      workspace.shell(`du -sb ${handle.home} 2>/dev/null | head -1`, {
         timeout: 4_000,
       }),
-      handle.sandbox.exec(
+      workspace.shell(
         `find ${handle.home} -type f 2>/dev/null | wc -l`,
         { timeout: 4_000 },
       ),

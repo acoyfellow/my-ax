@@ -8,7 +8,7 @@ import type { AppEnv } from "../app-env";
 import type { ToolDef } from "../types";
 import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { storeInlineMediaArtifact } from "../uploads";
-import { getUserWorkspace } from "../workspace";
+import { workspaceFor } from "../workspace";
 import { machineBusyOutcome, parseMachineShellContent } from "../machinectl-output";
 import { isFocusTool, isVerifiedPromptTool, withVerifiedCmuxDelivery } from "../cmux-delivery-verification";
 
@@ -24,9 +24,8 @@ async function persistScreenshotToWorkspace(env: AppEnv["Bindings"], identity: {
   const comma = dataUrl.indexOf(",");
   if (comma < 0) return;
   const bytes = Uint8Array.from(atob(dataUrl.slice(comma + 1).replace(/[\r\n]/g, "")), (char) => char.charCodeAt(0));
-  const { sandbox } = await getUserWorkspace(env, identity as never);
-  await sandbox.mkdir("/home/user/.my-ax/screenshots", { recursive: true }).catch(() => undefined);
-  await sandbox.writeFile(path, new Blob([bytes]).stream());
+  const workspace = await workspaceFor(env, identity);
+  await workspace.write(path, bytes);
 }
 
 function hostFor(c: Context<AppEnv>) {

@@ -23,7 +23,7 @@ import { SandboxThinkWorkspace } from "./think-workspace";
 import { thinkWorkspaceFor } from "./think-workspace-fs";
 import { createThinkTools } from "./tools";
 import type { ToolContext } from "./types";
-import { getUserWorkspace, snapshotWorkspace } from "./workspace";
+import { snapshotWorkspace } from "./workspace";
 import { WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
 import { notifyOwner } from "./notify";

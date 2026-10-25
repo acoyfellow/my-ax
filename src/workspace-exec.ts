@@ -5,13 +5,8 @@ export interface WorkspaceExecResult extends ShellResult {
   workspace_recycled?: true;
 }
 
-interface ExecCapable {
-  exec(cmd: string, opts: Record<string, unknown>): Promise<{ stdout?: string; stderr?: string; exitCode?: number; success?: boolean }>;
-}
-
-export interface AcquiredWorkspace<S extends ExecCapable> {
-  sandbox: S;
-  recycled: boolean;
+export interface ShellCapable {
+  shell(cmd: string, opts: Record<string, unknown>): Promise<{ stdout: string; stderr: string; exitCode: number; workspaceLost?: true }>;
 }
 
 function errorText(error: unknown): string {
@@ -30,18 +25,6 @@ function field<T>(error: unknown, name: string, guard: (value: unknown) => value
 
 const isString = (value: unknown): value is string => typeof value === "string";
 const isNumber = (value: unknown): value is number => typeof value === "number";
-
-const DEAD_SANDBOX_PATTERNS = [
-  /durable object instance is no longer active/i,
-  /websocket upgrade failed: 5\d\d/i,
-  /container (is )?not (running|ready)/i,
-  /network connection lost/i,
-];
-
-export function isDeadSandboxError(error: unknown): boolean {
-  const text = errorText(error);
-  return DEAD_SANDBOX_PATTERNS.some((pattern) => pattern.test(text));
-}
 
 const SHELL_EXITED_PATTERN = /shell exited \(exit code: (\d+|unknown)\)/i;
 
@@ -67,46 +50,6 @@ export async function execTreatingShellExitAsResult<T>(run: () => Promise<T>): P
   }
 }
 
-export async function withSandboxRecovery<T>(run: () => Promise<T>, reset: () => Promise<void>): Promise<{ value: T; reset: boolean }> {
-  try {
-    return { value: await run(), reset: false };
-  } catch (error) {
-    if (!isDeadSandboxError(error)) throw error;
-    await reset();
-    return { value: await run(), reset: true };
-  }
-}
-
-export interface RecoveringExecDeps<S> {
-  acquire: () => Promise<S>;
-  exec: (sandbox: S) => Promise<{ stdout?: string; stderr?: string; exitCode?: number }>;
-  destroy: () => Promise<void>;
-}
-
-const RESET_NOTE = "[workspace was unreachable and was reset to a fresh container restored from the last snapshot; background processes from before were stopped]\n";
-const DIED_MID_COMMAND_NOTE = "[the workspace container died while this command was running and was reset to a fresh container from the last snapshot; the command was not re-run because it may have partially completed. Check its effects before running it again.]\n";
-
-export async function recoveringWorkspaceExec<S>(deps: RecoveringExecDeps<S>): Promise<{ stdout: string; stderr: string; exitCode: number; reset: boolean }> {
-  let reset = false;
-  let sandbox: S;
-  try {
-    sandbox = await deps.acquire();
-  } catch (error) {
-    if (!isDeadSandboxError(error)) throw error;
-    await deps.destroy();
-    reset = true;
-    sandbox = await deps.acquire();
-  }
-  try {
-    const value = await execTreatingShellExitAsResult(() => deps.exec(sandbox));
-    return { stdout: value.stdout ?? "", stderr: `${reset ? RESET_NOTE : ""}${value.stderr ?? ""}`, exitCode: value.exitCode ?? -1, reset };
-  } catch (error) {
-    if (!isDeadSandboxError(error)) throw error;
-    await deps.destroy();
-    return { stdout: "", stderr: DIED_MID_COMMAND_NOTE, exitCode: -1, reset: true };
-  }
-}
-
 export function execFailureResult(error: unknown): WorkspaceExecResult {
   return {
     stdout: field(error, "stdout", isString) ?? "",
@@ -116,25 +59,23 @@ export function execFailureResult(error: unknown): WorkspaceExecResult {
   };
 }
 
-export async function workspaceShellExec<S extends ExecCapable>(
-  acquire: () => Promise<AcquiredWorkspace<S>>,
+export async function workspaceShellExec(
+  acquire: () => Promise<ShellCapable>,
   cmd: string,
   opts: Record<string, unknown>,
 ): Promise<WorkspaceExecResult> {
-  let recycled = false;
-  let result: WorkspaceExecResult;
   try {
     const workspace = await acquire();
-    recycled = workspace.recycled;
     const requested = typeof opts.timeout === "number" && opts.timeout > 0 ? opts.timeout : undefined;
     const bounded = requested ? shellBoundedCommand(cmd, requested) : undefined;
-    const raw = await workspace.sandbox.exec(bounded?.command ?? cmd, bounded ? { ...opts, timeout: bounded.sandboxTimeoutMs } : opts);
-    result = { stdout: raw.stdout ?? "", stderr: raw.stderr ?? "", exitCode: raw.exitCode ?? (raw.success ? 0 : 1) };
-    if (bounded && result.exitCode === 124) result = { ...result, error: `Command timed out after ${requested}ms and was stopped; the workspace was not touched.` };
+    const raw = await workspace.shell(bounded?.command ?? cmd, bounded ? { ...opts, timeout: bounded.sandboxTimeoutMs } : opts);
+    const result: WorkspaceExecResult = { stdout: raw.stdout, stderr: raw.stderr, exitCode: raw.exitCode };
+    if (raw.workspaceLost) return { ...result, workspace_recycled: true };
+    if (bounded && result.exitCode === 124) return { ...result, error: `Command timed out after ${requested}ms and was stopped; the workspace was not touched.` };
+    return result;
   } catch (error) {
-    result = execFailureResult(error);
+    return execFailureResult(error);
   }
-  return recycled ? { ...result, workspace_recycled: true } : result;
 }
 
 const GLOB_CHARS = /[*?[{]/;

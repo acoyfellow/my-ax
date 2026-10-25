@@ -1,187 +1,28 @@
-import { getSandbox, type DirectoryBackup, type Sandbox } from "@cloudflare/sandbox";
-import { readyMarkerCheckCommand, workspaceInitCommand } from "./workspace-init";
+import type { DirectoryBackup } from "@cloudflare/sandbox";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
 import { Effect } from "effect";
 import { databaseLayer } from "./effect/database";
 import { publishWorkspaceSnapshot } from "./workspace-snapshot-program";
 import { recordObserveEvent } from "./observe-events";
-import { verifyWorkspaceRestore, type WorkspaceSnapshotManifest } from "./workspace-snapshot";
-import type { WorkspaceAccess } from "./workspace-access";
+import { verifyWorkspaceRestore } from "./workspace-snapshot";
+import { latestSnapshotRow } from "./workspace-boot";
+import { workspaceFor, type WorkspaceStub } from "./workspace-object";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
-import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, homeLooksWiped, shouldRestoreDirectoryBackup, turnSnapshotDue, workspaceSandboxId, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
+import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, homeLooksWiped, turnSnapshotDue, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
 export { WORKSPACE_HOME, assertSeedablePath };
+export { workspaceFor, type WorkspaceStub };
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
-const READY_MARKER = "/tmp/my-ax-workspace-ready";
 
 const OWNER_SCOPE: WorkspaceScope = { kind: "owner" };
 
-function key(identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): string {
-  return workspaceSandboxId(identity.email, scope);
+function binding(identity: AccessIdentity, scope: WorkspaceScope) {
+  return { ownerEmail: identity.email, scope };
 }
 
-function handle(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE) {
-  return getSandbox(
-    (env as unknown as { SANDBOX: DurableObjectNamespace<Sandbox> }).SANDBOX,
-    key(identity, scope),
-    {
-      containerTimeouts: { instanceGetTimeoutMS: 120_000, portReadyTimeoutMS: 240_000 },
-      transport: "rpc",
-    },
-  );
-}
-
-// Only dedupe concurrent readiness work inside the same event turn. Caching a
-// Promise that closes over D1/RPC I/O across Durable Object events triggers
-// Workers' cross-request/cross-DO I/O guard on later chat turns.
-const preparing = new Map<string, Promise<void>>();
-
-export function invalidateUserWorkspace(identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): void {
-  preparing.delete(key(identity, scope));
-}
-
-export async function destroyUserWorkspace(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): Promise<void> {
-  invalidateUserWorkspace(identity, scope);
-  await handle(env, identity, scope).destroy();
-}
-
-export type UserSandbox = ReturnType<typeof handle>;
-
-export function userWorkspaceAccess(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): WorkspaceAccess<UserSandbox> {
-  return {
-    acquire: async () => (await getUserWorkspace(env, identity, { scope })).sandbox,
-    destroy: async () => {
-      console.warn("workspace_dead_resetting", { scope: scope.kind });
-      await destroyUserWorkspace(env, identity, scope).catch((error: unknown) => console.error("workspace_destroy_failed", { err: String(error) }));
-    },
-  };
-}
-
-type SnapshotRow = { backup_id: string; backup_dir: string; size_bytes: number | null; updated_at: string };
-
-async function latestSnapshotRow(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<SnapshotRow | null> {
-  return env.DB.prepare(
-    "SELECT backup_id, backup_dir, size_bytes, updated_at FROM workspace_snapshots WHERE owner_email = ?",
-  ).bind(workspaceSnapshotKey(identity.email, scope)).first<SnapshotRow>();
-}
-
-async function latestSnapshot(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<WorkspaceSnapshotManifest | null> {
-  const row = await latestSnapshotRow(env, identity, scope);
-  return row ? { backupId: row.backup_id, backupDir: row.backup_dir } : null;
-}
-
-function workspaceSizeCommand(): string {
-  const excludes = REBUILDABLE_BACKUP_EXCLUDES.map((pattern) => `--exclude=${JSON.stringify(pattern)}`).join(" ");
-  return `du -sb ${excludes} ${WORKSPACE_HOME} 2>/dev/null | cut -f1`;
-}
-
-const RESTORE_FALLBACK_DEPTH = 3;
-
-async function restoreCandidates(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<WorkspaceSnapshotManifest[]> {
-  const latest = await latestSnapshot(env, identity, scope);
-  const history = await env.DB.prepare(
-    "SELECT backup_id, backup_dir FROM workspace_snapshot_history WHERE workspace_key = ? ORDER BY id DESC LIMIT ?",
-  ).bind(workspaceSnapshotKey(identity.email, scope), RESTORE_FALLBACK_DEPTH + 1).all<{ backup_id: string; backup_dir: string }>()
-    .then((rows) => rows.results ?? [])
-    .catch(() => []);
-  const ordered = [latest, ...history.map((row) => ({ backupId: row.backup_id, backupDir: row.backup_dir }))]
-    .filter((candidate): candidate is WorkspaceSnapshotManifest => candidate !== null);
-  const seen = new Set<string>();
-  return ordered.filter((candidate) => !seen.has(candidate.backupId) && seen.add(candidate.backupId)).slice(0, RESTORE_FALLBACK_DEPTH);
-}
-
-async function restoreWithFallback(env: Env, identity: AccessIdentity, scope: WorkspaceScope, sandbox: ReturnType<typeof handle>): Promise<void> {
-  const candidates = await restoreCandidates(env, identity, scope);
-  let destroyedBrokenContainer = false;
-  for (const candidate of candidates) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const receipt = verifyWorkspaceRestore(candidate, await sandbox.restoreBackup({ id: candidate.backupId, dir: candidate.backupDir }));
-        console.info("workspace.restore_verified", receipt);
-        return;
-      } catch (err) {
-        console.error("workspace.restore_failed", { email: identity.email, scope, backupId: candidate.backupId, attempt, err: String(err) });
-        if (!destroyedBrokenContainer) {
-          destroyedBrokenContainer = true;
-          await sandbox.destroy().catch((destroyError: unknown) => console.error("workspace.destroy_after_restore_failure_failed", { err: String(destroyError) }));
-          continue;
-        }
-        break;
-      }
-    }
-  }
-  if (candidates.length) console.error("workspace.restore_unavailable_continuing", { email: identity.email, scope, tried: candidates.map((candidate) => candidate.backupId) });
-}
-
-async function measureHomeBytes(sandbox: ReturnType<typeof handle>): Promise<number | null> {
-  const measured = await sandbox.exec(workspaceSizeCommand(), { cwd: "/", timeout: 20_000, origin: "internal" }).catch(() => null);
-  const bytes = Number.parseInt(measured?.stdout?.trim() ?? "", 10);
-  return Number.isFinite(bytes) ? bytes : null;
-}
-
-async function diskBootSource(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<string | null> {
-  const state = await diskStub(env, identity, scope).diskState().catch(() => null);
-  return state?.managed ? state.restoredFrom : null;
-}
-
-export async function getUserWorkspace(env: Env, identity: AccessIdentity, options?: { restoreLatest?: boolean; scope?: WorkspaceScope }) {
-  const scope = options?.scope ?? OWNER_SCOPE;
-  const id = key(identity, scope);
-  const sandbox = handle(env, identity, scope);
-  const inFlight = preparing.get(id);
-  if (inFlight) {
-    await inFlight;
-    return { sandbox, home: WORKSPACE_HOME, recycled: false };
-  }
-  let recycled = false;
-  const promise = (async () => {
-    // Restore only when acquiring a fresh container. Re-applying the latest
-    // backup before every tool call resurrects files intentionally deleted by
-    // an earlier tool in the same turn. A /tmp marker survives calls within a
-    // live container but disappears naturally when Sandbox recycles it.
-    const acquireStarted = Date.now();
-    const ready = await sandbox.exec(readyMarkerCheckCommand(READY_MARKER), { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
-    recycled = ready?.exitCode !== 0;
-    const note = async (name: string, started: number, outcome: string, message?: string) => recycled && recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name, durationMs: Date.now() - started, outcome, message }).catch(() => undefined);
-    await note("fresh-container", acquireStarted, ready ? "ok" : "unreachable", `scope ${scope.kind}`);
-    const restoredFromDiskSnapshot = recycled ? await diskBootSource(env, identity, scope) : null;
-    const lastBackupBytes = recycled ? (await latestSnapshotRow(env, identity, scope).catch(() => null))?.size_bytes ?? null : null;
-    const bootHomeBytes = restoredFromDiskSnapshot ? await measureHomeBytes(sandbox) : null;
-    const restoreNeeded = shouldRestoreDirectoryBackup({ restoredFromDiskSnapshot, homeBytes: bootHomeBytes, lastBackupBytes });
-    if (restoredFromDiskSnapshot && !restoreNeeded) await note("restore", acquireStarted, "skipped", `booted from disk snapshot ${restoredFromDiskSnapshot} with ${bootHomeBytes} bytes in home`);
-    if (options?.restoreLatest !== false && recycled && restoreNeeded) {
-      const restoreStarted = Date.now();
-      try {
-        await restoreWithFallback(env, identity, scope, sandbox);
-        const restoredHomeBytes = await measureHomeBytes(sandbox);
-        const wiped = homeLooksWiped(restoredHomeBytes, lastBackupBytes);
-        await note("restore", restoreStarted, wiped ? "empty" : "ok", `${restoredHomeBytes} bytes in home, last backup ${lastBackupBytes} bytes`);
-        if (wiped) await note("reset", restoreStarted, "error", `home has ${restoredHomeBytes} bytes after restore; last good backup was ${lastBackupBytes} bytes`);
-      } catch (error) {
-        await note("restore", restoreStarted, "error", error instanceof Error ? error.message : String(error));
-        throw error;
-      }
-    }
-    const initStarted = Date.now();
-    const initialized = await sandbox.exec(workspaceInitCommand(WORKSPACE_HOME, READY_MARKER), {
-      cwd: "/",
-      timeout: 30_000,
-      origin: "internal",
-    }).catch(async (error: unknown) => {
-      await note("init", initStarted, "error", error instanceof Error ? error.message : String(error));
-      throw error;
-    });
-    await note("init", initStarted, initialized.exitCode === 0 ? "ok" : "error", initialized.exitCode === 0 ? undefined : initialized.stderr);
-    if (initialized.exitCode !== 0) throw new Error(initialized.stderr || "Workspace initialization failed");
-  })();
-  preparing.set(id, promise);
-  try {
-    await promise;
-  } finally {
-    preparing.delete(id);
-  }
-  return { sandbox, home: WORKSPACE_HOME, recycled };
+export async function stopUserWorkspace(env: Env, identity: AccessIdentity, scope: WorkspaceScope = OWNER_SCOPE): Promise<void> {
+  await (await workspaceFor(env, identity, scope)).stopContainer();
 }
 
 export type WorkspaceSnapshotOutcome =
@@ -200,32 +41,28 @@ export async function snapshotUserWorkspace(
 }
 
 type DiskState = { managed: boolean; bootSnapshot: string | null; restoredFrom: string | null };
-type DiskSandboxStub = { saveDisk(name: string): Promise<{ id: string; size: number } | null>; bootFrom(snapshotId: string): Promise<void>; bootSnapshot(): Promise<string | null>; diskState(): Promise<DiskState> };
 
-export function workspaceDiskState(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<DiskState> {
-  return diskStub(env, identity, scope).diskState();
-}
-
-function diskStub(env: Env, identity: AccessIdentity, scope: WorkspaceScope): DiskSandboxStub {
-  return handle(env, identity, scope) as unknown as DiskSandboxStub;
+export async function workspaceDiskState(env: Env, identity: AccessIdentity, scope: WorkspaceScope): Promise<DiskState> {
+  return (await workspaceFor(env, identity, scope)).diskState();
 }
 
 export async function saveWorkspaceDisk(env: Env, identity: AccessIdentity, scope: WorkspaceScope, name: string): Promise<{ id: string; size: number } | null> {
-  const lastBackupBytes = (await latestSnapshotRow(env, identity, scope).catch(() => null))?.size_bytes ?? null;
-  const homeBytes = await measureHomeBytes(handle(env, identity, scope));
+  const workspace = await workspaceFor(env, identity, scope);
+  const lastBackupBytes = (await latestSnapshotRow(env.DB, binding(identity, scope)).catch(() => null))?.size_bytes ?? null;
+  const homeBytes = await workspace.homeBytes();
   if (homeLooksWiped(homeBytes, lastBackupBytes)) {
     await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "shrink_refused", message: `${lastBackupBytes} -> ${homeBytes} bytes in home` }).catch(() => undefined);
     return null;
   }
-  const saved = await diskStub(env, identity, scope).saveDisk(`my-ax-${name}-${Date.now()}`);
+  const saved = await workspace.saveDisk(`my-ax-${name}-${Date.now()}`);
   if (saved) await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "ok", message: `${saved.id} ${saved.size} bytes` }).catch(() => undefined);
   return saved;
 }
 
 export async function copyWorkspaceDisk(env: Env, identity: AccessIdentity, from: WorkspaceScope, to: WorkspaceScope): Promise<string | null> {
   const saved = await saveWorkspaceDisk(env, identity, from, "fork").catch(() => null);
-  const snapshotId = saved?.id ?? await diskStub(env, identity, from).bootSnapshot();
-  if (snapshotId) await diskStub(env, identity, to).bootFrom(snapshotId);
+  const snapshotId = saved?.id ?? await (await workspaceFor(env, identity, from)).bootSnapshot();
+  if (snapshotId) await (await workspaceFor(env, identity, to)).bootFrom(snapshotId);
   return snapshotId;
 }
 
@@ -236,21 +73,19 @@ export async function snapshotWorkspace(
   options?: { scope?: WorkspaceScope; respectCooldown?: boolean },
 ): Promise<WorkspaceSnapshotOutcome> {
   const scope = options?.scope ?? OWNER_SCOPE;
-  const previous = await latestSnapshotRow(env, identity, scope);
+  const previous = await latestSnapshotRow(env.DB, binding(identity, scope));
   if (options?.respectCooldown && previous && !turnSnapshotDue(Date.parse(`${previous.updated_at}Z`), Date.now())) {
     return { published: false, reason: "cooldown" };
   }
-  const { sandbox } = await getUserWorkspace(env, identity, { scope });
-  const measured = await sandbox.exec(workspaceSizeCommand(), { cwd: "/", timeout: 20_000, origin: "internal" }).catch(() => null);
-  const sizeBytes = Number.parseInt(measured?.stdout?.trim() ?? "", 10);
-  const knownSize = Number.isFinite(sizeBytes) ? sizeBytes : 0;
+  const workspace = await workspaceFor(env, identity, scope);
+  const knownSize = await workspace.homeBytes().catch(() => null) ?? 0;
   const decision = decideSnapshotPublish(previous?.size_bytes ?? null, knownSize);
   if (!decision.publish) {
     console.error("workspace_snapshot_shrink_refused", { email: identity.email, scope, previousBytes: decision.previousBytes, nextBytes: decision.nextBytes });
     await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "snapshot", outcome: "shrink_refused", message: `${decision.previousBytes} -> ${decision.nextBytes} bytes` }).catch(() => undefined);
     return { published: false, reason: "shrink_refused", sizeBytes: knownSize, previousBytes: decision.previousBytes };
   }
-  const backup = await sandbox.createBackup({
+  const backup = await workspace.backup({
     dir: WORKSPACE_HOME,
     name: `my-ax-${name}-${Date.now()}`,
     ttl: SNAPSHOT_TTL_SECONDS,
@@ -291,8 +126,8 @@ export interface SeedFileResult {
  *    2. mkdir -p the parent and writeFile().
  *    3. createBackup() from the same handle (snapshotUserWorkspace also passes
  *       restoreLatest:false so the snapshot reflects the just-written state).
- *    4. destroy() the live sandbox and invalidate the readiness cache.
- *    5. getUserWorkspace() again — the default restoreLatest:true now pulls the
+ *    4. stop the live container.
+ *    5. awake() again — the default restoreLatest:true now pulls the
  *       freshly-saved snapshot, which is the real durability validation.
  *    6. readFile() and byte-compare against what we wrote.
  *
@@ -310,23 +145,15 @@ export async function seedUserWorkspaceFile(
   }
   const started = Date.now();
 
-  const fresh = await getUserWorkspace(env, identity, { restoreLatest: false });
-  const parent = input.path.slice(0, input.path.lastIndexOf("/")) || WORKSPACE_HOME;
-  await fresh.sandbox.exec(`mkdir -p ${JSON.stringify(parent)}`, {
-    cwd: "/",
-    timeout: 30_000,
-    origin: "internal",
-  });
-  await fresh.sandbox.writeFile(input.path, input.content);
+  const workspace = await workspaceFor(env, identity);
+  await workspace.awake({ restoreLatest: false });
+  await workspace.write(input.path, input.content);
 
   const snapshot = await snapshotUserWorkspace(env, identity, "seed");
 
-  await fresh.sandbox.destroy();
-  invalidateUserWorkspace(identity);
-
-  const restored = await getUserWorkspace(env, identity);
-  const read = await restored.sandbox.readFile(input.path);
-  const restoredContent = (read as unknown as { content?: string }).content ?? "";
+  await workspace.stopContainer();
+  await workspace.awake({ restoreLatest: true });
+  const restoredContent = await workspace.read(input.path);
   const restoreMatches = restoredContent === input.content;
 
   return {
@@ -342,7 +169,7 @@ export async function seedUserWorkspaceFile(
 export type WorkspaceSnapshotListing = { backupId: string; name: string; sizeBytes: number | null; createdAt: string; latest: boolean };
 
 export async function listWorkspaceSnapshots(env: Env, identity: AccessIdentity, limit = 20, scope: WorkspaceScope = OWNER_SCOPE): Promise<WorkspaceSnapshotListing[]> {
-  const latest = await latestSnapshotRow(env, identity, scope);
+  const latest = await latestSnapshotRow(env.DB, binding(identity, scope));
   const rows = await env.DB.prepare(
     "SELECT backup_id, name, size_bytes, created_at FROM workspace_snapshot_history WHERE workspace_key = ? ORDER BY id DESC LIMIT ?",
   ).bind(workspaceSnapshotKey(identity.email, scope), Math.min(Math.max(limit, 1), 100)).all<{ backup_id: string; name: string | null; size_bytes: number | null; created_at: string }>();
@@ -356,8 +183,8 @@ export async function restoreWorkspaceSnapshot(env: Env, identity: AccessIdentit
   ).bind(key, backupId).first<{ backup_id: string; backup_dir: string; size_bytes: number | null }>();
   if (!row) throw new Error("snapshot not found for this workspace");
   const saved = await snapshotWorkspace(env, identity, "before-restore", { scope });
-  const { sandbox } = await getUserWorkspace(env, identity, { scope });
-  verifyWorkspaceRestore({ backupId: row.backup_id, backupDir: row.backup_dir }, await sandbox.restoreBackup({ id: row.backup_id, dir: row.backup_dir }));
+  const workspace = await workspaceFor(env, identity, scope);
+  verifyWorkspaceRestore({ backupId: row.backup_id, backupDir: row.backup_dir }, await workspace.restore({ id: row.backup_id, dir: row.backup_dir }) as never);
   await Effect.runPromise(
     publishWorkspaceSnapshot(key, { id: row.backup_id, dir: row.backup_dir }, row.size_bytes, "restored").pipe(Effect.provide(databaseLayer(env.DB))),
   );

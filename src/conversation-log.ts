@@ -14,7 +14,7 @@
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
 import { checkSequenceIntegrity, isSequenceNumber, type SequenceIntegrityRow } from "./sequence-integrity";
-import { getUserWorkspace } from "./workspace";
+import { workspaceFor } from "./workspace";
 
 const LOG_DIR = "/home/user/.my-ax/conversations";
 
@@ -121,13 +121,13 @@ export async function appendConversationLog(
   await verifyRecentConversationSequence(env, identity, sessionId);
 
   try {
-    const { sandbox } = await getUserWorkspace(env, identity);
+    const workspace = await workspaceFor(env, identity);
 
     // Atomic append in the container avoids read-modify-write races. The
     // JSON line is base64-decoded in the shell so user/model content never
     // participates in command quoting.
     const encoded = bytesToBase64(new TextEncoder().encode(line));
-    const result = await sandbox.exec(
+    const result = await workspace.shell(
       `mkdir -p ${LOG_DIR} && printf %s '${encoded}' | base64 -d >> ${path}`,
       { timeout: 10_000, origin: "internal" },
     );
