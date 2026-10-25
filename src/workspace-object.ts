@@ -1,8 +1,9 @@
-import { getSandbox, type DirectoryBackup, type ExecOptions, type ProcessOptions, type RunCodeOptions, type Sandbox } from "@cloudflare/sandbox";
+import { getSandbox, Sandbox as SdkSandbox, type DirectoryBackup, type ExecOptions, type ProcessOptions, type RunCodeOptions, type Sandbox } from "@cloudflare/sandbox";
 import { DiskSandbox } from "./disk-sandbox";
 import { bootWorkspace, measureHomeBytes, type WorkspaceBinding } from "./workspace-boot";
 import { createWorkspaceLifecycle, LOST_MID_COMMAND_NOTE, WorkspaceLost, type OperationKind, type WorkspaceLifecycle } from "./workspace-lifecycle";
 import { execTreatingShellExitAsResult } from "./workspace-exec";
+import { createSaveQueue, type SaveBoundary } from "./workspace-save-policy";
 import { recordObserveEvent } from "./observe-events";
 import type { BackgroundProcessInfo } from "./types";
 import { workspaceSandboxId, type WorkspaceScope } from "./workspace-policy";
@@ -25,6 +26,7 @@ function processRecord(process: { id: string; pid?: number; command: string; sta
 
 export class WorkspaceObject extends DiskSandbox {
   private lifecycle: WorkspaceLifecycle | undefined;
+  private readonly saves = createSaveQueue();
   private bootOptions = { restoreLatest: true };
 
   private binding(): WorkspaceBinding | null {
@@ -195,8 +197,9 @@ export class WorkspaceObject extends DiskSandbox {
     return this.run("idempotent", () => measureHomeBytes({ exec: (command, options) => this.exec(command, options as ExecOptions) }));
   }
 
-  async backup(options: Parameters<Sandbox["createBackup"]>[0]): Promise<DirectoryBackup> {
-    return this.run("idempotent", () => this.createBackup(options));
+  async backup(options: Parameters<Sandbox["createBackup"]>[0], boundary?: SaveBoundary): Promise<DirectoryBackup> {
+    const take = () => this.run("idempotent", () => this.createBackup(options));
+    return boundary ? this.saves.save(boundary, take) : take();
   }
 
   async restore(backup: DirectoryBackup): Promise<unknown> {
@@ -208,9 +211,14 @@ export class WorkspaceObject extends DiskSandbox {
     await this.destroy();
   }
 
+  async saveDiskAt(boundary: SaveBoundary): Promise<{ id: string; size: number } | null> {
+    return this.saves.save(boundary, () => this.saveDisk(`my-ax-${boundary}-${Date.now()}`));
+  }
+
   override async onActivityExpired(): Promise<void> {
+    await this.saves.save("pause", () => this.saveDisk(`my-ax-pause-${Date.now()}`)).catch((error: unknown) => console.error("disk_snapshot_on_pause_failed", { err: String(error) }));
     this.lifecycleFor().stopped();
-    await super.onActivityExpired();
+    await SdkSandbox.prototype.onActivityExpired.call(this);
   }
 }
 

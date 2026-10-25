@@ -31,7 +31,7 @@ import { resolveWorkspacePath } from "../workspace-path";
 import { saveWorkspaceDisk, snapshotWorkspace, workspaceFor, type WorkspaceStub } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
-import { scheduleBackupRetry, scheduleTurnSnapshot } from "../turn-snapshot-schedule";
+import { compactionFinished } from "../workspace-save-policy";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
@@ -117,7 +117,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const finished = this.publishedRunning === true && !running;
     if (this.publishedRunning === running) return;
     this.publishedRunning = running;
-    if (finished) await scheduleTurnSnapshot((delay, callback, payload, options) => this.schedule(delay, callback as keyof this, payload, options)).catch((error: unknown) => console.error("pi_turn_snapshot_schedule_failed", { err: String(error) }));
     const ownerEmail = this.state?.ownerEmail;
     const chatId = this.state?.chatId;
     if (!ownerEmail || !chatId) return;
@@ -148,6 +147,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events: events.map(slimEvent), entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
+      if (compactionFinished(events as readonly { type: string; error?: string }[])) this.ctx.waitUntil(this.keepAliveWhile(() => this.saveWorkspaceAt("compaction")));
     });
     void stream.closed.finally(() => {
       this.cachedSlimView = null;
@@ -578,25 +578,15 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return { snapshot: disk?.id ?? (outcome?.published ? outcome.backup.id : ""), destroyed: true };
   }
 
-  async snapshotWorkspaceAfterTurn(): Promise<void> {
-    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
-  }
+  async snapshotWorkspaceAfterTurn(): Promise<void> {}
 
-  async retryWorkspaceBackupAfterCooldown(): Promise<void> {
-    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
-  }
+  async retryWorkspaceBackupAfterCooldown(): Promise<void> {}
 
-  private async publishTurnSnapshot(): Promise<void> {
+  private async saveWorkspaceAt(boundary: "compaction"): Promise<void> {
     const identity = this.identity();
-    const scope = { kind: "chat" as const, chatId: this.chatId() };
-    await saveWorkspaceDisk(this.env, identity, scope, "turn").catch((error: unknown) => console.error("pi_disk_snapshot_after_turn_failed", { chatId: scope.chatId, err: String(error) }));
-    const outcome = await snapshotWorkspace(this.env, identity, "turn", { scope, respectCooldown: true }).catch((error: unknown) => {
-      console.error("pi_workspace_snapshot_after_turn_failed", { chatId: scope.chatId, err: String(error) });
-      return null;
-    });
-    if (outcome && !outcome.published && outcome.reason === "cooldown") {
-      await scheduleBackupRetry((delay, callback, payload, options) => this.schedule(delay, callback as keyof this, payload, options));
-    }
+    const scope = this.chatScope();
+    await saveWorkspaceDisk(this.env, identity, scope, boundary).catch((error: unknown) => console.error("pi_disk_snapshot_failed", { boundary, chatId: scope.chatId, err: String(error) }));
+    await snapshotWorkspace(this.env, identity, boundary, { scope }).catch((error: unknown) => console.error("pi_workspace_snapshot_failed", { boundary, chatId: scope.chatId, err: String(error) }));
   }
 
   async sandboxId(): Promise<string> {

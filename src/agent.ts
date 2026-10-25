@@ -1,5 +1,4 @@
 import { createToolContext } from "./tool-context";
-import { scheduleBackupRetry } from "./turn-snapshot-schedule";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
 import { Think, type Session } from "@cloudflare/think";
@@ -69,7 +68,6 @@ import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
 import { voiceChannelPrompt } from "./voice-channel";
 import { requireInputChannel } from "./client-snapshot";
-import { shouldSnapshotSandboxForToolCall } from "./workspace-snapshot-classification";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -169,12 +167,6 @@ export class MyAgent extends Think<Env> {
     this.broadcast(frame);
   }
 
-  /** Per-turn flag: set when a successful tool call may have written under
-   *  /home/user. Drives a single snapshotUserWorkspace() in onChatResponse.
-   *  Reset at the start of every turn via onChatResponse itself (after we
-   *  consume it). The DO is single-threaded for a session so there's no
-   *  race between turns. */
-  private dirtyFsThisTurn = false;
   private notifiedOwnerThisTurn = false;
   // page.* codemode connector: in-flight page_call requests keyed by requestId,
   // resolved when the live client replies with a page_result frame (onMessage).
@@ -800,29 +792,7 @@ export class MyAgent extends Think<Env> {
       .run()
       .catch((error) => console.error("think_session_status_settled_failed", { err: String(error) }));
 
-    // A successful mutating tool commits workspace state even if a later model
-    // step errors. The live Sandbox cannot roll back, so skipping the snapshot
-    // would make successful writes disappear on recycle.
     this.notifiedOwnerThisTurn = false;
-    if (this.dirtyFsThisTurn) {
-      this.dirtyFsThisTurn = false;
-      try {
-        await this.schedule(0, "snapshotWorkspaceAfterTurn");
-      } catch (err) {
-        // Non-fatal: the turn itself already succeeded. Surface the
-        // failure mode in console.error so wrangler tail / Logpush can pick
-        // it up; if console.log isn't surfacing from the DO, the worker
-        // still ran — the next deployer will see the issue when running
-        // `wrangler tail` directly.
-        console.error("workspace_snapshot_at_turn_end_failed", {
-          email: identity.email,
-          sessionId: this.name,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    } else {
-      this.dirtyFsThisTurn = false;
-    }
     if (continueVerdict === "continue") {
       console.warn("turn_auto_continue", { sessionId: this.name, attempt: continuationsSoFar + 1 });
       await this.schedule(0, "continueTurnAfterStepBatch").catch((error) => console.error("turn_continuation_schedule_failed", { sessionId: this.name, err: String(error) }));
@@ -833,24 +803,24 @@ export class MyAgent extends Think<Env> {
     }
   }
 
-  async snapshotWorkspaceAfterTurn() {
-    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
+  async snapshotWorkspaceAfterTurn() {}
+
+  async retryWorkspaceBackupAfterCooldown() {}
+
+  private compactThenSave<A extends unknown[], R>(compact: (...args: A) => Promise<R | null>): (...args: A) => Promise<R | null> {
+    return async (...args: A) => {
+      const result = await compact(...args);
+      if (result) this.ctx.waitUntil(this.saveWorkspaceAtCompaction());
+      return result;
+    };
   }
 
-  async retryWorkspaceBackupAfterCooldown() {
-    this.ctx.waitUntil(this.keepAliveWhile(() => this.publishTurnSnapshot()));
-  }
-
-  private async publishTurnSnapshot() {
+  private async saveWorkspaceAtCompaction() {
     const identity = this.identity();
     if (!identity) return;
-    const outcome = await snapshotWorkspace(this.env, identity, "turn", { respectCooldown: true }).catch((error) => {
-      console.error("workspace_snapshot_after_turn_failed", { email: identity.email, sessionId: this.name, err: error instanceof Error ? error.message : String(error) });
-      return null;
+    await snapshotWorkspace(this.env, identity, "compaction").catch((error) => {
+      console.error("workspace_snapshot_at_compaction_failed", { sessionId: this.name, err: error instanceof Error ? error.message : String(error) });
     });
-    if (outcome && !outcome.published && outcome.reason === "cooldown") {
-      await scheduleBackupRetry((delay, callback, payload, options) => this.schedule(delay, callback as keyof this, payload, options));
-    }
   }
 
   async continueTurnAfterStepBatch() {
@@ -1005,12 +975,6 @@ export class MyAgent extends Think<Env> {
     this.turnProgress.toolFinished();
     const identity = this.identity();
     if (!identity) return;
-    // Mark the turn dirty if this tool MAY have written under /home/user.
-    // Repository tools may snapshot inline; marking the turn dirty is still safe
-    // because an additional workspace snapshot is a no-op delta.
-    if (ctx.success && shouldSnapshotSandboxForToolCall(ctx.toolName, ctx.output)) {
-      this.dirtyFsThisTurn = true;
-    }
     if (ctx.success && ctx.toolName === "notify_owner") {
       this.notifiedOwnerThisTurn = true;
     }
@@ -1364,7 +1328,7 @@ export class MyAgent extends Think<Env> {
       // Hermes-style compaction: preserve head + recent tail, summarize the
       // middle, keep tool-call/result pairs coherent. Workspace outputs can
       // get large quickly; compact before they crowd out useful context.
-      .onCompaction(
+      .onCompaction(this.compactThenSave(
         createCompactFunction({
           summarize: async (prompt) =>
             (await generateText({
@@ -1372,7 +1336,7 @@ export class MyAgent extends Think<Env> {
               prompt,
             })).text,
         }),
-      )
+      ))
       .compactAfter(100_000);
   }
 }

@@ -2,19 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const AGENT_SOURCES = ["./agent.ts", "./pi-engine/pi-chat-agent.ts"];
+test("the compaction save runs detached so it never blocks the turn", () => {
+  const pi = readFileSync(new URL("./pi-engine/pi-chat-agent.ts", import.meta.url), "utf8");
+  const think = readFileSync(new URL("./agent.ts", import.meta.url), "utf8");
+  assert.match(pi, /compactionFinished\([^)]*\)\) this\.ctx\.waitUntil\(this\.keepAliveWhile\(\(\) => this\.saveWorkspaceAt\("compaction"\)\)\)/);
+  assert.match(think, /if \(result\) this\.ctx\.waitUntil\(this\.saveWorkspaceAtCompaction\(\)\)/);
+});
 
-function scheduledCallbackBody(source: string): string {
-  const start = source.indexOf("async snapshotWorkspaceAfterTurn()");
-  assert.ok(start >= 0, "snapshotWorkspaceAfterTurn exists");
-  const end = source.indexOf("\n  }\n", start);
-  return source.slice(start, end);
-}
-
-test("the scheduled turn snapshot detaches its slow disk and backup work so the job queue is not starved", () => {
-  for (const path of AGENT_SOURCES) {
-    const body = scheduledCallbackBody(readFileSync(new URL(path, import.meta.url), "utf8"));
-    assert.match(body, /this\.ctx\.waitUntil\(this\.keepAliveWhile\(\(\) => this\.publishTurnSnapshot\(\)\)\)/, path);
-    assert.doesNotMatch(body, /snapshotWorkspace\(|saveWorkspaceDisk\(/, `${path} must not await snapshots inside the scheduled job`);
+test("callbacks scheduled before the save-at-boundaries change still resolve to a method", () => {
+  for (const path of ["./agent.ts", "./pi-engine/pi-chat-agent.ts"]) {
+    const source = readFileSync(new URL(path, import.meta.url), "utf8");
+    assert.match(source, /async snapshotWorkspaceAfterTurn\(\)/, path);
+    assert.match(source, /async retryWorkspaceBackupAfterCooldown\(\)/, path);
   }
 });

@@ -3,11 +3,9 @@ import assert from "node:assert/strict";
 import {
   REBUILDABLE_BACKUP_EXCLUDES,
   SANDBOX_ID_MAX_LENGTH,
-  TURN_SNAPSHOT_COOLDOWN_MS,
   decideSnapshotPublish,
   homeLooksWiped,
   shouldRestoreDirectoryBackup,
-  turnSnapshotDue,
   workspaceSandboxId,
   workspaceSnapshotKey,
 } from "./workspace-policy";
@@ -47,12 +45,6 @@ test("a near-empty backup never replaces a large one", () => {
   assert.deepEqual(decideSnapshotPublish(large, large / 2), { publish: true });
   assert.deepEqual(decideSnapshotPublish(null, 4096), { publish: true });
   assert.deepEqual(decideSnapshotPublish(1024 * 1024, 4096), { publish: true });
-});
-
-test("turn snapshots are rate-limited per workspace", () => {
-  assert.equal(turnSnapshotDue(null, 0), true);
-  assert.equal(turnSnapshotDue(1_000, 1_000 + TURN_SNAPSHOT_COOLDOWN_MS - 1), false);
-  assert.equal(turnSnapshotDue(1_000, 1_000 + TURN_SNAPSHOT_COOLDOWN_MS), true);
 });
 
 test("a disk boot with a healthy home keeps its disk instead of restoring an older home backup", () => {
