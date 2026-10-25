@@ -284,3 +284,95 @@ test("Pi chats get the sibling workspace tools and the API exposes the directory
   assert.match(pi, /siblingWorkspaceExtension\(/);
   assert.match(index, /registerWorkspaceDirectoryRoutes\(app\)/);
 });
+
+class FakeSocket {
+  sent: string[] = [];
+  closed = false;
+  send(frame: string) { this.sent.push(frame); }
+  close() { this.closed = true; }
+}
+
+function fakeHubState() {
+  const kv = new Map<string, unknown>();
+  const sockets: Array<{ socket: FakeSocket; tags: string[] }> = [];
+  return {
+    sockets,
+    state: {
+      storage: { kv: { get: (key: string) => kv.get(key), put: (key: string, value: unknown) => { kv.set(key, value); }, delete: (key: string) => kv.delete(key) } },
+      getWebSockets: () => sockets.map((entry) => entry.socket),
+      getTags: (socket: FakeSocket) => sockets.find((entry) => entry.socket === socket)?.tags ?? [],
+      acceptWebSocket: (socket: FakeSocket, tags: string[]) => { sockets.push({ socket, tags }); },
+    },
+  };
+}
+
+async function hubFixture() {
+  const { WorkspaceHub } = await import("./workspace-hub");
+  const fixture = fakeHubState();
+  const hub = new WorkspaceHub(fixture.state as never, {} as never);
+  Object.defineProperty(hub, "ctx", { value: fixture.state });
+  return { hub, ...fixture };
+}
+
+function subscriptionTag(subscription: object): string {
+  return `sub:${btoa(JSON.stringify(subscription))}`;
+}
+
+test("a published change is pushed to every matching subscriber at once", async () => {
+  const { hub, sockets } = await hubFixture();
+  const all = new FakeSocket();
+  const onlyB = new FakeSocket();
+  const onlyJobs = new FakeSocket();
+  sockets.push({ socket: all, tags: [subscriptionTag({})] });
+  sockets.push({ socket: onlyB, tags: [subscriptionTag({ workspaces: ["chat-b"] })] });
+  sockets.push({ socket: onlyJobs, tags: [subscriptionTag({ kinds: ["job.run"] })] });
+  const started = Date.now();
+  await hub.publish({ kind: "workspace.file", workspaceId: "chat-b", path: "/home/user/x" });
+  await hub.publish({ kind: "job.run", jobId: "j1", ok: true });
+  assert.ok(Date.now() - started < 2000);
+  assert.equal(all.sent.length, 2);
+  assert.equal(onlyB.sent.length, 1);
+  assert.match(onlyB.sent[0], /"workspaceId":"chat-b"/);
+  assert.equal(onlyJobs.sent.length, 1);
+  assert.match(onlyJobs.sent[0], /"kind":"job.run"/);
+});
+
+test("events are numbered, and a late subscriber can catch up from a sequence number", async () => {
+  const { hub } = await hubFixture();
+  await hub.publish({ kind: "workspace.status", workspaceId: "chat-a", status: "running" });
+  await hub.publish({ kind: "workspace.status", workspaceId: "chat-a", status: "active" });
+  await hub.publish({ kind: "workspace.message", workspaceId: "chat-b", from: "chat-a" });
+  const missed = await hub.since(1);
+  assert.deepEqual(missed.map((event) => event.seq), [2, 3]);
+  assert.deepEqual((await hub.since(0, { workspaces: ["chat-b"] })).map((event) => event.kind), ["workspace.message"]);
+});
+
+test("a subscriber whose socket fails is closed without blocking the others", async () => {
+  const { hub, sockets } = await hubFixture();
+  const broken = new FakeSocket();
+  broken.send = () => { throw new Error("gone"); };
+  const healthy = new FakeSocket();
+  sockets.push({ socket: broken, tags: [subscriptionTag({})] });
+  sockets.push({ socket: healthy, tags: [subscriptionTag({})] });
+  await hub.publish({ kind: "workspace.lost", workspaceId: "chat-a", reason: "stopped" });
+  assert.equal(broken.closed, true);
+  assert.equal(healthy.sent.length, 1);
+});
+
+test("workspace, job and directory changes publish to the coordinator", async () => {
+  const sources = await Promise.all(["pi-engine/pi-chat-agent.ts", "agent.ts", "job-service.ts", "workspace-object.ts", "workspace-directory.ts", "routes/workspaces.ts"].map((file) => readFile(new URL(`./${file}`, import.meta.url), "utf8")));
+  const [pi, think, jobs, object, directory, routes] = sources;
+  assert.match(pi, /kind: "workspace.status"/);
+  assert.match(think, /kind: "workspace.status"/);
+  assert.match(jobs, /kind: "job.run"/);
+  assert.match(object, /kind: "workspace.lost"/);
+  assert.match(directory, /kind: "workspace.message"/);
+  assert.match(directory, /kind: "workspace.file"/);
+  assert.match(routes, /\/api\/workspaces\/events/);
+});
+
+test("the coordinator is bound and migrated in the deployed config", async () => {
+  const wrangler = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  assert.match(wrangler, /"name": "WORKSPACE_HUB", "class_name": "WorkspaceHub"/);
+  assert.match(wrangler, /"tag": "v15-workspace-hub", "new_sqlite_classes": \["WorkspaceHub"\]/);
+});

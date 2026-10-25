@@ -3,9 +3,11 @@ import type { AppEnv } from "../app-env";
 import { forkPiChat, openPiChat } from "../pi-engine/routes";
 import { createWorkspaceDirectory, WorkspaceNotOwned } from "../workspace-directory";
 import { workspaceFor } from "../workspace";
+import { publishWorkspaceChange, workspaceHub } from "../workspace-hub-client";
 
 function directoryFor(c: Context<AppEnv>) {
-  return createWorkspaceDirectory(c.env, c.get("identity").email, { openChat: openPiChat, forkChat: forkPiChat, workspace: workspaceFor });
+  const email = c.get("identity").email;
+  return createWorkspaceDirectory(c.env, email, { openChat: openPiChat, forkChat: forkPiChat, workspace: workspaceFor, publish: (change) => publishWorkspaceChange(c.env, email, change) });
 }
 
 function failure(c: Context<AppEnv>, error: unknown) {
@@ -15,6 +17,15 @@ function failure(c: Context<AppEnv>, error: unknown) {
 }
 
 export function registerWorkspaceDirectoryRoutes(app: Hono<AppEnv>) {
+  app.get("/api/workspaces/events", async (c) => {
+    const hub = workspaceHub(c.env, c.get("identity").email);
+    if (!hub) return c.json({ ok: false, command: c.req.path, error: { code: "HUB_UNAVAILABLE", message: "the workspace hub is not configured" }, next_actions: [] }, 503);
+    if (c.req.header("Upgrade")?.toLowerCase() === "websocket") return hub.fetch(c.req.raw);
+    const since = Number(c.req.query("since") ?? "0") || 0;
+    const events = await hub.since(since, { workspaces: c.req.queries("workspace") ?? [], kinds: c.req.queries("kind") ?? [] });
+    return c.json({ ok: true, command: c.req.path, result: { events }, next_actions: [] });
+  });
+
   app.get("/api/workspaces", async (c) => {
     const workspaces = await directoryFor(c).list(Number(c.req.query("limit")) || 50);
     return c.json({ ok: true, command: c.req.path, result: { workspaces }, next_actions: [] });

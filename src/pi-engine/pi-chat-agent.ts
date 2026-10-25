@@ -32,6 +32,7 @@ import { saveWorkspaceDisk, snapshotWorkspace, workspaceFor, type WorkspaceStub 
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { compactionFinished } from "../workspace-save-policy";
+import { publishWorkspaceChange } from "../workspace-hub-client";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
@@ -90,7 +91,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       models.setProvider(this.ai.provider);
       installGatewayModels(models, this.env);
       this.registry.install(chatWorkspaceExtension(() => this.chatWorkspace(), PI_ENGINE_INSTRUCTIONS));
-      this.registry.install(siblingWorkspaceExtension(() => createWorkspaceDirectory(this.env, this.identity().email, { openChat: openPiChat, forkChat: forkPiChat, workspace: workspaceFor }), () => this.chatId()));
+      this.registry.install(siblingWorkspaceExtension(() => createWorkspaceDirectory(this.env, this.identity().email, { openChat: openPiChat, forkChat: forkPiChat, workspace: workspaceFor, publish: (change) => publishWorkspaceChange(this.env, this.identity().email, change) }), () => this.chatId()));
       this.registry.install(machineToolsExtension(() => this.machineRunner()));
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
@@ -126,6 +127,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     if (!ownerEmail || !chatId) return;
     const status = running ? "running" : lastTurnFailed(entries ?? await this.currentEntries()) ? "error" : "active";
     console.info("pi_run_status_published", { chatId, status });
+    this.ctx.waitUntil(publishWorkspaceChange(this.env, ownerEmail, { kind: "workspace.status", workspaceId: chatId, status }));
     await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = CASE WHEN ? = 'running' THEN datetime('now') ELSE updated_at END WHERE id = ? AND owner_email = ? AND status IN ('active', 'running', 'error') AND status != ?")
       .bind(status, status, chatId, ownerEmail.toLowerCase(), status).run()
       .catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));

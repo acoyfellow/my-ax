@@ -3,6 +3,7 @@
 // Does not own: authentication, native Agent alarm implementation, or presentation.
 
 import type { Env } from "./types";
+import { publishWorkspaceChange } from "./workspace-hub-client";
 import { cancelJobSchedule, computeNextRun, MAX_ACTIVE_JOBS_PER_OWNER, runJobNow, scheduleJob, validateJobInput, type JobInput, type JobRow } from "./jobs";
 
 const COLS = "id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, max_runs, run_count, status, next_run_at, last_run_at, last_error, schedule_id, created_at, updated_at";
@@ -167,6 +168,7 @@ export class JobService {
       await this.env.DB.prepare("INSERT INTO job_events (id, job_id, owner_email, action, ok, detail_json, idempotency_key, created_at) VALUES (?, ?, ?, 'run', ?, ?, NULL, ?)")
         .bind(eventId, id, this.owner, result.ok ? 1 : 0, JSON.stringify(result), this.now().toISOString()).run();
     }
+    await publishWorkspaceChange(this.env, this.owner, { kind: "job.run", jobId: id, ok: result.ok });
     if (!result.ok) throw new JobServiceError("DispatchFailed", result.error ?? "dispatch failed");
     return result;
   }
