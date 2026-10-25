@@ -8,9 +8,10 @@ import { recordObserveEvent } from "./observe-events";
 import { verifyWorkspaceRestore } from "./workspace-snapshot";
 import { latestSnapshotRow } from "./workspace-boot";
 import { workspaceFor, type WorkspaceStub } from "./workspace-object";
+import { isSaveBoundary } from "./workspace-save-policy";
 
 import { WORKSPACE_HOME, assertSeedablePath } from "./workspace-path";
-import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, homeLooksWiped, turnSnapshotDue, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
+import { REBUILDABLE_BACKUP_EXCLUDES, decideSnapshotPublish, homeLooksWiped, workspaceSnapshotKey, type WorkspaceScope } from "./workspace-policy";
 export { WORKSPACE_HOME, assertSeedablePath };
 export { workspaceFor, type WorkspaceStub };
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -27,15 +28,15 @@ export async function stopUserWorkspace(env: Env, identity: AccessIdentity, scop
 
 export type WorkspaceSnapshotOutcome =
   | { published: true; backup: DirectoryBackup; sizeBytes: number }
-  | { published: false; reason: "cooldown" | "shrink_refused"; sizeBytes?: number; previousBytes?: number };
+  | { published: false; reason: "shrink_refused"; sizeBytes?: number; previousBytes?: number };
 
 export async function snapshotUserWorkspace(
   env: Env,
   identity: AccessIdentity,
   name = "auto",
-  options?: { scope?: WorkspaceScope; respectCooldown?: boolean },
+  options?: { scope?: WorkspaceScope },
 ): Promise<DirectoryBackup> {
-  const outcome = await snapshotWorkspace(env, identity, name, { ...options, respectCooldown: options?.respectCooldown ?? false });
+  const outcome = await snapshotWorkspace(env, identity, name, options);
   if (!outcome.published) throw new Error(`workspace snapshot not published: ${outcome.reason}`);
   return outcome.backup;
 }
@@ -54,7 +55,7 @@ export async function saveWorkspaceDisk(env: Env, identity: AccessIdentity, scop
     await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "shrink_refused", message: `${lastBackupBytes} -> ${homeBytes} bytes in home` }).catch(() => undefined);
     return null;
   }
-  const saved = await workspace.saveDisk(`my-ax-${name}-${Date.now()}`);
+  const saved = isSaveBoundary(name) ? await workspace.saveDiskAt(name) : await workspace.saveDisk(`my-ax-${name}-${Date.now()}`);
   if (saved) await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "disk-snapshot", outcome: "ok", message: `${saved.id} ${saved.size} bytes` }).catch(() => undefined);
   return saved;
 }
@@ -70,13 +71,10 @@ export async function snapshotWorkspace(
   env: Env,
   identity: AccessIdentity,
   name: string,
-  options?: { scope?: WorkspaceScope; respectCooldown?: boolean },
+  options?: { scope?: WorkspaceScope },
 ): Promise<WorkspaceSnapshotOutcome> {
   const scope = options?.scope ?? OWNER_SCOPE;
   const previous = await latestSnapshotRow(env.DB, binding(identity, scope));
-  if (options?.respectCooldown && previous && !turnSnapshotDue(Date.parse(`${previous.updated_at}Z`), Date.now())) {
-    return { published: false, reason: "cooldown" };
-  }
   const workspace = await workspaceFor(env, identity, scope);
   const knownSize = await workspace.homeBytes().catch(() => null) ?? 0;
   const decision = decideSnapshotPublish(previous?.size_bytes ?? null, knownSize);
@@ -85,7 +83,7 @@ export async function snapshotWorkspace(
     await recordObserveEvent(env.DB, { ownerEmail: identity.email, sessionId: scope.kind === "chat" ? scope.chatId : null, kind: "workspace", name: "snapshot", outcome: "shrink_refused", message: `${decision.previousBytes} -> ${decision.nextBytes} bytes` }).catch(() => undefined);
     return { published: false, reason: "shrink_refused", sizeBytes: knownSize, previousBytes: decision.previousBytes };
   }
-  const backup = await workspace.backup({
+  const takeBackup = () => workspace.backup({
     dir: WORKSPACE_HOME,
     name: `my-ax-${name}-${Date.now()}`,
     ttl: SNAPSHOT_TTL_SECONDS,
@@ -93,7 +91,8 @@ export async function snapshotWorkspace(
     excludes: [...REBUILDABLE_BACKUP_EXCLUDES],
     compression: { format: "zstd" },
     multipart: true,
-  });
+  }, isSaveBoundary(name) ? name : undefined);
+  const backup = await takeBackup();
   await Effect.runPromise(
     publishWorkspaceSnapshot(workspaceSnapshotKey(identity.email, scope), backup, knownSize, name).pipe(Effect.provide(databaseLayer(env.DB))),
   );

@@ -144,3 +144,48 @@ test("the deployed Sandbox class is the workspace object", async () => {
   const source = await readFile(new URL("./index.tsx", import.meta.url), "utf8");
   assert.match(source, /export \{ WorkspaceObject as Sandbox \} from "\.\/workspace-object"/);
 });
+
+test("saves at the same workspace run one after another, never at once", async () => {
+  const { createSaveQueue } = await import("./workspace-save-policy");
+  const queue = createSaveQueue();
+  const order: string[] = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const work = (name: string, ms: number) => async () => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    order.push(name);
+    inFlight -= 1;
+    return name;
+  };
+  await Promise.all([queue.save("pause", work("pause", 20)), queue.save("compaction", work("compaction", 5)), queue.save("fork", work("fork", 1))]);
+  assert.equal(maxInFlight, 1);
+  assert.deepEqual(order, ["pause", "compaction", "fork"]);
+});
+
+test("a failed save does not block the next one", async () => {
+  const { createSaveQueue } = await import("./workspace-save-policy");
+  const queue = createSaveQueue();
+  await assert.rejects(queue.save("pause", async () => { throw new Error("disk full"); }), /disk full/);
+  assert.equal(await queue.save("fork", async () => "saved"), "saved");
+});
+
+test("a finished compaction triggers a save, and a failed one does not", async () => {
+  const { compactionFinished } = await import("./workspace-save-policy");
+  assert.equal(compactionFinished([{ type: "turn_end" }, { type: "compaction_end" }]), true);
+  assert.equal(compactionFinished([{ type: "compaction_end", error: "orphaned" }]), false);
+  assert.equal(compactionFinished([{ type: "turn_end" }]), false);
+});
+
+test("workspaces save only at pause, compaction and fork, not after every turn", async () => {
+  const pi = await readFile(new URL("./pi-engine/pi-chat-agent.ts", import.meta.url), "utf8");
+  const think = await readFile(new URL("./agent.ts", import.meta.url), "utf8");
+  const object = await readFile(new URL("./workspace-object.ts", import.meta.url), "utf8");
+  for (const source of [pi, think]) {
+    assert.doesNotMatch(source, /scheduleTurnSnapshot|scheduleBackupRetry|"turn", \{ scope, respectCooldown|schedule\(0, "snapshotWorkspaceAfterTurn"\)/);
+  }
+  assert.match(pi, /compactionFinished\(/);
+  assert.match(think, /compactThenSave\(/);
+  assert.match(object, /saves\.save\("pause"/);
+});
