@@ -77,6 +77,19 @@ export async function withSandboxRecovery<T>(run: () => Promise<T>, reset: () =>
   }
 }
 
+export interface RecoveringExecDeps<S> {
+  acquire: () => Promise<S>;
+  exec: (sandbox: S) => Promise<{ stdout?: string; stderr?: string; exitCode?: number }>;
+  destroy: () => Promise<void>;
+}
+
+export async function recoveringWorkspaceExec<S>(deps: RecoveringExecDeps<S>): Promise<{ stdout: string; stderr: string; exitCode: number; reset: boolean }> {
+  const run = async () => execTreatingShellExitAsResult(async () => deps.exec(await deps.acquire()));
+  const { value, reset } = await withSandboxRecovery(run, deps.destroy);
+  const note = reset ? "[workspace was unreachable and was reset to a fresh container restored from the last snapshot; background processes from before were stopped]\n" : "";
+  return { stdout: value.stdout ?? "", stderr: `${note}${value.stderr ?? ""}`, exitCode: value.exitCode ?? -1, reset };
+}
+
 export function execFailureResult(error: unknown): WorkspaceExecResult {
   return {
     stdout: field(error, "stdout", isString) ?? "",

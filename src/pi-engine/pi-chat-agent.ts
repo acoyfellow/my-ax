@@ -28,8 +28,8 @@ import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
 import type { Env } from "../types";
 import { resolveWorkspacePath } from "../workspace-path";
-import { execTreatingShellExitAsResult, withSandboxRecovery } from "../workspace-exec";
-import { getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
+import { recoveringWorkspaceExec } from "../workspace-exec";
+import { destroyUserWorkspace, getUserWorkspace, invalidateUserWorkspace, saveWorkspaceDisk, snapshotWorkspace } from "../workspace";
 import { WORKSPACE_HOME } from "../workspace-path";
 import { TURN_SNAPSHOT_COOLDOWN_MS, workspaceSandboxId } from "../workspace-policy";
 import { lastTurnFailed } from "./last-turn-failed";
@@ -324,39 +324,38 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   private async resetDeadChatSandbox(): Promise<void> {
-    const identity = this.identity();
     const scope = { kind: "chat" as const, chatId: this.chatId() };
     console.warn("pi_chat_sandbox_dead_resetting", { chatId: scope.chatId });
-    const { sandbox } = await getUserWorkspace(this.env, identity, { scope, restoreLatest: false }).catch(() => ({ sandbox: null }));
-    await sandbox?.destroy().catch((error: unknown) => console.error("pi_chat_sandbox_destroy_failed", { err: String(error) }));
-    invalidateUserWorkspace(identity, scope);
+    await destroyUserWorkspace(this.env, this.identity(), scope).catch((error: unknown) => console.error("pi_chat_sandbox_destroy_failed", { err: String(error) }));
   }
 
   private async chatWorkspace(): Promise<ChatWorkspace> {
     const scope = { kind: "chat" as const, chatId: this.chatId() };
-    const { sandbox } = await getUserWorkspace(this.env, this.identity(), { scope });
+    const acquire = async () => (await getUserWorkspace(this.env, this.identity(), { scope })).sandbox;
+    let cached: Awaited<ReturnType<typeof acquire>> | undefined;
+    const current = async () => (cached ??= await acquire());
     return {
       exec: async (command, timeoutMs) => {
-        const run = async () => {
-          const current = (await getUserWorkspace(this.env, this.identity(), { scope })).sandbox;
-          return execTreatingShellExitAsResult(() => current.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() }));
-        };
-        const { value: result, reset } = await withSandboxRecovery(run, () => this.resetDeadChatSandbox());
-        const note = reset ? "[workspace was unreachable and was reset to a fresh container restored from the last snapshot; background processes from before were stopped]\n" : "";
-        return { stdout: result.stdout ?? "", stderr: `${note}${result.stderr ?? ""}`, exitCode: result.exitCode ?? -1 };
+        const result = await recoveringWorkspaceExec({
+          acquire,
+          exec: (sandbox) => sandbox.exec(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() }),
+          destroy: async () => { cached = undefined; await this.resetDeadChatSandbox(); },
+        });
+        return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
       },
       readFile: async (path) => {
-        const file = await sandbox.readFile(resolveWorkspacePath(path));
+        const file = await (await current()).readFile(resolveWorkspacePath(path));
         return (file as unknown as { content?: string }).content ?? "";
       },
       writeFile: async (path, content) => {
         const target = resolveWorkspacePath(path);
         const parent = target.slice(0, target.lastIndexOf("/")) || WORKSPACE_HOME;
+        const sandbox = await current();
         await sandbox.exec(`mkdir -p ${JSON.stringify(parent)}`, { cwd: "/", timeout: 30_000 });
         await sandbox.writeFile(target, content);
       },
       listFiles: async (path) => {
-        const result = await sandbox.listFiles(resolveWorkspacePath(path));
+        const result = await (await current()).listFiles(resolveWorkspacePath(path));
         return result.files.map((file) => `${file.type === "directory" ? "d" : "-"} ${file.absolutePath}`);
       },
     };

@@ -79,6 +79,37 @@ test("a command that ends the shell is returned as its exit code without resetti
   assert.match((outcome.value as { stderr: string }).stderr, /files are unchanged/);
 });
 
+test("a workspace that fails to come up with a dead-container error is destroyed and the exec retried on a fresh one", async () => {
+  const { recoveringWorkspaceExec } = await import("./workspace-exec");
+  let acquires = 0;
+  let destroys = 0;
+  const ran: string[] = [];
+  const result = await recoveringWorkspaceExec({
+    acquire: async () => {
+      acquires += 1;
+      if (destroys === 0) throw new Error("WebSocket upgrade failed: 500 Internal Server Error");
+      return "fresh";
+    },
+    exec: async (sandbox) => { ran.push(sandbox); return { stdout: "alive\n", stderr: "", exitCode: 0 }; },
+    destroy: async () => { destroys += 1; },
+  });
+  assert.equal(destroys, 1);
+  assert.equal(acquires, 2);
+  assert.deepEqual(ran, ["fresh"]);
+  assert.equal(result.stdout, "alive\n");
+  assert.equal(result.reset, true);
+  assert.match(result.stderr, /reset to a fresh container/);
+});
+
+test("a dead workspace whose destroy also fails still surfaces the error instead of hanging", async () => {
+  const { recoveringWorkspaceExec } = await import("./workspace-exec");
+  await assert.rejects(recoveringWorkspaceExec({
+    acquire: async () => { throw new Error("WebSocket upgrade failed: 500 Internal Server Error"); },
+    exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
+    destroy: async () => undefined,
+  }), /WebSocket upgrade failed/);
+});
+
 test("an ordinary error is not retried", async () => {
   const { withSandboxRecovery } = await import("./workspace-exec");
   let resets = 0;
