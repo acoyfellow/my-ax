@@ -1,0 +1,31 @@
+src/dropped-files.ts
+  s_46448aabb2fde9::t_ef39b5f5578edd 1-51
+src/routes/workspaces.ts
+  s_46448aabb2fde9::t_539b0c7668fdd3 70-82
+src/styles/app.css
+  s_46448aabb2fde9::t_cd3b3dd1d5d048 1200-1219
+src/ui/Chat.svelte
+  s_46448aabb2fde9::t_da0502e1ccaf46 7,343-345,2243-2246,2264-2316,2374,2406-2410,2440,2992-3006,3305-3317
+src/ui/chat-outbound-whitespace.test.ts
+  s_46448aabb2fde9::t_7ee47ff1d848a5 13
+src/workspace-directory.ts
+  s_46448aabb2fde9::t_b9557d3a86a4c8 5,15,78-86
+src/workspace-object.ts
+  s_46448aabb2fde9::t_d443c9d0eb1ff2 9,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7d5a5b3bc1c19cea438a5e9616cd35599840c1f6",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
