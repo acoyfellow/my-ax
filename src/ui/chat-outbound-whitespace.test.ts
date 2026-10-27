@@ -10,6 +10,6 @@ test("outbound message rendering does not add template whitespace", () => {
 });
 
 test("outbound messages retain intentional leading whitespace", () => {
-  assert.ok(chat.includes("const text = composerText;\n    if (!text.trim() && pendingAttachments.length === 0) return;"));
+  assert.ok(chat.includes("const text = withAttachedFilesNote(composerText, pendingFiles.map((file) => file.path));\n    if (!text.trim() && pendingAttachments.length === 0) return;"));
   assert.ok(!chat.includes("const text = composerText.trim();"));
 });

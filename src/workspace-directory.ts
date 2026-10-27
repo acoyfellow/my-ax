@@ -2,6 +2,7 @@ import type { AppEnv } from "./app-env";
 import { assertSeedablePath, resolveWorkspacePath } from "./workspace-path";
 import type { WorkspaceScope } from "./workspace-policy";
 import type { WorkspaceChange } from "./workspace-hub-client";
+import { MAX_DROPPED_FILE_BYTES, uploadedFilePath } from "./dropped-files";
 
 export type WorkspaceEntry = { id: string; name: string; engine: string; status: string; updatedAt: string };
 
@@ -11,7 +12,7 @@ export class WorkspaceNotOwned extends Error {
 
 type Bindings = AppEnv["Bindings"];
 
-export type SiblingFiles = { read(path: string): Promise<string>; write(path: string, content: string): Promise<void> };
+export type SiblingFiles = { read(path: string): Promise<string>; write(path: string, content: string | Uint8Array): Promise<void> };
 
 export type SiblingChat = { submit(text: string, operationId?: string): Promise<unknown> };
 
@@ -73,6 +74,15 @@ export function createWorkspaceDirectory(env: Bindings, ownerEmail: string, deps
       const source = await entry(sourceId);
       if (source.engine !== "pi") throw new Error(`workspace ${sourceId} cannot be forked`);
       return deps.forkChat(env, owner, sourceId, source.name, atMessageId);
+    },
+    attachFile: async (chatId: string, name: string, bytes: Uint8Array, stamp: string): Promise<{ path: string; bytes: number; workspaceId: string }> => {
+      if (bytes.byteLength <= 0 || bytes.byteLength > MAX_DROPPED_FILE_BYTES) throw new Error("file must be between 1 byte and 25 MB");
+      const chat = await entry(chatId);
+      const workspaceId = chat.engine === "pi" ? chat.id : OWNER_WORKSPACE_ID;
+      const path = siblingPath(uploadedFilePath(name, stamp));
+      await (await files(workspaceId)).write(path, bytes);
+      await deps.publish?.({ kind: "workspace.file", workspaceId, path });
+      return { path, bytes: bytes.byteLength, workspaceId };
     },
     readFile: async (id: string, path: string): Promise<string> => (await files(id)).read(siblingPath(path)),
     writeFile: async (id: string, path: string, content: string): Promise<{ written: number }> => {

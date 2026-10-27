@@ -67,6 +67,19 @@ export function registerWorkspaceDirectoryRoutes(app: Hono<AppEnv>) {
     }
   });
 
+  app.post("/api/workspaces/:id/attachments", async (c) => {
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!(file instanceof File)) return failure(c, new Error("file is required"));
+    try {
+      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+$/, "");
+      const result = await directoryFor(c).attachFile(c.req.param("id"), file.name, new Uint8Array(await file.arrayBuffer()), stamp);
+      return c.json({ ok: true, command: c.req.path, result: { ...result, name: file.name, mime: file.type }, next_actions: [] });
+    } catch (error) {
+      return failure(c, error);
+    }
+  });
+
   app.put("/api/workspaces/:id/files", async (c) => {
     const body = await c.req.json<{ path?: string; content?: string }>().catch(() => ({} as { path?: string; content?: string }));
     if (!body.path || typeof body.content !== "string") return failure(c, new Error("path and content are required"));

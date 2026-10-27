@@ -6,6 +6,7 @@ import { execTreatingShellExitAsResult } from "./workspace-exec";
 import { createSaveQueue, type SaveBoundary } from "./workspace-save-policy";
 import { recordObserveEvent } from "./observe-events";
 import { publishWorkspaceChange } from "./workspace-hub-client";
+import { bytesToBase64Chunked } from "./dropped-files";
 import type { BackgroundProcessInfo } from "./types";
 import { workspaceSandboxId, type WorkspaceScope } from "./workspace-policy";
 
@@ -137,7 +138,7 @@ export class WorkspaceObject extends DiskSandbox {
     await this.run("idempotent", async () => {
       await this.mkdir(parent, { recursive: true });
       if (typeof content === "string") await this.writeFile(path, content);
-      else await this.writeFile(path, btoa(String.fromCharCode(...content)), { encoding: "base64" });
+      else await this.writeFile(path, bytesToBase64Chunked(content), { encoding: "base64" });
     });
   }
 

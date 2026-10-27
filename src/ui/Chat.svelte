@@ -4,6 +4,7 @@
   // transcript rendering, composer, attachments, voice, and tool results.
 
   import { onMount, tick } from "svelte";
+  import { isFileDrag, planDroppedFiles, withAttachedFilesNote } from "../dropped-files";
   import { PiSnapshotStore } from "./snapshot-store";
   import { marked } from "marked";
   import { VoiceClient } from "@cloudflare/voice/client";
@@ -339,6 +340,9 @@
   let inputEl = $state<HTMLTextAreaElement | undefined>(undefined);
   let composerText = $state("");
   let pendingAttachments = $state<Attachment[]>([]);
+  let pendingFiles = $state<Array<{ path: string; name: string }>>([]);
+  let fileDragDepth = $state(0);
+  let uploadingCount = $state(0);
   const DEPLOY_REFRESH_DRAFT_KEY = "my-ax-deploy-refresh-draft";
   const DRAFT_KEY_PREFIX = "my-ax-draft:";
   const DRAFT_MAX_AGE_MS = 60 * 60 * 1000;
@@ -2236,12 +2240,10 @@
     formEl?.requestSubmit();
   }
   async function onInputPaste(e: ClipboardEvent) {
-    for (const item of e.clipboardData?.items || []) {
-      if (item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (file) await addImageFile(file);
-      }
-    }
+    const pasted = Array.from(e.clipboardData?.files ?? []);
+    if (!pasted.length) return;
+    e.preventDefault();
+    await attachDroppedFiles(pasted);
   }
   async function addImageFile(file: File) {
     const formData = new FormData();
@@ -2258,6 +2260,59 @@
       return;
     }
     pendingAttachments = [...pendingAttachments, body.result];
+  }
+  async function addWorkspaceFile(file: File) {
+    const sessionId = readTabSession();
+    if (!sessionId || !ws) {
+      pushError(`Send a first message, then drop ${file.name || "the file"} again`);
+      return;
+    }
+    const formData = new FormData();
+    formData.set("file", file);
+    const response = await fetch(`/api/workspaces/${encodeURIComponent(sessionId)}/attachments`, { method: "POST", credentials: "include", body: formData });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.ok) {
+      pushError(body?.error?.message || `Could not attach ${file.name || "file"}`);
+      return;
+    }
+    pendingFiles = [...pendingFiles, { path: body.result.path, name: file.name || body.result.path }];
+  }
+  async function attachDroppedFiles(dropped: File[]) {
+    const plan = planDroppedFiles(dropped);
+    for (const { reason } of plan.rejected) pushError(reason);
+    uploadingCount += plan.images.length + plan.files.length;
+    try {
+      await Promise.all([
+        ...plan.images.map((file) => addImageFile(file).finally(() => { uploadingCount -= 1; })),
+        ...plan.files.map((file) => addWorkspaceFile(file).finally(() => { uploadingCount -= 1; })),
+      ]);
+    } finally {
+      inputEl?.focus();
+    }
+  }
+  function onFileDragEnter(e: DragEvent) {
+    if (!isFileDrag(e.dataTransfer?.types) || voiceEnabled) return;
+    e.preventDefault();
+    fileDragDepth += 1;
+  }
+  function onFileDragOver(e: DragEvent) {
+    if (!isFileDrag(e.dataTransfer?.types) || voiceEnabled) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  }
+  function onFileDragLeave(e: DragEvent) {
+    if (!isFileDrag(e.dataTransfer?.types)) return;
+    fileDragDepth = Math.max(0, fileDragDepth - 1);
+  }
+  function onFileDrop(e: DragEvent) {
+    if (!isFileDrag(e.dataTransfer?.types)) return;
+    e.preventDefault();
+    fileDragDepth = 0;
+    if (voiceEnabled) return;
+    void attachDroppedFiles(Array.from(e.dataTransfer?.files ?? []));
+  }
+  function removePendingFile(idx: number) {
+    pendingFiles = pendingFiles.filter((_, i) => i !== idx);
   }
   function removeAttachment(idx: number) {
     pendingAttachments = pendingAttachments.filter((_, i) => i !== idx);
@@ -2316,7 +2371,7 @@
   async function onImageInputChange(e: Event) {
     const files = (e.target as HTMLInputElement).files;
     if (!files) return;
-    for (const f of Array.from(files)) await addImageFile(f);
+    await attachDroppedFiles(Array.from(files));
     (e.target as HTMLInputElement).value = "";
   }
 
@@ -2348,7 +2403,11 @@
       if (composerText.trim()) queueComposerText();
       return;
     }
-    const text = composerText;
+    if (uploadingCount > 0) {
+      pushError("Wait for the attachments to finish uploading");
+      return;
+    }
+    const text = withAttachedFilesNote(composerText, pendingFiles.map((file) => file.path));
     if (!text.trim() && pendingAttachments.length === 0) return;
     if (ws && wsState.conn !== "live") {
       queueSendUntilOpen(text);
@@ -2378,6 +2437,7 @@
     const clientMsgId = makeClientMsgId();
     const outgoingAttachments = pendingAttachments;
     pendingAttachments = [];
+    pendingFiles = [];
     onboardingHidden = true;
     messages = [
       ...messages,
@@ -2929,7 +2989,21 @@
 
   <div class="flex-1 min-h-0 flex">
     <!-- Chat column -->
-    <div class="relative flex-1 min-w-0 flex flex-col h-full">
+    <div
+      class="relative flex-1 min-w-0 flex flex-col h-full"
+      role="region"
+      aria-label="Chat"
+      data-file-drop-zone="1"
+      ondragenter={onFileDragEnter}
+      ondragover={onFileDragOver}
+      ondragleave={onFileDragLeave}
+      ondrop={onFileDrop}
+    >
+      {#if fileDragDepth > 0}
+        <div class="file-drop-overlay" data-file-drop-overlay="1" aria-hidden="true">
+          <div class="file-drop-overlay__card">Drop images or files to attach</div>
+        </div>
+      {/if}
       {#if bootstrapPending || sessionResumeVisible}
         <div
           class="absolute inset-0 z-10 grid place-items-center bg-bg/80 backdrop-blur-[1px]"
@@ -3228,6 +3302,19 @@
                 <span class="voice-mode-active__label">{voicePreparationLabel()}</span>
               </div>
             {/if}
+            {#if !voiceEnabled && (pendingFiles.length > 0 || uploadingCount > 0)}
+              <div class="mb-2 flex flex-wrap gap-2" data-pending-files="1">
+                {#each pendingFiles as f, idx (`${f.path}-${idx}`)}
+                  <span class="inline-flex items-center gap-2 rounded-md border border-line bg-bg px-2 py-1 text-xs text-fg" title={f.path}>
+                    📎 {f.name}
+                    <button type="button" onclick={() => removePendingFile(idx)} aria-label={`Remove ${f.name}`}>×</button>
+                  </span>
+                {/each}
+                {#if uploadingCount > 0}
+                  <span class="inline-flex items-center rounded-md border border-line px-2 py-1 text-xs text-fg-mut" data-uploading="1">Uploading {uploadingCount}…</span>
+                {/if}
+              </div>
+            {/if}
             {#if !voiceEnabled && pendingAttachments.length > 0}
               <div class="mb-2 flex flex-wrap gap-2">
                 {#each pendingAttachments as a, idx (`${a.key}-${idx}`)}
@@ -3260,7 +3347,6 @@
           <input
             id="svelte-image-file"
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
             multiple
             class="hidden"
             onchange={onImageInputChange}
