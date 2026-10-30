@@ -100,10 +100,22 @@ interface ModelEntry {
 // (resolveAvailableModelId), so this stays functional there too. We moved off
 // the raw Workers-AI default because that binding path had no transient 3021
 // rate-limit retry and was failing ~half its turns.
-const DEFAULT_MODEL = "gpt-5.6-terra";
+const DEFAULT_MODEL = "claude-opus-5-5";
+const PREVIOUS_DEFAULT_MODEL = "gpt-5.6-terra";
+const DEFAULT_MODEL_MIGRATION_KEY = "model-default-opus-5-5";
+export function storedModelAfterDefaultChange(stored: string | null, migrated: boolean): string {
+  if (!stored) return DEFAULT_MODEL;
+  if (!migrated && stored === PREVIOUS_DEFAULT_MODEL) return DEFAULT_MODEL;
+  return stored;
+}
 function initialModel(): string {
   if (typeof localStorage === "undefined") return DEFAULT_MODEL;
-  return localStorage.getItem("model") || DEFAULT_MODEL;
+  const model = storedModelAfterDefaultChange(localStorage.getItem("model"), localStorage.getItem(DEFAULT_MODEL_MIGRATION_KEY) === "1");
+  try {
+    localStorage.setItem(DEFAULT_MODEL_MIGRATION_KEY, "1");
+    localStorage.setItem("model", model);
+  } catch {}
+  return model;
 }
 function initialReasoning(): Reasoning {
   if (typeof localStorage === "undefined") return "medium";

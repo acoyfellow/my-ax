@@ -149,7 +149,7 @@ export const DEFAULT_MODEL_ID = "@cf/moonshotai/kimi-k2.7-code";
 // Workers-AI binding path lacks — the Workers-AI default was failing ~half its
 // turns on gateway rate limits with no self-healing. gpt-5.6-terra is the
 // low-cost/fast gateway model.
-export const DEFAULT_GATEWAY_MODEL_ID = "gpt-5.6-terra";
+export const DEFAULT_GATEWAY_MODEL_ID = "claude-opus-5-5";
 
 export function hasModelGateway(env: Env): boolean {
   const hasBearer = Boolean(env.LLM_GATEWAY_TOKEN?.trim());

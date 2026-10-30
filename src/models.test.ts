@@ -81,15 +81,15 @@ describe("model catalog", () => {
   it("prefers the resilient gateway model as the default on gateway installs", () => {
     // The gateway default routes through the AI gateway (createRetryFetch 3021
     // backoff); the Workers-AI binding default had no rate-limit self-healing.
-    assert.equal(DEFAULT_GATEWAY_MODEL_ID, "gpt-5.6-terra");
-    assert.equal(findModel(DEFAULT_GATEWAY_MODEL_ID)?.route, "gateway-openai");
+    assert.equal(DEFAULT_GATEWAY_MODEL_ID, "claude-opus-5-5");
+    assert.equal(findModel(DEFAULT_GATEWAY_MODEL_ID)?.route, "gateway-anthropic");
     // Gateway present -> default is the gateway model.
-    assert.equal(defaultModelId(gatewayEnv), "gpt-5.6-terra");
+    assert.equal(defaultModelId(gatewayEnv), "claude-opus-5-5");
     // Gateway absent -> default heals back to the Workers-AI fallback (the
     // gateway model is not runnable / not in the available catalog).
     assert.equal(defaultModelId(minimalEnv), DEFAULT_MODEL_ID);
     // A fresh turn (no requested model) starts on the env-appropriate default.
-    assert.equal(resolveAvailableModelId(gatewayEnv, undefined), "gpt-5.6-terra");
+    assert.equal(resolveAvailableModelId(gatewayEnv, undefined), "claude-opus-5-5");
     assert.equal(resolveAvailableModelId(minimalEnv, undefined), DEFAULT_MODEL_ID);
   });
 });
