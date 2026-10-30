@@ -1,0 +1,27 @@
+package.json
+  s_46448aabb2fde9::t_a72ce009a5b690 106
+src/decision-page-xss.test.ts
+  s_46448aabb2fde9::t_9498a86c19509a 1-91
+src/html-embed.ts
+  s_46448aabb2fde9::t_c4e9159a8391c2 1-8
+src/routes/browser.ts
+  s_46448aabb2fde9::t_7fab02779057c9 4,17-18,37-39
+src/routes/decisions.ts
+  s_46448aabb2fde9::t_cf1299cc9f2b9d 18-21,64-86,94,128-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "73daea7546536e6ca161d1fa5e3f25fa8352500e",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
