@@ -7,6 +7,7 @@
   import { isFileDrag, planDroppedFiles, withAttachedFilesNote } from "../dropped-files";
   import { PiSnapshotStore } from "./snapshot-store";
   import { marked } from "marked";
+  import { hardenLinks, sanitizeRenderedMarkdown } from "./safe-markdown";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
   import { evaluateTurnStall, persistedTurnError, stallFingerprint, stallMessage, stallSurfaceText } from "./turn-stall";
@@ -938,7 +939,7 @@
 
   // ── Markdown render ────────────────────────────────────────────────
   function renderMarkdown(md: string): string {
-    let html = marked.parse(md ?? "") as string;
+    let html = sanitizeRenderedMarkdown(marked.parse(md ?? "") as string);
     // post-process <pre><code> for hljs + copy button. We need to do this
     // on the rendered HTML, since we're returning a string for {@html}.
     if (hljs) {
@@ -962,6 +963,7 @@
         }
         // copy button is added via DOM after-mount because it needs a click handler.
       });
+      hardenLinks(wrapper);
       html = wrapper.innerHTML;
     }
     return html;
