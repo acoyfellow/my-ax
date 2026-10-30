@@ -1,0 +1,27 @@
+package-lock.json
+  s_46448aabb2fde9::t_aa0c8f640a79d7 31,46,51,202-254,969-981,1347-1486,1990-2007,4343-4362,4405-4411,5017-5026,5597-5610,5633-5646,5664-5670,5812-5820,5917-5929,6893-6905,7137-7143,7255-7314,8040-8046,9318-9330,9772-9781,10164-10176,10892-10911,10967-10992,11402-11414,11424-11458,11628-11637,11653-11659
+package.json
+  s_46448aabb2fde9::t_80a86707594c88 106,180,195,200
+src/ui/Chat.svelte
+  s_46448aabb2fde9::t_ec2ba29787abe1 10,942,966
+src/ui/safe-markdown.test.ts
+  s_46448aabb2fde9::t_e31b51752106b0 1-54
+src/ui/safe-markdown.ts
+  s_46448aabb2fde9::t_22df3196cb7122 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "55ed1cd2616b68a81b47d1fe046fa904b99c2270",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
