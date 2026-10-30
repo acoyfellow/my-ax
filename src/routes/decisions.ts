@@ -15,6 +15,10 @@ import { getSessionAgent } from "../agent-stub";
 import type { DecisionResponseStore } from "../decision-response";
 import { decisionResponseLiveLayer, recordDecisionResponse } from "../decision-response-program";
 
+import { jsonForHtml } from "../html-embed";
+
+export { jsonForHtml };
+
 const ID_RE = /^run-decision-[0-9a-f-]{36}$/i;
 
 type DecisionBounds = { surface: "decision"; question: string; options: string[]; sessionId: string };
@@ -57,7 +61,29 @@ async function supersedeDecision(env: DecisionDb, ownerEmail: string, staleId: s
     .bind(staleId, crypto.randomUUID(), ownerEmail, new Date().toISOString(), JSON.stringify({ id: "my-ax", kind: "agent", mode: "live" }), JSON.stringify({ replacedBy: replacementId })).run();
 }
 
-function page(id: string, question: string, options: string[], answered: string | null, sessionHref: string): string {
+export const DECISION_PAGE_SCRIPT = `(()=>{
+  const data=JSON.parse(document.getElementById('decision-data').textContent);
+  const id=data.id;const opts=data.options;
+  const submit=document.getElementById('submit');const status=document.getElementById('status');let selected=-1;
+  const inputs=()=>document.querySelectorAll('input[name=choice]');
+  inputs().forEach(input=>input.addEventListener('change',()=>{selected=+input.value;submit.disabled=false;}));
+  submit.addEventListener('click',async()=>{
+    if(selected<0)return;submit.disabled=true;inputs().forEach(x=>x.disabled=true);
+    status.textContent='Sending…';
+    try{const r=await fetch('/api/decisions/'+encodeURIComponent(id)+'/respond',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({choice:opts[selected]})});
+    const j=await r.json();if(!r.ok)throw new Error(j&&j.error&&j.error.message||'failed');
+    document.getElementById('opts').replaceChildren();submit.remove();
+    const strong=document.createElement('strong');strong.textContent=opts[selected];
+    status.replaceChildren('Thanks — answered ',strong,'. The agent is continuing.');}
+    catch(e){status.textContent='Error: '+e.message;submit.disabled=false;inputs().forEach(x=>x.disabled=false);}
+  });
+})();`;
+
+export function decisionPageCsp(nonce: string): string {
+  return `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
+}
+
+export function decisionPage(id: string, question: string, options: string[], answered: string | null, sessionHref: string, nonce: string): string {
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
   const choices = options.map((option, index) => `<label class="choice"><input type="radio" name="choice" value="${index}"><span>${esc(option)}</span></label>`).join("");
   const closeBar = `<a class="close" href="${esc(sessionHref)}" aria-label="Close" title="Open My AX">×</a>`;
@@ -65,19 +91,7 @@ function page(id: string, question: string, options: string[], answered: string 
   const body = answered
     ? `${closeBar}<h1>${esc(question)}</h1><p class="done">You answered: <strong>${esc(answered)}</strong></p>${returnLink}`
     : `${closeBar}<h1>${esc(question)}</h1><div id="opts">${choices}</div><button id="submit" disabled>Submit choice</button><p id="status"></p>${returnLink}`;
-  const script = answered ? "" : `<script>
-    const id=${JSON.stringify(id)};const opts=${JSON.stringify(options)};
-    const submit=document.getElementById('submit');let selected=-1;
-    document.querySelectorAll('input[name=choice]').forEach(input=>input.onchange=()=>{selected=+input.value;submit.disabled=false;});
-    submit.onclick=async()=>{
-      if(selected<0)return;submit.disabled=true;document.querySelectorAll('input[name=choice]').forEach(x=>x.disabled=true);
-      document.getElementById('status').textContent='Sending…';
-      try{const r=await fetch('/api/decisions/'+id+'/respond',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({choice:opts[selected]})});
-      const j=await r.json();if(!r.ok)throw new Error(j?.error?.message||'failed');
-      document.getElementById('opts').innerHTML='';submit.remove();document.getElementById('status').innerHTML='Thanks — answered <strong>'+opts[selected]+'</strong>. The agent is continuing.';}
-      catch(e){document.getElementById('status').textContent='Error: '+e.message;submit.disabled=false;document.querySelectorAll('input[name=choice]').forEach(x=>x.disabled=false);}
-    };
-  </script>`;
+  const script = answered ? "" : `<script type="application/json" id="decision-data">${jsonForHtml({ id, options })}</script><script nonce="${nonce}">${DECISION_PAGE_SCRIPT}</script>`;
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>My AX decision</title><style>:root{color-scheme:dark}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;background:#0b1118;color:#f7f9fb;font-family:Inter,system-ui,sans-serif}main{position:relative;width:100%;max-width:32rem}h1{font-size:1.25rem;line-height:1.35;padding-right:2rem}#opts{display:grid;gap:.6rem;margin-top:1.25rem}.choice{display:flex;align-items:flex-start;gap:.7rem;padding:.85rem 1rem;border:1px solid rgba(181,198,211,.18);border-radius:.7rem;background:#111a24;cursor:pointer}.choice:has(input:checked){border-color:#f6821f;background:rgba(246,130,31,.08)}.choice input{margin-top:.18rem;accent-color:#f6821f}.choice span{line-height:1.35}#submit{width:100%;margin-top:1rem;padding:.85rem 1rem;border:0;border-radius:.7rem;background:#f6821f;color:#1b0900;font:700 1rem/1.2 inherit;cursor:pointer}#submit:disabled{opacity:.4;cursor:default}.done strong,#status strong{color:#f6821f}p{color:#9baaba;margin-top:1rem}.close{position:absolute;top:-.25rem;right:0;width:2rem;height:2rem;display:grid;place-items:center;border:1px solid rgba(181,198,211,.18);border-radius:.5rem;color:#9baaba;text-decoration:none;font-size:1.2rem;line-height:1}.close:hover{color:#f7f9fb;border-color:#f6821f}.return{display:inline-block;margin-top:1.25rem;color:#f6821f;text-decoration:none;font-weight:600}.return:hover{text-decoration:underline}</style></head><body><main>${body}${script}</main></body></html>`;
 }
 
@@ -111,8 +125,9 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
       const event = await c.env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.answered' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
       answered = event ? ((JSON.parse(event.data_json) as { choice?: string }).choice ?? null) : "(already answered)";
     }
-    return c.html(page(id, bounds.question, bounds.options, answered, sessionHref), 200, {
-      "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'",
+    const nonce = crypto.randomUUID().replace(/-/g, "");
+    return c.html(decisionPage(id, bounds.question, bounds.options, answered, sessionHref, nonce), 200, {
+      "Content-Security-Policy": decisionPageCsp(nonce),
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });

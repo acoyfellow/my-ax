@@ -46,6 +46,7 @@ import { registerDecisionRoutes } from "./routes/decisions";
 import { registerDeskRoutes } from "./routes/desk";
 import { registerTerminalRoutes } from "./routes/terminal";
 import { registerWorkspaceDirectoryRoutes } from "./routes/workspaces";
+import { bridgeOrigins, requestOriginGuard } from "./request-origin-guard";
 import { registerErrorRoutes } from "./routes/errors";
 import { registerCapabilityRoutes } from "./routes/capabilities";
 import { registerRecipeRoutes } from "./routes/recipes";
@@ -123,6 +124,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+app.use("*", requestOriginGuard(bridgeOrigins));
 app.use("*", cors());
 
 // GET /api/health — identity-free liveness/wiring probe for the my-ax-smoke-prober
