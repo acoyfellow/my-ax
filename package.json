@@ -103,7 +103,7 @@
     "test:voice-session-ownership": "tsx --test src/voice-session-ownership.test.ts",
     "test:voice-think-agent": "tsx --test src/voice-think-agent.test.ts",
     "test:session-ownership": "tsx --test src/session-ownership.test.ts",
-    "test:decision-response": "tsx --test src/decision-response.test.ts",
+    "test:decision-response": "tsx --test src/decision-response.test.ts src/decision-reuse.test.ts",
     "test:capability-review": "tsx --test src/capability-review.test.ts",
     "test:recovery-exhaustion": "tsx --test src/recovery-exhaustion.test.ts",
     "test:recurring-job-receipt": "tsx --test src/recurring-job-receipt.test.ts",

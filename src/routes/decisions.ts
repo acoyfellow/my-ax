@@ -19,17 +19,42 @@ const ID_RE = /^run-decision-[0-9a-f-]{36}$/i;
 
 type DecisionBounds = { surface: "decision"; question: string; options: string[]; sessionId: string };
 
-export async function createDecision(env: AppEnv["Bindings"], ownerEmail: string, sessionId: string, question: string, options: string[]) {
-  // Automated jobs may retry the same turn. Reuse an identical unanswered
-  // decision instead of creating duplicate widgets, pushes, and sessions.
-  const existing = await env.DB.prepare("SELECT id FROM runs WHERE owner_email = ? AND session_id = ? AND status = 'open' AND task_summary = ? AND json_extract(bounds_json, '$.surface') = 'decision' ORDER BY created_at DESC LIMIT 1")
-    .bind(ownerEmail, sessionId, question.slice(0, 200)).first<{ id: string }>();
-  if (existing) return { id: existing.id, href: `/api/decisions/${existing.id}`, reused: true };
+type DecisionDb = Pick<AppEnv["Bindings"], "DB">;
+
+export function sameDecision(bounds: Pick<DecisionBounds, "question" | "options">, question: string, options: readonly string[]): boolean {
+  return bounds.question === question && bounds.options.length === options.length && bounds.options.every((option, index) => option === options[index]);
+}
+
+function parseBounds(json: string): DecisionBounds | null {
+  try {
+    const bounds = JSON.parse(json) as DecisionBounds;
+    return typeof bounds.question === "string" && Array.isArray(bounds.options) ? bounds : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createDecision(env: DecisionDb, ownerEmail: string, sessionId: string, question: string, options: string[]) {
+  const open = await env.DB.prepare("SELECT id, bounds_json FROM runs WHERE owner_email = ? AND session_id = ? AND status = 'open' AND task_summary = ? AND json_extract(bounds_json, '$.surface') = 'decision' ORDER BY created_at DESC")
+    .bind(ownerEmail, sessionId, question.slice(0, 200)).all<{ id: string; bounds_json: string }>();
+  const candidates = (open.results ?? []).map((row) => ({ id: row.id, bounds: parseBounds(row.bounds_json) }));
+  const identical = candidates.find((candidate) => candidate.bounds && sameDecision(candidate.bounds, question, options));
+  if (identical) return { id: identical.id, href: `/api/decisions/${identical.id}`, reused: true };
   const id = `run-decision-${crypto.randomUUID()}`;
   const bounds: DecisionBounds = { surface: "decision", question, options, sessionId };
   await env.DB.prepare("INSERT INTO runs(id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, ?, 'open', ?, ?, ?, datetime('now'), datetime('now'))")
     .bind(id, ownerEmail, sessionId, "Decision requested", question.slice(0, 200), JSON.stringify(bounds)).run();
-  return { id, href: `/api/decisions/${id}` };
+  const superseded = candidates.filter((candidate) => candidate.bounds?.question === question).map((candidate) => candidate.id);
+  for (const staleId of superseded) await supersedeDecision(env, ownerEmail, staleId, id);
+  return { id, href: `/api/decisions/${id}`, ...(superseded.length ? { superseded } : {}) };
+}
+
+async function supersedeDecision(env: DecisionDb, ownerEmail: string, staleId: string, replacementId: string): Promise<void> {
+  const result = await env.DB.prepare("UPDATE runs SET status = 'aborted', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'open'")
+    .bind(staleId, ownerEmail).run();
+  if ((result.meta?.changes ?? 0) !== 1) return;
+  await env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, 'decision.superseded', ?, NULL)")
+    .bind(staleId, crypto.randomUUID(), ownerEmail, new Date().toISOString(), JSON.stringify({ id: "my-ax", kind: "agent", mode: "live" }), JSON.stringify({ replacedBy: replacementId })).run();
 }
 
 function page(id: string, question: string, options: string[], answered: string | null, sessionHref: string): string {
@@ -77,7 +102,12 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     const bounds = JSON.parse(row.bounds_json) as DecisionBounds;
     const sessionHref = `/?session=${encodeURIComponent(bounds.sessionId)}`;
     let answered: string | null = null;
-    if (row.status !== "open") {
+    if (row.status === "aborted") {
+      const event = await c.env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.superseded' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
+      const replacedBy = event ? (JSON.parse(event.data_json) as { replacedBy?: string }).replacedBy : undefined;
+      if (replacedBy && ID_RE.test(replacedBy)) return c.redirect(`/api/decisions/${replacedBy}`, 302);
+      answered = "(replaced by a newer question)";
+    } else if (row.status !== "open") {
       const event = await c.env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.answered' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
       answered = event ? ((JSON.parse(event.data_json) as { choice?: string }).choice ?? null) : "(already answered)";
     }
@@ -98,6 +128,7 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     if (!row) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "decision not found" }, next_actions: [] }, 404);
     const bounds = JSON.parse(row.bounds_json) as DecisionBounds;
     if (!bounds.options.includes(choice)) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CHOICE", message: "choice is not an allowed option" }, next_actions: [] }, 400);
+    if (row.status === "aborted") return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "DECISION_SUPERSEDED", message: "this question was replaced by a newer one with different options" }, next_actions: [] }, 409);
     if (row.status !== "open") return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
 
     const store: DecisionResponseStore = {
