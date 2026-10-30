@@ -1,0 +1,25 @@
+package.json
+  s_46448aabb2fde9::t_cea116b942f5a4 106
+src/decision-reuse.test.ts
+  s_46448aabb2fde9::t_fe3a558fe2f63a 1-123
+src/routes/decisions.ts
+  s_46448aabb2fde9::t_de4f0a8585d94d 22-42,47-57,105-110,131
+src/tools.test.ts
+  s_46448aabb2fde9::t_5b2fce05638148 2,8-21,25-26,35-40,52,57-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b8cf3aadd2fd4ee2dd161a553b89b5e479080efb",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
