@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
+import { jsonForHtml } from "../html-embed";
 
 function recordingUrl(env: Cloudflare.Env, sessionId: string): string {
   return `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/recording/${encodeURIComponent(sessionId)}`;
@@ -13,6 +14,8 @@ function recordingUrl(env: Cloudflare.Env, sessionId: string): string {
  * retrieves the owner-visible native recording server-side with a dedicated
  * Browser Rendering API token, while the app page renders it with rrweb-player.
  */
+const REPLAY_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
 export function registerBrowserRoutes(app: Hono<AppEnv>) {
   app.get("/api/browser/recordings/:id", async (c) => {
     const id = c.req.param("id");
@@ -31,7 +34,9 @@ export function registerBrowserRoutes(app: Hono<AppEnv>) {
   // browser tool card can mount it inline without nested headers.
   app.get("/browser/replay/:id", (c) => {
     const embed = c.req.query("embed") === "1";
-    const id = JSON.stringify(c.req.param("id"));
+    const rawId = c.req.param("id");
+    if (!REPLAY_ID_RE.test(rawId)) return c.text("not found", 404);
+    const id = jsonForHtml(rawId);
     const header = embed ? "" : `<header>my · ax · browser replay</header>`;
     const layout = embed
       ? `html,body{margin:0;background:#0b0d12;color:#e8edf5;font:13px system-ui;overflow:hidden}#shell{position:relative;width:100vw;height:100vh;background:#0b0d12}#replay{display:grid;place-items:center;width:100%;height:100%}.loading,.error,.still{display:grid;place-items:center;gap:8px;height:100%;padding:20px;box-sizing:border-box;text-align:center}.error{color:#fb7185}.still{color:#e8edf5}.still strong{font-size:14px}.still span{color:#9ca9bd;max-width:420px}.badge{position:absolute;top:10px;left:10px;z-index:10;border-radius:999px;background:rgba(11,13,18,.82);border:1px solid #293243;color:#e8edf5;padding:5px 10px;font-size:11px;font-weight:600;letter-spacing:.02em;pointer-events:none}.rr-player{max-height:100vh!important}.rr-player__frame{max-height:calc(100vh - 96px)!important}.rr-controller{position:sticky!important;bottom:0!important;z-index:5!important;box-sizing:border-box!important;height:96px!important;padding:8px 10px 10px!important;gap:7px!important;background:#0b0d12!important;border-top:1px solid #293243!important;color:#e8edf5!important}.rr-timeline{width:100%!important;gap:8px!important}.rr-timeline__time{width:42px!important;color:#9ca9bd!important;font:11px ui-monospace,monospace!important}.rr-progress{border-color:#0b0d12!important;background:#293243!important}.rr-progress__step{background:#777cfb!important}.rr-controller__btns{gap:5px!important;color:#e8edf5!important}.rr-controller__btns button{color:#e8edf5!important}.rr-controller__btns button svg{fill:currentColor!important}.rr-controller__btns button:active{background:#293243!important}.rr-controller__btns button.active{color:#fff!important;background:#4950f6!important}.switch .label{color:#e8edf5!important}@media(max-width:520px){.rr-controller{padding-inline:8px!important}.rr-controller__btns{width:100%!important;justify-content:space-between!important}.rr-controller__btns button:nth-of-type(4),.rr-controller__btns button:nth-of-type(5){display:none!important}.switch .label{display:none!important}}`
