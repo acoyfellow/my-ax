@@ -52,4 +52,25 @@ export const ARTIFACT_RUNTIME_JS = `(function(){
     submit: function(value, send){ window.parent.postMessage({ type: "my-ax:artifact-submit", value: String(value), send: send === true }, "*"); },
     register: function(tools){ window.parent.postMessage({ type: "my-ax:artifact-register", tools: tools }, "*"); }
   };
+  // Inline chat embeds (?inline=1) size the iframe to the content: report the
+  // document height whenever it changes so the host can fit the frame.
+  var lastHeight = 0;
+  function reportSize(){
+    var h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    if (h > 0 && h !== lastHeight) {
+      lastHeight = h;
+      window.parent.postMessage({ type: "my-ax:artifact-resize", height: h }, "*");
+    }
+  }
+  if (/[?&]inline=1(&|$)/.test(location.search) && typeof ResizeObserver === "function") {
+    var sizeObserver = new ResizeObserver(function(){ reportSize(); });
+    var startSizing = function(){
+      sizeObserver.observe(document.documentElement);
+      if (document.body) sizeObserver.observe(document.body);
+      reportSize();
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startSizing);
+    else startSizing();
+    window.addEventListener("load", reportSize);
+  }
 })();`;

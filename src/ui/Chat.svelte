@@ -2844,7 +2844,21 @@
       pushState: (artifactId, state) => artifactRegistry.pushState(artifactId, state),
     });
     const onArtifactMessage = (event: MessageEvent) => {
-      const data = event.data;
+      const incoming = event.data;
+      // Widgets built from a renamed tool description may speak my-ax:widget-*;
+      // treat those as the canonical my-ax:artifact-* frames.
+      const data = incoming && typeof incoming.type === "string" && incoming.type.startsWith("my-ax:widget-")
+        ? { ...incoming, type: "my-ax:artifact-" + incoming.type.slice("my-ax:widget-".length) }
+        : incoming;
+      if (data && data.type === "my-ax:artifact-resize") {
+        const frame = artifactFrames().find((f) => f.contentWindow === event.source);
+        const height = Number(data.height);
+        if (!frame || !Number.isFinite(height)) return;
+        // +2px for the frame border (border-box), bounded so a runaway widget cannot take over the page.
+        const bounded = Math.min(8000, Math.max(48, Math.ceil(height)));
+        frame.style.setProperty("--artifact-frame-height", `${bounded + 2}px`);
+        return;
+      }
       // page connector v2 handshake frames (register / invoke-result).
       if (data && data.type === "my-ax:artifact-register") {
         if (!artifactWindows().has(event.source as Window)) return;
