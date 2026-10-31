@@ -14,6 +14,11 @@
   let reusableToolAction = $state<"idle" | "approving" | "enabled" | "error">("idle");
   let reusableToolMessage = $state("");
 
+  // Inline chat embeds ask the preview to size to content (see artifact-runtime).
+  function inlineSrc(src: string): string {
+    return src + (src.includes("?") ? "&" : "?") + "inline=1";
+  }
+
   function openFullscreen() {
     fullscreen = true;
   }
@@ -146,7 +151,7 @@
       <iframe
         class="svelte-artifact-frame"
         data-tool-widget-frame="svelte-artifact"
-        src={widget.src}
+        src={inlineSrc(widget.src)}
         title={widget.title}
         loading="lazy"
         sandbox="allow-scripts"

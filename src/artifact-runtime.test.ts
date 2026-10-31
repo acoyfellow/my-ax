@@ -21,6 +21,12 @@ test("every convenience helper maps to an allowlisted verb", () => {
   assert.deepEqual(outside, [], `helpers call verbs outside the allowlist: ${outside.join(", ")}`);
 });
 
+test("inline embeds report content height so the host can size the frame", () => {
+  assert.match(ARTIFACT_RUNTIME_JS, /"my-ax:artifact-resize"/);
+  assert.match(ARTIFACT_RUNTIME_JS, /inline=1/);
+  assert.match(ARTIFACT_RUNTIME_JS, /ResizeObserver/);
+});
+
 test("the runtime bounds its own wait so a dead host cannot hang the artifact", () => {
   assert.match(ARTIFACT_RUNTIME_JS, /host_invoke_timeout/);
 });

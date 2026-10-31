@@ -19,10 +19,12 @@ export function widgetWording(text: string): string {
     .replace(/search_artifacts/g, "search_widgets")
     .replace(/get_artifact\b/g, "get_widget")
     .replace(/desk_promote_artifact/g, "desk_promote_widget")
-    .replace(/\bArtifacts\b/g, "Widgets")
-    .replace(/\bartifacts\b/g, "widgets")
-    .replace(/\bArtifact\b/g, "Widget")
-    .replace(/\bartifact\b/g, "widget")
+    // (?<![:-]) / (?!-) keep protocol frames like `my-ax:artifact-submit` and
+    // identifiers like `svelte-artifact` intact: the host only speaks those names.
+    .replace(/(?<![:-])\bArtifacts\b(?!-)/g, "Widgets")
+    .replace(/(?<![:-])\bartifacts\b(?!-)/g, "widgets")
+    .replace(/(?<![:-])\bArtifact\b(?!-)/g, "Widget")
+    .replace(/(?<![:-])\bartifact\b(?!-)/g, "widget")
     .replace(/\ban widget\b/g, "a widget")
     .replace(/\bAn widget\b/g, "A widget");
 }
