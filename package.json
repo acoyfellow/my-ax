@@ -50,7 +50,7 @@
     "test:machinectl-output": "tsx --test src/machinectl-output.test.ts src/cmux-delivery-verification.test.ts",
     "test:grant-crypto": "tsx --test src/grant-crypto.test.ts",
     "test:runs": "tsx --test src/routes/runs.test.ts",
-    "test:jobs-route": "tsx --test src/routes/jobs.test.ts src/morning-pick.test.ts",
+    "test:jobs-route": "tsx --test src/routes/jobs.test.ts src/morning-pick.test.ts src/ui/session-tiles-width.test.ts",
     "test:attention-route": "tsx --test src/routes/attention.test.ts",
     "test:browser-route": "tsx --test src/routes/browser.test.ts",
     "test:run-receipts": "node scripts/test-run-receipts.mjs",

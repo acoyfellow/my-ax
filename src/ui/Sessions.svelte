@@ -728,7 +728,7 @@
   .sessions-search:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 55%, transparent); }
   .sessions-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 13px; color: var(--fg); appearance: none; }
   .sessions-search input::placeholder { color: var(--fg-mut); }
-  .session-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 4px 8px; }
+  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px 4px 8px; }
   .session-sep { height: 1px; background: var(--line); margin: 2px 8px 2px; }
 
   :global(.session-row) { position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 7px; color: var(--fg); cursor: pointer; }
@@ -739,7 +739,7 @@
   :global(.session-row__meta) { font-size: 11.5px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
   :global(.session-row__main:focus-visible) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 6px; }
 
-  :global(.session-tile) { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0; height: 56px; padding: 8px 10px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); box-shadow: none; }
+  :global(.session-tile) { min-width: 0; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0; height: 56px; padding: 8px 10px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); box-shadow: none; }
   :global(.session-tile:hover) { background: var(--bg); border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
   :global(.session-tile[data-active="1"]) { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
   :global(.session-tile .session-row__main) { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 2px; }
