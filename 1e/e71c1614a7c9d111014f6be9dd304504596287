@@ -1,0 +1,23 @@
+package.json
+  s_46448aabb2fde9::t_22badb1954a7b4 53
+src/ui/Sessions.svelte
+  s_46448aabb2fde9::t_b927596bf913ba 731,742
+src/ui/session-tiles-width.test.ts
+  s_46448aabb2fde9::t_5d26f26b3c8b53 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1ee71c1614a7c9d111014f6be9dd304504596287",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
