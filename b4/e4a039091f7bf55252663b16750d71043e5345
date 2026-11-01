@@ -1,0 +1,35 @@
+package.json
+  s_46448aabb2fde9::t_93a936aee85b92 53
+src/index.tsx
+  s_46448aabb2fde9::t_7b34d5c73fad29 41,308
+src/morning-pick.test.ts
+  s_7941ce0d83409c::t_4abb714b1bf59d 1-40
+src/morning-pick.ts
+  s_7941ce0d83409c::t_b095bcbb2536f0 1-58
+src/routes/morning-pick.ts
+  s_7941ce0d83409c::t_77a3c32a24154f 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b4e4a039091f7bf55252663b16750d71043e5345",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_7941ce0d83409c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a18c22-7e75-7140-8651-cc23b1a5ae05",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
