@@ -1,0 +1,21 @@
+Dockerfile
+  s_aff9605c3b4204::t_7c0ec4ed07868c 5,14
+Dockerfile.computer
+  s_aff9605c3b4204::t_13095d7d715e13 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "01773c1c7cb0d9d426805929820237fe7f8c48e1",
+  "prompts": {},
+  "sessions": {
+    "s_aff9605c3b4204": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0806f-f6e6-7378-a167-08e626c7de42",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
