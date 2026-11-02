@@ -1,0 +1,19 @@
+scripts/build-vendor.mjs
+  s_aff9605c3b4204::t_bfcc0133c753d5 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7be4df268ee4cd9d83fa22b05a2e7978e7459c00",
+  "prompts": {},
+  "sessions": {
+    "s_aff9605c3b4204": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0806f-f6e6-7378-a167-08e626c7de42",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
