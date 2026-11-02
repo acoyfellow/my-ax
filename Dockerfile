@@ -2,7 +2,7 @@
 #
 # Per https://developers.cloudflare.com/sandbox/configuration/dockerfile/ —
 # we extend Cloudflare's official sandbox base image. The version MUST match
-# our @cloudflare/sandbox npm version (currently 0.12.1); a mismatch means
+# our @cloudflare/sandbox npm version (currently 0.12.14); a mismatch means
 # the in-container HTTP server speaks a different protocol than the SDK.
 #
 # Container ships with a deliberately lean utility baseline for the agent's
@@ -11,7 +11,7 @@
 # one exception, because `gh auth login` is an interactive device-code flow
 # that the inline terminal exists to complete, and a per-container manual
 # install does not survive a recycle.
-FROM docker.io/cloudflare/sandbox:0.12.1
+FROM docker.io/cloudflare/sandbox:0.12.14
 
 # Required for `wrangler dev` local development. Without this EXPOSE, the
 # Worker can't talk to the local container and we get

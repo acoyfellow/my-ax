@@ -1,4 +1,4 @@
-FROM docker.io/cloudflare/sandbox:0.12.1
+FROM docker.io/cloudflare/sandbox:0.12.14
 EXPOSE 3000 6080
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends xfce4 xfce4-terminal dbus-x11 \
