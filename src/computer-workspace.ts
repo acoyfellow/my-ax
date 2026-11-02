@@ -44,7 +44,7 @@ export class ComputerWorkspace extends withWorkspace(
     return this.serializeWrite(async () => {
       parseComputerWriteInput(input);
       return withReservedComputerRetainedWrite(this.ctx.storage, COMPUTER_RETAINED_WRITE_RESERVATION_BYTES, () => withComputerWorkspace(
-        () => getWorkspace(this as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
+        async () => (await getWorkspace(this as unknown as WorkspaceHandle)) as ComputerWorkspaceClient,
         (workspace) => writeComputerFileFromWorkspace(workspace, input),
       ));
     });
@@ -53,7 +53,7 @@ export class ComputerWorkspace extends withWorkspace(
   async health() {
     const retainedWriteReservedBytes = await getComputerRetainedWriteBytes(this.ctx.storage);
     return withComputerWorkspace(
-      () => getWorkspace(this as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
+      async () => (await getWorkspace(this as unknown as WorkspaceHandle)) as ComputerWorkspaceClient,
       (workspace) => computerHealthFromWorkspace(workspace, retainedWriteReservedBytes),
     );
   }
@@ -66,7 +66,7 @@ export async function withOwnerComputerWorkspace<T>(
 ): Promise<T> {
   const id = env.COMPUTER.idFromName(computerWorkspaceName(identity));
   return withComputerWorkspace(
-    () => getWorkspace(env.COMPUTER.get(id) as unknown as WorkspaceHandle) as Promise<ComputerWorkspaceClient>,
+    async () => (await getWorkspace(env.COMPUTER.get(id) as unknown as WorkspaceHandle)) as ComputerWorkspaceClient,
     operation,
   );
 }
