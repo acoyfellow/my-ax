@@ -6,8 +6,8 @@ const inventory = JSON.parse(readFileSync(resolve(root, "docs/effect-backend-inv
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 const failures = [];
 
-if (pkg.dependencies?.effect !== "4.0.0-rc.112") {
-  failures.push(`effect must be pinned to 4.0.0-rc.112, got ${pkg.dependencies?.effect ?? "missing"}`);
+if (pkg.dependencies?.effect !== "4.1.2") {
+  failures.push(`effect must be pinned to 4.1.2, got ${pkg.dependencies?.effect ?? "missing"}`);
 }
 
 for (const entry of inventory.entries) {

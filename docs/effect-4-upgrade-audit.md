@@ -4,12 +4,12 @@ My AX is moving from isolated Effect 3 helpers to an Effect v4 backend architect
 
 ## Version decision
 
-The public Effect documentation currently labels v4 as a release candidate. npm publishes:
+Effect v4 is now a stable release on npm:
 
-- stable: `effect@3.22.1`
-- v4 release candidate: `effect@4.0.0-rc.112`
+- stable v4: `effect@4.1.2`
+- previous reviewed v4 release candidate: `effect@4.0.0-rc.112`
 
-My AX will pin the exact reviewed v4 release-candidate version while the migration is in progress. An unreviewed floating `rc` or prerelease range is not acceptable. Updating the pin requires rerunning the complete Effect backend verification.
+My AX pins the exact reviewed v4 version. A floating range or unreviewed prerelease is not acceptable. Updating the pin requires rerunning the complete Effect backend verification.
 
 ## Official guidance reviewed
 
