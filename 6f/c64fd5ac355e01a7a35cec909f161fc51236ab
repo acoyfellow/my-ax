@@ -1,0 +1,21 @@
+docs/effect-4-upgrade-audit.md
+  s_f4b2674f38850d::t_c941e5ce42f3dc 7,9-10,12
+scripts/verify-effect-architecture.mjs
+  s_f4b2674f38850d::t_6deba3b67eb2a6 9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6fc64fd5ac355e01a7a35cec909f161fc51236ab",
+  "prompts": {},
+  "sessions": {
+    "s_f4b2674f38850d": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16f53-d941-721e-9ee6-aaaa8b6ada04",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
