@@ -5,7 +5,7 @@ import type { AppEnv } from "../app-env";
 import { getSessionAgent } from "../agent-stub";
 import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { JobService } from "../job-service";
-import type { JobInput } from "../jobs";
+import type { JobInput, JobRow } from "../jobs";
 import { readOwnerCheckIn } from "./check-in";
 import { SavedRecipeService } from "../saved-recipes";
 import { notifyOwner } from "../notify";
@@ -20,6 +20,7 @@ import { openPiChat } from "../pi-engine/routes";
 import { observeSessionTurns } from "../observe";
 import { sessionControl, sessionEngineOf } from "../session-control";
 import { recentObserveEvents } from "../observe-events";
+import { summarizeCoordinatorJob, wrapCoordinatorCode } from "../coordinator-code";
 
 const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
 type Method = typeof METHODS[number];
@@ -35,7 +36,7 @@ const TOOLS = [
   {
     name: "my_ax_code",
     description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations and workspace. Preferred for multi-step inspection and steering. Available typed methods include listSessions, workspaceList, workspaceRead, getSession, entries, inject. No raw fetch or outbound network.",
-    inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function using codemode.<method>(args)." } }, required: ["code"] },
+    inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function. Call codemode.<method>(args) or the bare method name." } }, required: ["code"] },
   },
   {
     name: "my_ax_check_in",
@@ -163,7 +164,8 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     };
     if (method === "jobs_list") {
       const status = typeof args.status === "string" && ["active", "paused"].includes(args.status) ? args.status as "active" | "paused" : undefined;
-      return { jobs: await jobs.list(status) };
+      const listed = (await jobs.list(status)) as JobRow[];
+      return { jobs: args.includePrompt === true ? listed : listed.map(summarizeCoordinatorJob) };
     }
     if (method === "jobs_create") return jobs.create(input, args.idempotencyKey as string | undefined);
     if (method === "jobs_update") return jobs.update(id, input);
@@ -492,7 +494,7 @@ const CODE_TYPES = `declare const codemode: {
   recipesList(args?: {}): Promise<unknown>;
   recipesDelete(args: { id: string }): Promise<unknown>;
   recipesRun(args: { sessionId: string; recipeId: string; input?: Record<string, unknown>; callerCapabilities?: string[] }): Promise<unknown>;
-  jobsList(args?: {}): Promise<unknown>;
+  jobsList(args?: { status?: "active" | "paused"; includePrompt?: boolean }): Promise<unknown>;
   jobsCreate(args: { sessionId: string; name: string; prompt: string; cadenceSecs: number; threadMode?: "same_session" | "new_session_per_run" | "specific_session"; maxRuns?: number | null; idempotencyKey?: string }): Promise<unknown>;
   jobsUpdate(args: { id: string; sessionId?: string; name?: string; prompt?: string; cadenceSecs?: number; threadMode?: "same_session" | "new_session_per_run" | "specific_session"; maxRuns?: number | null }): Promise<unknown>;
   jobsPause(args: { id: string }): Promise<unknown>; jobsResume(args: { id: string }): Promise<unknown>;
@@ -582,7 +584,7 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
         const code = typeof args.code === "string" ? args.code : "";
         if (!code) throw new Error("code is required");
         const executor = new DynamicWorkerExecutor({ loader: c.env.LOADER, globalOutbound: null, timeout: 30_000 });
-        const execution = await executor.execute(code, [{ name: "codemode", fns: coordinatorCodeFns(c) }]);
+        const execution = await executor.execute(wrapCoordinatorCode(code, CODE_METHOD_NAMES), [{ name: "codemode", fns: coordinatorCodeFns(c) }]);
         if (execution.error) return c.json(rpc(req.id, { ...text({ ok: false, error: execution.error, available: CODE_TYPES }), isError: true }));
         return c.json(rpc(req.id, text({ ok: true, result: execution.result, logs: execution.logs ?? [], availableMethods: CODE_METHOD_NAMES })));
       }
