@@ -1,4 +1,4 @@
-const workerStub = "data:text/javascript,export class DurableObject {} export class RpcTarget {} export class WorkerEntrypoint {} export class WorkflowEntrypoint {} export const env = {}; export const exports = {};";
+const workerStub = "data:text/javascript,export class DurableObject {} export class RpcTarget {} export class WorkerEntrypoint {} export class WorkflowEntrypoint {} export const env = {}; export const exports = {}; export const tracing = undefined;";
 const emailStub = "data:text/javascript,export class EmailMessage {}";
 
 export async function resolve(specifier, context, nextResolve) {
