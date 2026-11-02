@@ -3231,6 +3231,9 @@
             <span class="agent-thinking__dot" aria-hidden="true"></span>
           </div>
         {/if}
+        {#if taskRunning && taskElapsedText}
+          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off">Running for {taskElapsedText}</div>
+        {/if}
         {#if terminalOpen}
           <Terminal onClose={() => (terminalOpen = false)} />
         {/if}
@@ -3262,9 +3265,6 @@
             {/each}
             <div class="text-[11px] text-fg-mut">Sends as one message when the agent finishes. ↑ to edit.</div>
           </div>
-        {/if}
-        {#if taskRunning && taskElapsedText}
-          <p data-task-timer class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-1.5 -mb-1 text-right text-[11px] font-mono text-brand select-none" aria-live="off">task {taskElapsedText}</p>
         {/if}
         <form
           bind:this={formEl}
