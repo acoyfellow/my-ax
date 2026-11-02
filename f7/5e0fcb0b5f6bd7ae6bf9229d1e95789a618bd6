@@ -1,0 +1,27 @@
+package.json
+  s_46448aabb2fde9::t_63944014d7277a 152
+receipts/effect-v4-triage.md
+  s_46448aabb2fde9::t_af8be1d58736e3 86-87
+src/coordinator-code.test.ts
+  s_46448aabb2fde9::t_3c680dac2d64c8 3-4,9,11-29,32-34,37-39
+src/coordinator-code.ts
+  s_46448aabb2fde9::t_9c5fc30a6f5130 1,5-6
+src/routes/mcp.ts
+  s_46448aabb2fde9::t_f4fb6fef902d6c 167-168,497
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f75e0fcb0b5f6bd7ae6bf9229d1e95789a618bd6",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
