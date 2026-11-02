@@ -1,9 +1,9 @@
+import { normalizeCode } from "@cloudflare/codemode";
 import type { JobRow } from "./jobs";
 
 export function wrapCoordinatorCode(code: string, methodNames: readonly string[]): string {
-  const trimmed = code.trim();
-  if (!trimmed || /\bcodemode\./.test(trimmed)) return trimmed;
-  return `async () => { const { ${methodNames.join(", ")} } = codemode; const __fn = ${trimmed}; return typeof __fn === "function" ? await __fn() : __fn; }`;
+  const program = normalizeCode(code);
+  return `async () => { const { ${methodNames.join(", ")} } = codemode; return await (${program})(); }`;
 }
 
 export type CoordinatorJobSummary = Omit<JobRow, "prompt"> & { promptChars: number };

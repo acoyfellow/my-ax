@@ -164,7 +164,8 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     };
     if (method === "jobs_list") {
       const status = typeof args.status === "string" && ["active", "paused"].includes(args.status) ? args.status as "active" | "paused" : undefined;
-      return { jobs: ((await jobs.list(status)) as JobRow[]).map(summarizeCoordinatorJob) };
+      const listed = (await jobs.list(status)) as JobRow[];
+      return { jobs: args.includePrompt === true ? listed : listed.map(summarizeCoordinatorJob) };
     }
     if (method === "jobs_create") return jobs.create(input, args.idempotencyKey as string | undefined);
     if (method === "jobs_update") return jobs.update(id, input);
@@ -493,7 +494,7 @@ const CODE_TYPES = `declare const codemode: {
   recipesList(args?: {}): Promise<unknown>;
   recipesDelete(args: { id: string }): Promise<unknown>;
   recipesRun(args: { sessionId: string; recipeId: string; input?: Record<string, unknown>; callerCapabilities?: string[] }): Promise<unknown>;
-  jobsList(args?: {}): Promise<unknown>;
+  jobsList(args?: { status?: "active" | "paused"; includePrompt?: boolean }): Promise<unknown>;
   jobsCreate(args: { sessionId: string; name: string; prompt: string; cadenceSecs: number; threadMode?: "same_session" | "new_session_per_run" | "specific_session"; maxRuns?: number | null; idempotencyKey?: string }): Promise<unknown>;
   jobsUpdate(args: { id: string; sessionId?: string; name?: string; prompt?: string; cadenceSecs?: number; threadMode?: "same_session" | "new_session_per_run" | "specific_session"; maxRuns?: number | null }): Promise<unknown>;
   jobsPause(args: { id: string }): Promise<unknown>; jobsResume(args: { id: string }): Promise<unknown>;

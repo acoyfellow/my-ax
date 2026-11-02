@@ -83,8 +83,8 @@ Result: 44 done-on-main, 25 obsolete, 1 needed (partial).
 
 `ce666e9` bundled six connector fixes. Four are on main. Two are not, and this PR adds them:
 
-- `my_ax_code` accepts bare method names (`listSessions(...)`) as well as `codemode.listSessions(...)`. Added as `wrapCoordinatorCode` in `src/coordinator-code.ts`.
-- The `jobs_list` coordinator method returns `promptChars` instead of each job's full prompt body (`summarizeCoordinatorJob`).
+- `my_ax_code` accepts bare method names (`listSessions(...)`) as well as `codemode.listSessions(...)`. Added as `wrapCoordinatorCode` in `src/coordinator-code.ts`. It runs the caller's code through codemode's own `normalizeCode` and then binds every method name, so statement bodies, fenced code and comments keep working. The original `ce666e9` version did not: it skipped binding whenever `codemode.` appeared anywhere, including in a comment, and it broke statement-style code.
+- The `jobs_list` coordinator method returns `promptChars` instead of each job's full prompt body (`summarizeCoordinatorJob`). Pass `includePrompt: true` to get the full prompts.
 
 ## Worktree and remote branches
 
