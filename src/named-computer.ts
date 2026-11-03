@@ -46,7 +46,7 @@ export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId
 
 async function processRunning(sandbox: Sandbox, needle: string) {
   const listed = await sandbox.listProcesses().catch(() => []);
-  return listed.some((proc) => (proc.command ?? "").includes(needle));
+  return listed.some((proc) => (proc.status === "running" || proc.status === "starting") && (proc.command ?? "").includes(needle));
 }
 
 export const COMPUTER_SCREEN_PORT = 6080;
