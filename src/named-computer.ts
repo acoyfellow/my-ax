@@ -57,7 +57,7 @@ const VOXL_COMMAND = `voxl --addr=0.0.0.0 --port=${COMPUTER_SCREEN_PORT} --enabl
 export async function ensureComputerDisplay(sandbox: Sandbox) {
   if (!(await processRunning(sandbox, "Xvfb"))) {
     await sandbox.startProcess(XVFB_COMMAND, { cwd: "/" });
-    await sandbox.exec(`for i in $(seq 50); do [ -S /tmp/.X11-unix/X1 ] && exit 0; sleep 0.1; done; exit 1`, { cwd: "/", timeout: 10_000, origin: "internal" });
+    await sandbox.exec(`sh -c 'for i in $(seq 50); do [ -S /tmp/.X11-unix/X1 ] && exit 0; sleep 0.1; done; exit 1'`, { cwd: "/", timeout: 10_000, origin: "internal" });
   }
   if (!(await processRunning(sandbox, "xfce"))) {
     await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY } });
