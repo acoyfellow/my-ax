@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
 import { readFileSync } from "node:fs";
-import { computerPreviewSrc } from "../computer-id";
+import { computerPreviewSrc, screenContainerPath } from "../computer-id";
 
 test("create_computer iframe URL loads the voxl screen page through the Worker", () => {
   assert.equal(computerPreviewSrc("desk"), "/api/computers/desk/screen/");
@@ -28,4 +28,12 @@ test("computer routes register the screen proxy and no noVNC routes", () => {
   const source = readFileSync(new URL("./computers.ts", import.meta.url), "utf8");
   assert.match(source, /\/api\/computers\/:id\/screen\/\*/);
   assert.equal(source.includes("novnc"), false);
+});
+
+test("the screen socket and assets reach voxl at its own root paths", () => {
+  const source = readFileSync(new URL("./computers.ts", import.meta.url), "utf8");
+  assert.match(source, /sandbox\.wsConnect\(upstream, COMPUTER_SCREEN_PORT\)/);
+  assert.match(source, /sandbox\.containerFetch\(upstream, COMPUTER_SCREEN_PORT\)/);
+  const wsPath = screenContainerPath("/api/computers/desk/screen/ws", "desk");
+  assert.equal(`http://localhost:6080${wsPath}?token=1`, "http://localhost:6080/ws?token=1");
 });

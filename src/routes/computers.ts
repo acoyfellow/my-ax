@@ -5,6 +5,10 @@ import type { ApiResponse } from "../types";
 import { normalizeComputerId, screenContainerPath } from "../computer-id";
 import { COMPUTER_SCREEN_PORT, ensureComputerDisplay, getNamedComputer, listNamedComputers } from "../named-computer";
 
+export function screenUpstreamUrl(requestUrl: string, containerPath: string): string {
+  return `http://localhost:${COMPUTER_SCREEN_PORT}${containerPath}${new URL(requestUrl).search}`;
+}
+
 async function proxyScreen(c: Context<AppEnv>) {
   let computerId: string;
   let rest: string;
@@ -22,11 +26,11 @@ async function proxyScreen(c: Context<AppEnv>) {
   try {
     const { sandbox } = await getNamedComputer(c.env, c.get("identity"), computerId);
     await ensureComputerDisplay(sandbox);
-    const url = new URL(c.req.url);
+    const upstream = new Request(screenUpstreamUrl(c.req.url, rest), c.req.raw);
     if ((c.req.header("Upgrade") ?? "").toLowerCase() === "websocket") {
-      return sandbox.wsConnect(c.req.raw, COMPUTER_SCREEN_PORT);
+      return sandbox.wsConnect(upstream, COMPUTER_SCREEN_PORT);
     }
-    return await sandbox.containerFetch(new Request(`http://localhost:${COMPUTER_SCREEN_PORT}${rest}${url.search}`, c.req.raw), COMPUTER_SCREEN_PORT);
+    return await sandbox.containerFetch(upstream, COMPUTER_SCREEN_PORT);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json<ApiResponse>({
