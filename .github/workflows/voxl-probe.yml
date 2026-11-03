@@ -9,4 +9,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build --platform linux/amd64 -f Dockerfile.computer -t voxl-probe .
-      - run: docker run --rm voxl-probe sh -c 'voxl --version && ldd /usr/local/bin/voxl | grep -i "not found" || echo libs-ok'
+      - timeout-minutes: 2
+        run: |
+          docker run --rm voxl-probe sh -c 'ldd /usr/local/bin/voxl | grep "not found" && exit 1; ls -la /usr/local/bin/voxl; timeout 10 voxl --version </dev/null'
+      - timeout-minutes: 3
+        run: |
+          docker run -d --name probe voxl-probe sh -c 'Xvfb :1 -screen 0 1280x800x24 -shmem -nolisten tcp & sleep 1; DISPLAY=:1 voxl --addr=0.0.0.0 --port=6080 --enable-basic-auth=false --allowed-hosts=* --allowed-origins=* --audio-enabled=false'
+          for i in $(seq 30); do docker exec probe curl -sf localhost:6080/healthz && break; sleep 1; done
+          docker exec probe sh -c 'curl -sf -o /tmp/s.png -w "screenshot %{http_code} %{size_download}B\n" localhost:6080/screenshot && curl -sf "localhost:6080/wait?idle=200&timeout=3000" && echo && curl -sf -o /dev/null -w "page %{http_code}\n" localhost:6080/'
+          docker logs probe 2>&1 | tail -20
