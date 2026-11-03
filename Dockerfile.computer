@@ -2,11 +2,13 @@ FROM docker.io/cloudflare/sandbox:0.12.14 AS voxl-build
 ARG VOXL_VERSION=0.3.2
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends curl ca-certificates build-essential pkg-config clang libclang-dev \
-       libx264-dev libyuv-dev libopus-dev libpulse-dev libx11-dev libxext-dev libxdamage-dev libxfixes-dev libxtst-dev libxrandr-dev libxcomposite-dev libxkbcommon-dev esbuild \
+       libx264-dev libyuv-dev libopus-dev libpulse-dev libx11-dev libxext-dev libxdamage-dev libxfixes-dev libxtst-dev libxrandr-dev libxcomposite-dev libxkbcommon-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN lib=$(dirname "$(find /usr/lib -name 'libyuv.so*' | head -n1)") \
     && mkdir -p /usr/local/lib/pkgconfig \
     && printf 'prefix=/usr\nlibdir=%s\nincludedir=/usr/include\n\nName: libyuv\nDescription: libyuv\nVersion: 0\nLibs: -L${libdir} -lyuv\nCflags: -I${includedir}\n' "$lib" > /usr/local/lib/pkgconfig/libyuv.pc
+RUN npm install -g esbuild@0.28.2
+ENV ESBUILD=esbuild
 RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component rustfmt
 ENV PATH=/root/.cargo/bin:$PATH
 RUN cargo install --locked voxl-server --version ${VOXL_VERSION} --root /opt/voxl
