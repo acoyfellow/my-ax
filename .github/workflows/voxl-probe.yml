@@ -8,5 +8,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build --platform linux/amd64 -f Dockerfile.computer -t voxl-probe . 2>&1 | tail -80
+      - run: docker build --platform linux/amd64 -f Dockerfile.computer -t voxl-probe .
       - run: docker run --rm voxl-probe sh -c 'voxl --version && ldd /usr/local/bin/voxl | grep -i "not found" || echo libs-ok'

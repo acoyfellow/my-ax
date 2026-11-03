@@ -7,7 +7,7 @@ RUN apt-get update -qq \
 RUN lib=$(dirname "$(find /usr/lib -name 'libyuv.so*' | head -n1)") \
     && mkdir -p /usr/local/lib/pkgconfig \
     && printf 'prefix=/usr\nlibdir=%s\nincludedir=/usr/include\n\nName: libyuv\nDescription: libyuv\nVersion: 0\nLibs: -L${libdir} -lyuv\nCflags: -I${includedir}\n' "$lib" > /usr/local/lib/pkgconfig/libyuv.pc
-RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component rustfmt
 ENV PATH=/root/.cargo/bin:$PATH
 RUN cargo install --locked voxl-server --version ${VOXL_VERSION} --root /opt/voxl
 
