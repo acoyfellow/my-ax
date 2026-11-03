@@ -64,7 +64,13 @@ export async function ensureComputerDisplay(sandbox: Sandbox) {
   }
   if (!(await processRunning(sandbox, "voxl "))) {
     const voxl = await sandbox.startProcess(VOXL_COMMAND, { cwd: "/", env: { DISPLAY } });
-    await voxl.waitForPort(COMPUTER_SCREEN_PORT, { mode: "tcp" });
+    try {
+      await voxl.waitForPort(COMPUTER_SCREEN_PORT, { mode: "tcp" });
+    } catch (error) {
+      const logs = await sandbox.getProcessLogs(voxl.id).catch(() => null);
+      const output = `${logs?.stderr ?? ""}${logs?.stdout ?? ""}`.trim().slice(-800);
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${output ? `\nvoxl: ${output}` : ""}`);
+    }
   }
 }
 
