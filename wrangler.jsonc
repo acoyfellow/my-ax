@@ -82,6 +82,7 @@
   // Dynamic Worker loader for native Think Agent Skills script execution.
   // Runner defaults remain bounded: no network/tools and read-only workspace.
   "worker_loaders": [{ "binding": "LOADER" }],
+  "services": [{ "binding": "RADAR", "service": "arxiv-radar", "entrypoint": "RadarTools" }],
 
   // Cloudflare Containers — Sandbox SDK runtime image (per-user shell).
   // The image is built from ./Dockerfile, which extends

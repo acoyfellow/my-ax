@@ -13,6 +13,7 @@ import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
 import { sharedToolsExtension } from "./legacy-tools";
 import { ownerInstructionsExtension } from "./owner-instructions-tools";
 import { connectorToolsExtension, type ConnectorRunner } from "./connector-tools";
+import { withRadar } from "./radar-connector";
 import { createToolContext } from "../tool-context";
 import { PUBLIC_SYSTEM } from "../system-prompt";
 import { widgetWording } from "../widget-names";
@@ -298,10 +299,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   private connectorRunner(): ConnectorRunner {
-    return {
+    return withRadar({
       list: async () => (await this.helperAgent()).connectorCatalog(),
       call: async (serverId, toolName, args) => (await this.helperAgent()).connectorCall(serverId, toolName, args),
-    };
+    }, this.env.RADAR);
   }
 
   private sharedExtraTools(): ToolSet {

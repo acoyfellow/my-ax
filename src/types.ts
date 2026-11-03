@@ -55,6 +55,7 @@ declare global {
       MY_AX_BROWSER_ENGINE?: string;
       MY_AX_KITESURF_RECORDING?: string;
       WEBSEARCH?: WebSearch;
+      RADAR?: RadarService;
 
       // Note: CLOUDFLARE_AI_GATEWAY_ID is declared in wrangler.jsonc vars
       // so it's already in the wrangler-generated worker-configuration.d.ts.
@@ -113,6 +114,24 @@ declare global {
 
 // Re-export the wrangler-generated Env as the canonical app-level type.
 export type Env = Cloudflare.Env;
+
+export interface RadarPaperBrief {
+  readonly id: string;
+  readonly title: string;
+  readonly score: number;
+  readonly reason: string;
+  readonly summary: string;
+  readonly link: string;
+  readonly published: string;
+  readonly categories: readonly string[];
+}
+
+export interface RadarService {
+  cycles(count?: number): Promise<unknown[]>;
+  top(request?: { minScore?: number; cycles?: number; limit?: number }): Promise<RadarPaperBrief[]>;
+  paper(id: string): Promise<unknown>;
+  search(query: string, limit?: number, minScore?: number): Promise<RadarPaperBrief[]>;
+}
 
 // ---------------------------------------------------------------------------
 // Message attachments. Lives here because both the upload handler and the
