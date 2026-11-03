@@ -1,0 +1,21 @@
+.github/workflows/voxl-probe.yml
+  s_46448aabb2fde9::t_b37e7a6aa08300 1-12
+docker/voxl.Dockerfile
+  s_46448aabb2fde9::t_7998f1c6033ff4 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bbf35f4d5d7e92201de52cf6c1d4416e58e1630b",
+  "prompts": {},
+  "sessions": {
+    "s_46448aabb2fde9": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a16406-55d1-7667-a643-d1b60b40e986",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
