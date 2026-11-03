@@ -25,7 +25,7 @@ test("create_computer and snapshot_computer are Think tools", () => {
   assert.match(tools, /kind: "named-computer"/);
 });
 
-test("computers embed through a same-origin novnc route and a Settings tab", () => {
+test("computers embed through a same-origin screen route and a Settings tab", () => {
   assert.match(index, /registerComputerRoutes/);
   assert.match(settings, /label: "Computers"/);
   assert.match(widgets, /kind: "named-computer"/);
@@ -33,12 +33,12 @@ test("computers embed through a same-origin novnc route and a Settings tab", () 
   assert.match(named, /waitForPort/);
 });
 
-test("computer image splits desktop and vnc into separate apt layers", () => {
-  const xfce = dockerfile.includes("xfce4");
-  const novnc = dockerfile.includes("novnc");
+test("computer image streams the desktop with voxl instead of noVNC", () => {
   const aptRuns = dockerfile.split("RUN apt-get").length - 1;
-  assert.equal(xfce, true);
-  assert.equal(novnc, true);
+  assert.equal(dockerfile.includes("xfce4"), true);
+  assert.match(dockerfile, /cargo install --locked voxl-server --version \$\{VOXL_VERSION\}/);
+  assert.match(dockerfile, /COPY --from=voxl-build \/opt\/voxl\/bin\/voxl \/usr\/local\/bin\/voxl/);
+  assert.equal(/novnc|websockify|tigervnc/.test(dockerfile), false);
   assert.ok(aptRuns >= 2);
   assert.equal(dockerfile.includes("openttd"), false);
 });

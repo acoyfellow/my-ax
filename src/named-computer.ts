@@ -49,24 +49,22 @@ async function processRunning(sandbox: Sandbox, needle: string) {
   return listed.some((proc) => (proc.command ?? "").includes(needle));
 }
 
+export const COMPUTER_SCREEN_PORT = 6080;
+const DISPLAY = ":1";
+const XVFB_COMMAND = `Xvfb ${DISPLAY} -screen 0 1280x800x24 -shmem -nolisten tcp`;
+const VOXL_COMMAND = `voxl --addr=127.0.0.1 --port=${COMPUTER_SCREEN_PORT} --enable-basic-auth=false --allowed-hosts=* --allowed-origins=* --enable-resize=true --audio-enabled=false --title=my-ax-computer`;
+
 export async function ensureComputerDisplay(sandbox: Sandbox) {
-  await sandbox.exec("mkdir -p /tmp/my-ax-vnc", { cwd: "/", timeout: 10_000, origin: "internal" });
-  if (!(await processRunning(sandbox, "Xtigervnc"))) {
-    const x = await sandbox.startProcess(
-      "Xtigervnc :1 -geometry 1280x800 -depth 24 -SecurityTypes None -localhost yes",
-      { cwd: "/" },
-    );
-    await x.waitForPort(5901, { mode: "tcp" });
+  if (!(await processRunning(sandbox, "Xvfb"))) {
+    await sandbox.startProcess(XVFB_COMMAND, { cwd: "/" });
+    await sandbox.exec(`for i in $(seq 50); do [ -S /tmp/.X11-unix/X1 ] && exit 0; sleep 0.1; done; exit 1`, { cwd: "/", timeout: 10_000, origin: "internal" });
   }
   if (!(await processRunning(sandbox, "xfce"))) {
-    await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY: ":1" } });
+    await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY } });
   }
-  if (!(await processRunning(sandbox, "websockify"))) {
-    const novnc = await sandbox.startProcess(
-      "websockify --web=/usr/share/novnc 6080 localhost:5901",
-      { cwd: "/" },
-    );
-    await novnc.waitForPort(6080, { mode: "tcp" });
+  if (!(await processRunning(sandbox, "voxl "))) {
+    const voxl = await sandbox.startProcess(VOXL_COMMAND, { cwd: "/", env: { DISPLAY } });
+    await voxl.waitForPort(COMPUTER_SCREEN_PORT, { mode: "tcp" });
   }
 }
 
