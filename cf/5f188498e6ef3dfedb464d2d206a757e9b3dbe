@@ -1,0 +1,35 @@
+src/pi-engine/pi-chat-agent.ts
+  s_b4f0cc27d836af::t_401a70740f5cd7 16,302,305
+src/pi-engine/radar-connector.test.ts
+  s_48b2cfd9e5d78c::t_ca458cf455e479 1-48
+src/pi-engine/radar-connector.ts
+  s_48b2cfd9e5d78c::t_baef99a441499d 1-81
+src/types.ts
+  s_b4f0cc27d836af::t_9f362c0a5d0439 58,118-135
+wrangler.jsonc
+  s_b4f0cc27d836af::t_d4cdd5f5ddaaed 85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cf5f188498e6ef3dfedb464d2d206a757e9b3dbe",
+  "prompts": {},
+  "sessions": {
+    "s_48b2cfd9e5d78c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019ff130-6f0d-770a-adb2-c454f944b8e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    },
+    "s_b4f0cc27d836af": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0ce9e-c9f5-760a-9147-eddf8c03bb3a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
