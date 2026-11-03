@@ -52,7 +52,7 @@ async function processRunning(sandbox: Sandbox, needle: string) {
 export const COMPUTER_SCREEN_PORT = 6080;
 const DISPLAY = ":1";
 const XVFB_COMMAND = `Xvfb ${DISPLAY} -screen 0 1280x800x24 -shmem -nolisten tcp`;
-const VOXL_COMMAND = `voxl --addr=0.0.0.0 --port=${COMPUTER_SCREEN_PORT} --enable-basic-auth=false --allowed-hosts=* --allowed-origins=* --enable-resize=true --audio-enabled=false --title=my-ax-computer`;
+const VOXL_COMMAND = `voxl --addr=0.0.0.0 --port=${COMPUTER_SCREEN_PORT} --enable-basic-auth=false --allowed-hosts=* --allowed-origins=* --enable-resize=true --audio-enabled=false --files-root=/home/user --title=my-ax-computer`;
 
 export async function ensureComputerDisplay(sandbox: Sandbox) {
   if (!(await processRunning(sandbox, "Xvfb"))) {
