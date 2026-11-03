@@ -1,0 +1,21 @@
+package.json
+  s_b4f0cc27d836af::t_cdf2a9d453d6a2 94
+src/pi-engine/radar-connector.test.ts
+  s_b4f0cc27d836af::t_baf3cd0a31ea3d 1-2,22,29,36-37,43,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0c931b05823f5bba0fbf6976fc6ef2d835fdd577",
+  "prompts": {},
+  "sessions": {
+    "s_b4f0cc27d836af": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0ce9e-c9f5-760a-9147-eddf8c03bb3a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jordan Coeyman <acoyfellow@users.noreply.github.com>"
+    }
+  }
+}
