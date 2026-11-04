@@ -101,6 +101,8 @@ declare global {
       GITHUB_TOKEN?: string;
       GITHUB_REPO?: string;
 
+      RIG_PIPELINE_ENABLED?: string;
+
       /** Explicit opt-in: saved recipe promotions skip pending gate and become enabled. */
       MY_AX_RECIPE_AUTOTRUST?: string;
       RECIPE_AUTOTRUST?: string;
