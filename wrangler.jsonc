@@ -211,10 +211,17 @@
   //   https://developers.cloudflare.com/workers/runtime-apis/bindings/version-metadata/
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
 
+  "workflows": [
+    { "name": "my-ax-rig-pipeline", "binding": "RIG_PIPELINE", "class_name": "RigPipeline" }
+  ],
+
   // Local dev — bypasses Access when ENVIRONMENT=dev AND ISS+AUD empty AND DEV_USER_EMAIL set
   "env": {
     "preview": {
       "name": "my-ax-preview",
+      "workflows": [
+        { "name": "my-ax-preview-rig-pipeline", "binding": "RIG_PIPELINE", "class_name": "RigPipeline" }
+      ],
       "vars": {
         "ENVIRONMENT": "preview",
         "CF_ACCESS_AUD": "REPLACE_WITH_ACCESS_AUD",
@@ -267,6 +274,9 @@
     },
     "dev": {
       "name": "my-ax-dev",
+      "workflows": [
+        { "name": "my-ax-dev-rig-pipeline", "binding": "RIG_PIPELINE", "class_name": "RigPipeline" }
+      ],
       "vars": {
         "ENVIRONMENT": "dev",
         "CF_ACCESS_AUD": "",
