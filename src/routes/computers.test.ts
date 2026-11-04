@@ -2,51 +2,38 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
 import { readFileSync } from "node:fs";
-import { computerPreviewSrc } from "../computer-id";
+import { computerPreviewSrc, screenContainerPath } from "../computer-id";
 
-test("create_computer iframe URL sends noVNC websocket through the Worker", () => {
-  const src = computerPreviewSrc("desk");
-  assert.match(src, /^\/api\/computers\/desk\/novnc\/vnc\.html\?/);
-  assert.match(src, /autoconnect=1/);
-  const path = new URL(src, "https://example.com").searchParams.get("path");
-  assert.equal(path, "api/computers/desk/novnc/websockify");
+test("create_computer iframe URL loads the voxl screen page through the Worker", () => {
+  assert.equal(computerPreviewSrc("desk"), "/api/computers/desk/screen/");
 });
 
-test("Hono serves vnc.html and websockify instead of the generic Not found page", async () => {
+test("Hono routes the screen page, its assets and its socket to one handler", async () => {
   const app = new Hono();
-  app.get("/api/computers/:id/novnc/vnc.html", (c) => c.text("vnc"));
-  app.all("/api/computers/:id/novnc/websockify", (c) => c.text("ws"));
-  app.all("/api/computers/:id/novnc/*", (c) => c.text("asset"));
+  app.all("/api/computers/:id/screen", (c) => c.redirect(`${c.req.path}/`, 301));
+  app.all("/api/computers/:id/screen/*", (c) => c.text("screen"));
   app.notFound((c) => c.json({ ok: false, error: { message: "Not found", code: "NOT_FOUND" } }, 404));
 
-  const page = await app.request("https://example.com/api/computers/desk/novnc/vnc.html?autoconnect=1");
-  assert.equal(page.status, 200);
-  assert.equal(await page.text(), "vnc");
-
-  const socket = await app.request("https://example.com/api/computers/desk/novnc/websockify", {
-    headers: { Upgrade: "websocket" },
-  });
-  assert.equal(socket.status, 200);
-  assert.equal(await socket.text(), "ws");
-
-  const missing = await app.request("https://example.com/api/computers/desk/missing");
-  assert.equal(missing.status, 404);
+  for (const path of ["/", "/client.js", "/worker.js", "/ws"]) {
+    const res = await app.request(`https://example.com/api/computers/desk/screen${path}`);
+    assert.equal(res.status, 200, path);
+  }
+  const bare = await app.request("https://example.com/api/computers/desk/screen");
+  assert.equal(bare.status, 301);
+  assert.equal(bare.headers.get("location"), "/api/computers/desk/screen/");
+  assert.equal((await app.request("https://example.com/api/computers/desk/missing")).status, 404);
 });
 
-test("computer routes register explicit vnc.html and websockify before the wildcard", () => {
+test("computer routes register the screen proxy and no noVNC routes", () => {
   const source = readFileSync(new URL("./computers.ts", import.meta.url), "utf8");
-  assert.match(source, /\/api\/computers\/:id\/novnc\/vnc\.html/);
-  assert.match(source, /\/api\/computers\/:id\/novnc\/websockify/);
-  const htmlAt = source.indexOf("/novnc/vnc.html");
-  const starAt = source.lastIndexOf("/novnc/*");
-  assert.ok(htmlAt > 0 && starAt > htmlAt);
+  assert.match(source, /\/api\/computers\/:id\/screen\/\*/);
+  assert.equal(source.includes("novnc"), false);
 });
 
-test("opening a named computer does not wait for VNC before the chat receipt", () => {
-  const named = readFileSync(new URL("../named-computer.ts", import.meta.url), "utf8");
-  const start = named.indexOf("export async function getNamedComputer");
-  const end = named.indexOf("async function processRunning");
-  const getFn = named.slice(start, end);
-  assert.doesNotMatch(getFn, /ensureComputerDisplay|waitForPort/);
-  assert.match(named, /export async function ensureComputerDisplay/);
+test("the screen socket and assets reach voxl at its own root paths", () => {
+  const source = readFileSync(new URL("./computers.ts", import.meta.url), "utf8");
+  assert.match(source, /sandbox\.wsConnect\(upstream, COMPUTER_SCREEN_PORT\)/);
+  assert.match(source, /sandbox\.containerFetch\(upstream, COMPUTER_SCREEN_PORT\)/);
+  const wsPath = screenContainerPath("/api/computers/desk/screen/ws", "desk");
+  assert.equal(`http://localhost:6080${wsPath}?token=1`, "http://localhost:6080/ws?token=1");
 });

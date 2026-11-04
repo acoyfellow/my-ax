@@ -46,27 +46,48 @@ export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId
 
 async function processRunning(sandbox: Sandbox, needle: string) {
   const listed = await sandbox.listProcesses().catch(() => []);
-  return listed.some((proc) => (proc.command ?? "").includes(needle));
+  return listed.some((proc) => (proc.status === "running" || proc.status === "starting") && (proc.command ?? "").includes(needle));
+}
+
+export const COMPUTER_SCREEN_PORT = 6080;
+const DISPLAY = ":1";
+const XVFB_ARGS = `${DISPLAY} -screen 0 1280x800x24 -nolisten tcp`;
+const XVFB_COMMANDS = [`Xvfb ${XVFB_ARGS} -shmem`, `Xvfb ${XVFB_ARGS}`];
+const CLEAR_STALE_DISPLAY = "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1";
+const VOXL_COMMAND = `voxl --addr=0.0.0.0 --port=${COMPUTER_SCREEN_PORT} --enable-basic-auth=false --allowed-hosts=* --allowed-origins=* --enable-resize=true --audio-enabled=false --files-root=/home/user --title=my-ax-computer`;
+
+async function processOutput(sandbox: Sandbox, id: string): Promise<string> {
+  const logs = await sandbox.getProcessLogs(id).catch(() => null);
+  return `${logs?.stderr ?? ""}${logs?.stdout ?? ""}`.trim().slice(-800);
+}
+
+async function startDisplayServer(sandbox: Sandbox) {
+  const failures: string[] = [];
+  for (const command of XVFB_COMMANDS) {
+    await sandbox.exec(CLEAR_STALE_DISPLAY, { cwd: "/", timeout: 10_000, origin: "internal" });
+    const xvfb = await sandbox.startProcess(command, { cwd: "/" });
+    await sandbox.exec(`sh -c 'for i in $(seq 50); do [ -S /tmp/.X11-unix/X1 ] && exit 0; sleep 0.1; done; exit 1'`, { cwd: "/", timeout: 10_000, origin: "internal" });
+    await sandbox.exec("sleep 0.5", { cwd: "/", timeout: 10_000, origin: "internal" });
+    const status = await sandbox.getProcess(xvfb.id).then((proc) => proc?.status).catch(() => undefined);
+    if (status === "running" || status === "starting") return;
+    failures.push(`${command}: ${await processOutput(sandbox, xvfb.id) || status || "exited"}`);
+  }
+  throw new Error(`Xvfb did not stay up\n${failures.join("\n")}`);
 }
 
 export async function ensureComputerDisplay(sandbox: Sandbox) {
-  await sandbox.exec("mkdir -p /tmp/my-ax-vnc", { cwd: "/", timeout: 10_000, origin: "internal" });
-  if (!(await processRunning(sandbox, "Xtigervnc"))) {
-    const x = await sandbox.startProcess(
-      "Xtigervnc :1 -geometry 1280x800 -depth 24 -SecurityTypes None -localhost yes",
-      { cwd: "/" },
-    );
-    await x.waitForPort(5901, { mode: "tcp" });
-  }
+  if (!(await processRunning(sandbox, "Xvfb"))) await startDisplayServer(sandbox);
   if (!(await processRunning(sandbox, "xfce"))) {
-    await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY: ":1" } });
+    await sandbox.startProcess("startxfce4", { cwd: "/", env: { DISPLAY } });
   }
-  if (!(await processRunning(sandbox, "websockify"))) {
-    const novnc = await sandbox.startProcess(
-      "websockify --web=/usr/share/novnc 6080 localhost:5901",
-      { cwd: "/" },
-    );
-    await novnc.waitForPort(6080, { mode: "tcp" });
+  if (!(await processRunning(sandbox, "voxl "))) {
+    const voxl = await sandbox.startProcess(VOXL_COMMAND, { cwd: "/", env: { DISPLAY } });
+    try {
+      await voxl.waitForPort(COMPUTER_SCREEN_PORT, { mode: "tcp" });
+    } catch (error) {
+      const output = await processOutput(sandbox, voxl.id);
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${output ? `\nvoxl: ${output}` : ""}`);
+    }
   }
 }
 

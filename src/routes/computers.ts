@@ -2,17 +2,19 @@ import type { Context } from "hono";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { normalizeComputerId, novncContainerPath } from "../computer-id";
-import { ensureComputerDisplay, getNamedComputer, listNamedComputers } from "../named-computer";
+import { normalizeComputerId, screenContainerPath } from "../computer-id";
+import { COMPUTER_SCREEN_PORT, ensureComputerDisplay, getNamedComputer, listNamedComputers } from "../named-computer";
 
-const NOVNC_PORT = 6080;
+export function screenUpstreamUrl(requestUrl: string, containerPath: string): string {
+  return `http://localhost:${COMPUTER_SCREEN_PORT}${containerPath}${new URL(requestUrl).search}`;
+}
 
-async function proxyNovnc(c: Context<AppEnv>) {
+async function proxyScreen(c: Context<AppEnv>) {
   let computerId: string;
   let rest: string;
   try {
     computerId = normalizeComputerId(String(c.req.param("id") ?? ""));
-    rest = novncContainerPath(new URL(c.req.url).pathname, computerId);
+    rest = screenContainerPath(new URL(c.req.url).pathname, computerId);
   } catch (error) {
     return c.json<ApiResponse>({
       ok: false,
@@ -24,11 +26,11 @@ async function proxyNovnc(c: Context<AppEnv>) {
   try {
     const { sandbox } = await getNamedComputer(c.env, c.get("identity"), computerId);
     await ensureComputerDisplay(sandbox);
-    const url = new URL(c.req.url);
+    const upstream = new Request(screenUpstreamUrl(c.req.url, rest), c.req.raw);
     if ((c.req.header("Upgrade") ?? "").toLowerCase() === "websocket") {
-      return sandbox.wsConnect(c.req.raw, NOVNC_PORT);
+      return sandbox.wsConnect(upstream, COMPUTER_SCREEN_PORT);
     }
-    return await sandbox.containerFetch(`http://localhost:${NOVNC_PORT}${rest}${url.search}`, NOVNC_PORT);
+    return await sandbox.containerFetch(upstream, COMPUTER_SCREEN_PORT);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json<ApiResponse>({
@@ -46,7 +48,6 @@ export function registerComputerRoutes(app: Hono<AppEnv>) {
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { computers }, next_actions: [] });
   });
 
-  app.all("/api/computers/:id/novnc/vnc.html", proxyNovnc);
-  app.all("/api/computers/:id/novnc/websockify", proxyNovnc);
-  app.all("/api/computers/:id/novnc/*", proxyNovnc);
+  app.all("/api/computers/:id/screen", (c) => c.redirect(`${c.req.path}/`, 301));
+  app.all("/api/computers/:id/screen/*", proxyScreen);
 }

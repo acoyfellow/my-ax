@@ -24,7 +24,7 @@ export function browserReplayRecordingHref(replaySrc: string | undefined): strin
 const INTERNAL_RASTER_ARTIFACT_RE = /^\/api\/artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INTERNAL_SVELTE_ARTIFACT_RE = /^\/api\/artifacts\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preview$/i;
 const INTERNAL_AUDIO_MESSAGE_RE = /^\/api\/audio\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
-const INTERNAL_COMPUTER_PREVIEW_RE = /^\/api\/computers\/([a-z0-9][a-z0-9-]{0,62})\/novnc\/vnc\.html(?:\?.*)?$/;
+const INTERNAL_COMPUTER_PREVIEW_RE = /^\/api\/computers\/([a-z0-9][a-z0-9-]{0,62})\/screen\/(?:\?.*)?$/;
 const AUDIO_VOICES = new Set(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
 const MAX_BROWSER_TEXT_CHARS = 2_000;
 

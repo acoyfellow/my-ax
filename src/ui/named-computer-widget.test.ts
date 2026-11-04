@@ -7,13 +7,13 @@ test("create_computer receipts become an allowlisted iframe widget", () => {
     ok: true,
     kind: "named-computer",
     computerId: "desk",
-    src: "/api/computers/desk/novnc/vnc.html?autoconnect=1&resize=scale&path=api%2Fcomputers%2Fdesk%2Fnovnc%2Fwebsockify",
+    src: "/api/computers/desk/screen/",
     title: "desk",
   }));
   assert.equal(widget.kind, "named-computer");
   if (widget.kind === "named-computer") {
     assert.equal(widget.computerId, "desk");
-    assert.match(widget.src, /^\/api\/computers\/desk\/novnc\/vnc\.html/);
+    assert.equal(widget.src, "/api/computers/desk/screen/");
   }
 });
 
