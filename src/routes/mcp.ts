@@ -1,3 +1,4 @@
+import { assertNotForgedDecision } from "../decision-forgery-guard";
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import * as rpcContract from "../rpc/contract";
 import { markAttentionSeen } from "../fsm/attention-item";
@@ -348,6 +349,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   }
   const content = typeof args.content === "string" ? args.content.trim() : "";
   if (!content) throw new Error("content is required");
+  assertNotForgedDecision(content);
   await (await sessionControl(c.env, c.get("identity"), sessionId)).inject(content, `mcp:${crypto.randomUUID()}`);
   await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(sessionId, email).run();
   return { sessionId, injected: true };
