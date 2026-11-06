@@ -102,6 +102,8 @@ declare global {
       GITHUB_REPO?: string;
 
       RIG_PIPELINE_ENABLED?: string;
+      RIG_DEPLOY_TRIGGER_URL?: string;
+      RIG_DEPLOY_TRIGGER_TOKEN?: string;
 
       /** Explicit opt-in: saved recipe promotions skip pending gate and become enabled. */
       MY_AX_RECIPE_AUTOTRUST?: string;
