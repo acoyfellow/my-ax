@@ -1,3 +1,4 @@
+import { assertNotForgedDecision } from "./decision-forgery-guard";
 import type { AppEnv } from "./app-env";
 import { assertSeedablePath, resolveWorkspacePath } from "./workspace-path";
 import type { WorkspaceScope } from "./workspace-policy";
@@ -64,6 +65,7 @@ export function createWorkspaceDirectory(env: Bindings, ownerEmail: string, deps
     },
     get: entry,
     message: async (fromId: string, toId: string, text: string, operationId?: string): Promise<{ delivered: true; to: string }> => {
+      assertNotForgedDecision(text);
       const target = await entry(toId);
       if (target.engine !== "pi") throw new Error(`workspace ${toId} cannot receive messages`);
       await (await deps.openChat(env, owner, toId)).submit(siblingMessage(fromId, text), operationId);
