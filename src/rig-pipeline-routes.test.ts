@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { registerDecisionRoutes } from "./routes/decisions";
 import { parseStart, registerRigRoutes } from "./routes/rig";
 import { RIG_APPROVAL_EVENT, RIG_IMAGE_EVENT } from "./rig-pipeline";
-import { createRigDecision, recordRigEvent, summarizeChecks } from "./rig-pipeline-workflow";
+import { createRigDecision, gitlabPreviewTrigger, recordRigEvent, summarizeChecks } from "./rig-pipeline-workflow";
 
 const OWNER = "owner@example.com";
 
@@ -102,4 +102,22 @@ test("check runs are pending until all complete and fail on any failing conclusi
   assert.equal(summarizeChecks([{ status: "in_progress", conclusion: null }, { status: "completed", conclusion: "success" }]), "pending");
   assert.equal(summarizeChecks([{ status: "completed", conclusion: "success" }, { status: "completed", conclusion: "skipped" }]), "success");
   assert.equal(summarizeChecks([{ status: "completed", conclusion: "success" }, { status: "completed", conclusion: "failure" }]), "failure");
+});
+
+test("the deploy step triggers the internal GitLab preview pipeline with the PR number and pushed image", () => {
+  const params = { ownerEmail: OWNER, runId: "rig-1", target: "pr-416", commit: "abc1234" };
+  const trigger = gitlabPreviewTrigger({ url: "https://ci.internal.example/api/v4/projects/1/trigger/pipeline", token: "t0k" }, params, "registry.example/img:1");
+  assert.ok("url" in trigger);
+  assert.equal(trigger.url, "https://ci.internal.example/api/v4/projects/1/trigger/pipeline");
+  assert.equal(trigger.body.get("ref"), "main");
+  assert.equal(trigger.body.get("variables[DEPLOY_TARGET]"), "preview");
+  assert.equal(trigger.body.get("variables[PR]"), "416");
+  assert.equal(trigger.body.get("variables[PREVIEW_COMPUTER_IMAGE]"), "registry.example/img:1");
+});
+
+test("the rig never triggers a production deploy and needs its trigger secrets", () => {
+  const prod = gitlabPreviewTrigger({ url: "https://ci.internal.example/t", token: "t0k" }, { ownerEmail: OWNER, runId: "rig-1", target: "prod", commit: "abc1234" }, "img:1");
+  assert.ok("error" in prod && /production deploys stay manual/.test(prod.error));
+  const unset = gitlabPreviewTrigger({}, { ownerEmail: OWNER, runId: "rig-1", target: "pr-416", commit: "abc1234" }, "img:1");
+  assert.ok("error" in unset);
 });

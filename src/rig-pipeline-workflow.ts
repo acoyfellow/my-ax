@@ -49,15 +49,28 @@ export function summarizeChecks(runs: ReadonlyArray<{ status: string; conclusion
   return runs.every((run) => passing.has(run.conclusion ?? "")) ? "success" : "failure";
 }
 
-async function dispatchDeploy(env: Env, params: RigPipelineParams, image: string): Promise<{ ok: boolean; detail: string }> {
-  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return { ok: false, detail: "GITHUB_TOKEN and GITHUB_REPO are required for the deploy step" };
-  const response = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: "application/vnd.github+json", "user-agent": "my-ax-rig", "content-type": "application/json" },
-    body: JSON.stringify({ event_type: "rig-deploy", client_payload: { run_id: params.runId, target: params.target, commit: params.commit, image } }),
-  });
-  if (response.status >= 500) throw new Error(`GitHub dispatch returned ${response.status}`);
-  return response.status === 204 ? { ok: true, detail: "rig-deploy dispatched" } : { ok: false, detail: `GitHub dispatch returned ${response.status}` };
+export type DeployTrigger = { url: string; body: URLSearchParams } | { error: string };
+
+export function gitlabPreviewTrigger(config: { url?: string; token?: string }, params: RigPipelineParams, image: string): DeployTrigger {
+  if (!config.url || !config.token) return { error: "RIG_DEPLOY_TRIGGER_URL and RIG_DEPLOY_TRIGGER_TOKEN are required for the deploy step" };
+  const pr = /^pr-([0-9]+)$/.exec(params.target)?.[1];
+  if (!pr) return { error: `target ${params.target} is not a preview; production deploys stay manual in GitLab` };
+  const body = new URLSearchParams({ token: config.token, ref: "main" });
+  body.set("variables[DEPLOY_TARGET]", "preview");
+  body.set("variables[PR]", pr);
+  body.set("variables[PREVIEW_COMPUTER_IMAGE]", image);
+  body.set("variables[RIG_RUN_ID]", params.runId);
+  return { url: config.url, body };
+}
+
+async function triggerDeploy(env: Env, params: RigPipelineParams, image: string): Promise<{ ok: boolean; detail: string }> {
+  const trigger = gitlabPreviewTrigger({ url: env.RIG_DEPLOY_TRIGGER_URL, token: env.RIG_DEPLOY_TRIGGER_TOKEN }, params, image);
+  if ("error" in trigger) return { ok: false, detail: trigger.error };
+  const response = await fetch(trigger.url, { method: "POST", body: trigger.body });
+  if (response.status >= 500) throw new Error(`deploy trigger returned ${response.status}`);
+  if (response.status !== 201) return { ok: false, detail: `deploy trigger returned ${response.status}` };
+  const pipeline = await response.json<{ id?: number; web_url?: string }>().catch(() => ({} as { id?: number; web_url?: string }));
+  return { ok: true, detail: `pipeline ${pipeline.id ?? "unknown"} ${pipeline.web_url ?? ""}`.trim() };
 }
 
 async function signedOutStatus(url: string): Promise<{ signedOutStatus: number }> {
@@ -81,7 +94,7 @@ export function liveRigEffects(env: Env): RigEffects {
       });
       return { decisionId: decision.id };
     },
-    deploy: (params, image) => dispatchDeploy(env, params, image),
+    deploy: (params, image) => triggerDeploy(env, params, image),
     verify: signedOutStatus,
     record: (params, type, data) => recordRigEvent(env, params, type, data),
   };
