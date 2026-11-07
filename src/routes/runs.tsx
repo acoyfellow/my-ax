@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { applyRunEvent, ownerTerminalEvent } from "../fsm/run-status";
 import { Layout } from "../views/Layout";
 import type { ApiResponse } from "../types";
 import type { AppEnv } from "../app-env";
@@ -267,10 +268,8 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
       return c.json(errorResponse(c.req.path, "RUN_TERMINAL", "run is already terminal"), 409);
     }
 
-    const result = await c.env.DB.prepare(
-      "UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status NOT IN ('completed', 'failed', 'aborted')",
-    ).bind(status, runId, identity.email).run();
-    if (!result.success || (result.meta?.changes ?? 0) === 0) {
+    const transitioned = await applyRunEvent(c.env.DB, { id: runId, ownerEmail: identity.email }, ownerTerminalEvent(status));
+    if (!transitioned) {
       return c.json(errorResponse(c.req.path, "RUN_TERMINAL", "run became terminal before this transition"), 409);
     }
 

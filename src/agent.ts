@@ -1,4 +1,5 @@
 import { createToolContext } from "./tool-context";
+import { applyRunEvent } from "./fsm/run-status";
 import { applySessionEvent } from "./fsm/session-status";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
@@ -377,7 +378,7 @@ export class MyAgent extends Think<Env> {
         }),
         JSON.stringify(result),
       ).run();
-    await this.env.DB.prepare("UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(terminal, runId, identity.email.toLowerCase()).run();
+    await applyRunEvent(this.env.DB, { id: runId, ownerEmail: identity.email.toLowerCase() }, result.ok ? "recipe_succeeded" : "recipe_failed");
     // Refresh the cm_snippets projection so a successful run keeps the
     // dual-read store in sync with the latest recipe code. Fail-soft: a
     // projection write must never break a successful recipe run.

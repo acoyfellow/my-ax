@@ -1,3 +1,4 @@
+import { applyRunEvent } from "./fsm/run-status";
 import type { AppEnv } from "./app-env";
 
 type RunReceiptContext = { env: AppEnv["Bindings"]; get: (key: "identity") => AppEnv["Variables"]["identity"] };
@@ -61,9 +62,7 @@ export async function appendOwnedRunEvent(c: RunReceiptContext, runId: string, i
   await c.env.DB.prepare(
     "INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   ).bind(runId, id, email, ts, JSON.stringify(input.actor), type, JSON.stringify(data), evidence ? JSON.stringify(evidence) : null).run();
-  await c.env.DB.prepare(
-    "UPDATE runs SET status = CASE WHEN status = 'open' THEN 'running' ELSE status END, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-  ).bind(runId, email).run();
+  await applyRunEvent(c.env.DB, { id: runId, ownerEmail: email }, "receipt_recorded");
 
   return { runId, eventId: id, type };
 }
