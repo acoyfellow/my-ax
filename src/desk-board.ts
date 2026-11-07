@@ -2,7 +2,9 @@ export const DESK_PREFERENCE_KEY = "desk.board";
 export const DESK_MAX_CARDS = 30;
 export const DESK_DEEP_LINK = "/?action=desk";
 
-export type DeskCardStatus = "pending" | "approved" | "rejected";
+import { nextDeskCardStatus, type DeskCardStatus } from "./fsm/desk-card";
+
+export type { DeskCardStatus };
 
 export interface DeskCard {
   id: string;
@@ -73,7 +75,7 @@ export function upsertDeskCard(board: DeskBoard, incoming: unknown, now = new Da
     decisionHref: Object.hasOwn(raw, "decisionHref") ? raw.decisionHref : existing?.decisionHref,
     body: Object.hasOwn(raw, "body") ? raw.body : existing?.body,
     title: Object.hasOwn(raw, "title") ? raw.title : existing?.title,
-    status: Object.hasOwn(raw, "status") ? raw.status : existing?.status,
+    status: nextDeskCardStatus(existing?.status, Object.hasOwn(raw, "status") ? raw.status : undefined),
     updatedAt: now,
   });
   if (!card) throw new Error("invalid desk card");
