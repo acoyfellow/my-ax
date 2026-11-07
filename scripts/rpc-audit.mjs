@@ -7,7 +7,7 @@ const SRC = join(ROOT, "src");
 const ALLOW_PATH = join(ROOT, "scripts", "rpc-audit.allow.json");
 
 const STUB_ACQUIRE = /\bgetAgentByName\(|\bgetSubAgentByName\(|\.idFromName\(|\bgetSessionAgent\(|\bworkspaceHub\(|\bgetNamedComputer\(|\bgetSandbox\(/;
-const WRAPPED = /\bwithTimeout\(|\bwithRetry\(/;
+const WRAPPED = /\bwithTimeout\(|\bwithRetry\(|\bresolveStub\(/;
 const WINDOW = 8;
 
 function sourceFiles(dir) {
