@@ -8,7 +8,7 @@ const SRC = join(ROOT, "src");
 export const MACHINES = [
   { name: "sessions", owner: "src/fsm/session-status.ts", writer: /UPDATE sessions SET status\b/ },
   { name: "runs", owner: "src/fsm/run-status.ts", writer: /UPDATE runs SET status\b/ },
-  { name: "jobs", owner: "src/fsm/job-status.ts", writer: /UPDATE jobs SET status\b|status: "(active|paused|exhausted)" as const/ },
+  { name: "jobs", owner: "src/fsm/job-status.ts", writer: /UPDATE jobs SET[^"`]*\bstatus\s*=|^\s*status = CASE WHEN max_runs|status: "(active|paused|exhausted)" as const/ },
   { name: "recipes", owner: "src/fsm/recipe-status.ts", writer: /\bpatch\.status\s*=|body\.status === "enabled" \? "enabled"/ },
   { name: "attention", owner: "src/fsm/attention-item.ts", writer: /UPDATE attention_items SET (seen_at|dismissed_at)\b/ },
   { name: "desk", owner: "src/fsm/desk-card.ts", writer: /status: Object\.hasOwn\(raw, "status"\)/ },

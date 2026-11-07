@@ -5,6 +5,7 @@ import type { AccessIdentity } from "./auth";
 // DO. D1 is a thin owner/session UI index (name, prompt, cadence, schedule_id,
 // run receipts). Manual Run now reuses the same `/inject-user-message` path.
 
+import { CLAIM_RUN_SQL } from "./fsm/job-status";
 import type { Env } from "./types";
 import { completeRecurringJobRun } from "./recurring-job-run";
 import { scheduledJobRunPrompt } from "./jobs-prompt";
@@ -87,16 +88,7 @@ export function remainingRecurringJobRuns(row: Pick<JobRow, "max_runs" | "run_co
 }
 
 export async function claimRecurringJobRun(env: Env, jobId: string, ownerEmail: string): Promise<Pick<JobRow, "max_runs" | "run_count" | "status"> | null> {
-  return env.DB.prepare(`UPDATE jobs
-    SET run_count = run_count + 1,
-        status = CASE WHEN max_runs IS NOT NULL AND run_count + 1 >= max_runs THEN 'exhausted' ELSE 'active' END,
-        schedule_id = CASE WHEN max_runs IS NOT NULL AND run_count + 1 >= max_runs THEN NULL ELSE schedule_id END,
-        updated_at = datetime('now')
-    WHERE id = ?
-      AND owner_email = ?
-      AND status = 'active'
-      AND (max_runs IS NULL OR run_count < max_runs)
-    RETURNING max_runs, run_count, status`)
+  return env.DB.prepare(CLAIM_RUN_SQL)
     .bind(jobId, ownerEmail.toLowerCase())
     .first<Pick<JobRow, "max_runs" | "run_count" | "status">>();
 }
