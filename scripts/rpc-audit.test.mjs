@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { audit, machinectlCarriesOpId } from "./rpc-audit.mjs";
+import { audit, machinectlCancelsOnTimeout, machinectlCarriesOpId } from "./rpc-audit.mjs";
 
 const run = (text, allow = []) => audit(["/repo/src/x.ts"], () => text, allow).map((violation) => violation.rule);
 
@@ -38,4 +38,11 @@ test("a stale allowlist entry is itself a violation", () => {
 test("R5 needs an opId on machinectl call frames", () => {
   assert.equal(machinectlCarriesOpId('socket.send(JSON.stringify({ type: "call", id, tool, args }));'), false);
   assert.equal(machinectlCarriesOpId('socket.send(JSON.stringify({ type: "call", id, opId, tool, args }));'), true);
+});
+
+test("R5 needs a timed-out machinectl call to send cancel and warn that it may still finish", () => {
+  const silent = 'const timer = setTimeout(() => { this.pending.delete(id); resolve({ ok: false, error: "timed out" }); }, CALL_TIMEOUT_MS);';
+  assert.equal(machinectlCancelsOnTimeout(silent), false);
+  const cancelling = 'socket.send(JSON.stringify({ type: "cancel", id })); "It may still finish"\nconst timer = setTimeout(() => { this.pending.delete(id); cancelLaptopCall(socket, id); resolve(x); }, CALL_TIMEOUT_MS);';
+  assert.equal(machinectlCancelsOnTimeout(cancelling), true);
 });

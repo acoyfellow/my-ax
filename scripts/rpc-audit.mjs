@@ -73,11 +73,19 @@ export function machinectlCarriesOpId(hostText) {
   return /type:\s*"call"[^}]*\bopId\b/.test(hostText);
 }
 
+export function machinectlCancelsOnTimeout(hostText) {
+  const start = hostText.indexOf("setTimeout(() => {");
+  const end = start < 0 ? -1 : hostText.indexOf("CALL_TIMEOUT_MS)", start);
+  const timeoutBlock = start < 0 || end < 0 ? "" : hostText.slice(start, end);
+  return /cancelLaptopCall\(/.test(timeoutBlock) && /type: \\?"cancel\\?"/.test(hostText) && /may still finish/i.test(hostText);
+}
+
 function main() {
   const files = sourceFiles(SRC);
   const violations = audit(files, (path) => readFileSync(path, "utf8"), loadAllow());
   const hostText = readFileSync(join(SRC, "machinectl-host.ts"), "utf8");
   if (!machinectlCarriesOpId(hostText)) violations.push({ rule: "R5", at: "src/machinectl-host.ts", detail: "machinectl call frames carry no opId, so a timed-out call can run twice on the laptop" });
+  if (!machinectlCancelsOnTimeout(hostText)) violations.push({ rule: "R5", at: "src/machinectl-host.ts", detail: "a timed-out machinectl call must send cancel and warn that it may still finish" });
   for (const violation of violations) console.log(`${violation.rule} ${violation.at} ${violation.detail}`);
   const byRule = violations.reduce((counts, violation) => ({ ...counts, [violation.rule]: (counts[violation.rule] ?? 0) + 1 }), {});
   console.log(`files: ${files.length} violations: ${violations.length} ${JSON.stringify(byRule)}`);
