@@ -46,3 +46,11 @@ test("R5 needs a timed-out machinectl call to send cancel and warn that it may s
   const cancelling = 'socket.send(JSON.stringify({ type: "cancel", id })); "It may still finish"\nconst timer = setTimeout(() => { this.pending.delete(id); cancelLaptopCall(socket, id); resolve(x); }, CALL_TIMEOUT_MS);';
   assert.equal(machinectlCancelsOnTimeout(cancelling), true);
 });
+
+test("R1, R3, R4 and the R5 cancel check block the build; R2 and the R5 opId frame are tracked", async () => {
+  const { ENFORCED_RULES, isTrackedOpIdGap } = await import("./rpc-audit.mjs");
+  for (const rule of ["R1", "R3", "R4", "R5", "ALLOW"]) assert.equal(ENFORCED_RULES.has(rule), true);
+  assert.equal(ENFORCED_RULES.has("R2"), false);
+  assert.equal(isTrackedOpIdGap({ rule: "R5", detail: "machinectl call frames carry no opId, so a timed-out call can run twice" }), true);
+  assert.equal(isTrackedOpIdGap({ rule: "R5", detail: "a timed-out machinectl call must send cancel and warn that it may still finish" }), false);
+});

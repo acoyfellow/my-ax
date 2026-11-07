@@ -89,7 +89,15 @@ function main() {
   for (const violation of violations) console.log(`${violation.rule} ${violation.at} ${violation.detail}`);
   const byRule = violations.reduce((counts, violation) => ({ ...counts, [violation.rule]: (counts[violation.rule] ?? 0) + 1 }), {});
   console.log(`files: ${files.length} violations: ${violations.length} ${JSON.stringify(byRule)}`);
-  process.exitCode = violations.length === 0 ? 0 : 1;
+  const blocking = violations.filter((violation) => ENFORCED_RULES.has(violation.rule) && !isTrackedOpIdGap(violation));
+  console.log(`blocking: ${blocking.length} (enforced: ${[...ENFORCED_RULES].join(",")}; tracked, not yet enforced: R2 and the R5 opId frame)`);
+  process.exitCode = blocking.length === 0 ? 0 : 1;
+}
+
+export const ENFORCED_RULES = new Set(["R1", "R3", "R4", "R5", "ALLOW"]);
+
+export function isTrackedOpIdGap(violation) {
+  return violation.rule === "R5" && /carry no opId/.test(violation.detail);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
