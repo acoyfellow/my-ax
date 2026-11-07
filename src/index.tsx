@@ -44,6 +44,7 @@ import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computers";
 import { registerDecisionRoutes } from "./routes/decisions";
+import { readMachineStatus } from "./rpc/machine-host-client";
 import { registerDeskRoutes } from "./routes/desk";
 import { registerTerminalRoutes } from "./routes/terminal";
 import { registerWorkspaceDirectoryRoutes } from "./routes/workspaces";
@@ -240,8 +241,7 @@ app.get("/api", async (c) => {
     };
   }
 
-  const machineHost = c.env.MACHINE_HOST.get(c.env.MACHINE_HOST.idFromName(email.toLowerCase()));
-  const machineStatus = await machineHost.fetch("http://internal/status").then((r) => r.json<{ connected?: boolean; machineName?: string | null; tools?: unknown[] }>()).catch(() => ({ connected: false, machineName: null, tools: [] }));
+  const machineStatus = await readMachineStatus(c.env.MACHINE_HOST, email);
   connectorStatus.machinectl = {
     kind: "access-session",
     authorized: true,
