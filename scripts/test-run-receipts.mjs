@@ -49,8 +49,8 @@ try {
   assert.notEqual(calls[1].values[3], "2026-06-04T00:00:00.000Z");
   assert.match(calls[1].values[3], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.deepEqual(JSON.parse(calls[1].values[6]), { observation: "connected-laptop-session", session: { harness: "pi", id: "session-7" }, explicit: true, noTranscript: true, noAttach: true });
-  assert.match(calls[2].sql, /UPDATE runs SET status/);
-  assert.deepEqual(calls[2].values, ["run-1", "owner@example.com"]);
+  assert.match(calls[2].sql, /UPDATE runs SET status = \?.*AND status IN \(\?\)/);
+  assert.deepEqual(calls[2].values, ["running", "run-1", "owner@example.com", "open"]);
 
   await assert.rejects(() => appendOwnedRunEvent(mockContext({ owned: false }).ctx, "other-run", {
     actor: { id: "machinectl:laptop", kind: "machinectl", mode: "live" },

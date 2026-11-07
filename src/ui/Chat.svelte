@@ -10,6 +10,7 @@
   import { hardenLinks, sanitizeRenderedMarkdown } from "./safe-markdown";
   import { renderUserMarkdown } from "./user-message-markdown";
   import { initialPhase, messagePhase } from "../fsm/chat-message";
+  import { nextVoiceStatus, type VoiceStatus } from "../fsm/voice-status";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
   import { evaluateTurnStall, persistedTurnError, stallFingerprint, stallMessage, stallSurfaceText } from "./turn-stall";
@@ -415,7 +416,7 @@
   // ── Realtime voice mode (same Think session) ─────────────────────
   // Replaces passive read-aloud: one persistent microphone/TTS call feeds
   // ordinary durable Think turns and lets the normal transcript stream behind it.
-  type VoiceStatus = "idle" | "listening" | "thinking" | "speaking";
+
   let voiceEnabled = $state(false);
   let voiceStarting = $state(false);
   let voiceStatus = $state<VoiceStatus>("idle");
@@ -593,7 +594,7 @@
     const eventIsCurrent = () => voiceActivation.acceptsEvent(sessionId, client, readTabSession());
     client.addEventListener("statuschange", (status) => {
       if (!eventIsCurrent()) return;
-      voiceStatus = status;
+      voiceStatus = nextVoiceStatus(voiceStatus, status);
       voiceStarting = false;
       applyVoiceGate(status);
       maybeChime(status);

@@ -15,7 +15,9 @@
 // machine can be unit-tested without a browser, an AudioContext, or a live
 // VoiceClient. The Svelte layer owns the timer + the actual mute call.
 
-export type VoiceGateStatus = "idle" | "listening" | "thinking" | "speaking";
+import { isAgentTurn, type VoiceStatus } from "../fsm/voice-status";
+
+export type VoiceGateStatus = VoiceStatus;
 
 export type VoiceGateState = {
   /** True while the agent is producing/among-to-produce audio output. */
@@ -46,7 +48,7 @@ export function initialVoiceGateState(): VoiceGateState {
  *  audio captured during synthesis is either the user's own trailing echo or
  *  the leading edge of loudspeaker playback — never a wanted new turn. */
 export function isAgentAudioActive(status: VoiceGateStatus): boolean {
-  return status === "thinking" || status === "speaking";
+  return isAgentTurn(status);
 }
 
 /**

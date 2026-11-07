@@ -13,17 +13,12 @@
 // re-arms; keep it short and low so its tail decays before capture resumes
 // (the half-duplex re-arm debounce, ~400ms, covers this).
 
-export type VoiceChimeStatus = "idle" | "listening" | "thinking" | "speaking";
+import { isAgentTurn, type VoiceStatus } from "../fsm/voice-status";
+
+export type VoiceChimeStatus = VoiceStatus;
 
 /** Which chime to play, if any, on a status transition. */
 export type ChimeCue = "turn-start" | "your-turn" | null;
-
-/** Statuses where the agent is (or is about to be) producing audio — the
- *  owner should stop talking. Entering this set from a non-agent status is the
- *  "turn-start" boundary. */
-function isAgentTurn(status: VoiceChimeStatus): boolean {
-  return status === "thinking" || status === "speaking";
-}
 
 /**
  * Decide the chime for a status transition. Pure.
