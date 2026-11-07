@@ -46,7 +46,7 @@ test("saved recipe run input enforces the declared object schema subset", () => 
 });
 
 test("saved recipe patch supports focused CRUD edits", () => {
-  assert.deepEqual(validateSavedRecipePatch({ status: "disabled" }), { status: "disabled" });
+  assert.deepEqual(validateSavedRecipePatch({ status: "disabled" }), { statusEvent: "disabled" });
   assert.deepEqual(validateSavedRecipePatch({ description: "Updated useful recipe.", capabilities: ["workspace.read", "workspace.write"] }), {
     description: "Updated useful recipe.",
     capabilities: ["workspace.read", "workspace.write"],

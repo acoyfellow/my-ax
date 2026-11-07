@@ -110,7 +110,7 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       if (existing.code.trim() !== sourceCode) {
         throw new SavedRecipeError("Conflict", "This card no longer matches the saved reusable tool. Open Reusable tools to review the current version.");
       }
-      const recipe = await service(c).update(existing.id, { status: action === "approve" ? "enabled" : "disabled" });
+      const recipe = await service(c).transition(existing.id, action === "approve" ? "approved" : "rejected");
       if (action === "approve") {
         const row = await service(c).get(existing.id);
         await projectSavedRecipe(c.env, row);
@@ -144,7 +144,7 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const request = await body(c);
       const action = request.action === "reject" ? "reject" : request.action === "approve" ? "approve" : "";
       if (!action) throw new SavedRecipeError("InvalidInput", "action must be approve or reject");
-      const recipe = await service(c).update(c.req.param("id"), { status: action === "approve" ? "enabled" : "disabled" });
+      const recipe = await service(c).transition(c.req.param("id"), action === "approve" ? "approved" : "rejected");
       if (action === "approve") {
         const row = await service(c).get(c.req.param("id"));
         await projectSavedRecipe(c.env, row);

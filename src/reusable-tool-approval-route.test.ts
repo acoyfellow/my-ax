@@ -15,7 +15,7 @@ test("direct chat approval is owner-scoped and source-bound", () => {
   assert.match(slice, /service\(c\)\.getByName\(name\)/, "lookup must use the identity-scoped service");
   assert.match(slice, /attempt < 10/, "immediate card clicks must bridge the end-of-turn persistence race");
   assert.match(slice, /existing\.code\.trim\(\) !== sourceCode/, "stale or conflicting cards must not approve different code");
-  assert.match(slice, /status: action === "approve" \? "enabled" : "disabled"/);
+  assert.match(slice, /transition\(existing\.id, action === "approve" \? "approved" : "rejected"\)/);
   assert.match(slice, /projectSavedRecipe\(/, "approved tools must enter Code Mode immediately");
 });
 
