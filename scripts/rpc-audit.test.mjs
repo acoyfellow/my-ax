@@ -47,10 +47,23 @@ test("R5 needs a timed-out machinectl call to send cancel and warn that it may s
   assert.equal(machinectlCancelsOnTimeout(cancelling), true);
 });
 
-test("R1, R3, R4 and the R5 cancel check block the build; R2 and the R5 opId frame are tracked", async () => {
-  const { ENFORCED_RULES, isTrackedOpIdGap } = await import("./rpc-audit.mjs");
-  for (const rule of ["R1", "R3", "R4", "R5", "ALLOW"]) assert.equal(ENFORCED_RULES.has(rule), true);
-  assert.equal(ENFORCED_RULES.has("R2"), false);
-  assert.equal(isTrackedOpIdGap({ rule: "R5", detail: "machinectl call frames carry no opId, so a timed-out call can run twice" }), true);
-  assert.equal(isTrackedOpIdGap({ rule: "R5", detail: "a timed-out machinectl call must send cancel and warn that it may still finish" }), false);
+test("R1, R3, R4 and all of R5, including the opId frame, block the build; R2 is tracked", async () => {
+  const audit = await import("./rpc-audit.mjs");
+  for (const rule of ["R1", "R3", "R4", "R5", "ALLOW"]) assert.equal(audit.ENFORCED_RULES.has(rule), true);
+  assert.equal(audit.ENFORCED_RULES.has("R2"), false);
+  assert.equal("isTrackedOpIdGap" in audit, false);
+});
+
+test("the real machinectl host sends an opId on every call frame", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { machinectlCarriesOpId } = await import("./rpc-audit.mjs");
+  assert.equal(machinectlCarriesOpId(readFileSync(new URL("../src/machinectl-host.ts", import.meta.url), "utf8")), true);
+});
+
+test("a stub opened inside an rpc contract call counts as bounded, even when the call starts on the line above", async () => {
+  const { audit } = await import("./rpc-audit.mjs");
+  const wrapped = 'const result = await rpc.command("Session.heal", async () => {\n  const stub = await getSessionAgent(env, email, id);\n  return stub.heal();\n});';
+  const bare = 'const stub = await getSessionAgent(env, email, id);\nawait stub.heal();';
+  assert.deepEqual(audit(["/x/src/a.ts"], () => wrapped, []), []);
+  assert.equal(audit(["/x/src/a.ts"], () => bare, [])[0]?.rule, "R2");
 });

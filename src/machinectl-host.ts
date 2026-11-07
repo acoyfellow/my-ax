@@ -6,6 +6,7 @@
 // are forwarded over the existing socket, then receipt-logged to AUDIT_KV.
 
 import { isCurrentGeneration, laptopAnnounced, laptopConnected, laptopDisconnected, MACHINE_NAME_KEY, MACHINE_USER_KEY, TOOLS_KEY } from "./fsm/machine-connection";
+import { callOpId } from "./rpc/op-id";
 import { DurableObject } from "cloudflare:workers";
 import { laptopBusyResult } from "./machinectl-output";
 
@@ -254,14 +255,14 @@ export class MachineHost extends DurableObject<HostEnv> {
     if (request.method !== "POST") return new Response("POST required", { status: 405 });
     const bodyText = await request.text();
     if (byteLength(bodyText) > ARGS_BYTE_LIMIT) return new Response("request too large", { status: 413 });
-    const body = await Promise.resolve().then(() => JSON.parse(bodyText) as { tool?: string; args?: Record<string, unknown> }).catch(() => null);
+    const body = await Promise.resolve().then(() => JSON.parse(bodyText) as { tool?: string; args?: Record<string, unknown>; opId?: unknown }).catch(() => null);
     if (!body?.tool) return Response.json({ ok: false, error: "tool is required" }, { status: 400 });
     const tools = this.socket() ? await this.tools() : [];
     if (!tools.some((candidate) => candidate.name === body.tool)) {
       return Response.json({ ok: false, error: `Tool not available on the connected laptop: ${body.tool}` });
     }
     if (this.pending.size >= MAX_PENDING_CALLS) return Response.json(laptopBusyResult());
-    const result = await this.callLaptop(body.tool, body.args ?? {});
+    const result = await this.callLaptop(body.tool, body.args ?? {}, callOpId(request.headers.get("X-Machinectl-Op-Id") ?? (typeof body.opId === "string" ? body.opId : null), undefined));
     const machineName = (await this.machineName()) ?? "unknown";
     const user = request.headers.get("X-Machinectl-User") ?? await this.machineUser();
     this.ctx.waitUntil(this.audit(user, machineName, body.tool, body.args ?? {}, result).catch((error) => console.error("machinectl_receipt_failed", error)));
@@ -287,14 +288,14 @@ export class MachineHost extends DurableObject<HostEnv> {
       return Response.json(rpc(body.id, text(`Tool not available on the connected laptop: ${tool ?? "(missing)"}`, true)));
     }
     if (this.pending.size >= MAX_PENDING_CALLS) return Response.json(rpc(body.id, { ...text(JSON.stringify(laptopBusyResult()), true), structuredContent: laptopBusyResult() }));
-    const result = await this.callLaptop(tool, args);
+    const result = await this.callLaptop(tool, args, callOpId(request.headers.get("X-Machinectl-Op-Id"), body.params));
     const machineName = (await this.machineName()) ?? "unknown";
     const user = request.headers.get("X-Machinectl-User") ?? await this.machineUser();
     this.ctx.waitUntil(this.audit(user, machineName, tool, args, result).catch((error) => console.error("machinectl_receipt_failed", error)));
     return Response.json(rpc(body.id, result.ok ? text(result.content) : text(result.error, true)));
   }
 
-  private callLaptop(tool: string, args: Record<string, unknown>): Promise<ToolResult> {
+  private callLaptop(tool: string, args: Record<string, unknown>, opId: string): Promise<ToolResult> {
     const socket = this.socket();
     if (!socket) return Promise.resolve({ ok: false, error: "No laptop is currently connected." });
     const id = crypto.randomUUID();
@@ -306,7 +307,7 @@ export class MachineHost extends DurableObject<HostEnv> {
       }, CALL_TIMEOUT_MS);
       this.pending.set(id, { resolve, timer, tool, dispatchedAt: Date.now() });
       try {
-        socket.send(JSON.stringify({ type: "call", id, tool, args }));
+        socket.send(JSON.stringify({ type: "call", id, opId, tool, args }));
       } catch (err) {
         clearTimeout(timer);
         this.pending.delete(id);
