@@ -105,6 +105,8 @@
   let loading = $state(sessions.length === 0);
   let loadingMore = $state(false);
   let errorText = $state<string | null>(null);
+  let showArchived = $state(false);
+  const sessionsUrl = (extra = "") => `/api/sessions?limit=${PAGE_SIZE}${showArchived ? "&archived=1" : ""}${extra}`;
   let currentId = $derived(sessionState.id);
   // Pinned/unpinned split (server order is authoritative; splitPinned is a
   // defensive re-sort). See ./pinned-reorder.ts.
@@ -168,7 +170,7 @@
 
   async function refreshQuietly() {
     try {
-      const r = await fetch(`/api/sessions?limit=${PAGE_SIZE}`, { credentials: "include" });
+      const r = await fetch(sessionsUrl(), { credentials: "include" });
       if (!r.ok) return;
       const d = await r.json();
       const fresh = uniqueSessions(d?.result?.sessions ?? []);
@@ -184,13 +186,13 @@
     const titleEpoch = captureTitleEpoch();
     try {
       const requestedId = readTabSession();
-      const r = await fetch(`/api/sessions?limit=${PAGE_SIZE}`, {
+      const r = await fetch(sessionsUrl(), {
         credentials: "include",
       });
       if (!r.ok) throw new Error("HTTP " + r.status);
       const d = await r.json();
       sessions = uniqueSessions(d?.result?.sessions ?? []);
-      saveSessions(sessions);
+      if (!showArchived) saveSessions(sessions);
       const active = sessions.find((row) => row.id === requestedId);
       // Chat bootstrap can choose the latest server session while this eager
       // sidebar fetch is in flight. Do not let a stale pre-bootstrap null reset
@@ -213,7 +215,7 @@
     loadingMore = true;
     try {
       const r = await fetch(
-        `/api/sessions?limit=${PAGE_SIZE}&before=${encodeURIComponent(cursor)}`,
+        sessionsUrl(`&before=${encodeURIComponent(cursor)}`),
         { credentials: "include" },
       );
       if (!r.ok) throw new Error("HTTP " + r.status);
@@ -323,6 +325,32 @@
         "Couldn't delete that conversation: " + (err?.message || err),
       );
     }
+  }
+
+  async function setArchived(row: SessionRow, archived: boolean) {
+    try {
+      const r = await fetch(`/api/sessions/${encodeURIComponent(row.id)}/archive`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => null);
+        throw new Error(d?.error?.message || "HTTP " + r.status);
+      }
+      sessions = sessions.filter((candidate) => candidate.id !== row.id);
+      pinAnnounce = archived ? `Archived ${row.name || "conversation"}.` : `Restored ${row.name || "conversation"}.`;
+      refresh();
+    } catch (err: any) {
+      (window as any).__appendError?.(`Couldn't ${archived ? "archive" : "restore"} that conversation: ` + (err?.message || err));
+    }
+  }
+
+  function toggleArchivedView() {
+    showArchived = !showArchived;
+    sessions = [];
+    refresh();
   }
 
   // Pin/unpin: server holds the authoritative pinned flag + fractional rank so
@@ -617,6 +645,7 @@
               >{row.pinned === 1 ? "Unpin" : "Pin"}</button>
               <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>Rename</button>
               <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>Export markdown</a>
+              <button type="button" role="menuitem" aria-label={row.status === "archived" ? `Unarchive ${title}` : `Archive ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); setArchived(row, row.status !== "archived"); }}>{row.status === "archived" ? "Unarchive" : "Archive"}</button>
               <hr />
               <button type="button" role="menuitem" class="danger" aria-label={`Delete ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); del(row); }}>Delete</button>
             </div>
@@ -695,6 +724,14 @@
           </button>
         </div>
       {/if}
+      <div class="px-2 pt-2 pb-2">
+        <button
+          type="button"
+          class="session-archive-toggle w-full rounded-md text-fg-mut text-xs px-3 py-2 min-h-[36px] hover:bg-surface-1 hover:text-fg transition-colors"
+          aria-pressed={showArchived}
+          onclick={toggleArchivedView}
+        >{showArchived ? "Back to conversations" : "Show archived"}</button>
+      </div>
     {/if}
   </div>
   {#if docked}

@@ -1,3 +1,4 @@
+import { applySessionEvent } from "../fsm/session-status";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { ApiResponse } from "../types";
@@ -79,6 +80,8 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const limitRaw = parseInt(url.searchParams.get("limit") || "50", 10);
     const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 50));
     const before = url.searchParams.get("before"); // ISO-ish; passed through as-is to D1
+    const archivedOnly = url.searchParams.get("archived") === "1";
+    const archiveFilter = archivedOnly ? "status = 'archived'" : "status != 'archived'";
 
     try {
       const email = c.get("identity").email;
@@ -89,11 +92,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       const pinned = before
         ? []
         : ((await c.env.DB.prepare(
-            "SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 1 ORDER BY pin_rank ASC, updated_at DESC LIMIT 100",
+            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
           ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? "SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 AND updated_at < ? ORDER BY updated_at DESC LIMIT ?"
-        : "SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 ORDER BY updated_at DESC LIMIT ?";
+        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
+        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
       const stmt = before
         ? c.env.DB.prepare(query).bind(email, before, limit)
         : c.env.DB.prepare(query).bind(email, limit);
@@ -205,6 +208,20 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       }
       return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
     }
+  });
+
+  app.post("/api/sessions/:id/archive", async (c) => {
+    const id = c.req.param("id");
+    const command = `POST /api/sessions/${id}/archive`;
+    const body = (await c.req.json<{ archived?: unknown }>().catch(() => ({}))) as { archived?: unknown };
+    if (typeof body.archived !== "boolean") {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "archived must be a boolean" }, next_actions: [] }, 400);
+    }
+    const changed = await applySessionEvent(c.env.DB, { id, ownerEmail: c.get("identity").email }, body.archived ? "archived" : "unarchived");
+    if (!changed) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "Conflict", message: body.archived ? "only an idle conversation you own can be archived" : "conversation is not archived" }, next_actions: [] }, 409);
+    }
+    return c.json<ApiResponse>({ ok: true, command, result: { id, archived: body.archived }, next_actions: [] });
   });
 
   // POST /api/sessions/:id/rank  { beforeId: string | null }
