@@ -4,12 +4,7 @@ import { fileURLToPath } from "node:url";
 
 export const TEST_FILE_PATTERN = /\.test\.(ts|mjs|js|tsx)$/;
 
-export const ALLOWLIST = new Map([
-  [
-    "src/ui/chat-user-whitespace.test.ts",
-    "Asserts a msg-user-content wrapper and trimmed composer text that Chat.svelte does not implement; needs a product decision before it can run.",
-  ],
-]);
+export const ALLOWLIST = new Map([]);
 
 const SKIPPED_DIRECTORIES = new Set(["node_modules", ".git", ".wrangler", "dist"]);
 
