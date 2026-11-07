@@ -103,7 +103,7 @@
     "test:voice-session-ownership": "tsx --test src/voice-session-ownership.test.ts",
     "test:voice-think-agent": "tsx --test src/voice-think-agent.test.ts",
     "test:session-ownership": "tsx --test src/session-ownership.test.ts",
-    "test:fsm": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/fsm/session-status.test.ts src/fsm/run-status.test.ts src/fsm/job-status.test.ts src/fsm/recipe-status.test.ts src/fsm/attention-item.test.ts src/fsm/desk-card.test.ts src/fsm/workspace-verification.test.ts src/fsm/machine-connection.test.ts src/fsm/socket-connection.test.ts scripts/fsm-audit.test.mjs",
+    "test:fsm": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/fsm/session-status.test.ts src/fsm/run-status.test.ts src/fsm/job-status.test.ts src/fsm/recipe-status.test.ts src/fsm/attention-item.test.ts src/fsm/desk-card.test.ts src/fsm/workspace-verification.test.ts src/fsm/machine-connection.test.ts src/fsm/socket-connection.test.ts src/fsm/chat-message.test.ts scripts/fsm-audit.test.mjs",
     "test:rpc": "tsx --test src/rpc/rpc.test.ts src/rpc/deadline-signal.test.ts src/rpc/machine-host-client.test.ts src/rpc/bounded-stub.test.ts scripts/rpc-audit.test.mjs && node scripts/rpc-audit.mjs",
     "test:decision-response": "tsx --test src/decision-response.test.ts src/decision-reuse.test.ts src/decision-page-xss.test.ts src/ui/safe-markdown.test.ts src/ui/user-message-markdown.test.ts src/request-origin-guard.test.ts",
     "test:capability-review": "tsx --test src/capability-review.test.ts",

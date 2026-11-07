@@ -9,6 +9,7 @@
   import { marked } from "marked";
   import { hardenLinks, sanitizeRenderedMarkdown } from "./safe-markdown";
   import { renderUserMarkdown } from "./user-message-markdown";
+  import { initialPhase, messagePhase } from "../fsm/chat-message";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
   import { evaluateTurnStall, persistedTurnError, stallFingerprint, stallMessage, stallSurfaceText } from "./turn-stall";
@@ -1142,8 +1143,7 @@
       id,
       role,
       content: "",
-      streaming: role === "assistant",
-      pending: false,
+      ...messagePhase(initialPhase(role)),
       parts: [],
       timestamp: Date.now(),
       ...init,
@@ -1162,7 +1162,7 @@
   function appendDelta(id: string, delta: string) {
     let exists = messages.find((m) => m.id === id);
     if (!exists) {
-      exists = getOrCreateMessage(id, "assistant", { streaming: true });
+      exists = getOrCreateMessage(id, "assistant", messagePhase("streaming"));
     }
     const wasPinned = isLogPinned();
     updateMessage(id, (m) => {
@@ -1180,7 +1180,7 @@
         ...m,
         content: (m.content || "") + delta,
         parts,
-        streaming: true,
+        ...messagePhase("streaming"),
       };
     });
     noteAgentActivity();
@@ -1272,7 +1272,7 @@
   }
   function finalizeStreaming() {
     messages = messages.map((m) => {
-      if (!m.streaming || m.role !== "assistant") return m.streaming ? { ...m, streaming: false } : m;
+      if (!m.streaming || m.role !== "assistant") return m.streaming ? { ...m, ...messagePhase("settled") } : m;
       // Re-render text parts through markdown, AND finalize any tool part that
       // is still "pending": once a turn ends, an unresolved tool can't still be
       // running (its result frame never arrived — host timeout, disconnect, or
@@ -1285,7 +1285,7 @@
         }
         return p;
       });
-      return { ...m, streaming: false, parts };
+      return { ...m, ...messagePhase("settled"), parts };
     });
   }
 
@@ -1391,8 +1391,7 @@
       imageCount: message.images?.length,
       timestamp: message.timestamp,
       endedAt: message.endedAt,
-      streaming: message.streaming,
-      pending: false,
+      ...messagePhase(initialPhase(message.role, message.streaming)),
       sessionId,
     }));
     // Match each confirmed user message to its optimistic copy (an image-only
@@ -2142,8 +2141,7 @@
         attachments,
         timestamp: thinkTimestamps[messageIndex],
         timestampInterpolated: thinkTimestampInterpolated[messageIndex],
-        streaming: false,
-        pending: false,
+        ...messagePhase("settled"),
         sessionId: currentSessionId(),
       };
       thinkViews.push(m);
@@ -2456,8 +2454,7 @@
         content: text,
         attachments: outgoingAttachments,
         timestamp: Date.now(),
-        streaming: false,
-        pending: true,
+        ...messagePhase("optimistic"),
         parts: [],
         sessionId: currentSessionId(),
       },
