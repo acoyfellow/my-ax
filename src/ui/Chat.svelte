@@ -8,6 +8,7 @@
   import { PiSnapshotStore } from "./snapshot-store";
   import { marked } from "marked";
   import { hardenLinks, sanitizeRenderedMarkdown } from "./safe-markdown";
+  import { renderUserMarkdown } from "./user-message-markdown";
   import { VoiceClient } from "@cloudflare/voice/client";
   import { TappedVoiceTransport } from "./tapped-voice-transport";
   import { evaluateTurnStall, persistedTurnError, stallFingerprint, stallMessage, stallSurfaceText } from "./turn-stall";
@@ -938,6 +939,10 @@
   }
 
   // ── Markdown render ────────────────────────────────────────────────
+  function renderUserMessage(content: unknown): string {
+    return renderUserMarkdown(content);
+  }
+
   function renderMarkdown(md: string): string {
     let html = sanitizeRenderedMarkdown(marked.parse(md ?? "") as string);
     // post-process <pre><code> for hljs + copy button. We need to do this
@@ -3129,7 +3134,7 @@
                     </div>
                   {:else if m.imageCount}
                     <div class="mb-2 inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-fg-mut">{m.imageCount === 1 ? "1 image" : `${m.imageCount} images`}</div>
-                  {/if}{m.content}</div>
+                  {/if}<div class="msg-user-content prose prose-invert prose-sm max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">{@html renderUserMessage(m.content)}</div></div>
               {:else if m.role === "assistant"}
                 {#if m.parts.length === 0 && !m.streaming}
                   <div class="msg-body" data-empty="1"></div>
