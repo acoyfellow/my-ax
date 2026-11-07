@@ -1,3 +1,4 @@
+import { initialRecipeStatus, patchStatusEvent, requireRecipeTransition, type RecipeStatusEvent } from "./fsm/recipe-status";
 import type { Env } from "./types";
 
 export const SAVED_RECIPE_STATUSES = ["pending", "enabled", "disabled"] as const;
@@ -86,7 +87,7 @@ export function validateSavedRecipeInput(input: unknown): SavedRecipeInput {
   // Creation is owner-gated by default. Existing explicit auto-trust/native
   // callers may still request enabled, but omitted or unknown status can never
   // make unreviewed code runnable.
-  const status = body.status === "enabled" ? "enabled" : body.status === "disabled" ? "disabled" : "pending";
+  const status = initialRecipeStatus(body.status);
   const sourceRunId = typeof body.sourceRunId === "string" && body.sourceRunId.trim() ? body.sourceRunId.trim() : null;
   return { name, description, inputSchema, code, capabilities: [...new Set(cleanCapabilities)].sort(), sourceRunId, status };
 }
@@ -142,9 +143,11 @@ export function validateRecipeRunInput(input: unknown, inputSchema: unknown): Re
   return body;
 }
 
-export function validateSavedRecipePatch(input: unknown): Partial<SavedRecipeInput> {
+export type SavedRecipePatch = Partial<Omit<SavedRecipeInput, "status">> & { statusEvent?: RecipeStatusEvent };
+
+export function validateSavedRecipePatch(input: unknown): SavedRecipePatch {
   const body = assertObject(input, "recipe");
-  const patch: Partial<SavedRecipeInput> = {};
+  const patch: SavedRecipePatch = {};
   if ("name" in body) patch.name = cleanName(body.name);
   if ("description" in body) {
     const description = typeof body.description === "string" ? body.description.trim() : "";
@@ -172,7 +175,7 @@ export function validateSavedRecipePatch(input: unknown): Partial<SavedRecipeInp
   }
   if ("status" in body) {
     if (body.status !== "pending" && body.status !== "enabled" && body.status !== "disabled") throw new SavedRecipeError("InvalidInput", "status must be pending, enabled, or disabled");
-    patch.status = body.status;
+    patch.statusEvent = patchStatusEvent(body.status);
   }
   if ("sourceRunId" in body) patch.sourceRunId = typeof body.sourceRunId === "string" && body.sourceRunId.trim() ? body.sourceRunId.trim() : null;
   if (!Object.keys(patch).length) throw new SavedRecipeError("InvalidInput", "at least one field is required");
@@ -227,8 +230,16 @@ export class SavedRecipeService {
   }
 
   async update(id: string, input: unknown) {
-    await this.get(id);
-    const patch = validateSavedRecipePatch(input);
+    return this.applyPatch(id, validateSavedRecipePatch(input));
+  }
+
+  async transition(id: string, event: "approved" | "rejected") {
+    return this.applyPatch(id, { statusEvent: event });
+  }
+
+  private async applyPatch(id: string, patch: SavedRecipePatch) {
+    const current = await this.get(id);
+    const nextStatus = patch.statusEvent ? requireRecipeTransition(current.status, patch.statusEvent) : undefined;
     const assignments: string[] = [];
     const values: unknown[] = [];
     if (patch.name !== undefined) { assignments.push("name = ?"); values.push(patch.name); }
@@ -236,11 +247,12 @@ export class SavedRecipeService {
     if (patch.inputSchema !== undefined) { assignments.push("input_schema_json = ?"); values.push(JSON.stringify(patch.inputSchema)); }
     if (patch.code !== undefined) { assignments.push("code = ?"); values.push(patch.code); }
     if (patch.capabilities !== undefined) { assignments.push("capabilities_json = ?"); values.push(JSON.stringify(patch.capabilities)); }
-    if (patch.status !== undefined) { assignments.push("status = ?"); values.push(patch.status); }
+    if (nextStatus !== undefined) { assignments.push("status = ?"); values.push(nextStatus); }
     if (patch.sourceRunId !== undefined) { assignments.push("source_run_id = ?"); values.push(patch.sourceRunId); }
     assignments.push("updated_at = ?"); values.push(new Date().toISOString());
     try {
-      await this.env.DB.prepare(`UPDATE saved_recipes SET ${assignments.join(", ")} WHERE id = ? AND owner_email = ?`).bind(...values, id, this.owner()).run();
+      const result = await this.env.DB.prepare(`UPDATE saved_recipes SET ${assignments.join(", ")} WHERE id = ? AND owner_email = ? AND status = ?`).bind(...values, id, this.owner(), current.status).run();
+      if ((result.meta?.changes ?? 0) === 0) throw new SavedRecipeError("Conflict", "saved recipe changed during the update");
     } catch (error) {
       if (String(error).includes("UNIQUE")) throw new SavedRecipeError("Conflict", "saved recipe name already exists");
       throw error;

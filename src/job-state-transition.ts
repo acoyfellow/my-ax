@@ -1,3 +1,4 @@
+import { activeJob, pausedJob } from "./fsm/job-status";
 import type { JobRow } from "./jobs";
 
 export interface JobStateTransitionDeps {
@@ -15,13 +16,13 @@ export async function transitionJobPaused(row: JobRow, paused: boolean, deps: Jo
 
   if (paused) {
     await deps.cancel(row);
-    const updated = { ...row, status: "paused" as const, schedule_id: null };
+    const updated = pausedJob(row);
     await deps.persist(updated);
     return updated;
   }
 
   const scheduleId = await deps.schedule(row);
-  const scheduled = { ...row, status: "active" as const, schedule_id: scheduleId };
+  const scheduled = activeJob(row, scheduleId);
   try {
     // nextRun() must run INSIDE the try: it can throw on a malformed schedule
     // expression, and the native schedule is already created — so a failure

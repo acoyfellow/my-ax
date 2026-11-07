@@ -1,3 +1,4 @@
+import { initialSocketConnection, nextSocketConnection, retryDelayMs, type SocketConnectionEvent } from "../fsm/socket-connection";
 export type ReconnectingSocketLike = {
   readonly readyState: number;
   send(data: string): void;
@@ -65,9 +66,7 @@ export function createReconnectingSocket(
   options: ReconnectingSocketOptions = {},
 ): ReconnectingSocket {
   const maxAttempts = options.maxAttempts;
-  let attempt = 0;
-  let manuallyClosed = false;
-  let exhausted = false;
+  let connection = initialSocketConnection();
   let socket: ReconnectingSocketLike | null = null;
   let retryTimer: TimerHandle | null = null;
   const queue: string[] = [];
@@ -91,19 +90,40 @@ export function createReconnectingSocket(
   }
 
   function isCurrent(candidate: ReconnectingSocketLike): boolean {
-    return !manuallyClosed && socket === candidate;
+    return connection.kind !== "closed" && socket === candidate;
+  }
+
+  function clearRetry() {
+    if (retryTimer !== null) dependencies.cancel(retryTimer);
+    retryTimer = null;
+  }
+
+  function dispatch(event: SocketConnectionEvent) {
+    const step = nextSocketConnection(connection, event);
+    connection = step.state;
+    if (step.effect === "connect") { clearRetry(); connect(); }
+    else if (step.effect === "schedule_retry" && connection.kind === "waiting") {
+      const due = connection.attempt;
+      retryTimer = dependencies.schedule(() => { retryTimer = null; if (connection.kind === "waiting" && connection.attempt === due) dispatch({ type: "retry_due" }); }, retryDelayMs(due, dependencies.random()));
+    }
+    else if (step.effect === "signal_exhausted" && connection.kind === "exhausted") callbacks.onExhausted?.({ attempts: connection.attempt });
+    else if (step.effect === "close_socket") socket?.close(4000, "stale connection");
+    else if (step.effect === "shutdown") {
+      queue.length = 0;
+      queuedKeys.clear();
+      clearRetry();
+      socket?.close();
+    }
   }
 
   function connect() {
-    if (manuallyClosed || exhausted) return;
-    retryTimer = null;
+    if (connection.kind !== "connecting") return;
     const candidate = dependencies.createSocket(url);
     socket = candidate;
 
     candidate.addEventListener("open", () => {
       if (!isCurrent(candidate)) return;
-      attempt = 0;
-      exhausted = false;
+      dispatch({ type: "opened" });
       // Flush the queue, releasing dedup keys as each payload leaves so a
       // future legitimate retry of the same id (rare, e.g. edit-and-resend)
       // is still accepted.
@@ -117,18 +137,7 @@ export function createReconnectingSocket(
     candidate.addEventListener("close", (event) => {
       if (!isCurrent(candidate)) return;
       callbacks.onClose(event);
-      attempt += 1;
-      // Bounded give-up: after maxAttempts consecutive failed connects, stop
-      // retrying and signal terminal exhaustion so the UI can stop lying with
-      // an infinite "Reconnecting…" and offer an explicit Retry.
-      if (maxAttempts !== undefined && attempt >= maxAttempts) {
-        exhausted = true;
-        callbacks.onExhausted?.({ attempts: attempt });
-        return;
-      }
-      const baseDelay = Math.min(10_000, 500 * Math.pow(1.5, attempt - 1));
-      const delay = baseDelay * (0.85 + dependencies.random() * 0.3);
-      retryTimer = dependencies.schedule(connect, delay);
+      dispatch({ type: "dropped", maxAttempts });
     });
     candidate.addEventListener("error", () => {
       if (!isCurrent(candidate)) return;
@@ -144,7 +153,7 @@ export function createReconnectingSocket(
 
   return {
     send(data: string) {
-      if (manuallyClosed) return;
+      if (connection.kind === "closed") return;
       if (socket?.readyState === SOCKET_OPEN) {
         socket.send(data);
         return;
@@ -155,24 +164,13 @@ export function createReconnectingSocket(
       queue.push(data);
     },
     forceReconnect() {
-      if (manuallyClosed) return;
-      socket?.close(4000, "stale connection");
+      dispatch({ type: "force_reconnect" });
     },
     resume() {
-      if (manuallyClosed || !exhausted) return;
-      exhausted = false;
-      attempt = 0;
-      if (retryTimer !== null) { dependencies.cancel(retryTimer); retryTimer = null; }
-      connect();
+      dispatch({ type: "resume" });
     },
     close() {
-      if (manuallyClosed) return;
-      manuallyClosed = true;
-      queue.length = 0;
-      queuedKeys.clear();
-      if (retryTimer !== null) dependencies.cancel(retryTimer);
-      retryTimer = null;
-      socket?.close();
+      dispatch({ type: "close" });
     },
     get readyState() {
       return socket?.readyState ?? SOCKET_CONNECTING;

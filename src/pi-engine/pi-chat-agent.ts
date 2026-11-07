@@ -1,4 +1,5 @@
 import { createModels } from "@earendil-works/pi-ai/models";
+import { applySessionEvent } from "../fsm/session-status";
 import { createRegistry, Harness, type EntryRecord } from "@earendil-works/pi-durable";
 import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { AgentEvent, AgentEventStream } from "@earendil-works/pi-durable";
@@ -129,8 +130,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const status = running ? "running" : lastTurnFailed(entries ?? await this.currentEntries()) ? "error" : "active";
     console.info("pi_run_status_published", { chatId, status });
     this.ctx.waitUntil(publishWorkspaceChange(this.env, ownerEmail, { kind: "workspace.status", workspaceId: chatId, status }));
-    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = CASE WHEN ? = 'running' THEN datetime('now') ELSE updated_at END WHERE id = ? AND owner_email = ? AND status IN ('active', 'running', 'error') AND status != ?")
-      .bind(status, status, chatId, ownerEmail.toLowerCase(), status).run()
+    await applySessionEvent(this.env.DB, { id: chatId, ownerEmail: ownerEmail.toLowerCase() }, status === "running" ? "pi_run_started" : status === "error" ? "pi_run_settled_failed" : "pi_run_settled")
       .catch((error: unknown) => console.error("pi_run_status_publish_failed", { err: String(error) }));
   }
 

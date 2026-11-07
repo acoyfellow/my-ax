@@ -5,6 +5,7 @@
 // POST initialize/tools/list/tools/call to the same Durable Object. Tool calls
 // are forwarded over the existing socket, then receipt-logged to AUDIT_KV.
 
+import { isCurrentGeneration, laptopAnnounced, laptopConnected, laptopDisconnected, MACHINE_NAME_KEY, MACHINE_USER_KEY, TOOLS_KEY } from "./fsm/machine-connection";
 import { DurableObject } from "cloudflare:workers";
 import { laptopBusyResult } from "./machinectl-output";
 
@@ -51,10 +52,6 @@ export function cancelLaptopCall(socket: Pick<WebSocket, "send">, id: string): v
   }
 }
 const AUDIT_TTL_SECONDS = 60 * 60 * 24 * 30;
-const MACHINE_NAME_KEY = "machineName";
-const MACHINE_USER_KEY = "user";
-const TOOLS_KEY = "tools";
-const SOCKET_GENERATION_KEY = "socketGeneration";
 
 function text(value: string, isError = false) {
   return { content: [{ type: "text", text: value }], ...(isError ? { isError: true } : {}) };
@@ -180,7 +177,7 @@ export class MachineHost extends DurableObject<HostEnv> {
     this.cachedMachineName = undefined;
     this.cachedMachineUser = user;
     this.rejectPending("Laptop connection replaced while executing the tool call.");
-    await this.ctx.storage.put({ [MACHINE_USER_KEY]: user, [SOCKET_GENERATION_KEY]: generation });
+    await laptopConnected(this.ctx.storage, generation, user);
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
@@ -197,16 +194,15 @@ export class MachineHost extends DurableObject<HostEnv> {
       return;
     }
     const attachment = ws.deserializeAttachment() as SocketAttachment | null;
-    const activeGeneration = await this.ctx.storage.get<string>(SOCKET_GENERATION_KEY);
-    if (!attachment?.generation || attachment.generation !== activeGeneration) return;
+    if (!await isCurrentGeneration(this.ctx.storage, attachment?.generation)) return;
     if (frame.type === "hello") {
       if (frame.machineName.length > 128 || !validateTools(frame.tools)) {
         ws.close(1008, "invalid tool catalog");
         return;
       }
+      if (!await laptopAnnounced(this.ctx.storage, attachment?.generation, frame.machineName, frame.tools)) return;
       this.cachedMachineName = frame.machineName;
       this.cachedTools = frame.tools;
-      await this.ctx.storage.put({ [MACHINE_NAME_KEY]: frame.machineName, [TOOLS_KEY]: frame.tools });
       return;
     }
     if (frame.type === "ping") {
@@ -226,14 +222,10 @@ export class MachineHost extends DurableObject<HostEnv> {
 
   private async clearActiveSocket(ws: WebSocket, error: string): Promise<void> {
     const attachment = ws.deserializeAttachment() as SocketAttachment | null;
-    const activeGeneration = await this.ctx.storage.get<string>(SOCKET_GENERATION_KEY);
-    // Never let a late close/error from a superseded socket erase a newer
-    // laptop connection's advertised state.
-    if (!attachment?.generation || attachment.generation === activeGeneration) {
+    if (await laptopDisconnected(this.ctx.storage, attachment?.generation)) {
       this.cachedTools = undefined;
       this.cachedMachineName = undefined;
       this.cachedMachineUser = undefined;
-      await this.ctx.storage.delete([MACHINE_NAME_KEY, MACHINE_USER_KEY, TOOLS_KEY, SOCKET_GENERATION_KEY]);
       this.rejectPending(error);
     }
   }

@@ -6,6 +6,7 @@
 // server-side, records a receipt event, and injects the decision back into the
 // originating Think session so the agent resumes.
 
+import { applyRunEvent } from "../fsm/run-status";
 import { sessionControl } from "../session-control";
 import { Effect } from "effect";
 import type { Hono } from "hono";
@@ -54,9 +55,7 @@ export async function createDecision(env: DecisionDb, ownerEmail: string, sessio
 }
 
 async function supersedeDecision(env: DecisionDb, ownerEmail: string, staleId: string, replacementId: string): Promise<void> {
-  const result = await env.DB.prepare("UPDATE runs SET status = 'aborted', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'open'")
-    .bind(staleId, ownerEmail).run();
-  if ((result.meta?.changes ?? 0) !== 1) return;
+  if (!await applyRunEvent(env.DB, { id: staleId, ownerEmail }, "decision_superseded")) return;
   await env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, 'decision.superseded', ?, NULL)")
     .bind(staleId, crypto.randomUUID(), ownerEmail, new Date().toISOString(), JSON.stringify({ id: "my-ax", kind: "agent", mode: "live" }), JSON.stringify({ replacedBy: replacementId })).run();
 }
@@ -152,12 +151,10 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
           .bind(id, eventId, email, now, JSON.stringify({ id: email, kind: "human", mode: "live" }), JSON.stringify({ question, choice })).run();
       },
       completeRun: async ({ id, email }) => {
-        const result = await c.env.DB.prepare("UPDATE runs SET status = 'completed', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'open'").bind(id, email).run();
-        return (result.meta?.changes ?? 0) === 1;
+        return applyRunEvent(c.env.DB, { id, ownerEmail: email }, "decision_answered");
       },
       reopenRun: async ({ id, email }) => {
-        const result = await c.env.DB.prepare("UPDATE runs SET status = 'open', updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status = 'completed'").bind(id, email).run();
-        return (result.meta?.changes ?? 0) === 1;
+        return applyRunEvent(c.env.DB, { id, ownerEmail: email }, "decision_reopened");
       },
       deleteEvent: async ({ id, eventId, email }) => {
         await c.env.DB.prepare("DELETE FROM run_events WHERE run_id = ? AND event_id = ? AND owner_email = ? AND type = 'decision.answered'").bind(id, eventId, email).run();

@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { markAttentionSeen } from "../fsm/attention-item";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 
@@ -179,7 +180,7 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     const { filterSql, bindValues } = buildAttentionListFilter(email, query);
     const pending = await c.env.DB.prepare(`SELECT COALESCE(notification_tag, id) AS tag FROM attention_items WHERE owner_email = ? AND seen_at IS NULL${filterSql}`)
       .bind(...bindValues).all<{ tag: string }>();
-    await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL${filterSql}`).bind(...bindValues).run();
+    await markAttentionSeen(c.env.DB, email, { filterSql, filterBinds: bindValues.slice(1) });
     await queueAttentionDismissals(c, email, normalizeAttentionDismissalTags((pending.results ?? []).map((row) => row.tag)));
     const redirectTo = formatRenderedAttentionReturnHref(query);
     return c.redirect(redirectTo, 303);
@@ -271,12 +272,9 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
     const ids = normalizeAttentionSeenIds(body.ids);
     let seen = 0;
     if (ids.length) {
-      const placeholders = ids.map(() => "?").join(",");
-      const result = await c.env.DB.prepare(`UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL AND id IN (${placeholders})`).bind(email, ...ids).run();
-      seen = Number(result.meta?.changes ?? 0);
+      seen = await markAttentionSeen(c.env.DB, email, { ids });
     } else if (!hasExplicitIds) {
-      const result = await c.env.DB.prepare("UPDATE attention_items SET seen_at = datetime('now') WHERE owner_email = ? AND seen_at IS NULL").bind(email).run();
-      seen = Number(result.meta?.changes ?? 0);
+      seen = await markAttentionSeen(c.env.DB, email);
     }
     const unread = await c.env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>();
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { seen, unread: Number(unread?.count ?? 0) }, next_actions: [] });

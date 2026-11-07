@@ -1,4 +1,6 @@
 import { createToolContext } from "./tool-context";
+import { applyRunEvent } from "./fsm/run-status";
+import { applySessionEvent } from "./fsm/session-status";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 import { recentObserveEvents, recordObserveEvent } from "./observe-events";
 import { Think, type Session } from "@cloudflare/think";
@@ -283,9 +285,7 @@ export class MyAgent extends Think<Env> {
     this.cancelAllChats();
     await this.clearStuckRecovery().catch((error) => console.error("abort_clear_recovery_failed", { sessionId: this.name, err: String(error) }));
     await this.disarmTurnWatchdog().catch(() => {});
-    await this.env.DB.prepare("UPDATE sessions SET status = 'active', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
-      .bind(this.name, identity.email)
-      .run();
+    await applySessionEvent(this.env.DB, { id: this.name, ownerEmail: identity.email }, "turn_aborted");
     this.broadcast(JSON.stringify({ type: "my_ax_turn_aborted" }));
     return { aborted: true, sessionId: this.name };
   }
@@ -378,7 +378,7 @@ export class MyAgent extends Think<Env> {
         }),
         JSON.stringify(result),
       ).run();
-    await this.env.DB.prepare("UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(terminal, runId, identity.email.toLowerCase()).run();
+    await applyRunEvent(this.env.DB, { id: runId, ownerEmail: identity.email.toLowerCase() }, result.ok ? "recipe_succeeded" : "recipe_failed");
     // Refresh the cm_snippets projection so a successful run keeps the
     // dual-read store in sync with the latest recipe code. Fail-soft: a
     // projection write must never break a successful recipe run.
@@ -789,9 +789,7 @@ export class MyAgent extends Think<Env> {
       }).catch((error) => console.error("turn_completion_push_failed", { sessionId: this.name, err: String(error) }));
     }
     this.ctx.waitUntil(publishWorkspaceChange(this.env, identity.email, { kind: "workspace.status", workspaceId: this.name, status: result.status === "error" ? "error" : "active" }));
-    await this.env.DB.prepare("UPDATE sessions SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
-      .bind(result.status === "error" ? "error" : "active", this.name, identity.email)
-      .run()
+    await applySessionEvent(this.env.DB, { id: this.name, ownerEmail: identity.email }, result.status === "error" ? "turn_failed" : "turn_completed")
       .catch((error) => console.error("think_session_status_settled_failed", { err: String(error) }));
 
     this.notifiedOwnerThisTurn = false;
@@ -969,7 +967,7 @@ export class MyAgent extends Think<Env> {
     this.cancelAllChats();
     await this.clearStuckRecovery().catch((error) => console.error("turn_stuck_clear_failed", { sessionId: this.name, err: String(error) }));
     await logAssistantMessage(this.env, identity, this.name, STUCK_TURN_NOTE, { kind: "turn-stuck" }).catch((error) => console.error("turn_stuck_note_failed", { sessionId: this.name, err: String(error) }));
-    await this.env.DB.prepare("UPDATE sessions SET status = 'active', updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(this.name, identity.email).run();
+    await applySessionEvent(this.env.DB, { id: this.name, ownerEmail: identity.email }, "turn_stuck");
     this.broadcast(JSON.stringify({ type: "my_ax_turn_stuck", message: STUCK_TURN_NOTE }));
   }
 
@@ -1111,9 +1109,7 @@ export class MyAgent extends Think<Env> {
     const identity = this.identity();
     if (identity) {
       this.ctx.waitUntil(publishWorkspaceChange(this.env, identity.email, { kind: "workspace.status", workspaceId: this.name, status: "running" }));
-      await this.env.DB.prepare("UPDATE sessions SET status = 'running', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
-        .bind(this.name, identity.email)
-        .run()
+      await applySessionEvent(this.env.DB, { id: this.name, ownerEmail: identity.email }, "turn_started")
         .catch((error) => console.error("think_session_status_running_failed", { err: String(error) }));
     }
     const body = ctx.body ?? {};

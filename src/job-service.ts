@@ -2,6 +2,7 @@
 // Called by: HTTP jobs routes, canonical Think tools, and owner MCP coordinator.
 // Does not own: authentication, native Agent alarm implementation, or presentation.
 
+import { markJobPaused, markJobResumed, saveJobEdit } from "./fsm/job-status";
 import type { Env } from "./types";
 import { publishWorkspaceChange } from "./workspace-hub-client";
 import { cancelJobSchedule, computeNextRun, MAX_ACTIVE_JOBS_PER_OWNER, runJobNow, scheduleJob, validateJobInput, type JobInput, type JobRow } from "./jobs";
@@ -86,8 +87,8 @@ export class JobService {
     if (status === "active") replacement = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
     try {
       const next = status === "active" ? computeNextRun(this.now(), parsed.cadenceSecs) : old.next_run_at;
-      await this.env.DB.prepare("UPDATE jobs SET session_id=?, thread_mode=?, name=?, prompt=?, cadence_secs=?, max_runs=?, status=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=?")
-        .bind(parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, parsed.maxRuns, status, next, replacement, id, this.owner).run();
+      const saved = await saveJobEdit(this.env.DB, { id, ownerEmail: this.owner }, old.status, { sessionId: parsed.sessionId, threadMode: parsed.threadMode, name: parsed.name, prompt: parsed.prompt, cadenceSecs: parsed.cadenceSecs, maxRuns: parsed.maxRuns, status, nextRunAt: next, scheduleId: replacement });
+      if (!saved) throw new JobServiceError("Conflict", "job status changed during the edit");
     } catch (error) {
       if (replacement) await this.runtime.cancel(this.env, { owner_email: this.owner, session_id: parsed.sessionId, schedule_id: replacement }).catch(() => undefined);
       throw error;
@@ -118,12 +119,14 @@ export class JobService {
       const count = await this.env.DB.prepare("SELECT count(*) count FROM jobs WHERE owner_email=? AND status='active'").bind(this.owner).first<{count:number}>();
       if ((count?.count ?? 0) >= MAX_ACTIVE_JOBS_PER_OWNER) throw new JobServiceError("QuotaExceeded", `Maximum active jobs is ${MAX_ACTIVE_JOBS_PER_OWNER}`);
       const sid = await this.runtime.schedule(this.env, row);
-      try { await this.env.DB.prepare("UPDATE jobs SET status='active', schedule_id=?, next_run_at=?, updated_at=datetime('now') WHERE id=? AND owner_email=?").bind(sid, computeNextRun(this.now(), row.cadence_secs), id, this.owner).run(); }
+      try {
+        if (!await markJobResumed(this.env.DB, { id, ownerEmail: this.owner }, sid, computeNextRun(this.now(), row.cadence_secs))) throw new JobServiceError("Conflict", "job status changed before resume");
+      }
       catch (e) { await this.runtime.cancel(this.env, { ...row, schedule_id: sid }).catch(() => undefined); throw e; }
     } else {
       await this.runtime.cancel(this.env, row);
       try {
-        await this.env.DB.prepare("UPDATE jobs SET status='paused', schedule_id=NULL, updated_at=datetime('now') WHERE id=? AND owner_email=?").bind(id, this.owner).run();
+        if (!await markJobPaused(this.env.DB, { id, ownerEmail: this.owner })) throw new JobServiceError("Conflict", "job status changed before pause");
       } catch (error) {
         const replacement = await this.runtime.schedule(this.env, row).catch(() => null);
         if (replacement) await this.env.DB.prepare("UPDATE jobs SET schedule_id=? WHERE id=? AND owner_email=?").bind(replacement, id, this.owner).run().catch(() => undefined);

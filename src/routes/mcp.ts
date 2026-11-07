@@ -1,4 +1,5 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
+import { markAttentionSeen } from "../fsm/attention-item";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
@@ -194,7 +195,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("valid attention id is required");
     const item = await c.env.DB.prepare("SELECT id, title, href FROM attention_items WHERE id = ? AND owner_email = ?").bind(id, email).first<{ id: string; title: string; href: string }>();
     if (!item) throw new Error("attention item not found or not owned");
-    await c.env.DB.prepare("UPDATE attention_items SET seen_at = COALESCE(seen_at, datetime('now')) WHERE id = ? AND owner_email = ?").bind(id, email).run();
+    await markAttentionSeen(c.env.DB, email, { ids: [id] });
     const runId = `run-glance-${crypto.randomUUID()}`;
     await c.env.DB.prepare("INSERT INTO runs(id, owner_email, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, 'completed', ?, ?, ?, datetime('now'), datetime('now'))").bind(runId, email, "Glance reaction", `Acknowledged: ${item.title}`, JSON.stringify({ surface: "glance", action: "attention_acknowledge", attentionId: id })).run();
     await c.env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)").bind(runId, `evt-${crypto.randomUUID()}`, email, new Date().toISOString(), JSON.stringify({ id: email, kind: "human", mode: "live" }), "attention.acknowledged", JSON.stringify({ attentionId: id, href: item.href, surface: "glance" })).run();

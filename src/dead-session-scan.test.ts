@@ -40,12 +40,13 @@ function makeDb(sessions: Session[], entries: Entry[]) {
                 return null;
               },
               async run() {
-                if (sql.includes("UPDATE sessions SET status = 'interrupted'")) {
-                  const [id, owner] = binds as [string, string];
-                  const target = sessions.find((s) => s.id === id && s.owner_email === owner && (s.status === "active" || s.status === "running"));
+                if (sql.startsWith("UPDATE sessions SET status = ?")) {
+                  const [to, id, owner, ...from] = binds as string[];
+                  const target = sessions.find((s) => s.id === id && s.owner_email === owner && from.includes(s.status));
                   if (target) {
-                    target.status = "interrupted";
-                    updates.push({ id, status: "interrupted" });
+                    target.status = to;
+                    updates.push({ id, status: to });
+                    return { meta: { changes: 1 } };
                   }
                 }
                 return { meta: { changes: 0 } };

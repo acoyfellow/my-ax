@@ -69,9 +69,10 @@ function makeEnv() {
             return { meta: { changes: 1 } };
           }
           if (/^UPDATE saved_recipes SET/.test(q)) {
-            const id = bound[bound.length - 2];
-            const owner = bound[bound.length - 1];
-            const row = tables.saved_recipes.find((r) => r.id === id && r.owner_email === owner);
+            const id = bound[bound.length - 3];
+            const owner = bound[bound.length - 2];
+            const expectedStatus = bound[bound.length - 1];
+            const row = tables.saved_recipes.find((r) => r.id === id && r.owner_email === owner && r.status === expectedStatus);
             if (row && /status = \?/.test(q)) {
               // status is the only assignment in the approval update path.
               row.status = bound[0] as SavedRecipe["status"];
@@ -132,7 +133,7 @@ test("enable an eligible review candidate: pending -> enabled -> visible to code
   // update(enabled) -> projectSavedRecipe.
   const existing = await service.getByName(NAME);
   assert.equal(existing.code.trim(), SOURCE.trim(), "card source must match the saved row");
-  const enabled = await service.update(existing.id, { status: "enabled" });
+  const enabled = await service.transition(existing.id, "approved");
   assert.equal(enabled.status, "enabled", "approval flips the row to enabled");
   await projectSavedRecipe(env, await service.get(existing.id));
 

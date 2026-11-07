@@ -1,5 +1,6 @@
 import { Clock, Data, Effect } from "effect";
 import { Database, type DatabaseError } from "./effect/database";
+import { runStatusStatement } from "./fsm/run-status";
 import { runEventId, type AppendRunEventInput, type AppendRunEventResult } from "./run-receipts";
 
 export class RunReceiptOperationError extends Data.TaggedError("RunReceiptOperationError")<{
@@ -32,10 +33,8 @@ export function appendOwnedRunEvent(
       "INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       [runId, id, email, ts, JSON.stringify(input.actor), type, JSON.stringify(data), evidence ? JSON.stringify(evidence) : null],
     );
-    yield* database.run(
-      "UPDATE runs SET status = CASE WHEN status = 'open' THEN 'running' ELSE status END, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      [runId, email],
-    );
+    const receiptRecorded = runStatusStatement("receipt_recorded");
+    yield* database.run(receiptRecorded.sql, receiptRecorded.binds(runId, email));
     return { runId, eventId: id, type };
   });
 }

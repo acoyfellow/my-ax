@@ -1,3 +1,5 @@
+import { bootIsCurrent, initialVerification, nextVerification, type WorkspaceVerification } from "./fsm/workspace-verification";
+
 export type OperationKind = "idempotent" | "side-effecting";
 
 export class WorkspaceLost extends Error {
@@ -18,6 +20,7 @@ export type WorkspaceLifecycle = {
   awake: () => Promise<void>;
   use: <T>(kind: OperationKind, operation: () => Promise<T>) => Promise<T>;
   stopped: () => void;
+  verification: () => WorkspaceVerification;
 };
 
 export const LOST_MID_COMMAND_NOTE = "the workspace container stopped while this command was running; it was restarted, and the command was not re-run because it may have partially completed";
@@ -26,14 +29,22 @@ export const UNRESPONSIVE = "the container stopped responding and was replaced";
 
 export function createWorkspaceLifecycle(deps: LifecycleDeps): WorkspaceLifecycle {
   let booting: Promise<void> | undefined;
-  let verified = false;
+  let state = initialVerification();
 
   const bootOnce = (): Promise<void> => {
     booting ??= (async () => {
-      if (deps.expectedRunning() && !deps.running()) await deps.announceLoss(STOPPED_UNEXPECTEDLY);
-      await deps.boot();
-      deps.setExpectedRunning(true);
-      verified = true;
+      state = nextVerification(state, "boot_started");
+      const epoch = state.epoch;
+      try {
+        if (deps.expectedRunning() && !deps.running()) await deps.announceLoss(STOPPED_UNEXPECTEDLY);
+        await deps.boot();
+        if (!bootIsCurrent(state, epoch)) return;
+        deps.setExpectedRunning(true);
+        state = nextVerification(state, "boot_succeeded", epoch);
+      } catch (error) {
+        state = nextVerification(state, "boot_failed", epoch);
+        throw error;
+      }
     })().finally(() => {
       booting = undefined;
     });
@@ -42,8 +53,8 @@ export function createWorkspaceLifecycle(deps: LifecycleDeps): WorkspaceLifecycl
 
   const awake = async (): Promise<void> => {
     if (booting) return booting;
-    if (verified && deps.running()) return;
-    verified = false;
+    if (state.kind === "verified" && deps.running()) return;
+    state = nextVerification(state, "found_not_running");
     await bootOnce();
   };
 
@@ -52,7 +63,7 @@ export function createWorkspaceLifecycle(deps: LifecycleDeps): WorkspaceLifecycl
   const replace = async (): Promise<void> => {
     await deps.announceLoss(UNRESPONSIVE);
     deps.setExpectedRunning(false);
-    verified = false;
+    state = nextVerification(state, "replaced");
     await deps.destroy().catch(() => undefined);
     await bootOnce();
   };
@@ -75,9 +86,9 @@ export function createWorkspaceLifecycle(deps: LifecycleDeps): WorkspaceLifecycl
   };
 
   const stopped = (): void => {
-    verified = false;
+    state = nextVerification(state, "stopped");
     deps.setExpectedRunning(false);
   };
 
-  return { awake, use, stopped };
+  return { awake, use, stopped, verification: () => state };
 }
