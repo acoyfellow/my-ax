@@ -55,3 +55,17 @@ test("the Pi engine never overwrites an interrupted session and keeps updated_at
   assert.equal(await applySessionEvent(running.db, session, "pi_run_settled"), true);
   assert.deepEqual(running.row(), { status: "active", updated_at: "2000-01-01 00:00:00" });
 });
+
+test("only an idle session can be archived, and unarchive returns it to active", async () => {
+  for (const status of ["active", "error", "interrupted"] as const) assert.equal(nextSessionStatus(status, "archived"), "archived");
+  assert.equal(nextSessionStatus("running", "archived"), null);
+  assert.equal(nextSessionStatus("archived", "unarchived"), "active");
+  assert.equal(nextSessionStatus("active", "unarchived"), null);
+  const running = dbWith("running");
+  assert.equal(await applySessionEvent(running.db, session, "archived"), false);
+  assert.equal(running.row().status, "running");
+});
+
+test("a new turn in an archived session brings it back", () => {
+  assert.equal(nextSessionStatus("archived", "turn_started"), "running");
+});

@@ -1,4 +1,4 @@
-export type SessionStatus = "active" | "running" | "error" | "interrupted";
+export type SessionStatus = "active" | "running" | "error" | "interrupted" | "archived";
 
 export type SessionStatusEvent =
   | "turn_started"
@@ -10,12 +10,14 @@ export type SessionStatusEvent =
   | "dead_session_detected"
   | "pi_run_started"
   | "pi_run_settled"
-  | "pi_run_settled_failed";
+  | "pi_run_settled_failed"
+  | "archived"
+  | "unarchived";
 
 type Transition = { from: readonly SessionStatus[]; to: SessionStatus; touchUpdatedAt: boolean };
 
 export const SESSION_TRANSITIONS: Readonly<Record<SessionStatusEvent, Transition>> = {
-  turn_started: { from: ["active", "error", "interrupted", "running"], to: "running", touchUpdatedAt: true },
+  turn_started: { from: ["active", "error", "interrupted", "running", "archived"], to: "running", touchUpdatedAt: true },
   turn_completed: { from: ["running", "interrupted"], to: "active", touchUpdatedAt: true },
   turn_failed: { from: ["running", "interrupted"], to: "error", touchUpdatedAt: true },
   turn_aborted: { from: ["active", "running", "error", "interrupted"], to: "active", touchUpdatedAt: true },
@@ -25,6 +27,8 @@ export const SESSION_TRANSITIONS: Readonly<Record<SessionStatusEvent, Transition
   pi_run_started: { from: ["active", "error"], to: "running", touchUpdatedAt: true },
   pi_run_settled: { from: ["running", "error"], to: "active", touchUpdatedAt: false },
   pi_run_settled_failed: { from: ["active", "running"], to: "error", touchUpdatedAt: false },
+  archived: { from: ["active", "error", "interrupted"], to: "archived", touchUpdatedAt: false },
+  unarchived: { from: ["archived"], to: "active", touchUpdatedAt: true },
 };
 
 export function nextSessionStatus(current: SessionStatus, event: SessionStatusEvent): SessionStatus | null {

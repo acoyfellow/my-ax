@@ -36,6 +36,10 @@ function makeSessionApp(initialOwner = "owner@example.com") {
           }
           return { meta: { changes: 1 } };
         },
+        async all() {
+          calls.push({ sql, binds });
+          return { results: [] };
+        },
         async first<T>() {
           calls.push({ sql, binds });
           if (sql.includes("WHERE owner_email = ? AND stable_name = ?")) {
@@ -124,4 +128,29 @@ test("stableName rejects empty and overlong Unicode names before any session wri
   assert.equal((await empty.json<any>()).error.code, "INVALID_STABLE_NAME");
   assert.match((await overlong.json<any>()).error.message, /60 Unicode code points/);
   assert.equal(sessions.length, 0);
+});
+
+test("archive goes through the session state machine for the signed-in owner only", async () => {
+  const { app, DB, calls } = makeSessionApp();
+  const response = await app.fetch(new Request("https://my.ax.test/api/sessions/s1/archive", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived: true }) }), { DB } as never);
+  assert.equal(response.status, 200);
+  const update = calls.find((call) => call.sql.startsWith("UPDATE sessions SET status"));
+  assert.ok(update);
+  assert.deepEqual(update.binds.slice(0, 3), ["archived", "s1", "owner@example.com"]);
+  assert.ok(!update.binds.slice(3).includes("running"));
+});
+
+test("archive rejects a body without a boolean", async () => {
+  const { app, DB } = makeSessionApp();
+  const response = await app.fetch(new Request("https://my.ax.test/api/sessions/s1/archive", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived: "yes" }) }), { DB } as never);
+  assert.equal(response.status, 400);
+});
+
+test("the session list hides archived conversations unless asked for them", async () => {
+  const { app, DB, calls } = makeSessionApp();
+  await app.fetch(new Request("https://my.ax.test/api/sessions"), { DB } as never);
+  assert.ok(calls.filter((call) => call.sql.includes("FROM sessions WHERE owner_email")).every((call) => call.sql.includes("status != 'archived'")));
+  calls.length = 0;
+  await app.fetch(new Request("https://my.ax.test/api/sessions?archived=1"), { DB } as never);
+  assert.ok(calls.filter((call) => call.sql.includes("FROM sessions WHERE owner_email")).every((call) => call.sql.includes("status = 'archived'")));
 });
