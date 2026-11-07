@@ -1,4 +1,5 @@
 import type { Env } from "./types";
+import { applySessionEvent } from "./fsm/session-status";
 import type { AccessIdentity } from "./auth";
 import { logAssistantMessage } from "./conversation-log";
 import { notifyOwner } from "./notify";
@@ -23,9 +24,7 @@ export async function recordRecoveryExhaustion(
   const contract = recoveryExhaustionContract(sessionId, input);
   await sequenceRecoveryExhaustion(
     () => dependencies.logAssistant(env, identity, sessionId, input.terminalMessage, contract.transcriptMeta),
-    () => env.DB.prepare("UPDATE sessions SET status = 'interrupted', updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
-      .bind(sessionId, identity.email)
-      .run(),
+    () => applySessionEvent(env.DB, { id: sessionId, ownerEmail: identity.email }, "recovery_exhausted"),
     () => dependencies.notify(env, identity.email, contract.notification),
   );
 }

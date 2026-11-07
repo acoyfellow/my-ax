@@ -1,4 +1,5 @@
 import { Data, Effect } from "effect";
+import { applySessionEvent } from "./fsm/session-status";
 import {
   AUTO_REVIVE_PREFIX,
   DEAD_SESSION_ATTENTION_KIND,
@@ -84,9 +85,7 @@ function scanSession(
     if (!attention) {
       yield* operation("alert_owner", () => deps.alertOwner(ownerEmail, session.id, incident.originalUserEntryId));
     }
-    yield* operation("interrupt_session", () => db.prepare(
-      "UPDATE sessions SET status = 'interrupted', updated_at = updated_at WHERE id = ? AND owner_email = ? AND status IN ('active', 'running')",
-    ).bind(session.id, ownerEmail).run());
+    yield* operation("interrupt_session", () => applySessionEvent(db, { id: session.id, ownerEmail }, "dead_session_detected"));
   });
 }
 
