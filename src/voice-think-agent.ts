@@ -3,6 +3,7 @@ import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type VoiceTurnContext } from
 import { MyAgent } from "./agent";
 import { openPiChat } from "./pi-engine/routes";
 import type { Env } from "./types";
+import { settledWithin } from "./rpc/deadline-signal";
 import type { AccessIdentity } from "./auth";
 import {
   lockVoiceThinkConfig,
@@ -22,7 +23,6 @@ const VOICE_CHECKIN_POLL_MS = 1000;
 // Idle gap between spoken "still working" check-ins during a long turn.
 const VOICE_CHECKIN_IDLE_MS = 20000;
 
-function delay(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
 const VoiceAgent = withVoice(Agent);
 
@@ -123,7 +123,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
       })();
 
       // Fast path: if the turn resolves quickly, stay terse.
-      await Promise.race([runReply, delay(VOICE_ACK_THRESHOLD_MS)]);
+      await settledWithin(runReply, VOICE_ACK_THRESHOLD_MS);
       if (!outcome) {
         // Slow turn: acknowledge, then emit bounded "still working" check-ins
         // until the reply lands.
@@ -132,7 +132,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
         checkins.markSpoken(now);
         yield WORK_ACK;
         while (!outcome) {
-          await Promise.race([runReply, delay(VOICE_CHECKIN_POLL_MS)]);
+          await settledWithin(runReply, VOICE_CHECKIN_POLL_MS);
           if (outcome) break;
           const line = checkins.tick(Date.now());
           if (line) yield line;

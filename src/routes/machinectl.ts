@@ -10,6 +10,7 @@ import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError }
 import { storeInlineMediaArtifact } from "../uploads";
 import { workspaceFor } from "../workspace";
 import { machineBusyOutcome, parseMachineShellContent } from "../machinectl-output";
+import { invokeMachineTool, machineHostStub, readMachineStatus } from "../rpc/machine-host-client";
 import { isFocusTool, isVerifiedPromptTool, withVerifiedCmuxDelivery } from "../cmux-delivery-verification";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
@@ -29,8 +30,7 @@ async function persistScreenshotToWorkspace(env: AppEnv["Bindings"], identity: {
 }
 
 function hostFor(c: Context<AppEnv>) {
-  const email = c.get("identity").email.toLowerCase();
-  return c.env.MACHINE_HOST.get(c.env.MACHINE_HOST.idFromName(email));
+  return machineHostStub(c.env.MACHINE_HOST, c.get("identity").email);
 }
 
 export function registerMachinectlRoutes(app: Hono<AppEnv>) {
@@ -118,8 +118,8 @@ async function machineStatus(ctx: Parameters<ToolDef["execute"]>[1]) {
   const key = ctx.identity.email.toLowerCase();
   const cached = machineStatusCache.get(key);
   if (cached && Date.now() - cached.at < MACHINE_STATUS_CACHE_MS) return cached.status;
-  const host = ctx.env.MACHINE_HOST.get(ctx.env.MACHINE_HOST.idFromName(key));
-  const status = await host.fetch("http://internal/status").then((response) => response.json<{ connected: boolean; machineName?: string; tools?: PublishedTool[] }>());
+  const read = await readMachineStatus(ctx.env.MACHINE_HOST, key);
+  const status = { connected: read.connected, machineName: read.machineName ?? undefined, tools: read.tools as PublishedTool[] | undefined };
   machineStatusCache.set(key, { at: Date.now(), status });
   return status;
 }
@@ -145,10 +145,7 @@ function laptopTypes(catalog: PublishedTool[]): string {
 }
 
 async function machineInvoke(tool: string, args: Record<string, unknown>, ctx: Parameters<ToolDef["execute"]>[1]): Promise<MachineResult> {
-  const host = ctx.env.MACHINE_HOST.get(ctx.env.MACHINE_HOST.idFromName(ctx.identity.email.toLowerCase()));
-  const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": ctx.identity.email.toLowerCase() });
-  const response = await host.fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool, args }) });
-  return response.json<MachineResult>();
+  return invokeMachineTool<MachineResult>(ctx.env.MACHINE_HOST, ctx.identity.email, tool, args);
 }
 
 export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute"]>[1]) {
@@ -218,11 +215,7 @@ export const MACHINECTL_TOOL: ToolDef = {
       });
     }
     const { identity, env } = ctx;
-    const host = env.MACHINE_HOST.get(env.MACHINE_HOST.idFromName(identity.email.toLowerCase()));
-    if (tool === "tools/list") {
-      const status = await host.fetch("http://internal/status").then((response) => response.json<{ connected: boolean; machineName?: string; tools?: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> }>());
-      return JSON.stringify(status);
-    }
+    if (tool === "tools/list") return JSON.stringify(await readMachineStatus(env.MACHINE_HOST, identity.email));
     if (isVerifiedPromptTool(tool) || isFocusTool(tool)) {
       const provider = await createMachineWorkProvider(ctx);
       const verified = provider.fns[tool];
@@ -233,9 +226,7 @@ export const MACHINECTL_TOOL: ToolDef = {
         return JSON.stringify({ ok: false, verified: false, reason: error instanceof Error ? error.message : String(error) });
       }
     }
-    const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": identity.email.toLowerCase() });
-    const response = await host.fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool, args: (args.arguments as Record<string, unknown> | undefined) ?? {} }) });
-    const result = await response.json<{ ok?: boolean; content?: string; error?: string }>();
+    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {});
     if ((tool === "screenshot" || tool === "screen_record") && result.ok && typeof result.content === "string") {
       const artifact = await storeInlineMediaArtifact(env, identity, result.content);
       if (artifact) {

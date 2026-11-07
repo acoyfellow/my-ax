@@ -38,6 +38,18 @@ const RESULT_BYTE_LIMIT = 512 * 1024;
 const RESULT_MEDIA_BYTE_LIMIT = 64 * 1024 * 1024;
 const MAX_PENDING_CALLS = 8;
 const CALL_TIMEOUT_MS = 60 * 1000;
+
+export function timedOutCallError(tool: string, timeoutMs: number): string {
+  return `Tool call timed out after ${timeoutMs}ms: ${tool}. It may still finish on the laptop; a cancel was sent. Check its effect before retrying, because a retry can run it twice.`;
+}
+
+export function cancelLaptopCall(socket: Pick<WebSocket, "send">, id: string): void {
+  try {
+    socket.send(JSON.stringify({ type: "cancel", id }));
+  } catch (error) {
+    console.error("machinectl_cancel_failed", { id, err: error instanceof Error ? error.message : String(error) });
+  }
+}
 const AUDIT_TTL_SECONDS = 60 * 60 * 24 * 30;
 const MACHINE_NAME_KEY = "machineName";
 const MACHINE_USER_KEY = "user";
@@ -297,7 +309,8 @@ export class MachineHost extends DurableObject<HostEnv> {
     return new Promise<ToolResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        resolve({ ok: false, error: `Tool call timed out after ${CALL_TIMEOUT_MS}ms: ${tool}` });
+        cancelLaptopCall(socket, id);
+        resolve({ ok: false, error: timedOutCallError(tool, CALL_TIMEOUT_MS) });
       }, CALL_TIMEOUT_MS);
       this.pending.set(id, { resolve, timer, tool, dispatchedAt: Date.now() });
       try {

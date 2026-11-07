@@ -15,6 +15,7 @@ import {
 } from "./delegate-serial";
 import type { Env } from "./types";
 import type { AccessIdentity } from "./auth";
+import { deadlineSignal } from "./rpc/deadline-signal";
 import { SandboxThinkWorkspace } from "./think-workspace";
 import { thinkWorkspaceFor } from "./think-workspace-fs";
 import { ReadOnlyDelegateWorkspace, requireDelegateIdentity, splitDelegateRunInput } from "./read-only-delegate-workspace";
@@ -119,11 +120,10 @@ export function createDelegateManyTool(parent: DelegateParent) {
       const deadlineAt = Date.now() + DELEGATE_BATCH_DEADLINE_MS;
       const results = await runDelegatesInParallel(parsed.tasks, async (index) => {
         const { task } = parsed.tasks[index];
-        const timeout = AbortSignal.timeout(DELEGATE_TIMEOUT_MS);
-        const signal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeout]) : timeout;
+        const deadline = deadlineSignal(DELEGATE_TIMEOUT_MS, context.abortSignal);
         const result = await parent.runAgentTool(ReadOnlyDelegateAgent, {
-          input: { task, identity }, runId: runIds[index], displayOrder: index, signal, inputPreview: { task },
-        });
+          input: { task, identity }, runId: runIds[index], displayOrder: index, signal: deadline.signal, inputPreview: { task },
+        }).finally(deadline.clear);
         return {
           runId: result.runId,
           status: result.status,
