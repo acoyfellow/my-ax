@@ -6,7 +6,7 @@ const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
 
 test("outbound message rendering does not add template whitespace", () => {
   assert.ok(chat.includes('<div class="msg-body">{#if m.attachments && m.attachments.length}'));
-  assert.ok(chat.includes('{/if}{m.content}</div>'));
+  assert.ok(chat.includes('{/if}<div class="msg-user-content">{#each [userTextBlock(m.content)] as block}{@render textBlock(block)}{/each}</div></div>'));
 });
 
 test("outbound messages retain intentional leading whitespace", () => {

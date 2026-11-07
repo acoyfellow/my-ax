@@ -27,8 +27,9 @@ test("an outbound message cannot inject script or event handlers", () => {
   assert.doesNotMatch(html, /onerror|<script|javascript:/i);
 });
 
-test("the chat renders user content through the markdown renderer", async () => {
+test("the chat renders user content through the same text block as assistant content", async () => {
   const chat = await readFile(new URL("./Chat.svelte", import.meta.url), "utf8");
-  assert.match(chat, /<div class="msg-user-content[^"]*">\{@html renderUserMessage\(m\.content\)\}<\/div>/);
+  assert.match(chat, /<div class="msg-user-content">\{#each \[userTextBlock\(m\.content\)\] as block\}\{@render textBlock\(block\)\}\{\/each\}<\/div>/);
+  assert.match(chat, /return \{ text, rendered: renderUserMarkdown\(text\) \};/);
   assert.doesNotMatch(chat, /\{\/if\}\{m\.content\}<\/div>/);
 });

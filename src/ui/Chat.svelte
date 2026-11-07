@@ -939,8 +939,9 @@
   }
 
   // ── Markdown render ────────────────────────────────────────────────
-  function renderUserMessage(content: unknown): string {
-    return renderUserMarkdown(content);
+  function userTextBlock(content: unknown): { text: string; rendered: string } {
+    const text = typeof content === "string" ? content : String(content ?? "");
+    return { text, rendered: renderUserMarkdown(text) };
   }
 
   function renderMarkdown(md: string): string {
@@ -3134,20 +3135,14 @@
                     </div>
                   {:else if m.imageCount}
                     <div class="mb-2 inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-fg-mut">{m.imageCount === 1 ? "1 image" : `${m.imageCount} images`}</div>
-                  {/if}<div class="msg-user-content prose prose-invert prose-sm max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">{@html renderUserMessage(m.content)}</div></div>
+                  {/if}<div class="msg-user-content">{#each [userTextBlock(m.content)] as block}{@render textBlock(block)}{/each}</div></div>
               {:else if m.role === "assistant"}
                 {#if m.parts.length === 0 && !m.streaming}
                   <div class="msg-body" data-empty="1"></div>
                 {:else}
                   {#each groupParts(m.parts) as block, blockIdx (blockIdx)}
                     {#if block.kind === "text"}
-                      <div class="msg-body">
-                        {#if block.rendered}
-                          <div class="prose prose-invert prose-sm max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">{@html block.rendered}</div>
-                        {:else}
-                          {block.text}
-                        {/if}
-                      </div>
+                      <div class="msg-body">{@render textBlock(block)}</div>
                     {:else}
                       <!-- Consecutive tool calls share one container; each is a
                            row with internal separators (see .msg-tools--group). -->
@@ -3457,3 +3452,11 @@
 </div>
 
 <ImageLightbox />
+
+{#snippet textBlock(block: { text: string; rendered?: string })}
+  {#if block.rendered}
+                          <div class="prose prose-invert prose-sm max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">{@html block.rendered}</div>
+                        {:else}
+                          {block.text}
+                        {/if}
+{/snippet}
