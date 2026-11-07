@@ -32,7 +32,7 @@ assertIncludes(settings, 'class="job-action-button min-h-[44px]', "reusable-tool
 assertIncludes(appShell, 'if (title === sessionState.title) return cancelRename();', "unchanged conversation rename does not PATCH");
 assertIncludes(sessions, 'type SessionSignal = "idle" | "running" | "error";', "session rows show only idle, running, or failed");
 assertIncludes(sessions, 'if (status === "running" || status === "thinking") return "running";', "non-selected rows spin from the server run status, not the open socket");
-assertIncludes(reconnectingSocket, 'return !manuallyClosed && socket === candidate;', "reconnecting transport gates every callback on the current, non-retired socket");
+assertIncludes(reconnectingSocket, 'return connection.kind !== "closed" && socket === candidate;', "reconnecting transport gates every callback on the current, non-retired socket");
 assertIncludes(reconnectingSocket, 'if (retryTimer !== null) dependencies.cancel(retryTimer);', "manual close cancels any scheduled reconnect timer");
 assertIncludes(sessions, 'if (id === readTabSession()) {', "sidebar no-op switch compares against this tab's live session, not a stale snapshot");
 assertIncludes(sessions, 'let currentId = $derived(sessionState.id);', "sidebar active identity is driven by the shared session store");
@@ -51,7 +51,7 @@ assertIncludes(chat, 'setConn("reconnecting");\n          (ws as any)?.forceReco
 assertIncludes(chat, 'isTitleEpochCurrent(epoch)', "chat title refresh drops stale server titles via the title epoch");
 assertIncludes(sessions, 'isTitleEpochCurrent(titleEpoch)', "sidebar refresh drops stale server titles via the title epoch");
 // H2: bounded give-up terminal offline + retry.
-assertIncludes(reconnectingSocket, 'callbacks.onExhausted?.({ attempts: attempt });', "reconnecting transport signals terminal exhaustion after maxAttempts");
+assertIncludes(reconnectingSocket, 'callbacks.onExhausted?.({ attempts: connection.attempt });', "reconnecting transport signals terminal exhaustion after maxAttempts");
 assertIncludes(reconnectingSocket, 'resume()', "reconnecting transport exposes a resume affordance");
 assertIncludes(chat, '{ maxAttempts: 8 }', "chat caps reconnection attempts at the agreed bound");
 assertIncludes(chat, 'onExhausted() {', "chat consumes terminal exhaustion into a truthful offline pill");
