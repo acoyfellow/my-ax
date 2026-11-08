@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "file": "src/jobs.ts",
+    "match": "return getSessionAgent(env, ownerEmail, sessionId);",
+    "reason": "getSessionAgent bounds both the UserAgent and the MyAgent facet lookups with resolveStub in agent-stub.ts; this line only forwards that bounded helper."
+  },
+  {
+    "file": "src/pi-engine/pi-chat-agent.ts",
+    "match": "const helper = await getSessionAgent(this.env, identity.email, `recipes-${this.chatId()}`);",
+    "reason": "Runs inside command(\"Session.recipeHelper\") from the dynamically imported rpc contract on the line above; the audit pattern only sees the rpc. prefix."
+  },
+  {
+    "file": "src/named-computer.ts",
+    "match": "const { sandbox, computerId } = await getNamedComputer(env, identity, rawId, { restoreLatest: false });",
+    "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."
+  },
+  {
+    "file": "src/named-computer.ts",
+    "match": "const opened = await getNamedComputer(env, identity, rawId, { restoreLatest: false });",
+    "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."
+  },
+  {
+    "file": "src/named-computer.ts",
+    "match": "const restored = await getNamedComputer(env, identity, opened.computerId);",
+    "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the restore is bounded at the helper."
+  },
+  {
+    "file": "src/routes/computers.ts",
+    "match": "const { sandbox } = await getNamedComputer(c.env, c.get(\"identity\"), computerId);",
+    "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."
+  },
+  {
+    "file": "src/tools.ts",
+    "match": "const opened = await getNamedComputer(ctx.env, ctx.identity, id);",
+    "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."
+  },
+  {
+    "file": "src/workspace-object.ts",
+    "match": "return getSandbox(namespace, id, SANDBOX_STUB_OPTIONS);",
+    "reason": "getSandbox only builds a stub synchronously; SANDBOX_STUB_OPTIONS sets instanceGetTimeoutMS and portReadyTimeoutMS, and each sandbox exec passes its own timeout."
+  }
+]

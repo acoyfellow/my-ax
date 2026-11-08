@@ -1,4 +1,5 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
+import * as rpcContract from "../rpc/contract";
 import { markAttentionSeen } from "../fsm/attention-item";
 import { Effect } from "effect";
 import type { Hono } from "hono";
@@ -218,9 +219,11 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
     const input = args.input && typeof args.input === "object" && !Array.isArray(args.input) ? args.input as Record<string, unknown> : {};
     const callerCapabilities = Array.isArray(args.callerCapabilities) ? args.callerCapabilities.filter((capability): capability is string => typeof capability === "string") : undefined;
     const runnerId = (await sessionEngineOf(c.env, email, sessionId)) === "pi" ? `recipes-${sessionId}` : sessionId;
-    const stub = await getSessionAgent(c.env, email, runnerId);
-    await stub.seedIdentity(c.get("identity"));
-    return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
+    return rpcContract.command("Session.runSavedRecipe", async () => {
+      const stub = await getSessionAgent(c.env, email, runnerId);
+      await stub.seedIdentity(c.get("identity"));
+      return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
+    });
   }
   if (method === "observe_recent") return { events: await recentObserveEvents(c.env.DB, c.get("identity").email, { kind: typeof args.kind === "string" ? args.kind : undefined, sinceMinutes: args.sinceMinutes, sessionId: typeof args.sessionId === "string" ? args.sessionId : undefined }) };
   if (method === "workspace_snapshots") return { snapshots: await listWorkspaceSnapshots(c.env, c.get("identity"), clamp(args.limit, 20, 100)) };
@@ -331,9 +334,11 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, args: Reco
   }
   if (method === "heal") {
     if (await sessionEngineOf(c.env, email, sessionId) === "pi") return { sessionId, healed: false, reason: "new-engine chats keep their own history; nothing to heal" };
-    const stub = await getSessionAgent(c.env, email, sessionId);
-    await stub.seedIdentity(c.get("identity"));
-    return stub.healStoredHistory();
+    return rpcContract.command("Session.healStoredHistory", async () => {
+      const stub = await getSessionAgent(c.env, email, sessionId);
+      await stub.seedIdentity(c.get("identity"));
+      return stub.healStoredHistory();
+    });
   }
   if (method === "entries") {
     const after = Math.max(0, Number(args.after) || 0);
@@ -353,8 +358,11 @@ async function sendAndWaitInSession(c: CoordinatorContext, email: string, args: 
   await ownedSession(c, input.sessionId);
   const engine = await c.env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).first<{ engine: string | null }>();
   if (engine?.engine === "pi") return sendAndWaitPi(c, email, input);
-  const stub = await getSessionAgent(c.env, email, input.sessionId);
-  await stub.seedIdentity(c.get("identity"));
+  const stub = await rpcContract.command("Session.open", async () => {
+    const opened = await getSessionAgent(c.env, email, input.sessionId);
+    await opened.seedIdentity(c.get("identity"));
+    return opened;
+  });
   return sendAndWait(input, {
     latestEntryId: async () => {
       const row = await c.env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(input.sessionId, email).first<{ id: number }>();

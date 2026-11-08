@@ -1,4 +1,5 @@
 import type { AccessIdentity } from "./auth";
+import * as rpc from "./rpc/contract";
 import type { Env } from "./types";
 
 export type SessionEngine = "pi" | "think";
@@ -28,8 +29,11 @@ export async function sessionControl(env: Env, identity: AccessIdentity, session
     };
   }
   const { getSessionAgent } = await import("./agent-stub");
-  const stub = await getSessionAgent(env, identity.email, sessionId);
-  await stub.seedIdentity(identity);
+  const stub = await rpc.command("Session.open", async () => {
+    const opened = await getSessionAgent(env, identity.email, sessionId);
+    await opened.seedIdentity(identity);
+    return opened;
+  });
   return {
     engine,
     inject: async (content, clientMsgId) => { await stub.injectUserMessage({ content, clientMsgId }); },

@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
+import * as rpc from "./rpc/contract";
 import { getAgentByName, routeAgentRequest, routeSubAgentRequest } from "agents";
 import type { Env, ApiResponse } from "./types";
 import { accessMiddleware } from "./auth";
@@ -451,17 +452,19 @@ app.all("/agents/*", async (c) => {
     const sessionId = decodeURIComponent(match[1]);
     const ownedSession = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, identity.email.toLowerCase()).first<{ id: string }>();
     if (!ownedSession) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Session not found or not owned" } }, 404);
-    const parent = await getAgentByName(c.env.USER_AGENT, identity.email.toLowerCase());
+    const parent = await rpc.query("UserAgent.resolve", () => getAgentByName(c.env.USER_AGENT, identity.email.toLowerCase()));
     // Empty facets import the legacy direct-DO transcript before opening the
     // socket so migration-era D1 rows never render a silent blank session.
     try {
-      const facet = await getSessionAgent(c.env, identity.email, sessionId);
-      await facet.seedIdentity(identity);
-      if ((await facet.getMessages()).length === 0) {
-        const legacy = c.env.LEGACY_MY_AGENT.get(c.env.LEGACY_MY_AGENT.idFromName(sessionId));
+      const { facet, empty } = await rpc.command("Session.openForSocket", async () => {
+        const opened = await getSessionAgent(c.env, identity.email, sessionId);
+        await opened.seedIdentity(identity);
+        return { facet: opened, empty: (await opened.getMessages()).length === 0 };
+      });
+      if (empty) {
         let messages: import("ai").UIMessage[] = [];
         try {
-          messages = await (legacy as unknown as { getMessages: () => Promise<import("ai").UIMessage[]> }).getMessages();
+          messages = await rpc.query("LegacyMyAgent.getMessages", () => (c.env.LEGACY_MY_AGENT.get(c.env.LEGACY_MY_AGENT.idFromName(sessionId)) as unknown as { getMessages: () => Promise<import("ai").UIMessage[]> }).getMessages());
         } catch {}
         // The D1 transcript mirror is the fallback when a legacy direct DO is
         // unavailable, preserving readable history during migration.
@@ -483,7 +486,7 @@ app.all("/agents/*", async (c) => {
             };
           });
         }
-        if (messages.length) await facet.importLegacyMessages(messages);
+        if (messages.length) await rpc.command("Session.importLegacyMessages", () => facet.importLegacyMessages(messages));
       }
     } catch (err) {
       console.error("legacy_session_import_failed", { sessionId, err: err instanceof Error ? err.message : String(err) });
@@ -512,8 +515,7 @@ app.all("/agents/*", async (c) => {
     try {
       // Resolve ownership and the direct actor name in one fail-closed step.
       const voiceName = await resolveOwnedVoiceTarget(c.env.DB, identity, sessionId);
-      const stub = await getAgentByName(c.env.VoiceThinkAgent, voiceName);
-      await stub.seedSession(identity, sessionId);
+      await rpc.command("VoiceThinkAgent.seedSession", async () => (await getAgentByName(c.env.VoiceThinkAgent, voiceName)).seedSession(identity, sessionId));
       const routedUrl = new URL(c.req.url);
       // CRITICAL: route with the RAW voiceName, not encodeURIComponent(voiceName).
       // routeAgentRequest/routePartykitRequest resolve the target DO with

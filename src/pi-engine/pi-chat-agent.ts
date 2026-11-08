@@ -293,9 +293,12 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   private async helperAgent() {
     const identity = this.identity();
     const { getSessionAgent } = await import("../agent-stub");
-    const helper = await getSessionAgent(this.env, identity.email, `recipes-${this.chatId()}`);
-    await helper.seedIdentity(identity);
-    return helper;
+    const { command } = await import("../rpc/contract");
+    return command("Session.recipeHelper", async () => {
+      const helper = await getSessionAgent(this.env, identity.email, `recipes-${this.chatId()}`);
+      await helper.seedIdentity(identity);
+      return helper;
+    });
   }
 
   private connectorRunner(): ConnectorRunner {

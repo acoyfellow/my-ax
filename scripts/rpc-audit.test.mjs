@@ -47,10 +47,9 @@ test("R5 needs a timed-out machinectl call to send cancel and warn that it may s
   assert.equal(machinectlCancelsOnTimeout(cancelling), true);
 });
 
-test("R1, R3, R4 and all of R5, including the opId frame, block the build; R2 is tracked", async () => {
+test("every rule, including R2 unbounded Durable Object calls and the R5 opId frame, blocks the build", async () => {
   const audit = await import("./rpc-audit.mjs");
-  for (const rule of ["R1", "R3", "R4", "R5", "ALLOW"]) assert.equal(audit.ENFORCED_RULES.has(rule), true);
-  assert.equal(audit.ENFORCED_RULES.has("R2"), false);
+  for (const rule of ["R1", "R2", "R3", "R4", "R5", "ALLOW"]) assert.equal(audit.ENFORCED_RULES.has(rule), true);
   assert.equal("isTrackedOpIdGap" in audit, false);
 });
 

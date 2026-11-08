@@ -32,6 +32,7 @@ import {
 } from "./connectors";
 import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
+import * as rpc from "./rpc/contract";
 import { encryptToken, decryptToken, looksEncrypted } from "./grant-crypto";
 import { requirePublicHttpsUrl } from "./public-url";
 import { isConnectorHealth, type ConnectorHealth } from "./connector-health";
@@ -752,7 +753,10 @@ export function makeOAuthClientStore(
   workerOrigin: string,
 ): OAuthClientStoreExt {
   function stubFor(userEmail: string) {
-    return binding.get(binding.idFromName(`user:${userEmail.toLowerCase()}`));
+    const stub = binding.get(binding.idFromName(`user:${userEmail.toLowerCase()}`));
+    return {
+      fetch: (input: string, init?: RequestInit) => rpc.command(`OAuthClient.${new URL(input).pathname}`, () => stub.fetch(input, init)),
+    };
   }
 
   return {
