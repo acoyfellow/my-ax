@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { ActiveToken, Command } from "../commands/registry";
   import { chooseItem, KIND_LABEL, menuKey, tokenAt, type MenuItem, type MentionOption, type Replacement } from "./slash-menu-state";
 
@@ -71,14 +72,28 @@
   }
 
   $effect(() => {
-    void text;
-    if (!input) return;
-    const next = tokenAt(text, input.selectionStart ?? text.length);
-    if (!next) { token = null; dismissedAt = null; items = []; return; }
+    const current = text;
+    const element = input;
+    if (!element) return;
+    untrack(() => syncToken(tokenAt(current, element.selectionStart ?? current.length)));
+  });
+
+  function sameToken(a: ActiveToken | null, b: ActiveToken | null) {
+    return a === b || (a !== null && b !== null && a.kind === b.kind && a.start === b.start && a.end === b.end && a.query === b.query);
+  }
+
+  function syncToken(next: ActiveToken | null) {
+    if (!next) {
+      if (token !== null) token = null;
+      if (dismissedAt !== null) dismissedAt = null;
+      if (items.length) items = [];
+      return;
+    }
+    if (sameToken(token, next)) return;
     if (token && (token.kind !== next.kind || token.start !== next.start)) dismissedAt = null;
     token = next;
     if (dismissedAt !== next.start) void refreshItems(next);
-  });
+  }
 
   export function invalidate() {
     commandCache = null;
