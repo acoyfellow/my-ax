@@ -19,7 +19,7 @@ export const MACHINES = [
   { name: "voice", owner: "src/fsm/voice-status.ts", writer: /=\s*"idle"\s*\|\s*"listening"\s*\|\s*"thinking"\s*\|\s*"speaking"/ },
 ];
 
-function sourceFiles(dir) {
+export function sourceFiles(dir = SRC) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return name === "fsm" ? [] : sourceFiles(path);
@@ -43,8 +43,12 @@ export function audit(files, read) {
   return violations;
 }
 
+export function auditSource() {
+  return audit(sourceFiles(SRC), (path) => readFileSync(path, "utf8"));
+}
+
 function main() {
-  const violations = audit(sourceFiles(SRC), (path) => readFileSync(path, "utf8"));
+  const violations = auditSource();
   for (const violation of violations) console.log(`${violation.machine} ${violation.at} ${violation.line}`);
   const counts = Object.fromEntries(MACHINES.map((machine) => [machine.name, violations.filter((violation) => violation.machine === machine.name).length]));
   console.log(`fsm writers outside src/fsm: ${violations.length} ${JSON.stringify(counts)}`);

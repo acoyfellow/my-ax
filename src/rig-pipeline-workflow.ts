@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { applyRunEvent, rigRunEvent } from "./fsm/run-status";
 import { notifyOwner } from "./notify";
 import { RIG_APPROVE, RIG_REJECT, runRigPipeline, type RigEffects, type RigPipelineParams, type RigStepOptions, type RigSteps } from "./rig-pipeline";
 import type { Env } from "./types";
@@ -17,10 +18,10 @@ export function workflowSteps(step: WorkflowStep): RigSteps {
 }
 
 export async function recordRigEvent(env: Pick<Env, "DB">, params: RigPipelineParams, type: string, data: Record<string, unknown>): Promise<void> {
-  const status = type === "rig.failed" ? "failed" : type === "rig.rejected" ? "aborted" : type === "rig.verified" || type === "rig.deployed" ? "completed" : "open";
   await env.DB.prepare("INSERT OR IGNORE INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)")
     .bind(params.runId, `${type}:${crypto.randomUUID()}`, params.ownerEmail, new Date().toISOString(), RIG_ACTOR, type, JSON.stringify(data)).run();
-  await env.DB.prepare("UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(status, params.runId, params.ownerEmail).run();
+  const event = rigRunEvent(type);
+  if (event) await applyRunEvent(env.DB, { id: params.runId, ownerEmail: params.ownerEmail }, event);
 }
 
 export async function createRigDecision(env: Pick<Env, "DB">, params: RigPipelineParams, image: string): Promise<{ id: string; question: string; options: string[] }> {

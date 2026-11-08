@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyRunEvent, nextRunStatus, ownerTerminalEvent, RUN_TRANSITIONS, TERMINAL_RUN_STATUSES, type RunStatus } from "./run-status";
+import { applyRunEvent, nextRunStatus, ownerTerminalEvent, rigRunEvent, RUN_TRANSITIONS, TERMINAL_RUN_STATUSES, type RunStatus } from "./run-status";
 import { sqliteD1 } from "./sqlite-d1";
 
 const SCHEMA = "CREATE TABLE runs (id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, status TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT '')";
@@ -42,4 +42,25 @@ test("the owner can end only a live run", () => {
     for (const terminal of TERMINAL_RUN_STATUSES) assert.equal(nextRunStatus(status, ownerTerminalEvent(terminal)), null);
   }
   assert.equal(nextRunStatus("running", ownerTerminalEvent("aborted")), "aborted");
+});
+
+test("rig receipts end a live run once and never reopen a finished one", async () => {
+  const live = dbWith("open");
+  assert.equal(rigRunEvent("rig.approved"), null);
+  assert.equal(await applyRunEvent(live.db, run, rigRunEvent("rig.deployed")!), true);
+  assert.equal(live.status(), "completed");
+  assert.equal(await applyRunEvent(live.db, run, rigRunEvent("rig.failed")!), false);
+  assert.equal(live.status(), "completed");
+  const aborted = dbWith("aborted");
+  assert.equal(await applyRunEvent(aborted.db, run, rigRunEvent("rig.verified")!), false);
+  assert.equal(aborted.status(), "aborted");
+});
+
+test("only terminal rig receipts map to a run event", () => {
+  assert.equal(rigRunEvent("rig.started"), null);
+  assert.equal(rigRunEvent("rig.approved"), null);
+  assert.equal(rigRunEvent("rig.rejected"), "owner_aborted");
+  assert.equal(rigRunEvent("rig.failed"), "owner_failed");
+  assert.equal(rigRunEvent("rig.deployed"), "owner_completed");
+  assert.equal(rigRunEvent("rig.verified"), "owner_completed");
 });
