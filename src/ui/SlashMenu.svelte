@@ -154,7 +154,7 @@
           onmousedown={(event) => { event.preventDefault(); choose(item); }}
           onmouseenter={() => (index = itemIndex)}
         >
-          <span class="slash-menu__label">{label(item)}</span>
+          <span class="slash-menu__label" title={label(item)}>{label(item)}</span>
           <span class="slash-menu__detail">{detail(item)}</span>
           <span class="slash-menu__badge">{badge(item)}</span>
         </button>
@@ -172,7 +172,11 @@
     bottom: calc(100% + 6px);
     max-height: min(320px, 45vh);
     overflow-y: auto;
-    z-index: 40;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+    max-width: 100%;
+    z-index: 20;
     border: 1px solid var(--color-line, rgba(127, 127, 127, 0.25));
     border-radius: 10px;
     background: var(--color-surface, var(--color-bg, #fff));
@@ -181,7 +185,8 @@
   }
   .slash-menu__item {
     display: grid;
-    grid-template-columns: minmax(7rem, max-content) 1fr auto;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+    min-width: 0;
     gap: 10px;
     align-items: baseline;
     width: 100%;
@@ -198,6 +203,10 @@
     opacity: 0.5;
   }
   .slash-menu__label {
+    max-width: min(16rem, 45vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-weight: 600;
   }

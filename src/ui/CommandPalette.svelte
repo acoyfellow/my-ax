@@ -113,11 +113,11 @@
   .palette-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.45); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
   .palette { width: min(640px, 92vw); border-radius: 12px; background: var(--color-bg, #fff); color: var(--color-fg, inherit); box-shadow: 0 20px 60px rgba(0,0,0,.35); overflow: hidden; }
   .palette input { width: 100%; padding: 14px 16px; font-size: 15px; border: 0; border-bottom: 1px solid var(--color-line, rgba(127,127,127,.25)); background: transparent; outline: none; }
-  .palette ul { max-height: 52vh; overflow-y: auto; padding: 4px; }
-  .palette li button { display: grid; grid-template-columns: minmax(9rem, max-content) 1fr auto; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+  .palette ul { max-height: 52vh; overflow-y: auto; overflow-x: hidden; padding: 4px; }
+  .palette li button { display: grid; min-width: 0; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
   .palette li[aria-selected="true"] button { background: rgba(127,127,127,.14); }
   .palette li[data-unavailable] { opacity: .5; }
-  .palette code { font-weight: 600; }
+  .palette code { font-weight: 600; max-width: min(16rem, 40vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .palette span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .7; }
   .palette em { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; opacity: .55; }
   .palette__empty, .palette__hint { padding: 8px 12px; font-size: 11px; opacity: .6; }

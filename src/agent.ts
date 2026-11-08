@@ -72,6 +72,7 @@ import { intersectCapabilities } from "./capability-intersect";
 import { errorConversationMeta } from "./error-meta";
 import { voiceChannelPrompt } from "./voice-channel";
 import { requireInputChannel } from "./client-snapshot";
+import { collectMessageTimes, MESSAGE_TIME_TABLES, type MessageTimeRow } from "./message-times";
 
 // Generic system prompt for the public/self-host engine. Users connect
 // their own MCPs via Settings → Connectors (the BYO MCP path) and the
@@ -156,15 +157,14 @@ export class MyAgent extends Think<Env> {
   }
 
   async messageTimes(): Promise<Record<string, number>> {
-    const times: Record<string, number> = {};
-    try {
-      for (const row of this.sql<{ id: string; created_at: string }>`SELECT id, created_at FROM assistant_messages`) {
-        const raw = String(row.created_at);
-        const ms = Date.parse(raw.includes("T") ? raw : raw.replace(" ", "T") + "Z");
-        if (Number.isFinite(ms)) times[row.id] = ms;
-      }
-    } catch {}
-    return times;
+    for (const table of MESSAGE_TIME_TABLES) {
+      const present = this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table).toArray().length > 0;
+      if (!present) continue;
+      const rows = this.ctx.storage.sql.exec<MessageTimeRow>(`SELECT id, created_at FROM ${table}`).toArray();
+      const times = collectMessageTimes(rows);
+      if (Object.keys(times).length) return times;
+    }
+    return {};
   }
 
   sendDeskBoard(frame: string): void {

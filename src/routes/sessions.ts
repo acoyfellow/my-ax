@@ -480,8 +480,13 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const id = c.req.param("id");
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
     if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
-    const times = await rpc.query("Session.messageTimes", async () => (await getSessionAgent(c.env, identity.email, id)).messageTimes()).catch(() => ({}));
-    return c.json({ ok: true, result: { times } });
+    try {
+      const times = await rpc.query("Session.messageTimes", async () => (await getSessionAgent(c.env, identity.email, id)).messageTimes());
+      return c.json({ ok: true, result: { times } });
+    } catch (error) {
+      console.error("session_message_times_failed", { id, err: String(error) });
+      return c.json({ ok: false, error: { code: "MESSAGE_TIMES_UNAVAILABLE", message: String(error) } }, 502);
+    }
   });
 
   app.get("/api/sessions/:id/transcript", async (c) => {

@@ -137,7 +137,9 @@
 </div>
 
 <style>
-  .mcp-explorer { margin: 4px 0 10px; padding: 8px; border: 1px solid var(--color-line, rgba(127,127,127,.25)); border-radius: 8px; font-size: 12px; }
+  .mcp-explorer__row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(14rem, 40vw); }
+  .mcp-explorer__field input, .mcp-explorer__field select, .mcp-explorer__field textarea { min-width: 0; width: 100%; box-sizing: border-box; }
+  .mcp-explorer { min-width: 0; max-width: 100%; overflow-x: hidden; margin: 4px 0 10px; padding: 8px; border: 1px solid var(--color-line, rgba(127,127,127,.25)); border-radius: 8px; font-size: 12px; }
   .mcp-explorer__bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .mcp-explorer__state { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; background: rgba(127,127,127,.15); }
   .mcp-explorer__state[data-state="ready"] { background: rgba(34,197,94,.18); }
@@ -148,13 +150,13 @@
   .mcp-explorer__tabs button { text-transform: capitalize; padding: 2px 8px; border-radius: 6px; opacity: .7; }
   .mcp-explorer__tabs button[aria-selected="true"] { background: rgba(127,127,127,.15); opacity: 1; }
   .mcp-explorer__filter { margin-left: auto; border: 1px solid var(--color-line, rgba(127,127,127,.3)); border-radius: 6px; padding: 2px 6px; background: transparent; }
-  .mcp-explorer__list { max-height: 360px; overflow-y: auto; }
-  .mcp-explorer__row { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr auto; gap: 8px; width: 100%; text-align: left; padding: 4px 2px; }
+  .mcp-explorer__list { max-height: 360px; overflow-y: auto; overflow-x: hidden; }
+  .mcp-explorer__row { display: grid; min-width: 0; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto; gap: 8px; width: 100%; text-align: left; padding: 4px 2px; }
   .mcp-explorer__detail { padding: 6px 4px 10px 12px; display: grid; gap: 6px; }
   .mcp-explorer__field { display: grid; gap: 2px; margin-bottom: 4px; }
   .mcp-explorer__field input, .mcp-explorer__field select, .mcp-explorer__field textarea { border: 1px solid var(--color-line, rgba(127,127,127,.3)); border-radius: 6px; padding: 3px 6px; background: transparent; font-family: ui-monospace, monospace; }
   .mcp-explorer__field em { opacity: .55; font-style: normal; }
-  .mcp-explorer__output { max-height: 240px; overflow: auto; white-space: pre-wrap; font-size: 11px; padding: 6px; border-radius: 6px; background: rgba(127,127,127,.1); }
+  .mcp-explorer__output { max-height: 240px; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 11px; padding: 6px; border-radius: 6px; background: rgba(127,127,127,.1); }
   .mcp-explorer__output[data-ok="0"] { color: var(--color-bad, #dc2626); }
-  pre { white-space: pre-wrap; font-size: 11px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
 </style>
