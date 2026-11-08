@@ -34,6 +34,17 @@ export function ownerTerminalEvent(status: RunStatus): RunStatusEvent {
   return "owner_completed";
 }
 
+const RIG_TERMINAL_EVENTS: Readonly<Record<string, RunStatusEvent>> = {
+  "rig.rejected": "owner_aborted",
+  "rig.failed": "owner_failed",
+  "rig.deployed": "owner_completed",
+  "rig.verified": "owner_completed",
+};
+
+export function rigRunEvent(receiptType: string): RunStatusEvent | null {
+  return RIG_TERMINAL_EVENTS[receiptType] ?? null;
+}
+
 export function nextRunStatus(current: RunStatus, event: RunStatusEvent): RunStatus | null {
   const transition = RUN_TRANSITIONS[event];
   return transition.from.includes(current) ? transition.to : null;

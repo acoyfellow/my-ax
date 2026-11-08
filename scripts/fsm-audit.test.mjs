@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { audit, MACHINES } from "./fsm-audit.mjs";
+import { audit, auditSource, MACHINES } from "./fsm-audit.mjs";
 
 const read = (text) => () => text;
 
@@ -16,4 +16,8 @@ test("a raw sessions status write outside src/fsm is reported", () => {
 
 test("a write through the transition function is not reported", () => {
   assert.equal(audit(["/repo/src/agent.ts"], read(`await applySessionEvent(db, ref, "turn_started")`)).length, 0);
+});
+
+test("the real source has no state writes outside src/fsm", () => {
+  assert.deepEqual(auditSource().map((violation) => `${violation.machine} ${violation.at}`), []);
 });
