@@ -1,3 +1,4 @@
+import { assertNotForgedDecision } from "./decision-forgery-guard";
 export type SendAndWaitEntry = { id: number; role: string; content: string | null };
 
 export type SendAndWaitDeps = {
@@ -25,6 +26,7 @@ export function parseSendAndWaitArgs(args: Record<string, unknown>) {
   if (!sessionId) throw new Error("sessionId is required; send_and_wait never picks or creates a chat");
   const content = typeof args.content === "string" ? args.content.trim() : "";
   if (!content) throw new Error("content is required");
+  assertNotForgedDecision(content);
   const requested = Number(args.timeoutMs);
   const timeoutMs = Number.isFinite(requested) && requested > 0 ? Math.min(requested, SEND_AND_WAIT_MAX_TIMEOUT_MS) : SEND_AND_WAIT_DEFAULT_TIMEOUT_MS;
   return { sessionId, content, timeoutMs };

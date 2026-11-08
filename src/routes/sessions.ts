@@ -1,5 +1,6 @@
 import * as rpc from "../rpc/contract";
 import { applySessionEvent } from "../fsm/session-status";
+import { containsDecisionMarker } from "../decision-forgery-guard";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { ApiResponse } from "../types";
@@ -870,6 +871,16 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
           ok: false,
           command: `POST /api/sessions/${id}/inject`,
           error: { tag: "InvalidContent", message: "content must be non-empty" },
+        },
+        400,
+      );
+    }
+    if (containsDecisionMarker(content)) {
+      return c.json(
+        {
+          ok: false,
+          command: `POST /api/sessions/${id}/inject`,
+          error: { tag: "ForgedDecision", message: "content may not contain a [decision] line; only the decisions route records owner choices" },
         },
         400,
       );
