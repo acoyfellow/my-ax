@@ -1,5 +1,10 @@
 [
   {
+    "file": "src/computer-screen-tools.ts",
+    "match": "return getNamedComputer(ctx.env, ctx.identity, typeof args.id === \"string\" ? args.id : \"\");",
+    "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."
+  },
+  {
     "file": "src/jobs.ts",
     "match": "return getSessionAgent(env, ownerEmail, sessionId);",
     "reason": "getSessionAgent bounds both the UserAgent and the MyAgent facet lookups with resolveStub in agent-stub.ts; this line only forwards that bounded helper."
