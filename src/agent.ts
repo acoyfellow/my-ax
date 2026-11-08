@@ -49,6 +49,7 @@ import { readUploadBytes } from "./uploads";
 import { createSvelteArtifact, readOwnedSvelteArtifact, searchOwnedArtifacts } from "./artifacts";
 import { createAudioMessage } from "./audio-messages";
 import type { Attachment } from "./types";
+import type { ConnectorExploreResult } from "./connector-explore";
 import { makeOAuthClientStore } from "./oauth-store";
 import { healthFromDiscovery, summarizeConnectorError, type ConnectorHealth } from "./connector-health";
 import { getBuiltinConnectors } from "./connectors";
@@ -636,6 +637,30 @@ export class MyAgent extends Think<Env> {
       description: String(catalogTool.description ?? catalogTool.name),
       inputSchema: catalogTool.inputSchema ?? { type: "object", properties: {} },
     }));
+  }
+
+  async connectorExplore(): Promise<ConnectorExploreResult> {
+    await this.ensureNativeMcp();
+    const servers = this.getMcpServers().servers;
+    const nameOf = (serverId: string) => servers[serverId]?.name ?? serverId;
+    const group = <T extends { serverId: string }>(items: T[]) => {
+      const byServer: Record<string, T[]> = {};
+      for (const item of items) (byServer[nameOf(item.serverId)] ??= []).push(item);
+      return byServer;
+    };
+    const tools = group(this.mcp.listTools().map((tool) => ({ serverId: tool.serverId, name: tool.name, description: String(tool.description ?? ""), inputSchema: tool.inputSchema ?? { type: "object", properties: {} } })));
+    const resources = group(this.mcp.listResources().map((resource) => ({ serverId: resource.serverId, uri: String(resource.uri), name: String(resource.name ?? resource.uri), description: String(resource.description ?? ""), mimeType: resource.mimeType ? String(resource.mimeType) : null })));
+    const prompts = group(this.mcp.listPrompts().map((prompt) => ({ serverId: prompt.serverId, name: prompt.name, description: String(prompt.description ?? ""), arguments: (prompt.arguments ?? []).map((argument) => ({ name: argument.name, description: String(argument.description ?? ""), required: Boolean(argument.required) })) })));
+    const serverIdByName: Record<string, string> = {};
+    for (const [serverId, server] of Object.entries(servers)) serverIdByName[server.name] = serverId;
+    return { servers: Object.entries(servers).map(([serverId, server]) => ({ id: server.name, serverId, state: String(server.state), error: server.error ? String(server.error) : null })), tools, resources, prompts, serverIdByName };
+  }
+
+  async connectorCallByName(serverName: string, toolName: string, args: Record<string, unknown>): Promise<string> {
+    await this.ensureNativeMcp();
+    const serverId = Object.entries(this.getMcpServers().servers).find(([, server]) => server.name === serverName)?.[0];
+    if (!serverId) throw new Error(`MCP "${serverName}" is not connected`);
+    return this.connectorCall(serverId, toolName, args);
   }
 
   async runDelegateMany(input: unknown, toolCallId: string): Promise<string> {

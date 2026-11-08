@@ -10,6 +10,37 @@
 
   import { onMount } from "svelte";
   import { connectorRowDisplay, type ConnectorStatusPayload } from "./connector-row";
+  import McpExplorer from "./McpExplorer.svelte";
+
+  let exploring = $state<string | null>(null);
+  let renaming = $state<string | null>(null);
+  let renameDraft = $state("");
+  let renameError = $state<string | null>(null);
+
+  function beginRename(mcp: { id: string; displayName?: string }) {
+    renaming = mcp.id;
+    renameDraft = mcp.displayName || mcp.id;
+    renameError = null;
+  }
+
+  async function saveRename(id: string) {
+    const name = renameDraft.trim();
+    if (!name) { renaming = null; return; }
+    try {
+      const response = await fetch(`/api/mcps/${encodeURIComponent(id)}`, { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ displayName: name }) });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.ok) throw new Error(body?.error?.message ?? `HTTP ${response.status}`);
+      userMcps = userMcps.map((mcp) => (mcp.id === id ? { ...mcp, displayName: body.result.connector.displayName } : mcp));
+      renaming = null;
+    } catch (cause) {
+      renameError = cause instanceof Error ? cause.message : String(cause);
+    }
+  }
+
+  function onRenameKey(event: KeyboardEvent, id: string) {
+    if (event.key === "Enter") { event.preventDefault(); void saveRename(id); }
+    if (event.key === "Escape") { event.preventDefault(); renaming = null; }
+  }
 
   type UserMcp = {
     id: string;
@@ -282,7 +313,15 @@
           {#each userMcps as m (m.id)}
             {@const row = connectorRowDisplay(m.id, authStatus[m.id])}
             <tr class="conn-row" data-mcp-id={m.id} data-connection={row.kind}>
-              <td class="conn-row__name" title={m.upstream ?? ""}>{m.displayName || m.id}</td>
+              <td class="conn-row__name" title={m.upstream ?? ""}>
+                {#if renaming === m.id}
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input class="user-mcp-rename" bind:value={renameDraft} onkeydown={(event) => onRenameKey(event, m.id)} onblur={() => saveRename(m.id)} aria-label={`Rename ${m.displayName || m.id}`} maxlength="60" autofocus data-testid="mcp-rename-input" />
+                  {#if renameError}<span class="text-bad text-[10px]">{renameError}</span>{/if}
+                {:else}
+                  <button type="button" class="user-mcp-name" onclick={() => beginRename(m)} title="Click to rename" data-testid="mcp-name">{m.displayName || m.id}</button>
+                {/if}
+              </td>
               <td class="conn-row__count" data-zero={row.kind === "connected" ? undefined : "1"}>{row.kind === "connected" ? row.toolCount : "—"}</td>
               <td class="conn-row__status">
                 {#if row.kind === "connected"}
@@ -295,6 +334,7 @@
                 {:else}
                   <a class="user-mcp-authorize" href={row.href} title="Authorize via OAuth">authorize</a>
                 {/if}
+                <button type="button" class="user-mcp-explore" onclick={() => (exploring = exploring === m.id ? null : m.id)} aria-expanded={exploring === m.id} data-testid="mcp-explore">{exploring === m.id ? "Hide" : "Explore"}</button>
                 <button
                   type="button"
                   class="user-mcp-delete"
@@ -309,6 +349,9 @@
                 </button>
               </td>
             </tr>
+            {#if exploring === m.id}
+              <tr><td colspan={3}><McpExplorer server={m.id} label={m.displayName || m.id} /></td></tr>
+            {/if}
           {/each}
         {/if}
       </tbody>
@@ -488,6 +531,30 @@
     cursor: pointer;
   }
   :global(.user-mcp-retry:hover) { color: var(--fg); background: var(--color-surface-2); }
+  :global(.user-mcp-name) {
+    text-align: left;
+    color: inherit;
+    border-bottom: 1px dashed transparent;
+  }
+  :global(.user-mcp-name:hover) {
+    border-bottom-color: var(--fg-mut);
+  }
+  :global(.user-mcp-rename) {
+    width: 100%;
+    font: inherit;
+    padding: 1px 4px;
+    border: 1px solid var(--fg-mut);
+    border-radius: 4px;
+    background: transparent;
+  }
+  :global(.user-mcp-explore) {
+    font-size: 11px;
+    color: var(--fg-mut);
+    margin-right: 4px;
+  }
+  :global(.user-mcp-explore:hover) {
+    color: var(--fg);
+  }
   :global(.user-mcp-delete) {
     display: inline-flex;
     align-items: center;

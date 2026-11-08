@@ -19,6 +19,7 @@
   import { captureTitleEpoch, readTabSession, writeTabSession, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
   import { groupByTime, matchesTitle, runStateOf } from "./session-groups";
+  import { COMMAND_EVENT, type CommandEventDetail } from "./command-runner";
   import { DEFAULT_LAYOUT, LAYOUT_STORAGE_KEY, PANEL_DEFAULT_WIDTH, canDock, clampPanelWidth, parseLayout } from "./side-panel-layout";
 
   type SessionRow = {
@@ -514,7 +515,26 @@
     if (docked) panelWidth = clampPanelWidth(panelWidth, viewportWidth);
   }
 
+  async function onBuiltinCommand(event: Event) {
+    const detail = (event as CustomEvent<CommandEventDetail>).detail;
+    const id = detail.sessionId;
+    if (detail.name === "new") return newConversation();
+    if (detail.name === "skill-new") return window.dispatchEvent(new CustomEvent("my-ax:skills-open", { detail: { mode: "new" } }));
+    if (detail.name === "skill-save") return window.dispatchEvent(new CustomEvent("my-ax:skills-open", { detail: { mode: "save", sessionId: id } }));
+    if (detail.name === "tools") return window.dispatchEvent(new CustomEvent("my-ax:settings-open", { detail: { section: "connections" } }));
+    if (!id) return window.dispatchEvent(new CustomEvent("my-ax:toast", { detail: { text: "Send a first message, then use that command", kind: "info" } }));
+    const row = sessions.find((candidate) => candidate.id === id) ?? ({ id, name: "" } as SessionRow);
+    if (detail.name === "archive") return setArchived(row, true);
+    if (detail.name === "export") { location.href = `/api/sessions/${encodeURIComponent(id)}/export?format=markdown`; return; }
+    if (detail.name === "rename" && detail.args.name) {
+      await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: detail.args.name }) }).catch(() => undefined);
+      refresh();
+      return;
+    }
+  }
+
   onMount(() => {
+    window.addEventListener(COMMAND_EVENT, onBuiltinCommand);
     const saved = parseLayout(localStorage.getItem(LAYOUT_STORAGE_KEY));
     dockOpen = saved.open;
     panelWidth = clampPanelWidth(saved.width, window.innerWidth);
@@ -533,6 +553,7 @@
       window.removeEventListener("my-ax:sessions-close", close);
       window.removeEventListener("my-ax:sessions-toggle", toggle);
       window.removeEventListener("my-ax:sessions-refresh", refresh);
+      window.removeEventListener(COMMAND_EVENT, onBuiltinCommand);
       clearInterval(statusPoll);
       window.removeEventListener("resize", onViewportResize);
       document.removeEventListener("keydown", handleKeydown);

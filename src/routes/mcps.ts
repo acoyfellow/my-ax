@@ -190,4 +190,19 @@ export function registerMcpsCrudRoutes(app: Hono<AppEnv>) {
       );
     }
   });
+
+  app.patch("/api/mcps/:id", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json<{ displayName?: unknown }>().catch(() => ({ displayName: undefined }));
+    if (typeof body.displayName !== "string") {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { message: "Field `displayName` is required", code: "BAD_REQUEST" }, next_actions: [] }, 400);
+    }
+    try {
+      const connector = await oauthStoreFor(c).renameUserMcp(c.get("identity").email, id, body.displayName);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { connector }, next_actions: [] });
+    } catch (err) {
+      const message = String((err as Error).message);
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { message, code: /not found/.test(message) ? "NOT_FOUND" : "BAD_REQUEST" }, next_actions: [] }, /not found/.test(message) ? 404 : 400);
+    }
+  });
 }

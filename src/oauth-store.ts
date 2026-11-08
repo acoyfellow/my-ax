@@ -33,6 +33,7 @@ import {
 import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
 import * as rpc from "./rpc/contract";
+import { normalizeMcpDisplayName } from "./oauth-store-names";
 import { encryptToken, decryptToken, looksEncrypted } from "./grant-crypto";
 import { requirePublicHttpsUrl } from "./public-url";
 import { isConnectorHealth, type ConnectorHealth } from "./connector-health";
@@ -290,6 +291,10 @@ export class OAuthClientDO extends DurableObject<Env> {
       const { connector } = await req.json<{ connector: Connector }>();
       const result = await this.addUserMcpInternal(connector);
       return Response.json(result);
+    }
+    if (path === "/mcps/rename" && req.method === "POST") {
+      const { connectorId, displayName } = await req.json<{ connectorId: string; displayName: string }>();
+      return Response.json(await this.renameUserMcpInternal(connectorId, displayName));
     }
     if (path === "/mcps/remove" && req.method === "POST") {
       const { connectorId } = await req.json<{ connectorId: string }>();
@@ -695,6 +700,19 @@ export class OAuthClientDO extends DurableObject<Env> {
     return { ok: true, connector: persisted };
   }
 
+  private async renameUserMcpInternal(
+    connectorId: string,
+    displayName: string,
+  ): Promise<{ ok: true; connector: Connector } | { ok: false; error: string }> {
+    const name = normalizeMcpDisplayName(displayName);
+    if (!name) return { ok: false, error: "Name must be 1-60 visible characters" };
+    const existing = await this.ctx.storage.get<Connector>(`mcps:${connectorId}`);
+    if (!existing) return { ok: false, error: `MCP "${connectorId}" not found` };
+    const connector = { ...existing, displayName: name };
+    await this.ctx.storage.put(`mcps:${connectorId}`, connector);
+    return { ok: true, connector };
+  }
+
   private async removeUserMcpInternal(
     connectorId: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -744,7 +762,10 @@ export interface OAuthClientStoreExt extends OAuthClientStore {
   recordConnectorHealth(userEmail: string, connectorId: string, health: ConnectorHealth): Promise<void>;
 
   listConnectorHealth(userEmail: string): Promise<Record<string, ConnectorHealth>>;
+
+  renameUserMcp(userEmail: string, connectorId: string, displayName: string): Promise<Connector>;
 }
+
 
 // ─── facade implementing the OAuthClientStore interface for the rest of
 //     the app. Routes lookups to the per-user DO.
@@ -863,6 +884,16 @@ export function makeOAuthClientStore(
       const data = (await res.json()) as
         | { ok: true; connector: Connector }
         | { ok: false; error: string };
+      if (!data.ok) throw new Error(data.error);
+      return data.connector;
+    },
+    async renameUserMcp(userEmail, connectorId, displayName) {
+      const res = await stubFor(userEmail).fetch("http://internal/mcps/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectorId, displayName }),
+      });
+      const data = (await res.json()) as { ok: true; connector: Connector } | { ok: false; error: string };
       if (!data.ok) throw new Error(data.error);
       return data.connector;
     },
