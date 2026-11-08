@@ -1,11 +1,39 @@
+FROM docker.io/cloudflare/sandbox:0.12.14 AS voxl-build
+ARG VOXL_VERSION=0.3.2
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends curl ca-certificates build-essential pkg-config clang libclang-dev \
+       libx264-dev libyuv-dev libopus-dev libpulse-dev libx11-dev libxext-dev libxdamage-dev libxfixes-dev libxtst-dev libxrandr-dev libxcomposite-dev libxkbcommon-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN lib=$(dirname "$(find /usr/lib -name 'libyuv.so*' | head -n1)") \
+    && mkdir -p /usr/local/lib/pkgconfig \
+    && printf 'prefix=/usr\nlibdir=%s\nincludedir=/usr/include\n\nName: libyuv\nDescription: libyuv\nVersion: 0\nLibs: -L${libdir} -lyuv\nCflags: -I${includedir}\n' "$lib" > /usr/local/lib/pkgconfig/libyuv.pc
+RUN npm install -g esbuild@0.28.2
+ENV ESBUILD=esbuild
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component rustfmt
+ENV PATH=/root/.cargo/bin:$PATH
+RUN cargo install --locked voxl-server --version ${VOXL_VERSION} --root /opt/voxl
+
 FROM docker.io/cloudflare/sandbox:0.12.14
 EXPOSE 3000 6080
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends xfce4 xfce4-terminal dbus-x11 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-RUN apt-get update -qq \
-    && apt-get install -y -qq --no-install-recommends tigervnc-standalone-server novnc websockify \
+RUN install -d -m 0755 /etc/apt/keyrings \
+    && curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg -o /etc/apt/keyrings/packages.mozilla.org.asc \
+    && echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" > /etc/apt/sources.list.d/mozilla.list \
+    && printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' > /etc/apt/preferences.d/mozilla \
+    && apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends firefox \
+    && update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/firefox 200 \
+    && mkdir -p /etc/xdg/xfce4 \
+    && printf 'WebBrowser=firefox\n' > /etc/xdg/xfce4/helpers.rc \
+    && firefox --version \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends xvfb libx264-dev libyuv0 libopus0 libpulse0 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=voxl-build /opt/voxl/bin/voxl /usr/local/bin/voxl
+RUN voxl --version
 RUN rm -rf /home/user && mkdir -p /home/user
 ENV DISPLAY=:1
 ENV PATH=/home/user/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

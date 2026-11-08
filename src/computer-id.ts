@@ -15,19 +15,18 @@ export function shouldRestoreComputerSnapshot(restoreLatest: boolean | undefined
   return readyExitCode !== 0;
 }
 
-export function novncContainerPath(requestPath: string, computerId: string): string {
-  const prefix = `/api/computers/${computerId}/novnc`;
+export function screenContainerPath(requestPath: string, computerId: string): string {
+  const prefix = `/api/computers/${computerId}/screen`;
   if (!requestPath.startsWith(prefix + "/") && requestPath !== prefix) {
-    throw new Error("novnc path is outside the computer proxy");
+    throw new Error("screen path is outside the computer proxy");
   }
-  const rest = requestPath === prefix ? "/vnc.html" : requestPath.slice(prefix.length);
+  const rest = requestPath === prefix ? "/" : requestPath.slice(prefix.length);
   if (!rest.startsWith("/") || rest.includes("..") || rest.startsWith("//")) {
-    throw new Error("novnc path is not allowed");
+    throw new Error("screen path is not allowed");
   }
   return rest;
 }
 
 export function computerPreviewSrc(computerId: string): string {
-  const id = normalizeComputerId(computerId);
-  return `/api/computers/${id}/novnc/vnc.html?autoconnect=1&resize=scale&path=${encodeURIComponent(`api/computers/${id}/novnc/websockify`)}`;
+  return `/api/computers/${normalizeComputerId(computerId)}/screen/`;
 }
