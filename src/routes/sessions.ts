@@ -1,3 +1,4 @@
+import * as rpc from "../rpc/contract";
 import { applySessionEvent } from "../fsm/session-status";
 import { Effect } from "effect";
 import type { Hono } from "hono";
@@ -258,7 +259,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!session) {
         return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
       }
-      const live = await getSessionAgent(c.env, email, id).then((stub) => stub.sessionTurnState()).catch(() => null);
+      const live = await rpc.query("Session.turnState", () => getSessionAgent(c.env, email, id).then((stub) => stub.sessionTurnState())).catch(() => null);
       const result = buildSessionTurnState({
         sessionId: id,
         sessionStatus: live?.sessionStatus ?? session.status,
@@ -331,8 +332,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
 
     try {
-      const stub = await getSessionAgent(c.env, identity.email, id);
-      await stub.seedIdentity(identity);
+      await rpc.command("Session.seedIdentity", async () => (await getSessionAgent(c.env, identity.email, id)).seedIdentity(identity));
     } catch {
     }
 
@@ -365,9 +365,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!(await requireOwnedSession(c.env, id, identity.email))) {
         return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
       }
-      const stub = await getSessionAgent(c.env, identity.email, id);
-      await stub.seedIdentity(identity);
-      const result = await stub.healStoredHistory();
+      const result = await rpc.command("Session.healStoredHistory", async () => {
+        const stub = await getSessionAgent(c.env, identity.email, id);
+        await stub.seedIdentity(identity);
+        return stub.healStoredHistory();
+      });
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result, next_actions: [] });
     } catch (err) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "HEAL_FAILED", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
@@ -383,9 +385,12 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!(await requireOwnedSession(c.env, id, identity.email))) {
         return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
       }
-      const stub = await getSessionAgent(c.env, identity.email, id);
-      await stub.seedIdentity(identity);
-      const result = await stub.setSessionModel(body.model, body.reasoningEffort);
+      const model = body.model;
+      const result = await rpc.command("Session.setModel", async () => {
+        const stub = await getSessionAgent(c.env, identity.email, id);
+        await stub.seedIdentity(identity);
+        return stub.setSessionModel(model, body.reasoningEffort);
+      });
       return c.json<ApiResponse>({ ok: result.ok, command: c.req.path, result, next_actions: [] }, result.ok ? 200 : 400);
     } catch (err) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "MODEL_SET_FAILED", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
@@ -410,14 +415,16 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
     let forkId: string | null = null;
     try {
-      const sourceStub = await getSessionAgent(c.env, identity.email, sourceId);
-      await sourceStub.seedIdentity(identity);
-      const history = await sourceStub.forkHistoryAt(atMessageId);
+      const history = await rpc.query("Session.forkHistoryAt", async () => {
+        const sourceStub = await getSessionAgent(c.env, identity.email, sourceId);
+        await sourceStub.seedIdentity(identity);
+        return sourceStub.forkHistoryAt(atMessageId);
+      });
       forkId = crypto.randomUUID();
       const forkName = `Fork · ${source.name}`.slice(0, 200);
       await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))").bind(forkId, forkName, identity.email).run();
-      const forkStub = await getSessionAgent(c.env, identity.email, forkId);
-      await forkStub.seedForkHistory(identity, history);
+      const newForkId = forkId;
+      await rpc.command("Session.seedForkHistory", async () => (await getSessionAgent(c.env, identity.email, newForkId)).seedForkHistory(identity, history));
       const cutoff = await c.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND json_extract(meta_json, '$.uiMessageId') = ? ORDER BY id DESC LIMIT 1").bind(sourceId, identity.email, atMessageId).first<{ id: number }>();
       if (cutoff) {
         await c.env.DB.prepare(`INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
@@ -472,8 +479,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const id = c.req.param("id");
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
     if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
-    const stub = await getSessionAgent(c.env, identity.email, id);
-    const times = await stub.messageTimes().catch(() => ({}));
+    const times = await rpc.query("Session.messageTimes", async () => (await getSessionAgent(c.env, identity.email, id)).messageTimes()).catch(() => ({}));
     return c.json({ ok: true, result: { times } });
   });
 
@@ -482,10 +488,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const id = c.req.param("id");
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
     if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
-    const stub = await getSessionAgent(c.env, identity.email, id);
     let messages: string;
     try {
-      messages = await stub.transcriptJson();
+      messages = await rpc.query("Session.transcript", async () => (await getSessionAgent(c.env, identity.email, id)).transcriptJson());
     } catch (error) {
       console.error("session_transcript_failed", { id, err: String(error) });
       return c.json({ ok: false, error: { code: "TRANSCRIPT_UNAVAILABLE", message: String(error) } }, 502);
@@ -899,10 +904,13 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
 
     try {
-      const stub = await getSessionAgent(c.env, c.get("identity").email, id);
-      await stub.seedIdentity(c.get("identity"));
+      const stub = await rpc.command("Session.open", async () => {
+        const opened = await getSessionAgent(c.env, c.get("identity").email, id);
+        await opened.seedIdentity(c.get("identity"));
+        return opened;
+      });
       try {
-        await stub.injectUserMessage({ content, clientMsgId: body.clientMsgId, attachments: body.attachments });
+        await rpc.command("Session.inject", () => stub.injectUserMessage({ content, clientMsgId: body.clientMsgId, attachments: body.attachments }));
       } catch (err) {
         return c.json(
           {

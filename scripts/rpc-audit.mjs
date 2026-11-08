@@ -7,8 +7,9 @@ const SRC = join(ROOT, "src");
 const ALLOW_PATH = join(ROOT, "scripts", "rpc-audit.allow.json");
 
 const STUB_ACQUIRE = /\bgetAgentByName\(|\bgetSubAgentByName\(|\.idFromName\(|\bgetSessionAgent\(|\bworkspaceHub\(|\bgetNamedComputer\(|\bgetSandbox\(/;
-const WRAPPED = /\bwithTimeout\(|\bwithRetry\(|\bresolveStub\(/;
+const WRAPPED = /\bwithTimeout\(|\bwithRetry\(|\bresolveStub\(|\brpc\.(query|command|idempotentCommand|startJob)\(/;
 const WINDOW = 8;
+const WRAPPER_LOOKBACK = 2;
 
 function sourceFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -55,7 +56,7 @@ export function audit(files, readText, allow) {
         violations.push({ rule: "R3", at, detail: "retryOnTimeout without an opId can run the method twice" });
       }
       if (STUB_ACQUIRE.test(line) && !/^\s*(export\s+)?(async\s+)?function\b/.test(line) && !/^\s*import\b/.test(line)) {
-        const near = lines.slice(index, index + WINDOW).join("\n");
+        const near = lines.slice(Math.max(0, index - WRAPPER_LOOKBACK), index + WINDOW).join("\n");
         if (!WRAPPED.test(near) && !allowed(allow, file, line, used)) {
           violations.push({ rule: "R2", at, detail: `Durable Object call without withTimeout/withRetry or an allowlist reason: ${line.trim().slice(0, 120)}` });
         }
@@ -89,15 +90,11 @@ function main() {
   for (const violation of violations) console.log(`${violation.rule} ${violation.at} ${violation.detail}`);
   const byRule = violations.reduce((counts, violation) => ({ ...counts, [violation.rule]: (counts[violation.rule] ?? 0) + 1 }), {});
   console.log(`files: ${files.length} violations: ${violations.length} ${JSON.stringify(byRule)}`);
-  const blocking = violations.filter((violation) => ENFORCED_RULES.has(violation.rule) && !isTrackedOpIdGap(violation));
-  console.log(`blocking: ${blocking.length} (enforced: ${[...ENFORCED_RULES].join(",")}; tracked, not yet enforced: R2 and the R5 opId frame)`);
+  const blocking = violations.filter((violation) => ENFORCED_RULES.has(violation.rule));
+  console.log(`blocking: ${blocking.length} (enforced: ${[...ENFORCED_RULES].join(",")}; tracked, not yet enforced: R2)`);
   process.exitCode = blocking.length === 0 ? 0 : 1;
 }
 
 export const ENFORCED_RULES = new Set(["R1", "R3", "R4", "R5", "ALLOW"]);
-
-export function isTrackedOpIdGap(violation) {
-  return violation.rule === "R5" && /carry no opId/.test(violation.detail);
-}
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

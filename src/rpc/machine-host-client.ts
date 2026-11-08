@@ -23,15 +23,15 @@ export async function readMachineStatus(namespace: HostNamespace, ownerEmail: st
   return timed.ok ? timed.value : DISCONNECTED_STATUS;
 }
 
-export async function invokeMachineTool<T>(namespace: HostNamespace, ownerEmail: string, tool: string, args: Record<string, unknown>, timeoutMs = MACHINE_INVOKE_TIMEOUT_MS): Promise<T | { ok: false; error: string }> {
+export async function invokeMachineTool<T>(namespace: HostNamespace, ownerEmail: string, tool: string, args: Record<string, unknown>, timeoutMs = MACHINE_INVOKE_TIMEOUT_MS, opId: string = crypto.randomUUID()): Promise<T | { ok: false; error: string }> {
   const host = machineHostStub(namespace, ownerEmail);
-  const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": ownerEmail.toLowerCase() });
+  const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": ownerEmail.toLowerCase(), "X-Machinectl-Op-Id": opId });
   const timed = await withTimeout({
     promise: host.fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool, args }) }).then((response) => response.json<T>()),
     timeoutMs,
     op: "MachineHost.invoke",
   });
   if (timed.ok) return timed.value;
-  if (timed.reason === "timeout") return { ok: false, error: `My Machine did not answer within ${timeoutMs}ms for ${tool}. It may still finish on the laptop. Check its effect before retrying, because a retry can run it twice.` };
+  if (timed.reason === "timeout") return { ok: false, error: `My Machine did not answer within ${timeoutMs}ms for ${tool}. It may still finish on the laptop. Retry with opId ${opId} to get its result instead of running it again.` };
   return { ok: false, error: `My Machine call failed for ${tool}: ${timed.error instanceof Error ? timed.error.message : String(timed.error)}` };
 }

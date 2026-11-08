@@ -199,6 +199,7 @@ export const MACHINECTL_TOOL: ToolDef = {
     properties: {
       tool: { type: "string", description: "Laptop tool name, or the special discovery value tools/list." },
       arguments: { type: "object", description: "Arguments for the laptop tool." },
+      opId: { type: "string", description: "Only when retrying a call that timed out: pass the opId from that error to get its result instead of running it again." },
     },
     required: ["tool"],
   },
@@ -226,7 +227,7 @@ export const MACHINECTL_TOOL: ToolDef = {
         return JSON.stringify({ ok: false, verified: false, reason: error instanceof Error ? error.message : String(error) });
       }
     }
-    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {});
+    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {}, undefined, typeof args.opId === "string" && args.opId.length > 0 ? args.opId : undefined);
     if ((tool === "screenshot" || tool === "screen_record") && result.ok && typeof result.content === "string") {
       const artifact = await storeInlineMediaArtifact(env, identity, result.content);
       if (artifact) {
