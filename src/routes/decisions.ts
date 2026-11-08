@@ -17,12 +17,18 @@ import type { DecisionResponseStore } from "../decision-response";
 import { decisionResponseLiveLayer, recordDecisionResponse } from "../decision-response-program";
 
 import { jsonForHtml } from "../html-embed";
+import { RIG_APPROVAL_EVENT } from "../rig-pipeline";
 
 export { jsonForHtml };
 
 const ID_RE = /^run-decision-[0-9a-f-]{36}$/i;
 
-type DecisionBounds = { surface: "decision"; question: string; options: string[]; sessionId: string };
+type DecisionBounds = { surface: "decision"; question: string; options: string[]; sessionId: string; rigInstanceId?: string };
+
+export async function resumeRigWorkflow(env: Pick<AppEnv["Bindings"], "RIG_PIPELINE">, instanceId: string, choice: string): Promise<void> {
+  const instance = await env.RIG_PIPELINE.get(instanceId);
+  await instance.sendEvent({ type: RIG_APPROVAL_EVENT, payload: { choice, via: "push" } });
+}
 
 type DecisionDb = Pick<AppEnv["Bindings"], "DB">;
 
@@ -162,6 +168,10 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     };
     try {
       const resume = async () => {
+        if (bounds.rigInstanceId) {
+          await resumeRigWorkflow(c.env, bounds.rigInstanceId, choice);
+          return;
+        }
         await (await sessionControl(c.env, c.get("identity"), bounds.sessionId)).inject(`[decision] In response to "${bounds.question}", I chose: ${choice}`, `decision:${id}`);
         await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(bounds.sessionId, email).run();
       };

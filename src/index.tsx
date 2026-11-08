@@ -48,6 +48,7 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computers";
 import { registerDecisionRoutes } from "./routes/decisions";
 import { readMachineStatus } from "./rpc/machine-host-client";
+import { registerRigRoutes } from "./routes/rig";
 import { registerDeskRoutes } from "./routes/desk";
 import { registerTerminalRoutes } from "./routes/terminal";
 import { registerWorkspaceDirectoryRoutes } from "./routes/workspaces";
@@ -82,6 +83,7 @@ export { WorkspaceObject as Sandbox } from "./workspace-object";
 export { Sandbox as NamedComputer } from "@cloudflare/sandbox";
 export { ComputerWorkspace } from "./computer-workspace";
 export { PiChatAgent } from "./pi-engine/pi-chat-agent";
+export { RigPipeline } from "./rig-pipeline-workflow";
 const app = new Hono<AppEnv>();
 
 // Fail loud on missing CORE secrets only. The two below are required for the
@@ -319,6 +321,7 @@ registerInstructionRoutes(app);
 registerArtifactRoutes(app);
 registerComputerRoutes(app);
 registerDecisionRoutes(app);
+registerRigRoutes(app);
 registerDeskRoutes(app);
 registerTerminalRoutes(app);
 registerWorkspaceDirectoryRoutes(app);

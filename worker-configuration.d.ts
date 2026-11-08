@@ -4,6 +4,7 @@
 interface __BaseEnv_Env {
 	AUDIT_KV: KVNamespace;
 	BACKUP_BUCKET: R2Bucket;
+	RIG_PIPELINE: Workflow<import("./src/rig-pipeline").RigPipelineParams>;
 	USER_UPLOADS: R2Bucket;
 	DB: D1Database;
 	LOADER: WorkerLoader;
@@ -35,6 +36,7 @@ declare namespace Cloudflare {
 	interface DevEnv {
 		AUDIT_KV: KVNamespace;
 		BACKUP_BUCKET: R2Bucket;
+		RIG_PIPELINE: Workflow<import("./src/rig-pipeline").RigPipelineParams>;
 		USER_UPLOADS: R2Bucket;
 		DB: D1Database;
 		LOADER: WorkerLoader;
