@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, untrack } from "svelte";
   type Skill = { id: string; name: string; description: string; instructions: string; allowedTools: string[]; updatedAt: string };
 
   type Draft = { id: string | null; name: string; description: string; instructions: string; allowedTools: string };
@@ -52,11 +53,14 @@
   $effect(() => {
     if (request.nonce === handledNonce) return;
     handledNonce = request.nonce;
-    if (request.mode === "new") draft = emptyDraft();
-    if (request.mode === "save") void startSave(request.sessionId);
+    const { mode, sessionId } = request;
+    untrack(() => {
+      if (mode === "new") draft = emptyDraft();
+      if (mode === "save") void startSave(sessionId);
+    });
   });
 
-  $effect(() => { void load(); });
+  onMount(() => { void load(); });
 
   async function save() {
     if (!draft) return;

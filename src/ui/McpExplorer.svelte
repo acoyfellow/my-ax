@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { argsFromFields, EMPTY_EXPLORE, schemaFields, type ConnectorExploreResult, type ExploredTool } from "../connector-explore";
 
   type Props = { server: string; label: string };
@@ -35,7 +36,7 @@
     }
   }
 
-  $effect(() => { void refresh(); });
+  onMount(() => { void refresh(); });
 
   function toggleTool(tool: ExploredTool) {
     openTool = openTool === tool.name ? null : tool.name;
