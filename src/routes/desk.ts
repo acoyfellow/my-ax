@@ -1,4 +1,5 @@
 import { getAgentByName } from "agents";
+import * as rpc from "../rpc/contract";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
@@ -100,8 +101,7 @@ async function broadcastDeskApp(env: AppEnv["Bindings"], email: string, app: Des
   const rows = await env.DB.prepare(
     "SELECT id FROM sessions WHERE owner_email = ? AND status != 'archived' ORDER BY updated_at DESC LIMIT 40",
   ).bind(owner).all<{ id: string }>();
-  const parent = await getAgentByName(env.USER_AGENT, owner);
-  await parent.broadcastDeskApp((rows.results ?? []).map((row) => row.id), app);
+  await rpc.command("UserAgent.broadcastDeskApp", async () => (await getAgentByName(env.USER_AGENT, owner)).broadcastDeskApp((rows.results ?? []).map((row) => row.id), app));
 }
 
 async function readBoard(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {
@@ -116,8 +116,7 @@ async function broadcastBoard(env: AppEnv["Bindings"], email: string, board: Des
   const rows = await env.DB.prepare(
     "SELECT id FROM sessions WHERE owner_email = ? AND status != 'archived' ORDER BY updated_at DESC LIMIT 40",
   ).bind(owner).all<{ id: string }>();
-  const parent = await getAgentByName(env.USER_AGENT, owner);
-  await parent.broadcastDeskBoard((rows.results ?? []).map((row) => row.id), board);
+  await rpc.command("UserAgent.broadcastDeskBoard", async () => (await getAgentByName(env.USER_AGENT, owner)).broadcastDeskBoard((rows.results ?? []).map((row) => row.id), board));
 }
 
 async function writeBoard(env: AppEnv["Bindings"], email: string, board: DeskBoard): Promise<void> {
@@ -130,8 +129,7 @@ async function writeBoard(env: AppEnv["Bindings"], email: string, board: DeskBoa
   const rows = await env.DB.prepare(
     "SELECT id FROM sessions WHERE owner_email = ? AND status != 'archived' ORDER BY updated_at DESC LIMIT 40",
   ).bind(owner).all<{ id: string }>();
-  const parent = await getAgentByName(env.USER_AGENT, owner);
-  await parent.broadcastDeskBoard((rows.results ?? []).map((row) => row.id), board);
+  await rpc.command("UserAgent.broadcastDeskBoard", async () => (await getAgentByName(env.USER_AGENT, owner)).broadcastDeskBoard((rows.results ?? []).map((row) => row.id), board));
 }
 
 export async function ownerDeskGet(env: AppEnv["Bindings"], email: string): Promise<DeskBoard> {

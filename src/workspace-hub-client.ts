@@ -1,3 +1,5 @@
+import * as rpc from "./rpc/contract";
+
 export type HubStub = {
   publish(change: WorkspaceChange): Promise<unknown>;
   since(since: number, subscription?: Subscription): Promise<WorkspaceEvent[]>;
@@ -41,5 +43,5 @@ export function workspaceHub(env: unknown, ownerEmail: string): HubStub | null {
 export async function publishWorkspaceChange(env: unknown, ownerEmail: string, change: WorkspaceChange): Promise<void> {
   const hub = workspaceHub(env, ownerEmail);
   if (!hub) return;
-  await hub.publish(change).catch((error: unknown) => console.error("workspace_hub_publish_failed", { kind: change.kind, err: String(error) }));
+  await rpc.command("WorkspaceHub.publish", () => hub.publish(change)).catch((error: unknown) => console.error("workspace_hub_publish_failed", { kind: change.kind, err: String(error) }));
 }

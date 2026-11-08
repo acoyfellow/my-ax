@@ -9,6 +9,7 @@
   //     prompt capture, theme cycle, model-catalog search
 
   import { onMount, tick } from "svelte";
+  import SkillsPanel from "./SkillsPanel.svelte";
   import {
     modelState,
     setModel,
@@ -50,7 +51,8 @@
   let ownerInstructions = $state("");
   let ownerInstructionsStatus = $state("");
   let ownerInstructionsRevision = 0;
-  let activeSection = $state<"general" | "capabilities" | "artifacts" | "computers" | "recipes" | "jobs" | "starters" | "connections">("general");
+  let activeSection = $state<"general" | "capabilities" | "artifacts" | "computers" | "recipes" | "skills" | "jobs" | "starters" | "connections">("general");
+  let skillsMode = $state<{ mode: "new" | "save" | "list"; sessionId: string | null; nonce: number }>({ mode: "list", sessionId: null, nonce: 0 });
   let computers = $state<Array<{ computer_id: string; backup_id: string; updated_at: string }>>([]);
   let computersLoading = $state(false);
   let computerStatus = $state("");
@@ -61,6 +63,7 @@
     { id: "artifacts" as const, label: "Widgets", hint: "Reusable widgets and dashboards" },
     { id: "computers" as const, label: "Computers", hint: "Named Ubuntu desktops" },
     { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
+    { id: "skills" as const, label: "Skills & commands", hint: "Your / menu and saved instructions" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
     { id: "starters" as const, label: "Starters", hint: "New-conversation suggestions" },
     { id: "connections" as const, label: "Connections", hint: "Runtime and services" },
@@ -115,6 +118,12 @@
       activeSection = visibleSections[0].id;
     }
   });
+  function openSkills(event: Event) {
+    const detail = (event as CustomEvent<{ mode?: "new" | "save"; sessionId?: string | null }>).detail ?? {};
+    skillsMode = { mode: detail.mode ?? "list", sessionId: detail.sessionId ?? null, nonce: skillsMode.nonce + 1 };
+    openDrawer(new CustomEvent("my-ax:settings-open", { detail: { section: "skills" } }));
+  }
+
   function openDrawer(event?: Event) {
     lastActiveElement = document.activeElement as HTMLElement | null;
     const detail = event instanceof CustomEvent ? event.detail as { section?: string; recipeName?: string } : undefined;
@@ -125,6 +134,9 @@
     if (requestedSection === "artifacts") activeSection = "artifacts";
     if (requestedSection === "computers") activeSection = "computers";
     if (requestedSection === "starters") activeSection = "starters";
+    if (requestedSection === "connections") activeSection = "connections";
+    if (requestedSection === "skills") activeSection = "skills";
+    if (requestedSection === "model") activeSection = "general";
     open = true;
     refreshJobs();
     void refreshArtifacts();
@@ -969,6 +981,7 @@
     relocateExtras();
     // Settings open/close events
     window.addEventListener("my-ax:settings-open", openDrawer);
+    window.addEventListener("my-ax:skills-open", openSkills);
     window.addEventListener("my-ax:settings-close", closeDrawer);
     window.addEventListener("my-ax:settings-toggle", toggleDrawer);
     window.addEventListener("keydown", handleKeydown);
@@ -976,6 +989,7 @@
     mq.addEventListener("change", onSystemThemeChange);
     return () => {
       window.removeEventListener("my-ax:settings-open", openDrawer);
+      window.removeEventListener("my-ax:skills-open", openSkills);
       window.removeEventListener("my-ax:settings-close", closeDrawer);
       window.removeEventListener("my-ax:settings-toggle", toggleDrawer);
       window.removeEventListener("keydown", handleKeydown);
@@ -1285,6 +1299,10 @@
           </div>
         {/if}
         {#if artifactStatus}<p class="text-xs text-fg-mut" role="status" aria-live="polite">{artifactStatus}</p>{/if}
+      </div>
+
+      <div hidden={activeSection !== "skills"} class="space-y-4">
+        <SkillsPanel request={skillsMode} />
       </div>
 
       <div hidden={activeSection !== "recipes"} class="space-y-4">

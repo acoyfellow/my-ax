@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./types";
 import { getSessionAgent } from "./agent-stub";
+import * as rpc from "./rpc/contract";
 import { notifyOwner } from "./notify";
 import { DEAD_SESSION_ATTENTION_KIND } from "./dead-session-detector";
 import { runDeadSessionScan, type DeadSessionDeps } from "./dead-session-program";
@@ -15,9 +16,11 @@ export function makeDeadSessionDeps(env: Env): DeadSessionDeps {
       await (await sessionControl(env, { email: ownerEmail, sub: "system:auto-revive" } as Parameters<typeof sessionControl>[1], sessionId)).inject(message, clientMsgId);
     },
     settleRunningWithoutTurn: async (ownerEmail, sessionId) => {
-      const stub = await getSessionAgent(env, ownerEmail, sessionId);
-      await stub.seedIdentity({ email: ownerEmail, sub: "system:turn-watchdog" });
-      await stub.settleIfNoLiveTurn();
+      await rpc.command("Session.settleIfNoLiveTurn", async () => {
+        const stub = await getSessionAgent(env, ownerEmail, sessionId);
+        await stub.seedIdentity({ email: ownerEmail, sub: "system:turn-watchdog" });
+        await stub.settleIfNoLiveTurn();
+      });
     },
     alertOwner: async (ownerEmail, sessionId, dedupeSuffix) => {
       await notifyOwner(env, ownerEmail, {

@@ -80,6 +80,11 @@
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
   import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
+  import SlashMenu from "./SlashMenu.svelte";
+  import CommandPalette from "./CommandPalette.svelte";
+  import { COMMAND_EVENT, runCommand, type CommandEventDetail } from "./command-runner";
+  import { MENTION_PATTERN, parseSlashInput, type Command } from "../commands/registry";
+  import type { Replacement } from "./slash-menu-state";
 
   // Markdown ships in the application bundle so the first streamed token can
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
@@ -2213,6 +2218,72 @@
 
   // ── Composer ──────────────────────────────────────────────────────
   let formEl = $state<HTMLFormElement | undefined>(undefined);
+  let slashMenu = $state<{ handleKey: (event: KeyboardEvent) => boolean; invalidate: () => void } | undefined>(undefined);
+
+  async function applySlashReplacement(replacement: Replacement) {
+    composerText = replacement.text;
+    await tick();
+    inputEl?.focus();
+    inputEl?.setSelectionRange(replacement.caret, replacement.caret);
+    autoGrow();
+  }
+
+  function sendComposedText(text: string) {
+    composerText = text;
+    void tick().then(() => formEl?.requestSubmit());
+  }
+
+  async function composerFetchJson(path: string, init?: RequestInit) {
+    const response = await fetch(path, { credentials: "include", ...init });
+    return response.json().catch(() => ({ ok: false, error: { message: `HTTP ${response.status}` } }));
+  }
+
+  async function runSlashCommand(command: Command) {
+    composerText = "";
+    await runCommand(command, {}, "", {
+      sessionId: () => readTabSession() || null,
+      send: sendComposedText,
+      toast: (text, kind) => (kind === "error" ? pushError(text) : window.dispatchEvent(new CustomEvent("my-ax:toast", { detail: { text, kind: "info" } }))),
+      fetchJson: composerFetchJson,
+    });
+  }
+
+  async function expandComposerText(raw: string): Promise<{ text: string; files: string[] } | null> {
+    MENTION_PATTERN.lastIndex = 0;
+    const hasMention = MENTION_PATTERN.test(raw);
+    MENTION_PATTERN.lastIndex = 0;
+    const slash = parseSlashInput(raw);
+    if (!hasMention && !slash) return { text: raw, files: [] };
+    const body = await composerFetchJson("/api/commands/expand", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: raw, sessionId: readTabSession() || null }) }).catch(() => null);
+    if (!body?.ok) return { text: raw, files: [] };
+    const result = body.result as { text: string; files: string[]; skill: { name: string } | null; unresolved: unknown[] };
+    if (slash && !result.skill) {
+      const commands = await composerFetchJson(`/api/commands?connectors=0&q=${encodeURIComponent(slash.trigger)}`).catch(() => null);
+      const match = (commands?.result?.commands as Command[] | undefined)?.find((command) => command.trigger === slash.trigger && command.kind !== "skill");
+      if (match) {
+        composerText = "";
+        await runCommand(match, slash.args, slash.rest, { sessionId: () => readTabSession() || null, send: sendComposedText, toast: (text, kind) => (kind === "error" ? pushError(text) : window.dispatchEvent(new CustomEvent("my-ax:toast", { detail: { text, kind: "info" } }))), fetchJson: composerFetchJson });
+        return null;
+      }
+    }
+    return { text: result.text, files: result.files };
+  }
+
+  function onCommandEvent(event: Event) {
+    const detail = (event as CustomEvent<CommandEventDetail>).detail;
+    if (detail.name === "voice") toggleVoiceMode();
+    else if (detail.name === "model") window.dispatchEvent(new CustomEvent("my-ax:settings-open", { detail: { section: "model" } }));
+    else if (detail.name === "fork") {
+      const latest = [...messages].reverse().find((message) => !message.pending && !message.streaming);
+      if (latest) void forkFromMessage(latest);
+      else pushError("There is nothing to fork yet");
+    }
+  }
+
+  $effect(() => {
+    window.addEventListener(COMMAND_EVENT, onCommandEvent);
+    return () => window.removeEventListener(COMMAND_EVENT, onCommandEvent);
+  });
   let pendingFirstReady = $state(false);
 
   function autoGrow() {
@@ -2224,6 +2295,7 @@
     autoGrow();
   }
   function onInputKeydown(e: KeyboardEvent) {
+    if (slashMenu?.handleKey(e)) return;
     if (shouldRecallQueue({ key: e.key, composerText, queued: localQueue.size, modifier: e.shiftKey || e.altKey || e.metaKey || e.ctrlKey })) {
       e.preventDefault();
       recallQueueForEditing();
@@ -2414,7 +2486,9 @@
       pushError("Wait for the attachments to finish uploading");
       return;
     }
-    const text = withAttachedFilesNote(composerText, pendingFiles.map((file) => file.path));
+    const expanded = await expandComposerText(composerText);
+    if (expanded === null) return;
+    const text = withAttachedFilesNote(expanded.text, [...pendingFiles.map((file) => file.path), ...expanded.files]);
     if (!text.trim() && pendingAttachments.length === 0) return;
     if (ws && wsState.conn !== "live") {
       queueSendUntilOpen(text);
@@ -2943,6 +3017,7 @@
   });
 </script>
 
+<CommandPalette />
 <div class="h-full flex flex-col">
   {#if authenticationRecovery.accessRequired}
     <div class="connector-banner" data-show="1" data-state="needs-auth" role="alert">
@@ -3291,7 +3366,10 @@
               </svg>
             {/if}
           </button>
-          <div class="flex-1 min-w-0">
+          <div class="flex-1 min-w-0 relative">
+            {#if !voiceEnabled}
+              <SlashMenu bind:this={slashMenu} input={inputEl} text={composerText} sessionId={readTabSession() || null} onReplace={applySlashReplacement} onRun={runSlashCommand} />
+            {/if}
             {#if cameraOn}
               <div class="webcam-preview" data-camera-preview="1">
                 <!-- svelte-ignore a11y_media_has_caption -->

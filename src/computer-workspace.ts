@@ -12,6 +12,7 @@ import {
   type ComputerWorkspaceClient,
 } from "./computer-filesystem";
 import { computerWorkspaceName } from "./computer-owner";
+import * as rpc from "./rpc/contract";
 import {
   COMPUTER_RETAINED_WRITE_RESERVATION_BYTES,
   getComputerRetainedWriteBytes,
@@ -64,16 +65,14 @@ export async function withOwnerComputerWorkspace<T>(
   identity: Pick<AccessIdentity, "email">,
   operation: (workspace: ComputerWorkspaceClient) => Promise<T>,
 ): Promise<T> {
-  const id = env.COMPUTER.idFromName(computerWorkspaceName(identity));
-  return withComputerWorkspace(
-    async () => (await getWorkspace(env.COMPUTER.get(id) as unknown as WorkspaceHandle)) as ComputerWorkspaceClient,
+  return rpc.command("Computer.workspace", () => withComputerWorkspace(
+    async () => (await getWorkspace(env.COMPUTER.get(env.COMPUTER.idFromName(computerWorkspaceName(identity))) as unknown as WorkspaceHandle)) as ComputerWorkspaceClient,
     operation,
-  );
+  ));
 }
 
 export async function getComputerHealth(env: Pick<Env, "COMPUTER">, identity: Pick<AccessIdentity, "email">) {
-  const id = env.COMPUTER.idFromName(computerWorkspaceName(identity));
-  return env.COMPUTER.get(id).health();
+  return rpc.query("Computer.health", () => env.COMPUTER.get(env.COMPUTER.idFromName(computerWorkspaceName(identity))).health());
 }
 
 export function createComputerWorkProvider(ctx: Pick<ToolContext, "env" | "identity">) {
@@ -84,7 +83,7 @@ export function createComputerWorkProvider(ctx: Pick<ToolContext, "env" | "ident
   return {
     fns: {
       read: (input: unknown) => open((workspace) => readComputerFileFromWorkspace(workspace, input)),
-      write: (input: unknown) => computer.write(input),
+      write: (input: unknown) => rpc.command("Computer.write", () => computer.write(input)),
       list: (input: unknown) => open((workspace) => listComputerFilesFromWorkspace(workspace, input)),
       grep: (input: unknown) => open((workspace) => grepComputerFilesFromWorkspace(workspace, input)),
     },

@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { getAgentByName } from "agents-pi";
+import * as rpc from "../rpc/contract";
 import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
@@ -17,16 +18,18 @@ type PiEnv = { PI_CHAT: DurableObjectNamespace<PiChatAgent> };
 
 export async function openPiChat(env: AppEnv["Bindings"], ownerEmail: string, chatId: string) {
   const email = ownerEmail.toLowerCase();
-  const stub = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
-  await stub.bind({ email }, chatId);
-  return stub;
+  return rpc.command("PiChat.open", async () => {
+    const stub = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
+    await stub.bind({ email }, chatId);
+    return stub;
+  });
 }
 
 async function ownedUnboundPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") => { email: string } }, chatId: string) {
   if (!PI_CHAT_ID_PATTERN.test(chatId)) throw new Error("invalid chat id");
   const email = c.get("identity").email.toLowerCase();
   const owned = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
-  const opened = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId));
+  const opened = rpc.query("PiChat.resolve", () => getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)));
   const [row, stub] = await Promise.all([owned, opened]);
   return row ? { stub, email } : null;
 }
@@ -42,16 +45,20 @@ export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceI
   const owner = email.toLowerCase();
   const entryId = parseForkPoint(atMessageId);
   if (entryId === null) throw new Error("Fork point was not found in this conversation.");
-  const source = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, sourceId));
-  await source.bind({ email: owner }, sourceId);
-  const entries = await source.forkEntriesAt(entryId);
+  const entries = await rpc.query("PiChat.forkEntriesAt", async () => {
+    const source = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, sourceId));
+    await source.bind({ email: owner }, sourceId);
+    return source.forkEntriesAt(entryId);
+  });
   const forkId = crypto.randomUUID();
   const name = `Fork · ${sourceName}`.slice(0, 200);
   await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))").bind(forkId, name, owner).run();
   try {
-    const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, forkId));
-    await target.bind({ email: owner }, forkId);
-    const messageCount = await target.seedFromFork(entries);
+    const messageCount = await rpc.command("PiChat.seedFromFork", async () => {
+      const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, forkId));
+      await target.bind({ email: owner }, forkId);
+      return target.seedFromFork(entries);
+    });
     await copyWorkspaceDisk(env, { email: owner } as AccessIdentity, { kind: "chat", chatId: sourceId }, { kind: "chat", chatId: forkId }).catch((error: unknown) => console.error("pi_fork_disk_copy_failed", { err: String(error) }));
     return { sessionId: forkId, name, messageCount };
   } catch (error) {
@@ -113,7 +120,7 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     if (!PI_CHAT_ID_PATTERN.test(chatId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
     const email = c.get("identity").email.toLowerCase();
     const ownership = c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first();
-    const loading = getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)).then((stub) => stub.slimLiveFor({ email }, chatId));
+    const loading = rpc.query("PiChat.slimLive", () => getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, chatId)).then((stub) => stub.slimLiveFor({ email }, chatId)));
     const [row, view] = await Promise.all([ownership, loading.catch(() => null)]);
     if (!row || !view) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
     return c.json({ ok: true, result: JSON.parse(JSON.stringify(view)) } as Record<string, unknown>);

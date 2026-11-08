@@ -6,6 +6,9 @@ export { computerPreviewSrc } from "./computer-id";
 import type { Env } from "./types";
 import { WORKSPACE_HOME } from "./workspace-path";
 import { verifyWorkspaceRestore } from "./workspace-snapshot";
+import * as rpc from "./rpc/contract";
+
+export const NAMED_COMPUTER_OPEN_TIMEOUT_MS = 5 * 60_000;
 
 const SNAPSHOT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const READY_MARKER = "/tmp/my-ax-computer-ready";
@@ -27,7 +30,11 @@ async function latestSnapshot(env: Env, identity: AccessIdentity, computerId: st
   return row ? { backupId: row.backup_id, backupDir: row.backup_dir } : null;
 }
 
-export async function getNamedComputer(env: Env, identity: AccessIdentity, rawId: string, options?: { restoreLatest?: boolean }) {
+export function getNamedComputer(env: Env, identity: AccessIdentity, rawId: string, options?: { restoreLatest?: boolean }) {
+  return rpc.command("NamedComputer.open", () => openNamedComputer(env, identity, rawId, options), NAMED_COMPUTER_OPEN_TIMEOUT_MS);
+}
+
+async function openNamedComputer(env: Env, identity: AccessIdentity, rawId: string, options?: { restoreLatest?: boolean }) {
   const computerId = normalizeComputerId(rawId);
   const sandbox = handle(env, identity, computerId);
   const ready = await sandbox.exec(`test -f ${READY_MARKER}`, { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);

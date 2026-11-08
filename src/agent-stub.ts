@@ -12,5 +12,5 @@ export async function getUserAgent(env: Pick<Env, "USER_AGENT">, ownerEmail: str
 
 export async function getSessionAgent(env: Env, ownerEmail: string, sessionId: string) {
   const parent = await getUserAgent(env, ownerEmail);
-  return getSubAgentByName(parent, MyAgent, sessionId);
+  return resolveStub("MyAgent.facet", () => getSubAgentByName(parent, MyAgent, sessionId));
 }

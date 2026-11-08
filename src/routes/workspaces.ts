@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import type { AppEnv } from "../app-env";
+import * as rpc from "../rpc/contract";
 import { forkPiChat, openPiChat } from "../pi-engine/routes";
 import { createWorkspaceDirectory, WorkspaceNotOwned } from "../workspace-directory";
 import { workspaceFor } from "../workspace";
@@ -22,7 +23,7 @@ export function registerWorkspaceDirectoryRoutes(app: Hono<AppEnv>) {
     if (!hub) return c.json({ ok: false, command: c.req.path, error: { code: "HUB_UNAVAILABLE", message: "the workspace hub is not configured" }, next_actions: [] }, 503);
     if (c.req.header("Upgrade")?.toLowerCase() === "websocket") return hub.fetch(c.req.raw);
     const since = Number(c.req.query("since") ?? "0") || 0;
-    const events = await hub.since(since, { workspaces: c.req.queries("workspace") ?? [], kinds: c.req.queries("kind") ?? [] });
+    const events = await rpc.query("WorkspaceHub.since", () => hub.since(since, { workspaces: c.req.queries("workspace") ?? [], kinds: c.req.queries("kind") ?? [] }));
     return c.json({ ok: true, command: c.req.path, result: { events }, next_actions: [] });
   });
 

@@ -1,6 +1,7 @@
 import { Agent, getAgentByName, getSubAgentByName, type Connection } from "agents";
 import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type VoiceTurnContext } from "@cloudflare/voice";
 import { MyAgent } from "./agent";
+import * as rpc from "./rpc/contract";
 import { openPiChat } from "./pi-engine/routes";
 import type { Env } from "./types";
 import { settledWithin } from "./rpc/deadline-signal";
@@ -52,9 +53,12 @@ export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, ses
     const result = await chat.wait(receipt.operationId);
     return result.text ?? (result.reason ? `The turn ended: ${result.reason}` : "");
   }
-  const parent = await getAgentByName(env.USER_AGENT, identity.email.toLowerCase());
-  const facet = await getSubAgentByName(parent, MyAgent, sessionId);
-  await facet.seedIdentity(identity);
+  const facet = await rpc.command("MyAgent.voiceFacet", async () => {
+    const parent = await getAgentByName(env.USER_AGENT, identity.email.toLowerCase());
+    const opened = await getSubAgentByName(parent, MyAgent, sessionId);
+    await opened.seedIdentity(identity);
+    return opened;
+  });
   return await facet.runVoiceTurn(transcript);
 }
 

@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import * as rpc from "../rpc/contract";
 import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../app-env";
@@ -179,9 +180,11 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       if (!await requireOwnedSession(c.env, sessionId, c.get("identity").email)) throw new SavedRecipeError("NotFound", "session not found or not owned");
       const { sessionEngineOf } = await import("../session-control");
       const runnerId = (await sessionEngineOf(c.env, c.get("identity").email, sessionId)) === "pi" ? `recipes-${sessionId}` : sessionId;
-      const agent = await getSessionAgent(c.env, c.get("identity").email, runnerId);
-      await agent.seedIdentity(c.get("identity"));
-      const result = await agent.runSavedRecipe({ recipeId: c.req.param("id"), input });
+      const result = await rpc.command("Session.runSavedRecipe", async () => {
+        const agent = await getSessionAgent(c.env, c.get("identity").email, runnerId);
+        await agent.seedIdentity(c.get("identity"));
+        return agent.runSavedRecipe({ recipeId: c.req.param("id"), input });
+      });
       return ok(c, command, result, 202);
     } catch (error) {
       return failure(c, command, error);
