@@ -117,6 +117,7 @@ declare global {
       EMAIL_ENABLED?: string;
       RESEND_API_KEY?: string;
       EMAIL_FROM?: string;
+      AMBER_ENABLED?: string;
 
     }
   }

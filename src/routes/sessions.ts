@@ -22,6 +22,7 @@ import { reorderPinnedSession, setSessionPinned } from "../session-pinning-progr
 import { buildSessionTurnState } from "../session-turn";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS } from "../unicode-text";
 import { writeUsage } from "../usage-meter";
+import { amberEnabled, setAmber } from "../amber";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
   sequence_number: number | null;
@@ -95,11 +96,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       const pinned = before
         ? []
         : ((await c.env.DB.prepare(
-            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
+            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
           ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
-        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
+        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
+        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
       const stmt = before
         ? c.env.DB.prepare(query).bind(email, before, limit)
         : c.env.DB.prepare(query).bind(email, limit);
@@ -225,6 +226,23 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "Conflict", message: body.archived ? "only an idle conversation you own can be archived" : "conversation is not archived" }, next_actions: [] }, 409);
     }
     return c.json<ApiResponse>({ ok: true, command, result: { id, archived: body.archived }, next_actions: [] });
+  });
+
+  app.post("/api/sessions/:id/amber", async (c) => {
+    const id = c.req.param("id");
+    const command = `POST /api/sessions/${id}/amber`;
+    if (!amberEnabled(c.env)) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "AMBER_DISABLED", message: "Amber is disabled (AMBER_ENABLED is not 1)" }, next_actions: [] }, 503);
+    }
+    const body = (await c.req.json<{ amber?: unknown }>().catch(() => ({}))) as { amber?: unknown };
+    if (typeof body.amber !== "boolean") {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "amber must be a boolean" }, next_actions: [] }, 400);
+    }
+    const changed = await setAmber(c.env.DB, id, c.get("identity").email, body.amber);
+    if (!changed) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    return c.json<ApiResponse>({ ok: true, command, result: { id, amber: body.amber }, next_actions: [] });
   });
 
   // POST /api/sessions/:id/rank  { beforeId: string | null }
