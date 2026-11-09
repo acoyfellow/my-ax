@@ -106,6 +106,7 @@
     "test:fsm": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/fsm/session-status.test.ts src/fsm/run-status.test.ts src/fsm/job-status.test.ts src/fsm/recipe-status.test.ts src/fsm/attention-item.test.ts src/fsm/desk-card.test.ts src/fsm/workspace-verification.test.ts src/fsm/machine-connection.test.ts src/fsm/socket-connection.test.ts src/fsm/chat-message.test.ts src/fsm/voice-status.test.ts scripts/fsm-audit.test.mjs",
     "test:commands": "tsx --test src/commands/commands.test.ts src/message-times.test.ts src/ui/slash-menu-layout.test.ts",
     "test:email": "tsx --test src/email-in.test.ts",
+    "test:amber": "tsx --test src/amber.test.ts",
     "test:verify": "tsx --test verify/replays/job-pause-exhaust.replay.test.ts verify/replays/session-scan-live-turn.replay.test.ts verify/replays/socket-exhaustive.test.ts",
     "test:usage": "tsx --test src/usage-meter.test.ts",
     "test:rpc": "tsx --test src/rpc/rpc.test.ts src/rpc/deadline-signal.test.ts src/rpc/machine-host-client.test.ts src/rpc/op-id.test.ts src/rpc/contract.test.ts src/rpc/bounded-stub.test.ts scripts/rpc-audit.test.mjs && node scripts/rpc-audit.mjs",
