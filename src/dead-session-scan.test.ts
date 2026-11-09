@@ -67,7 +67,6 @@ function recordingDeps() {
     reviveTurn: async (_owner, sessionId) => { revived.push(sessionId); },
     alertOwner: async (_owner, sessionId) => { alerted.push(sessionId); },
     settleRunningWithoutTurn: async (_owner, sessionId) => { settled.push(sessionId); },
-    hasLiveTurn: async () => false,
   };
   return { deps, revived, alerted, settled };
 }
