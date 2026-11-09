@@ -114,6 +114,9 @@ declare global {
 
       USAGE?: { writeDataPoint: (point: { blobs: string[]; doubles?: number[]; indexes?: string[] }) => void };
       USAGE_METER_ENABLED?: string;
+      EMAIL_ENABLED?: string;
+      RESEND_API_KEY?: string;
+      EMAIL_FROM?: string;
 
     }
   }
