@@ -53,9 +53,7 @@ PauseSaves ==
        THEN /\ status' = "paused"
             /\ scheduleId' = None
             /\ UNCHANGED <<alarms, nextAlarm>>
-       ELSE /\ alarms' = alarms \cup {nextAlarm}
-            /\ nextAlarm' = nextAlarm + 1
-            /\ UNCHANGED <<status, scheduleId>>
+       ELSE UNCHANGED <<status, scheduleId, alarms, nextAlarm>>
   /\ UNCHANGED <<runCount, firing, resume>>
 
 ResumeSchedulesAlarm ==

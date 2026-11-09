@@ -44,7 +44,7 @@ function harness() {
   return { db, live, service: new JobService(env, OWNER, () => new Date("2026-01-01T00:00:00Z"), runtime as never) };
 }
 
-test("pausing while the last allowed run is claimed leaves an out-of-runs job with a live alarm", async () => {
+test("pausing while the last allowed run is claimed must not leave an out-of-runs job with a live alarm", async () => {
   const { db, live, service } = harness();
 
   await assert.rejects(service.setPaused("job-1", true), (error: unknown) => error instanceof JobServiceError && error.code === "Conflict");
@@ -52,6 +52,6 @@ test("pausing while the last allowed run is claimed leaves an out-of-runs job wi
   const row = db.raw.prepare("SELECT status, run_count, schedule_id FROM jobs WHERE id='job-1'").get() as { status: string; run_count: number; schedule_id: string | null };
   assert.equal(row.status, "exhausted");
   assert.equal(row.run_count, 2);
-  assert.deepEqual([...live], ["alarm-2"], "the pause rollback scheduled a fresh alarm for a job that has no runs left");
-  assert.equal(row.schedule_id, "alarm-2", "and wrote that alarm id onto the exhausted job row");
+  assert.deepEqual([...live], [], "the pause rollback must not schedule a fresh alarm for a job that has no runs left");
+  assert.equal(row.schedule_id, null, "and must not write an alarm id onto the exhausted job row");
 });

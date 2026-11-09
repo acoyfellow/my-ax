@@ -24,6 +24,7 @@ export interface DeadSessionDeps {
   reviveTurn: (ownerEmail: string, sessionId: string, message: string, clientMsgId: string) => Promise<void>;
   alertOwner: (ownerEmail: string, sessionId: string, dedupeSuffix: number) => Promise<void>;
   settleRunningWithoutTurn: (ownerEmail: string, sessionId: string) => Promise<void>;
+  hasLiveTurn: (ownerEmail: string, sessionId: string) => Promise<boolean>;
 }
 
 type DeadSessionRow = { id: string; owner_email: string; updated_at: string; status?: string };
@@ -62,6 +63,7 @@ function scanSession(
       return;
     }
 
+    if (yield* operation("check_live_turn", () => deps.hasLiveTurn(ownerEmail, session.id))) return;
     const latestUserEntry = (recent.results ?? []).find((entry) => entry.id === dead.latestUserEntryId);
     if (!latestUserEntry) return;
     const incident = deadSessionRecoveryPlan(latestUserEntry);

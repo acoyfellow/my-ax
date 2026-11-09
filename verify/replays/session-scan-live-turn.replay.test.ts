@@ -14,26 +14,43 @@ CREATE TABLE conversation_entries (id INTEGER PRIMARY KEY, session_id TEXT, owne
 CREATE TABLE attention_items (id TEXT, owner_email TEXT, session_id TEXT, kind TEXT, created_at TEXT);
 `;
 
-test("a turn still working on one slow tool is marked interrupted, and archive then succeeds mid-turn", async () => {
+function seed() {
   const db = sqliteD1(SCHEMA);
   const now = new Date("2026-11-08T12:00:00Z");
   const turnStarted = new Date(now.getTime() - DEAD_SESSION_STALL_MS - 60_000).toISOString();
   db.raw.prepare("INSERT INTO sessions VALUES ('s-1', ?, 'running', 'think', ?)").run(OWNER, turnStarted);
   db.raw.prepare("INSERT INTO conversation_entries VALUES (1, 's-1', ?, ?, 'user', 'run the long build', ?)").run(OWNER, turnStarted, JSON.stringify({ uiMessageId: `${AUTO_REVIVE_PREFIX}1` }));
+  return { db, now };
+}
 
-  const agentStillWorking = true;
-  const settled: string[] = [];
+test("a turn still working on one slow tool is left alone by the scan: no interrupt, no archive", async () => {
+  const { db, now } = seed();
+  const alerts: string[] = [];
+  const revived: string[] = [];
   await Effect.runPromise(runDeadSessionScan(db as unknown as DeadSessionDb, {
-    reviveTurn: async () => undefined,
-    alertOwner: async () => undefined,
-    settleRunningWithoutTurn: async (_owner, id) => { settled.push(id); },
+    reviveTurn: async (_owner, id) => { revived.push(id); },
+    alertOwner: async (_owner, id) => { alerts.push(id); },
+    settleRunningWithoutTurn: async () => undefined,
+    hasLiveTurn: async () => true,
   }, now));
 
   const afterScan = db.raw.prepare("SELECT status FROM sessions WHERE id='s-1'").get() as { status: string };
-  assert.equal(agentStillWorking, true);
-  assert.equal(afterScan.status, "interrupted", "the scan marks the session interrupted although the agent is still mid-turn");
-  assert.deepEqual(settled, [], "it never asked the agent whether a turn is live");
+  assert.equal(afterScan.status, "running", "the scan must not mark a session interrupted while the agent is still mid-turn");
+  assert.deepEqual(alerts, [], "no owner alert while a turn is live");
+  assert.deepEqual(revived, [], "no duplicate revive while a turn is live");
 
   const archived = await applySessionEvent(db, { id: "s-1", ownerEmail: OWNER }, "archived");
-  assert.equal(archived, true, "archive is accepted while the turn is still running");
+  assert.equal(archived, false, "archive stays blocked while the turn is running");
+});
+
+test("the same quiet session is still flagged once the agent confirms no turn is live", async () => {
+  const { db, now } = seed();
+  await Effect.runPromise(runDeadSessionScan(db as unknown as DeadSessionDb, {
+    reviveTurn: async () => undefined,
+    alertOwner: async () => undefined,
+    settleRunningWithoutTurn: async () => undefined,
+    hasLiveTurn: async () => false,
+  }, now));
+  const afterScan = db.raw.prepare("SELECT status FROM sessions WHERE id='s-1'").get() as { status: string };
+  assert.equal(afterScan.status, "interrupted", "a genuinely quiet session still gets flagged");
 });

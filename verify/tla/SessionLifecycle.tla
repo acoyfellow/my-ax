@@ -40,6 +40,7 @@ RecoveryGivesUp ==
   /\ Fire("recovery_exhausted")
 
 ScannerFlagsQuietSession ==
+  /\ turn = "idle"
   /\ Fire("dead_session_detected")
   /\ UNCHANGED turn
 
