@@ -112,6 +112,9 @@ declare global {
       PANTRY_TOKEN?: string;
       PANTRY?: { fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
 
+      USAGE?: { writeDataPoint: (point: { blobs: string[]; doubles?: number[]; indexes?: string[] }) => void };
+      USAGE_METER_ENABLED?: string;
+
     }
   }
 }
