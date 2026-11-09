@@ -128,8 +128,11 @@ export class JobService {
       try {
         if (!await markJobPaused(this.env.DB, { id, ownerEmail: this.owner })) throw new JobServiceError("Conflict", "job status changed before pause");
       } catch (error) {
-        const replacement = await this.runtime.schedule(this.env, row).catch(() => null);
-        if (replacement) await this.env.DB.prepare("UPDATE jobs SET schedule_id=? WHERE id=? AND owner_email=?").bind(replacement, id, this.owner).run().catch(() => undefined);
+        const current = await this.owned(id).catch(() => null);
+        if (current && current.status === "active") {
+          const replacement = await this.runtime.schedule(this.env, row).catch(() => null);
+          if (replacement) await this.env.DB.prepare("UPDATE jobs SET schedule_id=? WHERE id=? AND owner_email=?").bind(replacement, id, this.owner).run().catch(() => undefined);
+        }
         throw error;
       }
     }

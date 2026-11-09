@@ -967,6 +967,10 @@ export class MyAgent extends Think<Env> {
     }
   }
 
+  async hasLiveTurn(): Promise<boolean> {
+    return this.turnProgress.snapshot().active;
+  }
+
   async settleIfNoLiveTurn(): Promise<{ settled: boolean }> {
     if (this.turnProgress.snapshot().active) return { settled: false };
     const identity = this.identity();

@@ -54,3 +54,5 @@ src/*.bak-*
 wrangler.preview-d1.json
 proof/recipe-dogfood-learning-curve*.json
 proof/experiments/
+verify/tla/.tlc/
+verify/tla/states/
