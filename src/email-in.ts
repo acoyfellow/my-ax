@@ -17,7 +17,7 @@ export type SendEmailInput = { to: string; subject: string; body: string };
 
 export async function sendEmail(env: { RESEND_API_KEY?: string; EMAIL_FROM?: string; fetch?: typeof fetch }, input: SendEmailInput): Promise<{ ok: boolean; error?: string }> {
   if (!env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY is not set" };
-  const from = env.EMAIL_FROM ?? "my.ax <noreply@my.ax.cloudflare.dev>";
+  const from = env.EMAIL_FROM ?? "My AX <noreply@example.com>";
   const doFetch = env.fetch ?? fetch;
   const response = await doFetch("https://api.resend.com/emails", {
     method: "POST",
