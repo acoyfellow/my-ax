@@ -21,6 +21,7 @@ import { PinLimitError } from "../session-pinning";
 import { reorderPinnedSession, setSessionPinned } from "../session-pinning-program";
 import { buildSessionTurnState } from "../session-turn";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS } from "../unicode-text";
+import { writeUsage } from "../usage-meter";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
   sequence_number: number | null;
@@ -336,6 +337,8 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       await rpc.command("Session.seedIdentity", async () => (await getSessionAgent(c.env, identity.email, id)).seedIdentity(identity));
     } catch {
     }
+
+    if (created) writeUsage(c.env, { name: "session_created", owner: identity.email, sessionId: id });
 
     return c.json<ApiResponse>(
       {
@@ -953,6 +956,8 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
         500,
       );
     }
+
+    writeUsage(c.env, { name: "message_injected", owner: identity.email, sessionId: id });
 
     // Touch updated_at so the sidebar reorders this session to the top,
     // matching the behavior of a real WS user message.
