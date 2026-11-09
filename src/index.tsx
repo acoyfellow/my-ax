@@ -23,6 +23,8 @@ import { deploymentVersionResponse } from "./deploy-version";
 import { oauthStoreFor } from "./oauth-store";
 import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
+import { registerEmailRoutes } from "./routes/email";
+import { emailEnabled, parseRawEmail } from "./email-in";
 import { pruneObserveEvents } from "./observe-events";
 import { openPiChat, registerPiEngineRoutes } from "./pi-engine/routes";
 import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
@@ -296,6 +298,7 @@ app.get("/api", async (c) => {
 });
 
 registerSessionRoutes(app);
+registerEmailRoutes(app);
 registerPiEngineRoutes(app);
 registerUploadRoutes(app);
 registerPushRoutes(app);
@@ -744,6 +747,22 @@ app.notFound((c) =>
 
 export default {
   fetch: app.fetch,
+  async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext) {
+    if (!emailEnabled(env)) {
+      message.setReject("email disabled");
+      return;
+    }
+    const raw = await new Response(message.raw).text();
+    const parsed = parseRawEmail(raw);
+    const owner = message.to.toLowerCase();
+    await env.DB.prepare("INSERT INTO emails (id, owner_email, from_addr, to_addr, subject, body, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
+      .bind(crypto.randomUUID(), owner, message.from, message.to, parsed.subject, parsed.body)
+      .run();
+    ctx.waitUntil((async () => {
+      const { notifyOwner } = await import("./notify");
+      await notifyOwner(env, owner, { kind: "session.update", title: "New email", body: parsed.subject || message.from, href: "/", dedupeKey: `email:${message.to}:${parsed.subject}:${Date.now()}` }).catch(() => undefined);
+    })());
+  },
   scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(scanDeadSessions(env));
     ctx.waitUntil(pruneObserveEvents(env.DB).catch((error) => console.error("observe_prune_failed", { err: String(error) })));
