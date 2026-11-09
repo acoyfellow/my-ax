@@ -23,6 +23,12 @@ test("meter writes the event with owner and session when enabled", () => {
   assert.deepEqual(binding.points[0].doubles, [2]);
 });
 
+test("meter defaults the count to one", () => {
+  const binding = fakeBinding();
+  writeUsage({ USAGE: binding, USAGE_METER_ENABLED: "1" }, { name: "session_created", owner: "o@x", sessionId: "s1" });
+  assert.deepEqual(binding.points[0].doubles, [1]);
+});
+
 test("meter writes nothing when the binding is absent", () => {
   assert.equal(writeUsage({ USAGE_METER_ENABLED: "1" }, { name: "session_created", owner: "o@x", sessionId: "s1" }), false);
 });
