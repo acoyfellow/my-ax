@@ -21,6 +21,7 @@ import { getConversationStarters, setConversationStarters } from "./conversation
 import { databaseLayer } from "./effect/database";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
 import { createCmuxObserveTool, type CmuxReader } from "./cmux-observer";
+import { SPAWN_CHILD_TOOL, WAIT_CHILD_TOOL } from "./agent-tree-tools";
 
 export const DESK_UPSERT_TOOL: ToolDef = {
   name: "desk_upsert",
@@ -279,6 +280,8 @@ export const TOOLS: ToolDef[] = [
   WORK_SEARCH_TOOL,
   WORK_CODE_TOOL,
   OPEN_ISSUE_SESSION_TOOL,
+  SPAWN_CHILD_TOOL,
+  WAIT_CHILD_TOOL,
   CREATE_COMPUTER_TOOL,
   SNAPSHOT_COMPUTER_TOOL,
   COMPUTER_SCREENSHOT_TOOL,

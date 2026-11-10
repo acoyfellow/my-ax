@@ -269,6 +269,12 @@ export class MyAgent extends Think<Env> {
     });
   }
 
+  async clearHistory(): Promise<{ cleared: number }> {
+    const cleared = this.messages.length;
+    await this.clearMessages();
+    return { cleared };
+  }
+
   async sessionTurnState(): Promise<{ sessionStatus: string; requestId: string | null }> {
     const identity = this.identity();
     if (!identity) throw new Error("session identity not seeded");

@@ -4,6 +4,22 @@
   // transcript rendering, composer, attachments, voice, and tool results.
 
   import { onMount, tick } from "svelte";
+
+  interface Props {
+    binding?: SessionBinding;
+  }
+  const { binding = tabSessionBinding() }: Props = $props();
+  const instanceId = $props.id();
+  const composerShortcutId = `composer-shortcut-${instanceId}`;
+  let imageFileEl: HTMLInputElement | null = $state(null);
+  const readTabSession = () => binding.read();
+  const readLastUsedSession = () => binding.lastUsed();
+  const writeTabSession = (id: string | null) => binding.write(id);
+  const setActiveSession = (id: string | null, title?: string | null) => { if (binding.followsTab) setPageActiveSession(id, title); };
+  const embeddedWsState = $state({ conn: pageWsState.conn, status: pageWsState.status });
+  const wsState = binding.followsTab ? pageWsState : embeddedWsState;
+  const setConn = (state: typeof wsState.conn) => { if (binding.followsTab) setPageConn(state); else embeddedWsState.conn = state; };
+  const setStatus = (status: typeof wsState.status) => { if (binding.followsTab) setPageStatus(status); else embeddedWsState.status = status; };
   import { isFileDrag, planDroppedFiles, withAttachedFilesNote } from "../dropped-files";
   import { PiSnapshotStore } from "./snapshot-store";
   import { marked } from "marked";
@@ -54,9 +70,9 @@
     type StreamingTurnState,
   } from "./streaming-turn-fsm";
   import {
-    setConn,
-    setStatus,
-    wsState,
+    setConn as setPageConn,
+    setStatus as setPageStatus,
+    wsState as pageWsState,
     modelState,
     setModel,
     pushSystem,
@@ -66,16 +82,14 @@
     SESSION_KEY,
     RESUME_SESSION_ONCE_KEY,
     FIRST_SEND_SESSION_ONCE_KEY,
-    setActiveSession,
+    setActiveSession as setPageActiveSession,
     captureTitleEpoch,
     isTitleEpochCurrent,
     storedSessionEngine,
     rememberSessionEngine,
     knowsSessionEngine,
-    readTabSession,
-    writeTabSession,
   } from "@my-ax/store";
-  import { readLastUsedSession } from "./tab-session";
+  import { tabSessionBinding, type SessionBinding } from "./session-binding";
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
@@ -359,7 +373,7 @@
   let draftRestored = false;
 
   function draftKey(): string {
-    const fromUrl = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("session");
+    const fromUrl = !binding.followsTab || typeof location === "undefined" ? null : new URLSearchParams(location.search).get("session");
     return `${DRAFT_KEY_PREFIX}${fromUrl || readTabSession() || "new"}`;
   }
 
@@ -389,6 +403,7 @@
   let deployRefreshPending = $state(false);
 
   function restoreDeployRefreshDraft() {
+    if (!binding.followsTab) return;
     try {
       const raw = sessionStorage.getItem(DEPLOY_REFRESH_DRAFT_KEY);
       sessionStorage.removeItem(DEPLOY_REFRESH_DRAFT_KEY);
@@ -1600,7 +1615,7 @@
     dispatchTurn({ type: "session-switch" });
     messages = [];
     thinkMessages = [];
-    toastBus.pending = [];
+    if (binding.followsTab) toastBus.pending = [];
     applyStatus("idle");
     onboardingHidden = true;
     resumingExistingSession = true;
@@ -1645,6 +1660,14 @@
     return typeof id === "string" && id ? id : null;
   }
   async function sessionForBootstrap(): Promise<string | null> {
+    if (!binding.followsTab) {
+      const fixed = readTabSession();
+      onboardingHidden = true;
+      resumingExistingSession = true;
+      sessionResumeVisible = true;
+      bootstrapPending = false;
+      return fixed;
+    }
     const requested = readTabSession();
     const shouldResume = sessionStorage.getItem(RESUME_SESSION_ONCE_KEY) === "1";
     const isFirstSendSession = sessionStorage.getItem(FIRST_SEND_SESSION_ONCE_KEY) === "1";
@@ -1760,9 +1783,9 @@
       void refreshRemoteTurn();
       requestActiveResponseRecovery();
     }
-    const pendingFirst = sessionStorage.getItem("my-ax-pending-first-message");
-    const pendingFirstAttachments = sessionStorage.getItem("my-ax-pending-first-attachments");
-    const pendingFirstSession = sessionStorage.getItem("my-ax-pending-first-session");
+    const pendingFirst = binding.followsTab ? sessionStorage.getItem("my-ax-pending-first-message") : null;
+    const pendingFirstAttachments = binding.followsTab ? sessionStorage.getItem("my-ax-pending-first-attachments") : null;
+    const pendingFirstSession = binding.followsTab ? sessionStorage.getItem("my-ax-pending-first-session") : null;
     // Fail closed: only adopt a pending first-message that was typed for the
     // session now mounted. A payload bound to a different (or missing) session
     // is dropped so it cannot leak across conversations.
@@ -2281,6 +2304,7 @@
   }
 
   $effect(() => {
+    if (!binding.followsTab) return;
     window.addEventListener(COMMAND_EVENT, onCommandEvent);
     return () => window.removeEventListener(COMMAND_EVENT, onCommandEvent);
   });
@@ -2397,7 +2421,7 @@
     pendingAttachments = pendingAttachments.filter((_, i) => i !== idx);
   }
   function openImageFile() {
-    (document.getElementById("svelte-image-file") as HTMLInputElement)?.click();
+    imageFileEl?.click();
   }
 
   // Consolidated composer "+" menu: Add File / Camera.
@@ -2514,7 +2538,7 @@
       return;
     }
 
-    toastBus.pending = []; // clear transient notices when a new turn starts
+    if (binding.followsTab) toastBus.pending = [];
     const clientMsgId = makeClientMsgId();
     const outgoingAttachments = pendingAttachments;
     pendingAttachments = [];
@@ -2729,7 +2753,7 @@
   $effect(() => {
     if (!taskRunning) {
       taskStartedAt = null;
-      document.title = IDLE_TITLE;
+      if (binding.followsTab) document.title = IDLE_TITLE;
       return;
     }
     if (taskStartedAt === null) taskStartedAt = Date.now();
@@ -2738,7 +2762,7 @@
     return () => clearInterval(ticker);
   });
   $effect(() => {
-    if (taskRunning && taskElapsedText) document.title = `Working · task ${taskElapsedText} · my ax`;
+    if (binding.followsTab && taskRunning && taskElapsedText) document.title = `Working · task ${taskElapsedText} · my ax`;
   });
 
   // A detected deployment waits for durable turn/voice work to become idle.
@@ -2811,9 +2835,9 @@
       deployRefreshPending = true;
       refreshForDeploymentWhenSafe();
     };
-    window.addEventListener("my-ax:deploy-update", onDeployUpdate);
+    if (binding.followsTab) window.addEventListener("my-ax:deploy-update", onDeployUpdate);
     window.addEventListener("online", onVisibilityChange);
-    document.addEventListener("keydown", onGlobalKeydown);
+    if (binding.followsTab) document.addEventListener("keydown", onGlobalKeydown);
     document.addEventListener("visibilitychange", onVisibilityChange);
     const onSwitch = (e: Event) => { const id = (e as CustomEvent<{ id?: string }>).detail?.id; if (id) { window.dispatchEvent(new Event("my-ax:switch-session-ack")); switchToSession(id); } };
     const followDeepLink = (target: MyAxDeepLink) => {
@@ -2916,7 +2940,7 @@
         for (const id of [...new Set(ids)]) artifactRegistry.pushState(id, state);
       } catch {}
     };
-    setArtifactBridge({
+    if (binding.followsTab) setArtifactBridge({
       listTools: () => artifactRegistry.listTools(),
       invokeTool: (artifactId, name, args) => artifactRegistry.invoke(artifactId, name, args),
       pushState: (artifactId, state) => artifactRegistry.pushState(artifactId, state),
@@ -2977,14 +3001,16 @@
       if (!text) return;
       if (d?.kind === "error") pushError(text); else pushSystem(text);
     };
-    window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
-    window.addEventListener("my-ax:navigate", onNavigate as EventListener);
-    window.addEventListener("my-ax:toast", onPageToast as EventListener);
     const onTerminalOpen = () => { terminalOpen = true; };
-    window.addEventListener("my-ax:terminal-open", onTerminalOpen);
-    window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
+    if (binding.followsTab) {
+      window.addEventListener("my-ax:switch-session", onSwitch as EventListener);
+      window.addEventListener("my-ax:navigate", onNavigate as EventListener);
+      window.addEventListener("my-ax:toast", onPageToast as EventListener);
+      window.addEventListener("my-ax:terminal-open", onTerminalOpen);
+      window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
+      navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
+    }
     window.addEventListener("message", onArtifactMessage);
-    navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
     return () => {
       window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
       window.removeEventListener("my-ax:starters-refresh", onStartersRefresh);
@@ -2995,7 +3021,7 @@
       window.removeEventListener("my-ax:toast", onPageToast as EventListener);
       window.removeEventListener("my-ax:terminal-open", onTerminalOpen);
       window.removeEventListener("message", onArtifactMessage);
-      setArtifactBridge(null);
+      if (binding.followsTab) setArtifactBridge(null);
       navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
       window.removeEventListener("online", onVisibilityChange);
       if (connectionWatchdogId) clearInterval(connectionWatchdogId);
@@ -3281,7 +3307,7 @@
         <!-- Toasts (system / error) render AFTER messages so a transient
              notice sits in chronological position, never pinned above newer
              history. -->
-        {#each toastBus.pending as t, toastIdx (`${t.id}-${toastIdx}`)}
+        {#each binding.followsTab ? toastBus.pending : [] as t, toastIdx (`${t.id}-${toastIdx}`)}
           <article class={`msg msg-${t.kind}`}>
             <header class="msg-head">
               <span class="msg-head__role">{t.kind === "error" ? "Error" : "System"}</span>
@@ -3316,7 +3342,7 @@
         <button
           type="button"
           onclick={pinToLatest}
-          class="fixed z-20 right-5 bottom-28 sm:bottom-24 rounded-full ring ring-line bg-bg/95 shadow-raise min-w-11 h-11 px-3 text-fg text-sm hover:ring-brand/60 flex items-center gap-1"
+          class="{binding.followsTab ? 'fixed' : 'absolute'} z-20 right-5 bottom-28 sm:bottom-24 rounded-full ring ring-line bg-bg/95 shadow-raise min-w-11 h-11 px-3 text-fg text-sm hover:ring-brand/60 flex items-center gap-1"
           aria-label={unreadWhileAway > 0 ? `Scroll to latest message, ${unreadWhileAway} unread` : "Scroll to latest message"}
           title="Scroll to latest"
         >
@@ -3430,14 +3456,14 @@
                 onpaste={onInputPaste}
                 rows={1}
                 placeholder={isMobileComposer() ? "Message my ax" : "Message my ax · Enter to send, Shift + Enter for new line"}
-                aria-describedby="composer-shortcut"
+                aria-describedby={composerShortcutId}
                 class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 aria-label="Message"
               ></textarea>
             {/if}
           </div>
           <input
-            id="svelte-image-file"
+            bind:this={imageFileEl}
             type="file"
             multiple
             class="hidden"
@@ -3519,7 +3545,7 @@
               </svg>
             {/if}
           </button>
-          <p id="composer-shortcut" class="sr-only">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
+          <p id={composerShortcutId} class="sr-only">{isMobileComposer() ? "Return for new line, tap Send to send" : "Enter to send, Shift + Enter for new line"}</p>
         </form>
       </div>
     </div>

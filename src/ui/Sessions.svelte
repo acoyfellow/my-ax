@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { emptyListView } from "./session-list-empty";
   // 1:1 port of src/views/SessionsSidebar.tsx + the conversations-sidebar
   // block of chat.js (~250 lines: refreshSessions, loadMoreSessions,
   // buildSessionRow, renameSession, deleteSession, switchToSession,
@@ -625,9 +626,17 @@
         </li>
       </ul>
     {:else if sessions.length === 0}
+      {@const empty = emptyListView(showArchived)}
       <div class="px-3 py-6 text-center text-xs text-fg-mut">
-        No conversations yet.<br />
-        Send a message to start one.
+        {empty.text}{#if empty.hint}<br />{empty.hint}{/if}
+      </div>
+      <div class="px-2 pt-2 pb-2">
+        <button
+          type="button"
+          class="session-archive-toggle w-full rounded-md text-fg-mut text-xs px-3 py-2 min-h-[36px] hover:bg-surface-1 hover:text-fg transition-colors"
+          aria-pressed={showArchived}
+          onclick={toggleArchivedView}
+        >{empty.toggleLabel}</button>
       </div>
     {:else}
       {#snippet rowMenu(row: SessionRow, title: string, pinnedGroup: boolean, indexInGroup: number, groupTotal: number)}

@@ -62,9 +62,15 @@ function assistantParts(message: ModelMessage): { parts: PiChatPart[]; reasoning
   return { parts, reasoning };
 }
 
+export function turnErrorText(message: { errorMessage?: unknown }): string {
+  const text = typeof message.errorMessage === "string" ? message.errorMessage.trim() : "";
+  return text || "This turn failed before the model replied. Try again, or pick another model.";
+}
+
 export class PiTranscript {
   private entries = new Map<number, PiEntry>();
   partial: ModelMessage | null = null;
+  private streamError: string | null = null;
   busy = false;
   model = "";
   queued = 0;
@@ -78,6 +84,7 @@ export class PiTranscript {
   }
 
   applySnapshot(snapshot: PiSnapshot): void {
+    this.streamError = null;
     this.recordEntryTimes(snapshot.entryTimes);
     this.entries.clear();
     for (const entry of snapshot.entries) this.entries.set(entry.id, entry);
@@ -166,6 +173,11 @@ export class PiTranscript {
           const entry = event.entry as PiEntry | undefined;
           if (entry) this.entries.set(entry.id, entry);
           if (event.type === "message_end" && entry?.model?.some((message) => message.role === "assistant")) this.partial = null;
+          const ended = event.message as ModelMessage | undefined;
+          if (event.type === "message_end" && !entry && ended?.role === "assistant" && ended.stopReason === "error") {
+            this.streamError = turnErrorText(ended);
+            this.partial = null;
+          }
           break;
         }
         case "tool_execution_update": {
@@ -222,8 +234,8 @@ export class PiTranscript {
           } else if (parts.length || reasoning) {
             out.push({ id, role: "assistant", content: "", parts, reasoning: reasoning || undefined, timestamp, endedAt: writtenAt, streaming: false });
           }
-          if (message.stopReason === "error" && typeof message.errorMessage === "string") {
-            out.push({ id: `${id}-error`, role: "error", content: message.errorMessage, parts: [], timestamp, streaming: false });
+          if (message.stopReason === "error") {
+            out.push({ id: `${id}-error`, role: "error", content: turnErrorText(message), parts: [], timestamp, streaming: false });
           }
         } else if (message.role === "toolResult") {
           const tool = tools.get(String(message.toolCallId ?? ""));
@@ -252,6 +264,9 @@ export class PiTranscript {
       } else {
         out.push({ id: "pi-partial", role: "assistant", content: "", parts, reasoning: reasoning || undefined, streaming: true });
       }
+    }
+    if (this.streamError && out[out.length - 1]?.role !== "error") {
+      out.push({ id: "pi-stream-error", role: "error", content: this.streamError, parts: [], streaming: false });
     }
     return out;
   }
