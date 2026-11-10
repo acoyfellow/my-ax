@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { mount, onMount, unmount } from "svelte";
   import Chat from "./Chat.svelte";
   import ModalPanel from "./ModalPanel.svelte";
   import NavIconButton from "./NavIconButton.svelte";
   import { fixedSessionBinding, type SessionBinding } from "./session-binding";
+  import { ROOT_PIP_SIZE, copiedStyles, documentPip, mirroredAttributes } from "./root-pip";
 
   type Child = { id: string; name: string; status: string };
 
@@ -15,6 +16,47 @@
   let open = $state(false);
   let maximized = $state(false);
   let clearing = $state(false);
+  let pipWindow = $state<Window | null>(null);
+  const pipSupported = typeof window !== "undefined" && documentPip(window) !== null;
+
+  function preparePipDocument(target: Document): HTMLElement {
+    for (const [name, value] of mirroredAttributes(document.documentElement)) target.documentElement.setAttribute(name, value);
+    for (const style of copiedStyles(document.styleSheets)) {
+      if (style.kind === "link") {
+        const link = target.createElement("link");
+        link.rel = "stylesheet";
+        link.href = style.href;
+        target.head.append(link);
+      } else {
+        const element = target.createElement("style");
+        element.textContent = style.css;
+        target.head.append(element);
+      }
+    }
+    target.title = "Root · my ax";
+    target.body.className = "h-full m-0 bg-bg text-fg";
+    const host = target.createElement("div");
+    host.className = "h-full flex flex-col";
+    host.style.height = "100vh";
+    target.body.append(host);
+    return host;
+  }
+
+  async function popOut() {
+    const api = documentPip(window);
+    if (!api || !binding) return;
+    if (api.window) { api.window.focus(); return; }
+    const opened = await api.requestWindow(ROOT_PIP_SIZE).catch(() => null);
+    if (!opened) return;
+    const instance = mount(Chat, { target: preparePipDocument(opened.document), props: { binding } });
+    pipWindow = opened;
+    open = false;
+    opened.addEventListener("pagehide", () => {
+      void unmount(instance);
+      pipWindow = null;
+    }, { once: true });
+  }
+
 
   async function loadChildren(id: string) {
     const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/children`, { credentials: "include" }).catch(() => null);
@@ -35,6 +77,7 @@
   }
 
   async function openPanel() {
+    if (pipWindow) { pipWindow.focus(); return; }
     open = true;
     const id = await ensureRoot();
     if (id) void loadChildren(id);
@@ -54,23 +97,30 @@
     if (!response?.ok) { loadError = body?.error?.message ?? "Clear failed"; return; }
     loadError = null;
     chatGeneration += 1;
+    if (pipWindow) { pipWindow.close(); pipWindow = null; await popOut(); }
   }
 
   onMount(() => {
     const onOpen = () => { void openPanel(); };
     window.addEventListener("my-ax:root-open", onOpen);
     if (new URL(location.href).searchParams.get("action") === "root") void openPanel();
-    return () => window.removeEventListener("my-ax:root-open", onOpen);
+    return () => {
+      window.removeEventListener("my-ax:root-open", onOpen);
+      pipWindow?.close();
+    };
   });
 </script>
 
-<NavIconButton label="Open root" title="Root" aria-haspopup="dialog" onclick={() => void openPanel()} data-root-button="">
+<NavIconButton label={pipWindow ? "Root is popped out" : "Open root"} title={pipWindow ? "Root (popped out)" : "Root"} aria-haspopup="dialog" onclick={() => void openPanel()} data-root-button="" data-popped={pipWindow ? "true" : "false"}>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="19" r="2" /><path d="M12 7v4M12 11l-6 6M12 11l6 6" /></svg>
 </NavIconButton>
 
 <ModalPanel {open} title="Root" size="wide" maximizable bind:maximized onClose={closePanel} panelAttributes={{ "data-root-panel": "" }}>
   {#snippet actions()}
     <button type="button" class="modal-panel__control" onclick={clear} disabled={clearing || !rootId}>Clear</button>
+    {#if pipSupported}
+      <button type="button" class="modal-panel__control" onclick={() => void popOut()} disabled={!binding} aria-label="Pop out" title="Pop out (stays on top)" data-root-popout="">⧉</button>
+    {/if}
   {/snippet}
   <div class="root-content">
     {#if loadError}
