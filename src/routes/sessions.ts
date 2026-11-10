@@ -23,6 +23,7 @@ import { buildSessionTurnState } from "../session-turn";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS } from "../unicode-text";
 import { writeUsage } from "../usage-meter";
 import { amberEnabled, setAmber } from "../amber";
+import { clearRefusal, lookupSession, refuseIfRoot, ROOT_STABLE_NAME } from "../root-session";
 
 type SequencedConversationEntryRow = ConversationEntryRow & {
   sequence_number: number | null;
@@ -221,6 +222,8 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     if (typeof body.archived !== "boolean") {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "archived must be a boolean" }, next_actions: [] }, 400);
     }
+    const archiveRefusal = body.archived ? refuseIfRoot(await lookupSession(c.env.DB, c.get("identity").email, id), "archive") : null;
+    if (archiveRefusal) return c.json<ApiResponse>({ ok: false, command, error: archiveRefusal, next_actions: [] }, 409);
     const changed = await applySessionEvent(c.env.DB, { id, ownerEmail: c.get("identity").email }, body.archived ? "archived" : "unarchived");
     if (!changed) {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "Conflict", message: body.archived ? "only an idle conversation you own can be archived" : "conversation is not archived" }, next_actions: [] }, 409);
@@ -460,8 +463,39 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
   });
 
+  app.get("/api/root", async (c) => {
+    const identity = c.get("identity");
+    const command = "GET /api/root";
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO sessions (id, name, stable_name, status, owner_email, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
+      ).bind(crypto.randomUUID(), "Root", ROOT_STABLE_NAME, identity.email).run();
+      const row = await c.env.DB.prepare("SELECT id, name, status FROM sessions WHERE owner_email = ? AND stable_name = ?")
+        .bind(identity.email, ROOT_STABLE_NAME).first<{ id: string; name: string; status: string }>();
+      if (!row) throw new Error("root was not found after upsert");
+      await rpc.command("Session.seedIdentity", async () => (await getSessionAgent(c.env, identity.email, row.id)).seedIdentity(identity)).catch(() => undefined);
+      return c.json<ApiResponse>({ ok: true, command, result: { id: row.id, name: row.name, status: row.status }, next_actions: [{ command: `POST /api/root/clear`, description: "Clear root's history and keep its id" }] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "ROOT_UNAVAILABLE", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 503);
+    }
+  });
+
+  app.post("/api/root/clear", async (c) => {
+    const identity = c.get("identity");
+    const command = "POST /api/root/clear";
+    const body = (await c.req.json<{ id?: unknown }>().catch(() => ({}))) as { id?: unknown };
+    const id = typeof body.id === "string" ? body.id : "";
+    const refusal = clearRefusal(id ? await lookupSession(c.env.DB, identity.email, id) : null);
+    if (refusal) return c.json<ApiResponse>({ ok: false, command, error: refusal, next_actions: [] }, 409);
+    const result = await rpc.command("Session.clearHistory", async () => (await getSessionAgent(c.env, identity.email, id)).clearHistory());
+    await c.env.DB.prepare("DELETE FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(id, identity.email).run().catch(() => undefined);
+    return c.json<ApiResponse>({ ok: true, command, result: { id, cleared: result.cleared }, next_actions: [] });
+  });
+
   app.delete("/api/sessions/:id", async (c) => {
     const id = c.req.param("id");
+    const deleteRefusal = refuseIfRoot(await lookupSession(c.env.DB, c.get("identity").email, id), "delete");
+    if (deleteRefusal) return c.json<ApiResponse>({ ok: false, command: `DELETE /api/sessions/${id}`, error: deleteRefusal, next_actions: [] }, 409);
     try {
       const email = c.get("identity").email;
       // Cancel native alarms before removing their D1 index rows. Otherwise a
