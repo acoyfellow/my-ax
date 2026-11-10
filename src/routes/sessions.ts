@@ -468,12 +468,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const command = "GET /api/root";
     try {
       await c.env.DB.prepare(
-        "INSERT INTO sessions (id, name, stable_name, status, owner_email, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
+        "INSERT INTO sessions (id, name, stable_name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, 'pi', datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
       ).bind(crypto.randomUUID(), "Root", ROOT_STABLE_NAME, identity.email).run();
       const row = await c.env.DB.prepare("SELECT id, name, status FROM sessions WHERE owner_email = ? AND stable_name = ?")
         .bind(identity.email, ROOT_STABLE_NAME).first<{ id: string; name: string; status: string }>();
       if (!row) throw new Error("root was not found after upsert");
-      await rpc.command("Session.seedIdentity", async () => (await getSessionAgent(c.env, identity.email, row.id)).seedIdentity(identity)).catch(() => undefined);
       return c.json<ApiResponse>({ ok: true, command, result: { id: row.id, name: row.name, status: row.status }, next_actions: [{ command: `POST /api/root/clear`, description: "Clear root's history and keep its id" }] });
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "ROOT_UNAVAILABLE", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 503);
@@ -487,7 +486,12 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const id = typeof body.id === "string" ? body.id : "";
     const refusal = clearRefusal(id ? await lookupSession(c.env.DB, identity.email, id) : null);
     if (refusal) return c.json<ApiResponse>({ ok: false, command, error: refusal, next_actions: [] }, 409);
-    const result = await rpc.command("Session.clearHistory", async () => (await getSessionAgent(c.env, identity.email, id)).clearHistory());
+    const { sessionEngineOf } = await import("../session-control");
+    const { openPiChat } = await import("../pi-engine/routes");
+    const cleared = await sessionEngineOf(c.env, identity.email, id) === "pi"
+      ? await rpc.command("PiChat.clearContext", async () => (await openPiChat(c.env, identity.email, id)).clearContext()).then(() => 0)
+      : (await rpc.command("Session.clearHistory", async () => (await getSessionAgent(c.env, identity.email, id)).clearHistory())).cleared;
+    const result = { cleared };
     await c.env.DB.prepare("DELETE FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(id, identity.email).run().catch(() => undefined);
     return c.json<ApiResponse>({ ok: true, command, result: { id, cleared: result.cleared }, next_actions: [] });
   });

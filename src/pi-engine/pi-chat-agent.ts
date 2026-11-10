@@ -390,6 +390,13 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return entries.length;
   }
 
+  async clearContext(): Promise<{ cleared: boolean }> {
+    if (await this.isBusy()) throw new Error("TURN_RUNNING");
+    const conversation = await this.harness.conversation("1");
+    await conversation.reset(undefined, BACKGROUND_CONTEXT);
+    return { cleared: true };
+  }
+
   async transcriptJson(): Promise<string> {
     const entries: EntryRecord[] = await this.harness.messages();
     return JSON.stringify(entries);
