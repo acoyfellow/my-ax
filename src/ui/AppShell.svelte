@@ -125,4 +125,6 @@
 
 <RunReceiptModal />
 
-<Miniplayer />
+{#if typeof localStorage !== "undefined" && localStorage.getItem("my-ax-miniplayer") === "1"}
+  <Miniplayer />
+{/if}
