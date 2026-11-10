@@ -8,6 +8,7 @@
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
   import Root from "./Root.svelte";
+  import NavIconButton from "./NavIconButton.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -61,20 +62,13 @@
   class="safe-area-appbar relative z-30 flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-line bg-bg-alt text-fg min-h-[52px]"
   role="banner"
 >
-    <button
-      type="button"
-      onclick={openSessions}
-      class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3"
-      aria-label="Open conversations sidebar"
-      aria-controls="sessions-panel"
-      title="Conversations (⌘B)"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <NavIconButton label="Open conversations sidebar" title="Conversations (⌘B)" onclick={openSessions} aria-controls="sessions-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="3" y1="6" x2="21" y2="6" />
         <line x1="3" y1="12" x2="21" y2="12" />
         <line x1="3" y1="18" x2="21" y2="18" />
       </svg>
-    </button>
+    </NavIconButton>
 
   <div class="flex-1 min-w-0">
     {#if editingTitle}
@@ -109,20 +103,12 @@
 
   <Attention />
 
-  <button
-    id="settings-button"
-    type="button"
-    onclick={openSettings}
-    class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3"
-    aria-label="Settings"
-    aria-haspopup="dialog"
-    title="Settings"
-  >
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <NavIconButton id="settings-button" label="Settings" onclick={openSettings} aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
-  </button>
+  </NavIconButton>
 </header>
 
 <RunReceiptModal />

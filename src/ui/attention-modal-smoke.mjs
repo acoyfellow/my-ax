@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 
 const attention = readFileSync(new URL("./Attention.svelte", import.meta.url), "utf8");
+const modalPanel = readFileSync(new URL("./ModalPanel.svelte", import.meta.url), "utf8");
 
 function assertIncludes(haystack, needle, label) {
   if (!haystack.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
@@ -11,12 +12,14 @@ function assertNotIncludes(haystack, needle, label) {
 }
 
 // Native dialog primitive + backdrop language (shared with Settings).
-assertIncludes(attention, "<dialog", "Notifications uses the native dialog primitive");
-assertIncludes(attention, "bind:this={dialogEl}", "Notifications dialog is controlled through the native dialog API");
-assertIncludes(attention, ".notif-panel::backdrop", "Notifications uses the native dialog backdrop pseudo-element");
-assertIncludes(attention, "background: rgb(0 0 0 / 0.56);", "backdrop matches Settings dim strength");
-assertIncludes(attention, "backdrop-filter: blur(3px);", "backdrop matches Settings blur language");
-assertIncludes(attention, "inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;", "panel honors PWA safe-area top");
+assertIncludes(attention, "<ModalPanel", "Notifications uses the shared modal panel");
+assertIncludes(modalPanel, "<dialog", "Notifications uses the native dialog primitive");
+assertIncludes(modalPanel, "bind:this={dialogEl}", "Notifications dialog is controlled through the native dialog API");
+assertIncludes(modalPanel, "showModal()", "Notifications opens as a native modal");
+assertIncludes(modalPanel, ".modal-panel::backdrop", "Notifications uses the native dialog backdrop pseudo-element");
+assertIncludes(modalPanel, "background: rgb(0 0 0 / 0.56);", "backdrop matches Settings dim strength");
+assertIncludes(modalPanel, "backdrop-filter: blur(3px);", "backdrop matches Settings blur language");
+assertIncludes(modalPanel, "inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;", "panel honors PWA safe-area top");
 
 // B redesign: ONE unified chronological stream, no jargon, no tabs.
 assertIncludes(attention, 'import {', "imports the pure notification-stream model");
@@ -40,10 +43,10 @@ assertIncludes(attention, "attentionSourceLabel", "conversation navigation is a 
 assertIncludes(attention, "my-ax:run-receipt-open", "run receipts remain available as a nested modal");
 
 // Mobile geometry: single scroll region, bottom sheet, no two-column nav.
-assertIncludes(attention, "overscroll-behavior: contain;", "one bounded scroll region");
-assertIncludes(attention, "border-radius: 16px 16px 0 0;", "mobile bottom-sheet corners");
-assertIncludes(attention, "max-width: 100vw;", "mobile sheet overrides the UA dialog:modal max-width so it is truly full-width");
-assertIncludes(attention, "inset: auto 0 0 0;", "mobile sheet pins to both viewport edges + bottom");
+assertIncludes(modalPanel, "overscroll-behavior: contain;", "one bounded scroll region");
+assertIncludes(modalPanel, "border-radius: 16px 16px 0 0;", "mobile bottom-sheet corners");
+assertIncludes(modalPanel, "max-width: 100vw;", "mobile sheet overrides the UA dialog:modal max-width so it is truly full-width");
+assertIncludes(modalPanel, "inset: auto 0 0 0;", "mobile sheet pins to both viewport edges + bottom");
 
 // The old jargon/tabs/CheckIn embed must be gone.
 assertNotIncludes(attention, "attention-owner-nav", "the two-column tab nav is removed");

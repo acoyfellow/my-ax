@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import ModalPanel from "./ModalPanel.svelte";
+  import NavIconButton from "./NavIconButton.svelte";
   import { parseDeskBoard, type DeskBoard } from "../desk-board";
   import { parseDeskApp, type DeskApp } from "../desk-app";
   import { ArtifactOutboundBridge, type OutboundVerb } from "./artifact-outbound";
@@ -9,7 +11,6 @@
   let board = $state<DeskBoard>({ cards: [], updatedAt: "" });
   let deskApp = $state<DeskApp>({ artifactId: null, state: null, updatedAt: "", updatedBy: null });
   let error = $state<string | null>(null);
-  let dialogEl: HTMLDialogElement | null = null;
   let appFrameEl: HTMLIFrameElement | null = null;
 
   const hostedArtifactId = $derived(deskApp.artifactId);
@@ -89,7 +90,6 @@
     const url = new URL(location.href);
     if (url.searchParams.get("action") === "desk") url.searchParams.delete("action");
     history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    if (dialogEl?.open) dialogEl.close();
   }
 
   async function openPanel() {
@@ -97,7 +97,6 @@
     const url = new URL(location.href);
     url.searchParams.set("action", "desk");
     history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    if (dialogEl && !dialogEl.open) dialogEl.showModal();
     await refresh();
   }
 
@@ -133,18 +132,11 @@
   });
 </script>
 
-<button type="button" class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2" aria-label="Open desk" title="Desk" onclick={() => void openPanel()}>
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /></svg>
-</button>
+<NavIconButton label="Open desk" title="Desk" onclick={() => void openPanel()}>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /></svg>
+</NavIconButton>
 
-<dialog bind:this={dialogEl} class="notif-panel z-50 overflow-hidden border border-line bg-bg-alt p-0 text-fg" onclose={() => { if (open) closePanel(); }} data-desk-panel>
-  <div class="notif-header safe-area-appbar">
-    <h2 class="truncate text-sm font-semibold text-fg">Desk</h2>
-    <div class="flex items-center gap-2">
-      <button type="button" onclick={closePanel} class="notif-close" aria-label="Close desk">×</button>
-    </div>
-  </div>
-  <div class="notif-body">
+<ModalPanel {open} title="Desk" closeLabel="Close desk" onClose={closePanel} panelAttributes={{ "data-desk-panel": "" }}>
     {#if hostedArtifactId}
       <iframe
         bind:this={appFrameEl}
@@ -178,56 +170,9 @@
         {/each}
       </ul>
     {/if}
-  </div>
-</dialog>
+  </ModalPanel>
 
 <style>
-  .notif-panel {
-    position: fixed;
-    inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;
-    width: min(460px, calc(100vw - 1rem));
-    height: auto;
-    max-height: min(680px, calc(100dvh - 1rem));
-    margin: 0;
-    transform: translateX(-50%);
-    border-radius: 16px;
-    box-shadow: 0 28px 80px rgb(0 0 0 / 0.32), 0 2px 10px rgb(0 0 0 / 0.12);
-  }
-  .notif-panel[open] { display: flex; flex-direction: column; }
-  .notif-panel::backdrop { background: rgb(0 0 0 / 0.56); backdrop-filter: blur(3px); }
-  .notif-header {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-height: 56px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
-    background: var(--bg-alt);
-  }
-  .notif-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 36px;
-    min-width: 36px;
-    color: var(--fg-mut);
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    background: var(--bg);
-    font-size: 14px;
-    line-height: 1;
-  }
-  .notif-close:hover { color: var(--fg); background: var(--surface-2); }
-  .notif-body {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    background: var(--bg-alt);
-  }
   .notif-empty {
     padding: 2.5rem 1.25rem;
     text-align: center;
@@ -294,14 +239,4 @@
   .notif-pill[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
   .notif-pill[data-tone="attention"] { border-color: color-mix(in srgb, var(--brand) 50%, var(--line)); color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
   .notif-pill[data-tone="ok"] { border-color: color-mix(in srgb, #16a34a 45%, var(--line)); color: #16a34a; background: color-mix(in srgb, #16a34a 10%, transparent); }
-  @media (max-width: 639px) {
-    .notif-panel {
-      inset: auto 0 0 0;
-      transform: none;
-      width: 100vw;
-      max-width: 100vw;
-      max-height: calc(100dvh - max(2.5rem, env(safe-area-inset-top)));
-      border-radius: 16px 16px 0 0;
-    }
-  }
 </style>

@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
+  import ModalPanel from "./ModalPanel.svelte";
+  import NavIconButton from "./NavIconButton.svelte";
   import { parseMyAxDeepLink } from "./deep-links";
   import { attentionSourceLabel, isExternalSourceHref } from "../source-href";
   import { reconcileSeen } from "./attention-state";
@@ -20,7 +22,6 @@
   let clearing = $state(false);
   let error = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
-  let dialogEl: HTMLDialogElement | null = null;
 
   // The single unified, reverse-chronological stream (attention pings + failed
   // runs), with owner-dismissed runs filtered out. See notification-stream.ts.
@@ -160,14 +161,11 @@
     open = false;
     selectedId = null;
     replaceAttentionUrl(null, false);
-    if (dialogEl?.open) dialogEl.close();
   }
   async function openPanel(attentionId: string | null = null) {
     selectedId = attentionId;
     if (attentionId) replaceAttentionUrl(attentionId, true);
     open = true;
-    await tick();
-    if (dialogEl && !dialogEl.open) dialogEl.showModal();
     loading = true;
     await Promise.all([refresh(), refreshFailedRuns()]);
     if (attentionId) {
@@ -264,35 +262,23 @@
 </script>
 
 <div class="relative h-10 w-10 flex-shrink-0" data-attention-root>
-  <button type="button" onclick={toggle} class="relative flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2 active:bg-surface-3 transition-colors" aria-label={unread ? `${unread} unread notifications` : "Notifications"} aria-haspopup="dialog" aria-expanded={open} title="Notifications">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  <NavIconButton label={unread ? `${unread} unread notifications` : "Notifications"} title="Notifications" class="relative" onclick={toggle} aria-haspopup="dialog" aria-expanded={open}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     {#if unread > 0}<span class="absolute top-0.5 right-0.5 min-w-3 h-3 px-0.5 rounded-full bg-brand text-white text-[8px] leading-3 text-center">{unread > 9 ? "9+" : unread}</span>{/if}
-  </button>
-  {#if open}
-    <dialog
-      bind:this={dialogEl}
-      class="notif-panel z-50 overflow-hidden border border-line bg-bg-alt p-0 text-fg"
-      aria-label="Notifications"
-      onclick={(event) => event.target === event.currentTarget && closePanel()}
-      oncancel={(event) => { event.preventDefault(); closePanel(); }}
-      onclose={() => { if (open) closePanel(); }}
-      data-attention-owner-panel
-    >
-      <div class="notif-header safe-area-appbar">
-        <div class="flex min-w-0 items-center gap-2">
-          {#if selectedId}
-            <button type="button" onclick={showList} class="notif-close" aria-label="Back to notifications">←</button>
-          {/if}
-          <h2 class="truncate text-sm font-semibold text-fg">{selectedId ? "Notification" : "Notifications"}</h2>
-        </div>
-        <div class="flex items-center gap-1">
-          {#if !selectedId && stream.length > 0}
-            <button type="button" onclick={clearAll} disabled={clearing} class="notif-clear-all">{clearing ? "Clearing…" : "Clear all"}</button>
-          {/if}
-          <button type="button" onclick={closePanel} class="notif-close" aria-label="Close notifications">×</button>
-        </div>
-      </div>
-      <div class="notif-body" data-attention-owner-content>
+  </NavIconButton>
+  <ModalPanel {open} title={selectedId ? "Notification" : "Notifications"} closeLabel="Close notifications" onClose={closePanel} panelAttributes={{ "data-attention-owner-panel": "" }}>
+    {#snippet header()}
+      {#if selectedId}
+        <button type="button" onclick={showList} class="modal-panel__control" aria-label="Back to notifications">←</button>
+      {/if}
+      <h2 class="truncate text-sm font-semibold text-fg">{selectedId ? "Notification" : "Notifications"}</h2>
+    {/snippet}
+    {#snippet actions()}
+      {#if !selectedId && stream.length > 0}
+        <button type="button" onclick={clearAll} disabled={clearing} class="notif-clear-all">{clearing ? "Clearing…" : "Clear all"}</button>
+      {/if}
+    {/snippet}
+    <div data-attention-owner-content>
         {#if selected}
           <article class="notif-detail" data-notification-detail={selected.id}>
             <div class="flex items-center gap-2">
@@ -340,36 +326,10 @@
           </ul>
         {/if}
       </div>
-    </dialog>
-  {/if}
+  </ModalPanel>
 </div>
 
 <style>
-  .notif-panel {
-    position: fixed;
-    inset: max(0.5rem, env(safe-area-inset-top)) auto auto 50%;
-    width: min(460px, calc(100vw - 1rem));
-    height: auto;
-    max-height: min(680px, calc(100dvh - 1rem));
-    margin: 0;
-    transform: translateX(-50%);
-    border-radius: 16px;
-    box-shadow: 0 28px 80px rgb(0 0 0 / 0.32), 0 2px 10px rgb(0 0 0 / 0.12);
-  }
-  .notif-panel[open] { display: flex; flex-direction: column; }
-  .notif-panel::backdrop { background: rgb(0 0 0 / 0.56); backdrop-filter: blur(3px); }
-
-  .notif-header {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-height: 56px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
-    background: var(--bg-alt);
-  }
   .notif-clear-all {
     border: 1px solid var(--line);
     border-radius: 0.375rem;
@@ -379,29 +339,6 @@
     transition: color 120ms, background 120ms;
   }
   .notif-clear-all:hover { color: var(--fg); background: var(--surface-2); }
-  .notif-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 36px;
-    min-width: 36px;
-    color: var(--fg-mut);
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    background: var(--bg);
-    font-size: 14px;
-    line-height: 1;
-  }
-  .notif-close:hover { color: var(--fg); background: var(--surface-2); }
-
-  .notif-body {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    background: var(--bg-alt);
-  }
   .notif-empty {
     padding: 2.5rem 1.25rem;
     text-align: center;
@@ -513,22 +450,4 @@
   .notif-pill[data-tone="retrying"] { border-color: color-mix(in srgb, #f59e0b 45%, var(--line)); color: #f59e0b; background: color-mix(in srgb, #f59e0b 10%, transparent); }
   .notif-pill[data-tone="ok"] { border-color: color-mix(in srgb, #16a34a 45%, var(--line)); color: #16a34a; background: color-mix(in srgb, #16a34a 10%, transparent); }
 
-  @media (min-width: 640px) { .notif-panel { top: 6vh; } }
-
-  /* Mobile: full-width bottom-anchored sheet, one scroll region. */
-  @media (max-width: 639px) {
-    .notif-panel {
-      /* Bottom sheet: pin to both edges. Also override the UA
-         dialog:modal max-width (calc(100% - 6px - 2em)) which otherwise
-         clamps the sheet ~38px narrower than the viewport. */
-      inset: auto 0 0 0;
-      transform: none;
-      width: 100vw;
-      max-width: 100vw;
-      max-height: calc(100dvh - max(2.5rem, env(safe-area-inset-top)));
-      border-radius: 16px 16px 0 0;
-    }
-    .notif-header { min-height: 52px; }
-    .notif-close { min-height: 40px; min-width: 40px; }
-  }
 </style>
