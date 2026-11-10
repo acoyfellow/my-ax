@@ -29,3 +29,11 @@ test("clear is only for root, and not while a turn runs", () => {
   assert.equal(clearRefusal({ ...root, status: "running" })?.code, "TURN_RUNNING");
   assert.equal(clearRefusal(root), null);
 });
+
+test("the conversation list query leaves root out", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./routes/sessions.ts", import.meta.url), "utf8");
+  const line = source.split("\n").find((each) => each.includes("const archiveFilter ="));
+  assert.ok(line, "archiveFilter is defined");
+  assert.match(line, /stable_name IS NULL OR stable_name != '\$\{ROOT_STABLE_NAME\}'/);
+});

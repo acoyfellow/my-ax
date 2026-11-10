@@ -7,7 +7,7 @@
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
-  import RootWidget from "./RootWidget.svelte";
+  import Root from "./Root.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -103,6 +103,8 @@
   </span>
 
 
+  <Root />
+
   <Desk />
 
   <Attention />
@@ -124,5 +126,3 @@
 </header>
 
 <RunReceiptModal />
-
-<RootWidget />

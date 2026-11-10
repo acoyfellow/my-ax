@@ -86,7 +86,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 50));
     const before = url.searchParams.get("before"); // ISO-ish; passed through as-is to D1
     const archivedOnly = url.searchParams.get("archived") === "1";
-    const archiveFilter = archivedOnly ? "status = 'archived'" : "status != 'archived'";
+    const archiveFilter = `${archivedOnly ? "status = 'archived'" : "status != 'archived'"} AND (stable_name IS NULL OR stable_name != '${ROOT_STABLE_NAME}')`;
 
     try {
       const email = c.get("identity").email;
