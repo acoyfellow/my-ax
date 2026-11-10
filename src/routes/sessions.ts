@@ -987,13 +987,16 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
 
     try {
-      const stub = await rpc.command("Session.open", async () => {
+      const { sessionControl, sessionEngineOf } = await import("../session-control");
+      const piSession = (await sessionEngineOf(c.env, c.get("identity").email, id)) === "pi";
+      const stub = piSession ? null : await rpc.command("Session.open", async () => {
         const opened = await getSessionAgent(c.env, c.get("identity").email, id);
         await opened.seedIdentity(c.get("identity"));
         return opened;
       });
       try {
-        await rpc.command("Session.inject", () => stub.injectUserMessage({ content, clientMsgId: body.clientMsgId, attachments: body.attachments }));
+        if (stub) await rpc.command("Session.inject", () => stub.injectUserMessage({ content, clientMsgId: body.clientMsgId, attachments: body.attachments }));
+        else await (await sessionControl(c.env, c.get("identity"), id)).inject(content, body.clientMsgId ?? `inject:${crypto.randomUUID()}`);
       } catch (err) {
         return c.json(
           {
