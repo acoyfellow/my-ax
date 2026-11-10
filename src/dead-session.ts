@@ -15,13 +15,6 @@ export function makeDeadSessionDeps(env: Env): DeadSessionDeps {
       const { sessionControl } = await import("./session-control");
       await (await sessionControl(env, { email: ownerEmail, sub: "system:auto-revive" } as Parameters<typeof sessionControl>[1], sessionId)).inject(message, clientMsgId);
     },
-    hasLiveTurn: async (ownerEmail, sessionId) => {
-      return await rpc.command("Session.hasLiveTurn", async () => {
-        const stub = await getSessionAgent(env, ownerEmail, sessionId);
-        await stub.seedIdentity({ email: ownerEmail, sub: "system:turn-watchdog" });
-        return await stub.hasLiveTurn();
-      });
-    },
     settleRunningWithoutTurn: async (ownerEmail, sessionId) => {
       await rpc.command("Session.settleIfNoLiveTurn", async () => {
         const stub = await getSessionAgent(env, ownerEmail, sessionId);

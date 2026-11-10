@@ -228,6 +228,19 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     return c.json<ApiResponse>({ ok: true, command, result: { id, archived: body.archived }, next_actions: [] });
   });
 
+  app.post("/api/sessions/:id/stop", async (c) => {
+    const id = c.req.param("id");
+    const command = `POST /api/sessions/${id}/stop`;
+    const identity = c.get("identity");
+    const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email.toLowerCase()).first();
+    if (!owned) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    const { sessionControl } = await import("../session-control");
+    const result = await (await sessionControl(c.env, identity, id)).abort();
+    return c.json<ApiResponse>({ ok: true, command, result: { id, aborted: result.aborted }, next_actions: [] });
+  });
+
   app.post("/api/sessions/:id/amber", async (c) => {
     const id = c.req.param("id");
     const command = `POST /api/sessions/${id}/amber`;

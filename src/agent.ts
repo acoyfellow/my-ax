@@ -9,6 +9,7 @@ import { applyIssueContext } from "./issue-context";
 import { MEMORY_BLOCK_MAX_TOKENS, isMemoryBlockLeak } from "./memory-block";
 import { shouldAutoContinue, TURN_CUT_NOTE, TURN_STEP_BATCH } from "./turn-continuation";
 import { judgeTurn, turnLimitsFromEnv, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, TurnProgressTracker } from "./turn-watchdog";
+import { finishTurnRecord, heartbeatTurnRecord, startTurnRecord } from "./turn-record";
 import { generateText, stepCountIs, type ModelMessage, type StopCondition, type ToolSet, type UIMessage } from "ai";
 import { Effect } from "effect";
 import { createCompactFunction } from "agents/sessions";
@@ -283,6 +284,7 @@ export class MyAgent extends Think<Env> {
     const identity = this.identity();
     if (!identity) throw new Error("session identity not seeded");
     this.turnProgress.finish();
+    this.clearTurnRecord();
     this.cancelAllChats();
     await this.clearStuckRecovery().catch((error) => console.error("abort_clear_recovery_failed", { sessionId: this.name, err: String(error) }));
     await this.disarmTurnWatchdog().catch(() => {});
@@ -748,6 +750,7 @@ export class MyAgent extends Think<Env> {
 
   async onChatResponse(result: ChatResponseResult) {
     this.turnProgress.finish();
+    this.clearTurnRecord();
     const identity = this.identity();
     if (!identity) return;
     const continuationsSoFar = this.ctx.storage.kv.get<number>("auto-continuations") ?? 0;
@@ -950,10 +953,36 @@ export class MyAgent extends Think<Env> {
 
   async beforeToolCall(): Promise<void> {
     this.turnProgress.toolStarted();
+    this.heartbeatTurn();
   }
 
   onChunk(): void {
     this.turnProgress.progress();
+    this.heartbeatTurn();
+  }
+
+  private lastTurnRecordWrite = 0;
+
+  private recordTurnStart(): void {
+    const identity = this.identity();
+    if (!identity) return;
+    this.lastTurnRecordWrite = Date.now();
+    Effect.runPromise(startTurnRecord(this.env.DB, this.name, identity.email)).catch((error) => console.error("turn_record_start_failed", { sessionId: this.name, err: String(error) }));
+  }
+
+  private heartbeatTurn(): void {
+    const identity = this.identity();
+    if (!identity) return;
+    const now = Date.now();
+    if (now - this.lastTurnRecordWrite < 30_000) return;
+    this.lastTurnRecordWrite = now;
+    Effect.runPromise(heartbeatTurnRecord(this.env.DB, this.name, identity.email, this.turnProgress.snapshot().toolsRunning)).catch((error) => console.error("turn_record_heartbeat_failed", { sessionId: this.name, err: String(error) }));
+  }
+
+  private clearTurnRecord(): void {
+    const identity = this.identity();
+    if (!identity) return;
+    Effect.runPromise(finishTurnRecord(this.env.DB, this.name, identity.email)).catch((error) => console.error("turn_record_finish_failed", { sessionId: this.name, err: String(error) }));
   }
 
   private async armTurnWatchdog(): Promise<void> {
@@ -993,6 +1022,7 @@ export class MyAgent extends Think<Env> {
   private async endStuckTurn(identity: AccessIdentity): Promise<void> {
     console.error("turn_stuck_ended", { sessionId: this.name, liveness: this.turnProgress.snapshot() });
     this.turnProgress.finish();
+    this.clearTurnRecord();
     this.cancelAllChats();
     await this.clearStuckRecovery().catch((error) => console.error("turn_stuck_clear_failed", { sessionId: this.name, err: String(error) }));
     await logAssistantMessage(this.env, identity, this.name, STUCK_TURN_NOTE, { kind: "turn-stuck" }).catch((error) => console.error("turn_stuck_note_failed", { sessionId: this.name, err: String(error) }));
@@ -1133,6 +1163,7 @@ export class MyAgent extends Think<Env> {
     // replaced turn that never reached onChatResponse. Idempotent.
     await this.reconcileAssistantHistory().catch((error) => console.error("think_assistant_log_before_turn_failed", { err: String(error) }));
     this.turnProgress.start();
+    this.recordTurnStart();
     this.lastStepAt = Date.now();
     await this.armTurnWatchdog();
     const identity = this.identity();

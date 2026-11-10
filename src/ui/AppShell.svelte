@@ -7,6 +7,7 @@
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
+  import Miniplayer from "./Miniplayer.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -123,3 +124,7 @@
 </header>
 
 <RunReceiptModal />
+
+{#if typeof localStorage !== "undefined" && localStorage.getItem("my-ax-miniplayer") === "1"}
+  <Miniplayer />
+{/if}
