@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { copiedStyles, documentPip, mirroredAttributes } from "./root-pip";
+import { ROOT_PIP_OPTIONS, ROOT_PIP_SIZE, copiedStyles, documentPip, mirroredAttributes, nextPipSize } from "./root-pip";
 
 test("pop-out is offered only where Document Picture-in-Picture exists", () => {
   assert.equal(documentPip({}), null);
@@ -19,4 +19,17 @@ test("readable sheets are inlined and cross-origin sheets are linked", () => {
 test("the theme on the page root carries into the pop-out", () => {
   const attrs: Record<string, string> = { class: "dark", "data-theme": "dark", id: "x" };
   assert.deepEqual(mirroredAttributes({ getAttribute: (name) => attrs[name] ?? null }), [["class", "dark"], ["data-theme", "dark"]]);
+});
+
+test("the pop-out hides the browser's back-to-tab button", () => {
+  assert.equal(ROOT_PIP_OPTIONS.disallowReturnToOpener, true);
+  assert.equal(ROOT_PIP_OPTIONS.width, ROOT_PIP_SIZE.width);
+});
+
+test("maximize grows the pop-out to the screen and a second press restores it", () => {
+  const screen = { availWidth: 1728, availHeight: 1080 };
+  const grown = nextPipSize(false, screen);
+  assert.deepEqual(grown, { size: { width: 1728, height: 1080 }, maximized: true });
+  const restored = nextPipSize(grown.maximized, screen);
+  assert.deepEqual(restored, { size: { width: 420, height: 640 }, maximized: false });
 });
