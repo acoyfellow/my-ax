@@ -479,6 +479,14 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
   });
 
+  app.get("/api/sessions/:id/children", async (c) => {
+    const id = c.req.param("id");
+    const email = c.get("identity").email.toLowerCase();
+    const rows = await c.env.DB.prepare("SELECT id, name, status, updated_at FROM sessions WHERE owner_email = ? AND parent_id = ? ORDER BY updated_at DESC LIMIT 50")
+      .bind(email, id).all<{ id: string; name: string; status: string; updated_at: string }>();
+    return c.json<ApiResponse>({ ok: true, command: `GET /api/sessions/${id}/children`, result: { children: rows.results ?? [] }, next_actions: [] });
+  });
+
   app.post("/api/root/clear", async (c) => {
     const identity = c.get("identity");
     const command = "POST /api/root/clear";
