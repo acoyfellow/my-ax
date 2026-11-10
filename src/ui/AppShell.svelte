@@ -7,6 +7,7 @@
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
+  import Miniplayer from "./Miniplayer.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -123,3 +124,5 @@
 </header>
 
 <RunReceiptModal />
+
+<Miniplayer />
