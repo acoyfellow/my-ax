@@ -39,6 +39,7 @@ import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
 import { chatWorkspaceExtension, type ChatWorkspace } from "./workspace-tools";
 import { siblingWorkspaceExtension } from "./sibling-tools";
+import { nextDoneDelivery, parentMessage } from "../agent-tree";
 import { createWorkspaceDirectory } from "../workspace-directory";
 import { forkPiChat, openPiChat } from "./routes";
 import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
@@ -554,6 +555,24 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }
     const last = entries.reduce((max, entry) => Math.max(max, entry.id), after);
     if (last > after) this.ctx.storage.kv.put("indexed-through", last);
+    if (rows.length && !(await this.isBusy())) await this.deliverDoneToParent(rows).catch((error) => console.error("pi_done_delivery_failed", { chatId, err: String(error) }));
+  }
+
+  private async deliverDoneToParent(rows: ReadonlyArray<{ piEntryId: number; role: string; content: string | null }>): Promise<void> {
+    const ownerEmail = this.state.ownerEmail;
+    const chatId = this.state.chatId;
+    if (!ownerEmail || !chatId) return;
+    const replies = rows.filter((row) => row.role === "assistant" && row.content).map((row) => ({ entryId: row.piEntryId, text: row.content ?? "" }));
+    const delivered = this.ctx.storage.kv.get<number>("done-delivered-through") ?? 0;
+    const next = nextDoneDelivery(replies, delivered);
+    if (!next) return;
+    const child = await this.env.DB.prepare("SELECT parent_id, name FROM sessions WHERE id = ? AND owner_email = ?").bind(chatId, ownerEmail).first<{ parent_id: string | null; name: string }>();
+    if (!child?.parent_id) return;
+    const parent = await this.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(child.parent_id, ownerEmail).first<{ id: string }>();
+    if (!parent) return;
+    this.ctx.storage.kv.put("done-delivered-through", next.entryId);
+    const { sessionControl } = await import("../session-control");
+    await (await sessionControl(this.env, { email: ownerEmail, sub: `child:${chatId}` } as Parameters<typeof sessionControl>[1], parent.id)).inject(parentMessage(chatId, child.name, next.line), `child-done:${chatId}:${next.entryId}`);
   }
 
   private conversationMemory(): ConversationMemory {
