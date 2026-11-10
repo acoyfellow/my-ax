@@ -14,6 +14,7 @@
   import ActivitySignal from "./ActivitySignal.svelte";
   import AppPopOut from "./AppPopOut.svelte";
   import VoiceListen from "./VoiceListen.svelte";
+  import Miniplayer from "./Miniplayer.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -107,3 +108,5 @@
 </header>
 
 <RunReceiptModal />
+
+<Miniplayer />
