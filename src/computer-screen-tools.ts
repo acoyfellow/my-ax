@@ -2,6 +2,7 @@ import type { Sandbox } from "@cloudflare/sandbox";
 import { COMPUTER_SCREEN_PORT, ensureComputerDisplay, getNamedComputer } from "./named-computer";
 import { storeInlineMediaArtifact } from "./uploads";
 import type { ToolContext, ToolDef } from "./types";
+import { boundedExecTimeout, parseComputerInput, tailOutput, xdotoolCommand } from "./computer-control";
 
 const ID_PARAM = { type: "string", description: "Computer id: lowercase letters, digits, hyphens" };
 const MAX_RECORD_SECONDS = 30;
@@ -95,5 +96,56 @@ export const COMPUTER_RECORD_TOOL: ToolDef = {
     const { sandbox, computerId } = await openScreen(args, ctx);
     const response = await screenFetch(sandbox, screenRecordPath(args.seconds));
     return JSON.stringify({ ...(await storeMedia(ctx, "video/mp4", response)), computerId });
+  },
+};
+
+export const COMPUTER_EXEC_TOOL: ToolDef = {
+  name: "computer_exec",
+  description: "Run one shell command inside a named computer (Ubuntu, home /home/user, DISPLAY :1). Use it to clone repos, run dev servers in the background (append ' > /tmp/x.log 2>&1 &'), run tests, or open a browser. Returns exitCode, stdout and stderr tails. Timeout default 60s, max 110s.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: ID_PARAM,
+      command: { type: "string", description: "Shell command." },
+      cwd: { type: "string", description: "Working directory. Default /home/user." },
+      timeout: { type: "number", description: "Milliseconds, 1000 to 110000. Default 60000." },
+    },
+    required: ["id", "command"],
+  },
+  execute: async (args, ctx) => {
+    const command = typeof args.command === "string" ? args.command.trim() : "";
+    if (!command) throw new Error("command is required");
+    const { sandbox, computerId } = await openScreen(args, ctx);
+    const cwd = typeof args.cwd === "string" && args.cwd.startsWith("/") ? args.cwd : "/home/user";
+    const result = await sandbox.exec(command, { cwd, timeout: boundedExecTimeout(args.timeout), env: { DISPLAY: ":1", HOME: "/home/user" } });
+    return JSON.stringify({ computerId, exitCode: result.exitCode, stdout: tailOutput(result.stdout), stderr: tailOutput(result.stderr) });
+  },
+};
+
+export const COMPUTER_INPUT_TOOL: ToolDef = {
+  name: "computer_input",
+  description: "Drive a named computer's desktop: click {x,y,button?,double?}, move {x,y}, type {text}, key {keys: xdotool names like 'ctrl+l Return'}, or scroll {x,y,dy}. Coordinates are screen pixels from computer_screenshot. Follow with computer_wait using the screenshot seq.",
+  parameters: {
+    type: "object",
+    properties: {
+      id: ID_PARAM,
+      action: { type: "string", enum: ["click", "move", "type", "key", "scroll"] },
+      x: { type: "number" },
+      y: { type: "number" },
+      button: { type: "string", enum: ["left", "right", "middle"] },
+      double: { type: "boolean" },
+      text: { type: "string" },
+      keys: { type: "string" },
+      dy: { type: "number", description: "Wheel steps; positive scrolls down." },
+    },
+    required: ["id", "action"],
+  },
+  execute: async (args, ctx) => {
+    const input = parseComputerInput(args);
+    const { sandbox, computerId } = await openScreen(args, ctx);
+    await ensureComputerDisplay(sandbox);
+    const result = await sandbox.exec(xdotoolCommand(input), { cwd: "/", timeout: 15_000, env: { DISPLAY: ":1" } });
+    if (result.exitCode !== 0) throw new Error(`xdotool failed: ${tailOutput(result.stderr).slice(-300)}`);
+    return JSON.stringify({ computerId, ok: true, action: input.action });
   },
 };

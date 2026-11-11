@@ -103,7 +103,7 @@
       "image": "./Dockerfile.computer",
       "name": "my-ax-computer",
       "max_instances": 10,
-      "instance_type": "basic"
+      "instance_type": "standard-2"
     }
   ],
 

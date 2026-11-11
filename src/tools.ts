@@ -13,7 +13,7 @@ import { JobService } from "./job-service";
 import type { RecurringJobThreadMode } from "./jobs";
 import { issueSessionTitle } from "./session-title";
 import { computerPreviewSrc } from "./computer-id";
-import { COMPUTER_RECORD_TOOL, COMPUTER_SCREENSHOT_TOOL, COMPUTER_WAIT_TOOL } from "./computer-screen-tools";
+import { COMPUTER_EXEC_TOOL, COMPUTER_INPUT_TOOL, COMPUTER_RECORD_TOOL, COMPUTER_SCREENSHOT_TOOL, COMPUTER_WAIT_TOOL } from "./computer-screen-tools";
 import { getNamedComputer, snapshotNamedComputer } from "./named-computer";
 import { limitModelToolOutputWithSpill } from "./tool-output-limit";
 import { widgetToolName, widgetWording } from "./widget-names";
@@ -287,6 +287,8 @@ export const TOOLS: ToolDef[] = [
   COMPUTER_SCREENSHOT_TOOL,
   COMPUTER_WAIT_TOOL,
   COMPUTER_RECORD_TOOL,
+  COMPUTER_EXEC_TOOL,
+  COMPUTER_INPUT_TOOL,
   {
     name: "manage_jobs",
     description: "List, create, update, pause, resume, run, delete, or inspect history for this owner's recurring prompt jobs. When creating a job from a conversation, omit sessionId to attach it to this current conversation; do not guess a prior session id for 'here'. threadMode defaults to 'same_session' and controls the destination each run: 'new_session_per_run' (a new thread each run), 'same_session' (this thread), or 'specific_session' (a specific thread whose id you must pass in sessionId). maxRuns is a positive run cap; use 1 for once or null for unlimited.",
