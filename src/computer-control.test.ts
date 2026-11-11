@@ -43,3 +43,12 @@ test("the computer image ships xdotool and the tools are registered", () => {
   assert.match(dockerfile, /xdotool git build-essential python3/);
   assert.ok(tools.includes("COMPUTER_EXEC_TOOL") && tools.includes("COMPUTER_INPUT_TOOL"));
 });
+
+test("computer Firefox starts without the first-run terms dialog", () => {
+  const dockerfile = readFileSync(new URL("../Dockerfile.computer", import.meta.url), "utf8");
+  const policies = JSON.parse(readFileSync(new URL("../computer/firefox-policies.json", import.meta.url), "utf8")).policies;
+  assert.match(dockerfile, /COPY computer\/firefox-policies\.json \/usr\/lib\/firefox\/distribution\/policies\.json/);
+  assert.equal(policies.SkipTermsOfUse, true);
+  assert.equal(policies.Preferences["browser.aboutwelcome.enabled"].Value, false);
+  assert.equal(policies.Preferences["termsofuse.bypassNotification"].Value, true);
+});

@@ -37,6 +37,7 @@ RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends xvfb xdotool git build-essential python3 libx264-dev libyuv0 libopus0 libpulse0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY --from=voxl-build /opt/voxl/bin/voxl /usr/local/bin/voxl
+COPY computer/firefox-policies.json /usr/lib/firefox/distribution/policies.json
 RUN voxl --version
 RUN rm -rf /home/user && mkdir -p /home/user
 ENV DISPLAY=:1

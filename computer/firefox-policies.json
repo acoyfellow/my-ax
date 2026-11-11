@@ -1,0 +1,21 @@
+{
+  "policies": {
+    "SkipTermsOfUse": true,
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DontCheckDefaultBrowser": true,
+    "DisableProfileImport": true,
+    "NoDefaultBookmarks": true,
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "UserMessaging": { "WhatsNew": false, "FeatureRecommendations": false, "UrlbarInterventions": false, "SkipOnboarding": true, "MoreFromMozilla": false, "FirefoxLabs": false, "Locked": true },
+    "Preferences": {
+      "datareporting.policy.dataSubmissionPolicyBypassNotification": { "Value": true, "Status": "locked" },
+      "browser.aboutwelcome.enabled": { "Value": false, "Status": "locked" },
+      "browser.startup.homepage_override.mstone": { "Value": "ignore", "Status": "locked" },
+      "trailhead.firstrun.didSeeAboutWelcome": { "Value": true, "Status": "locked" },
+      "termsofuse.bypassNotification": { "Value": true, "Status": "locked" },
+      "browser.translations.automaticallyPopup": { "Value": false, "Status": "locked" }
+    }
+  }
+}
