@@ -4,7 +4,7 @@
   import ModalPanel from "./ModalPanel.svelte";
   import NavIconButton from "./NavIconButton.svelte";
   import { fixedSessionBinding, type SessionBinding } from "./session-binding";
-  import { ROOT_PIP_OPTIONS, copiedStyles, documentPip, mirroredAttributes, nextPipSize } from "./root-pip";
+  import { ROOT_PIP_OPTIONS, copiedStyles, documentPip, mirroredAttributes } from "./root-pip";
 
   type Child = { id: string; name: string; status: string };
 
@@ -35,46 +35,13 @@
     }
     target.title = "Root · my ax";
     target.body.className = "h-full m-0 bg-bg text-fg";
-    const frame = target.createElement("div");
-    frame.className = "flex flex-col";
-    frame.style.height = "100vh";
-    frame.append(pipToolbar(target));
     const host = target.createElement("div");
-    host.className = "flex-1 min-h-0 flex flex-col";
-    frame.append(host);
-    target.body.append(frame);
+    host.className = "h-full flex flex-col";
+    host.style.height = "100vh";
+    target.body.append(host);
     return host;
   }
 
-  function pipToolbar(target: Document): HTMLElement {
-    const bar = target.createElement("div");
-    bar.className = "flex-none flex items-center justify-between gap-2 px-3 py-1 border-b border-line bg-bg-alt";
-    const title = target.createElement("span");
-    title.className = "text-sm font-semibold text-fg";
-    title.textContent = "Root";
-    const maximize = target.createElement("button");
-    maximize.type = "button";
-    maximize.className = "flex items-center justify-center w-10 h-10 rounded-md text-fg-mut hover:text-fg hover:bg-surface-2";
-    maximize.dataset.rootPipMaximize = "";
-    const label = (maximized: boolean) => {
-      maximize.textContent = maximized ? "⤡" : "⤢";
-      maximize.setAttribute("aria-label", maximized ? "Restore size" : "Maximize");
-      maximize.title = maximized ? "Restore size" : "Maximize";
-      maximize.setAttribute("aria-pressed", String(maximized));
-    };
-    let maximized = false;
-    label(maximized);
-    maximize.addEventListener("click", () => {
-      const view = target.defaultView;
-      if (!view) return;
-      const next = nextPipSize(maximized, view.screen);
-      view.resizeTo(next.size.width, next.size.height);
-      maximized = next.maximized;
-      label(maximized);
-    });
-    bar.append(title, maximize);
-    return bar;
-  }
 
   async function popOut() {
     const api = documentPip(window);

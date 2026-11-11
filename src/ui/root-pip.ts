@@ -9,18 +9,6 @@ export const ROOT_PIP_SIZE = { width: 420, height: 640 } as const;
 
 export const ROOT_PIP_OPTIONS: PipWindowOptions = { ...ROOT_PIP_SIZE, disallowReturnToOpener: true };
 
-export type ScreenArea = { availWidth: number; availHeight: number };
-
-export type PipSize = { width: number; height: number };
-
-export function maximizedPipSize(screen: ScreenArea): PipSize {
-  return { width: Math.max(ROOT_PIP_SIZE.width, screen.availWidth), height: Math.max(ROOT_PIP_SIZE.height, screen.availHeight) };
-}
-
-export function nextPipSize(maximized: boolean, screen: ScreenArea): { size: PipSize; maximized: boolean } {
-  return maximized ? { size: { ...ROOT_PIP_SIZE }, maximized: false } : { size: maximizedPipSize(screen), maximized: true };
-}
-
 export function documentPip(host: unknown): DocumentPictureInPicture | null {
   const candidate = (host as { documentPictureInPicture?: unknown } | null)?.documentPictureInPicture;
   if (!candidate || typeof (candidate as DocumentPictureInPicture).requestWindow !== "function") return null;
