@@ -2527,8 +2527,8 @@
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (shouldSendToRoot(binding.followsTab, composerRoute)) {
-      const text = composerText.trim();
-      if (!text) return;
+      const text = composerText;
+      if (!text.trim()) return;
       composerText = "";
       composerRoute.sendToRoot?.(text);
       await tick();
