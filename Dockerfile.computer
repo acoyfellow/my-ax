@@ -1,6 +1,7 @@
 FROM docker.io/cloudflare/sandbox:0.12.14 AS voxl-build
 ARG VOXL_VERSION=0.3.2
-RUN apt-get update -qq \
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-retries \
+    && for attempt in 1 2 3 4 5; do apt-get update -qq -o APT::Update::Error-Mode=any && break; sleep $((attempt * 10)); done \
     && apt-get install -y -qq --no-install-recommends curl ca-certificates build-essential pkg-config clang libclang-dev \
        libx264-dev libyuv-dev libopus-dev libpulse-dev libx11-dev libxext-dev libxdamage-dev libxfixes-dev libxtst-dev libxrandr-dev libxcomposite-dev libxkbcommon-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -15,7 +16,8 @@ RUN cargo install --locked voxl-server --version ${VOXL_VERSION} --root /opt/vox
 
 FROM docker.io/cloudflare/sandbox:0.12.14
 EXPOSE 3000 6080
-RUN apt-get update -qq \
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-retries \
+    && for attempt in 1 2 3 4 5; do apt-get update -qq -o APT::Update::Error-Mode=any && break; sleep $((attempt * 10)); done \
     && apt-get install -y -qq --no-install-recommends xfce4 xfce4-terminal dbus-x11 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN install -d -m 0755 /etc/apt/keyrings \
