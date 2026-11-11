@@ -3398,7 +3398,7 @@
           </div>
         {/if}
         {#if taskRunning && taskElapsedText}
-          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off"><SessionSignalDot signal="running" />Running for {taskElapsedText}</div>
+          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off">Running for {taskElapsedText}<SessionSignalDot signal="running" /></div>
         {/if}
         {#if terminalOpen}
           <Terminal onClose={() => (terminalOpen = false)} />
