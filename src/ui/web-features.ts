@@ -1,6 +1,8 @@
 export const WEB_FEATURES = {
   wakeLock: { label: "Keep screen on", hint: "While a turn runs, or when you turn it on from the top bar.", defaultOn: true },
   voice: { label: "AX voice commands", hint: "Shows a mic button in the top bar. Only phrases that start with AX do anything; changes need a spoken confirm. Chrome may send the audio to its speech service.", defaultOn: false },
+  virtualKeyboard: { label: "Keyboard-aware input bar", hint: "Lifts the message bar above the on-screen keyboard.", defaultOn: true },
+  scrollProgress: { label: "Scroll progress bar", hint: "Thin bar at the top of the chat showing how far you have scrolled.", defaultOn: true },
 } as const;
 
 export type WebFeature = keyof typeof WEB_FEATURES;

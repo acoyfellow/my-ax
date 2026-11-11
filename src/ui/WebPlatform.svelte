@@ -6,6 +6,8 @@
   const supportChecks: Record<WebFeature, () => boolean> = {
     wakeLock: () => "wakeLock" in navigator,
     voice: () => "SpeechRecognition" in window || "webkitSpeechRecognition" in window,
+    virtualKeyboard: () => "virtualKeyboard" in navigator || "visualViewport" in window,
+    scrollProgress: () => typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("animation-timeline: scroll()"),
   };
 
   let supported = $state<Partial<Record<WebFeature, boolean>>>({});
