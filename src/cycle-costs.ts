@@ -74,3 +74,63 @@ export function cycleCostPoint(row: CycleCostRow): CycleCostPoint {
     recipesSaved: parseJsonArray(row.recipes_saved_json),
   };
 }
+
+export const COST_SUMMARY_WINDOW_DAYS = 7;
+
+export type CostSummaryWindow = { todayStart: string; weekStart: string; now: string };
+
+export function costSummaryWindow(nowMillis: number): CostSummaryWindow {
+  const now = new Date(nowMillis);
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const weekStart = new Date(nowMillis - COST_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return { todayStart: todayStart.toISOString(), weekStart: weekStart.toISOString(), now: now.toISOString() };
+}
+
+export type CostSummaryTotalsRow = {
+  today_tokens: number | null;
+  week_tokens: number | null;
+  cycles: number;
+  sessions: number;
+};
+
+export type CostSummaryModelRow = {
+  model: string | null;
+  tokens: number | null;
+  cycles: number;
+};
+
+export type CostSummaryModel = { model: string | null; label: string; tokens: number; cycles: number };
+
+export type CostSummary = {
+  windowDays: number;
+  todayStart: string;
+  weekStart: string;
+  todayTokens: number;
+  weekTokens: number;
+  cycles: number;
+  sessions: number;
+  models: CostSummaryModel[];
+};
+
+export function costSummary(
+  window: CostSummaryWindow,
+  totals: CostSummaryTotalsRow | null,
+  models: readonly CostSummaryModelRow[],
+  labelFor: (model: string) => string | undefined,
+): CostSummary {
+  return {
+    windowDays: COST_SUMMARY_WINDOW_DAYS,
+    todayStart: window.todayStart,
+    weekStart: window.weekStart,
+    todayTokens: totals?.today_tokens ?? 0,
+    weekTokens: totals?.week_tokens ?? 0,
+    cycles: totals?.cycles ?? 0,
+    sessions: totals?.sessions ?? 0,
+    models: models.map((row) => ({
+      model: row.model,
+      label: row.model ? labelFor(row.model) ?? row.model : "Unknown model",
+      tokens: row.tokens ?? 0,
+      cycles: row.cycles,
+    })),
+  };
+}
