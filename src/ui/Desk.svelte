@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { registerStatusRing } from "./paint-ring";
   import ModalPanel from "./ModalPanel.svelte";
   import NavIconButton from "./NavIconButton.svelte";
   import { parseDeskBoard, type DeskBoard } from "../desk-board";
@@ -102,7 +101,6 @@
   }
 
   onMount(() => {
-    registerStatusRing();
     const onOpen = () => { void openPanel(); };
     const onBoard = (event: Event) => {
       const next = parseDeskBoard((event as CustomEvent).detail);
@@ -159,7 +157,7 @@
         {#each board.cards as card (card.id)}
           <li class="notif-item">
             <div class="notif-item-main">
-              <div class="notif-pill" data-ring={card.status} data-tone={card.status === "rejected" ? "bad" : card.status === "approved" ? "ok" : "attention"}>{card.status}</div>
+              <div class="notif-pill" data-tone={card.status === "rejected" ? "bad" : card.status === "approved" ? "ok" : "attention"}>{card.status}</div>
               <strong>{card.title}</strong>
               {#if card.body}<p class="notif-detail-body">{card.body}</p>{/if}
               <div class="flex gap-2 mt-2">
@@ -241,9 +239,4 @@
   .notif-pill[data-tone="bad"] { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
   .notif-pill[data-tone="attention"] { border-color: color-mix(in srgb, var(--brand) 50%, var(--line)); color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
   .notif-pill[data-tone="ok"] { border-color: color-mix(in srgb, #16a34a 45%, var(--line)); color: #16a34a; background: color-mix(in srgb, #16a34a 10%, transparent); }
-  @supports (background: paint(status-ring)) {
-    .notif-pill[data-ring] { background-image: paint(status-ring); --ring-progress: 1; --ring-width: 1.5; --ring-color: var(--brand); }
-    .notif-pill[data-ring="approved"] { --ring-color: var(--good); }
-    .notif-pill[data-ring="rejected"] { --ring-color: var(--bad); }
-  }
 </style>
