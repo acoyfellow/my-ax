@@ -52,3 +52,9 @@ test("computer Firefox starts without the first-run terms dialog", () => {
   assert.equal(policies.Preferences["browser.aboutwelcome.enabled"].Value, false);
   assert.equal(policies.Preferences["termsofuse.bypassNotification"].Value, true);
 });
+
+test("computer_exec brings the desktop up first so GUI apps it starts get a display", () => {
+  const tools = readFileSync(new URL("./computer-screen-tools.ts", import.meta.url), "utf8");
+  const exec = tools.slice(tools.indexOf('name: "computer_exec"'), tools.indexOf('name: "computer_input"'));
+  assert.ok(exec.indexOf("ensureComputerDisplay(sandbox)") > -1 && exec.indexOf("ensureComputerDisplay(sandbox)") < exec.indexOf("sandbox.exec(command"));
+});

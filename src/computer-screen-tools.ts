@@ -117,6 +117,7 @@ export const COMPUTER_EXEC_TOOL: ToolDef = {
     if (!command) throw new Error("command is required");
     const { sandbox, computerId } = await openScreen(args, ctx);
     const cwd = typeof args.cwd === "string" && args.cwd.startsWith("/") ? args.cwd : "/home/user";
+    await ensureComputerDisplay(sandbox);
     const result = await sandbox.exec(command, { cwd, timeout: boundedExecTimeout(args.timeout), env: { DISPLAY: ":1", HOME: "/home/user" } });
     return JSON.stringify({ computerId, exitCode: result.exitCode, stdout: tailOutput(result.stdout), stderr: tailOutput(result.stderr) });
   },
