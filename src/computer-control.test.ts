@@ -40,5 +40,6 @@ test("the computer image ships xdotool and the tools are registered", () => {
   const dockerfile = readFileSync(new URL("../Dockerfile.computer", import.meta.url), "utf8");
   const tools = readFileSync(new URL("./tools.ts", import.meta.url), "utf8");
   assert.match(dockerfile, /xdotool/);
+  assert.match(dockerfile, /xdotool git build-essential python3/);
   assert.ok(tools.includes("COMPUTER_EXEC_TOOL") && tools.includes("COMPUTER_INPUT_TOOL"));
 });
