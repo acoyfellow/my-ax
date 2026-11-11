@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SessionSignalDot from "./SessionSignal.svelte";
+  import { sessionSignalOf, type SessionSignal } from "./session-signal";
   import { emptyListView } from "./session-list-empty";
   // 1:1 port of src/views/SessionsSidebar.tsx + the conversations-sidebar
   // block of chat.js (~250 lines: refreshSessions, loadMoreSessions,
@@ -131,20 +133,9 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  type SessionSignal = "idle" | "running" | "error";
-
   function sessionSignal(row: SessionRow, active: boolean): SessionSignal {
     if (active && (wsState.status === "thinking" || wsState.status === "running")) return "running";
-    const status = (row.status || "active").toLowerCase();
-    if (status === "running" || status === "thinking") return "running";
-    if (status === "error" || status === "failed") return "error";
-    return "idle";
-  }
-
-  function sessionSignalLabel(signal: SessionSignal): string {
-    if (signal === "running") return "Response in progress";
-    if (signal === "error") return "Last turn failed";
-    return "Idle";
+    return sessionSignalOf(row.status);
   }
 
   function shortSessionTime(iso: string | null | undefined): string {
@@ -702,7 +693,7 @@
           ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}
           ondragend={pinnedGroup ? onPinDragEnd : undefined}
         >
-          <span class="session-row__signal" data-signal={signal} role="img" aria-label={sessionSignalLabel(signal)} title={sessionSignalLabel(signal)}></span>
+          <SessionSignalDot {signal} />
           <div
             class="session-row__main"
             data-run-state={runStateOf(signal)}
@@ -814,12 +805,7 @@
   :global(.session-tile .session-row__signal) { position: absolute; top: 10px; right: 10px; }
   :global(.session-tile .session-row__actions) { position: absolute; right: 4px; bottom: 4px; }
 
-  :global(.session-row__signal) { flex: none; width: 7px; height: 7px; border-radius: 999px; background: color-mix(in srgb, var(--fg-mut) 45%, transparent); }
-  :global(.session-row__signal[data-signal="error"]) { background: var(--bad); }
-  :global(.session-row__signal[data-signal="running"]) { width: 10px; height: 10px; background: transparent; box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--good) 25%, transparent); border-top-color: var(--good); animation: session-signal-spin 700ms linear infinite; }
   :global(.session-tile .session-row__signal[data-signal="running"]) { top: 9px; right: 9px; }
-  @keyframes session-signal-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { :global(.session-row__signal[data-signal="running"]) { animation-duration: 1.8s; } }
 
   :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
   :global(.session-tiles > li:nth-child(odd) .session-menu) { right: auto; left: -2px; }

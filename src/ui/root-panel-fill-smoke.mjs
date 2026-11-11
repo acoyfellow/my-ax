@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 
-const modal = readFileSync(new URL("./ModalPanel.svelte", import.meta.url), "utf8");
 const root = readFileSync(new URL("./Root.svelte", import.meta.url), "utf8");
+const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
 
 function assert(condition, label) {
   if (!condition) throw new Error(label);
 }
 
-assert(/\.modal-panel__body\[data-fill="true"\]\s*\{[^}]*overflow:\s*hidden/.test(modal), "a fill modal body must not scroll; the chat inside it scrolls");
-assert(/\.modal-panel__body\[data-fill="true"\]\s*\{[^}]*flex-direction:\s*column/.test(modal), "a fill modal body must be a flex column so its child can take the free height");
-assert(modal.includes('data-fill={fill ? "true" : "false"}'), "ModalPanel exposes fill on the body");
-assert(/<ModalPanel[^>]*\bfill\b/.test(root), "Root opts into a fill body so the input bar stays pinned");
-assert(/\.root-content\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0/.test(root), "root content must size from the body, not from its own content");
-assert(!/\.root-content\s*\{[^}]*height:\s*100%/.test(root), "root content must not use height: 100%, which grows with a long chat");
+assert(!root.includes("<ModalPanel"), "root is a top drawer, not a modal");
+assert(!root.includes("maximizable"), "the root drawer has no maximize button");
+assert(/\.root-drawer\s*\{[^}]*height:\s*calc\(100dvh - var\(--page-composer-height/.test(root), "the drawer stops above the page input bar");
+assert(/\.root-scrim\s*\{[^}]*inset:\s*0 0 var\(--page-composer-height/.test(root), "the backdrop leaves the page input bar clickable");
+assert(root.includes("composerHidden") && root.includes("registerRootSender"), "root hides its own input and borrows the page input bar");
+assert(chat.includes("shouldSendToRoot(binding.followsTab, composerRoute)"), "the page input bar forwards to root while the drawer is open");
+assert(/\.root-content\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0/.test(root), "root content sizes from the drawer, not from its own content");
 
-console.log("✓ root panel fill smoke: the root input bar stays pinned in the modal");
+console.log("✓ root drawer smoke: top drawer, no maximize, shared always-visible input bar");

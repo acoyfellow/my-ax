@@ -5,9 +5,9 @@ export type DocumentPictureInPicture = {
   window: Window | null;
 };
 
-export const ROOT_PIP_SIZE = { width: 420, height: 640 } as const;
+export const APP_PIP_SIZE = { width: 480, height: 720 } as const;
 
-export const ROOT_PIP_OPTIONS: PipWindowOptions = { ...ROOT_PIP_SIZE, disallowReturnToOpener: true };
+export const APP_PIP_OPTIONS: PipWindowOptions = { ...APP_PIP_SIZE, disallowReturnToOpener: true };
 
 export function documentPip(host: unknown): DocumentPictureInPicture | null {
   const candidate = (host as { documentPictureInPicture?: unknown } | null)?.documentPictureInPicture;

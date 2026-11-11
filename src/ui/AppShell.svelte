@@ -3,12 +3,14 @@
   // and connection-pill block.
 
   import { tick } from "svelte";
-  import { sessionState, setActiveSession, wsState } from "@my-ax/store";
+  import { sessionState, setActiveSession } from "@my-ax/store";
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
   import Root from "./Root.svelte";
   import NavIconButton from "./NavIconButton.svelte";
+  import ActivitySignal from "./ActivitySignal.svelte";
+  import AppPopOut from "./AppPopOut.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -49,13 +51,6 @@
     else if (event.key === "Escape") { event.preventDefault(); cancelRename(); }
   }
 
-  const connLabel = $derived(
-    wsState.conn === "live"
-      ? "connected"
-      : wsState.conn === "reconnecting"
-        ? "connecting…"
-        : "offline",
-  );
 </script>
 
 <header
@@ -69,6 +64,8 @@
         <line x1="3" y1="18" x2="21" y2="18" />
       </svg>
     </NavIconButton>
+
+  <ActivitySignal />
 
   <div class="flex-1 min-w-0">
     {#if editingTitle}
@@ -85,17 +82,7 @@
     <span id="identity-email-anchor" class="hidden lg:inline max-w-[14rem] truncate text-xs text-fg-mut" title={`Signed in as ${identityEmail}`}>{identityEmail}</span>
   {/if}
 
-  <!-- Connection pill — reads from wsState.conn directly. -->
-  <span
-    data-state={wsState.conn}
-    class="flex-shrink-0 inline-flex items-center justify-center gap-0 sm:gap-1.5 rounded-full sm:rounded-md w-10 h-10 sm:w-auto sm:h-auto sm:px-2.5 sm:py-1.5 text-sm font-medium data-[state=live]:bg-good/10 data-[state=live]:text-good data-[state=reconnecting]:bg-warn/10 data-[state=reconnecting]:text-warn data-[state=offline]:bg-bad/10 data-[state=offline]:text-bad"
-    aria-live="polite"
-    title="Connection status"
-  >
-    <span class="w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full" aria-hidden="true" style="background:currentColor"></span>
-    <span class="hidden sm:inline">{connLabel}</span>
-  </span>
-
+  <AppPopOut />
 
   <Root />
 
