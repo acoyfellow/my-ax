@@ -94,6 +94,9 @@
   } from "@my-ax/store";
   import { tabSessionBinding, type SessionBinding } from "./session-binding";
   import { composerRoute, shouldSendToRoot } from "./composer-route.svelte";
+  import { wantsWakeLock } from "./wake-lock";
+  import SessionSignalDot from "./SessionSignal.svelte";
+  import { recordWebReceipt, wakeLockState, webFeatures } from "./web-platform.svelte";
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
@@ -860,15 +863,22 @@
   let wakeLockSentinel: any = null;
   async function syncWakeLock() {
     if (typeof document === "undefined" || typeof navigator === "undefined") return;
-    const shouldHold = composerLocked && document.visibilityState === "visible" && "wakeLock" in navigator;
+    if (!binding.followsTab) return;
+    const busy = composerLocked || piBusy;
+    const shouldHold = wantsWakeLock({ supported: "wakeLock" in navigator, enabled: webFeatures.wakeLock, visible: document.visibilityState === "visible", busy, manual: wakeLockState.manual });
     if (shouldHold && !wakeLockSentinel) {
       try {
         wakeLockSentinel = await (navigator as any).wakeLock.request("screen");
-        wakeLockSentinel.addEventListener?.("release", () => { wakeLockSentinel = null; });
-      } catch {}
+        wakeLockState.held = true;
+        recordWebReceipt("wakeLock", busy ? "Held the screen on during a turn" : "Held the screen on by request");
+        wakeLockSentinel.addEventListener?.("release", () => { wakeLockSentinel = null; wakeLockState.held = false; });
+      } catch (error) {
+        recordWebReceipt("wakeLock", `The browser refused to keep the screen on (${error instanceof Error ? error.name : "error"})`);
+      }
     } else if (!shouldHold && wakeLockSentinel) {
       const held = wakeLockSentinel;
       wakeLockSentinel = null;
+      wakeLockState.held = false;
       await held.release?.().catch?.(() => {});
     }
   }
@@ -908,6 +918,9 @@
   }
   $effect(() => {
     void composerLocked;
+    void piBusy;
+    void webFeatures.wakeLock;
+    void wakeLockState.manual;
     void syncWakeLock();
   });
   // Rendering/recovery errors must never trap the user behind an infinite
@@ -2259,6 +2272,21 @@
   });
 
   $effect(() => {
+    if (!binding.followsTab) return;
+    const onVoiceAsk = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: unknown }>).detail?.text;
+      if (typeof text === "string" && text.trim()) sendFromOutside(text);
+    };
+    const onVoiceStop = () => cancelAgent();
+    window.addEventListener("my-ax:voice-ask", onVoiceAsk);
+    window.addEventListener("my-ax:voice-stop", onVoiceStop);
+    return () => {
+      window.removeEventListener("my-ax:voice-ask", onVoiceAsk);
+      window.removeEventListener("my-ax:voice-stop", onVoiceStop);
+    };
+  });
+
+  $effect(() => {
     if (!binding.followsTab || !composerEl || typeof ResizeObserver === "undefined") return;
     const root = document.documentElement;
     const observer = new ResizeObserver(() => root.style.setProperty("--page-composer-height", `${composerEl?.getBoundingClientRect().height ?? 0}px`));
@@ -3364,7 +3392,7 @@
           </div>
         {/if}
         {#if taskRunning && taskElapsedText}
-          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off">Running for {taskElapsedText}</div>
+          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off"><SessionSignalDot signal="running" />Running for {taskElapsedText}</div>
         {/if}
         {#if terminalOpen}
           <Terminal onClose={() => (terminalOpen = false)} />

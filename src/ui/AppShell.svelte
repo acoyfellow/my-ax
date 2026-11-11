@@ -11,6 +11,7 @@
   import NavIconButton from "./NavIconButton.svelte";
   import ActivitySignal from "./ActivitySignal.svelte";
   import AppPopOut from "./AppPopOut.svelte";
+  import VoiceListen from "./VoiceListen.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -81,6 +82,8 @@
   {#if identityEmail}
     <span id="identity-email-anchor" class="hidden lg:inline max-w-[14rem] truncate text-xs text-fg-mut" title={`Signed in as ${identityEmail}`}>{identityEmail}</span>
   {/if}
+
+  <VoiceListen />
 
   <AppPopOut />
 

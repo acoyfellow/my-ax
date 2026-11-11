@@ -909,7 +909,7 @@ html {
     font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
     font-size: 11px; color: var(--fg-mut); opacity: 0.7; font-variant-numeric: tabular-nums;
   }
-  .msg-duration--running { color: var(--brand); opacity: 1; }
+  .msg-duration--running { color: var(--brand); opacity: 1; display: inline-flex; align-items: center; gap: 6px; }
   .msg-body { min-width: 0; max-width: 100%; font-size: 14px; line-height: 1.55; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
   .msg-assistant .msg-body { white-space: normal; overflow-x: hidden; }
   .msg-assistant .prose { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
