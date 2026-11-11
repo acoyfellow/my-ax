@@ -3203,6 +3203,9 @@
         aria-label="Conversation"
         onscroll={syncScrollToBottom}
       >
+        {#if webFeatures.scrollProgress}
+          <div data-scroll-progress aria-hidden="true"></div>
+        {/if}
         <!-- Onboarding -->
         {#if !bootstrapPending && !onboardingHidden && messages.length === 0}
           <div class="max-w-3xl mx-auto mt-6 sm:mt-12 px-1 sm:px-6 text-center">

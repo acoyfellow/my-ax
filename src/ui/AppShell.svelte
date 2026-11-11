@@ -4,6 +4,7 @@
 
   import { onMount, tick } from "svelte";
   import { startTabLeader } from "./tab-leader.svelte";
+  import { startKeyboardInset } from "./keyboard-inset.svelte";
   import { sessionState, setActiveSession } from "@my-ax/store";
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
@@ -59,6 +60,7 @@
   });
 
   onMount(() => {
+    startKeyboardInset();
     startTabLeader();
   });
 </script>

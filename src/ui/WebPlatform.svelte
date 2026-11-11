@@ -9,6 +9,8 @@
     voice: () => "SpeechRecognition" in window || "webkitSpeechRecognition" in window,
     storagePersist: () => "storage" in navigator && typeof navigator.storage.persist === "function",
     tabLeader: () => "locks" in navigator && "BroadcastChannel" in window,
+    virtualKeyboard: () => "virtualKeyboard" in navigator || "visualViewport" in window,
+    scrollProgress: () => typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("animation-timeline: scroll()"),
   };
 
   let supported = $state<Partial<Record<WebFeature, boolean>>>({});
