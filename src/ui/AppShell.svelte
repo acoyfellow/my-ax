@@ -2,7 +2,8 @@
   // 1:1 port of src/views/AppShell.tsx + chat.js's header-controls block
   // and connection-pill block.
 
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
+  import { startTabLeader } from "./tab-leader.svelte";
   import { sessionState, setActiveSession } from "@my-ax/store";
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
@@ -55,6 +56,10 @@
   let appBarHeight = $state(52);
   $effect(() => {
     document.documentElement.style.setProperty("--appbar-height", `${appBarHeight}px`);
+  });
+
+  onMount(() => {
+    startTabLeader();
   });
 </script>
 
