@@ -1,6 +1,8 @@
 export const WEB_FEATURES = {
   wakeLock: { label: "Keep screen on", hint: "While a turn runs, or when you turn it on from the top bar.", defaultOn: true },
   voice: { label: "AX voice commands", hint: "Shows a mic button in the top bar. Only phrases that start with AX do anything; changes need a spoken confirm. Chrome may send the audio to its speech service.", defaultOn: false },
+  location: { label: "Share location with the agent", hint: "Lets the agent ask for your rough location (rounded to about 1 km). The browser asks first.", defaultOn: false },
+  gzipExport: { label: "Compress exports", hint: "Downloads large text and JSON exports as .gz files.", defaultOn: true },
 } as const;
 
 export type WebFeature = keyof typeof WEB_FEATURES;

@@ -6,6 +6,8 @@
   const supportChecks: Record<WebFeature, () => boolean> = {
     wakeLock: () => "wakeLock" in navigator,
     voice: () => "SpeechRecognition" in window || "webkitSpeechRecognition" in window,
+    location: () => "geolocation" in navigator,
+    gzipExport: () => typeof CompressionStream !== "undefined",
   };
 
   let supported = $state<Partial<Record<WebFeature, boolean>>>({});

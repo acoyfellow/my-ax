@@ -97,6 +97,7 @@
   import { wantsWakeLock } from "./wake-lock";
   import SessionSignalDot from "./SessionSignal.svelte";
   import { recordWebReceipt, wakeLockState, webFeatures } from "./web-platform.svelte";
+  import { installLocationBridge } from "./location-request";
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
@@ -2836,6 +2837,7 @@
 
   // ── Lifecycle ─────────────────────────────────────────────────────
   onMount(() => {
+    const removeLocationBridge = typeof window === "undefined" ? () => {} : installLocationBridge(window, { enabled: () => webFeatures.location, pushSystem, receipt: (text) => recordWebReceipt("location", text) });
     ensureMarkedHljs().then(async () => {
       // Re-render completed text once lazy syntax highlighting is ready so
       // fenced code receives the same finalized styling as restored history.
@@ -3073,6 +3075,7 @@
     }
     window.addEventListener("message", onArtifactMessage);
     return () => {
+      removeLocationBridge();
       window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
       window.removeEventListener("my-ax:starters-refresh", onStartersRefresh);
       document.removeEventListener("keydown", onGlobalKeydown);

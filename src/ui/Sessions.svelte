@@ -19,6 +19,8 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
+  import { downloadMaybeGzip, saveBlob } from "./gzip-download";
+  import { recordWebReceipt, webFeatures } from "./web-platform.svelte";
   import { captureTitleEpoch, readTabSession, writeTabSession, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
   import { groupByTime, matchesTitle, runStateOf } from "./session-groups";
@@ -157,6 +159,19 @@
     menuFor = menuFor === id ? null : id;
   }
   function closeMenu() { menuFor = null; }
+  async function downloadConversation(row: SessionRow) {
+    try {
+      const r = await fetch(`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`, { credentials: "include" });
+      if (!r.ok) return;
+      const text = await r.text();
+      const base = (row.name || "conversation").replace(/[^\w.-]+/g, "-").slice(0, 60) || "conversation";
+      await downloadMaybeGzip(new Blob([text], { type: "text/markdown" }), `${base}.md`, {
+        enabled: () => webFeatures.gzipExport,
+        receipt: (t) => recordWebReceipt("gzipExport", t),
+        save: saveBlob,
+      });
+    } catch {}
+  }
 
   // ── data ──────────────────────────────────────────────────────────
   function uniqueSessions(rows: SessionRow[]): SessionRow[] {
@@ -668,6 +683,7 @@
               >{row.pinned === 1 ? "Unpin" : "Pin"}</button>
               <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>Rename</button>
               <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>Export markdown</a>
+              <button type="button" role="menuitem" aria-label={`Download ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); void downloadConversation(row); }}>Download this conversation</button>
               <button type="button" role="menuitem" aria-label={row.status === "archived" ? `Unarchive ${title}` : `Archive ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); setArchived(row, row.status !== "archived"); }}>{row.status === "archived" ? "Unarchive" : "Archive"}</button>
               <hr />
               <button type="button" role="menuitem" class="danger" aria-label={`Delete ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); del(row); }}>Delete</button>
