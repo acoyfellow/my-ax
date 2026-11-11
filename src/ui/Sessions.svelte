@@ -135,6 +135,8 @@
 
   function sessionSignal(row: SessionRow, active: boolean): SessionSignal {
     if (active && (wsState.status === "thinking" || wsState.status === "running")) return "running";
+    const status = (row.status || "active").toLowerCase();
+    if (status === "running" || status === "thinking") return "running";
     return sessionSignalOf(row.status);
   }
 
