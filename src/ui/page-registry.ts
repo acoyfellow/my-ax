@@ -321,6 +321,18 @@ export const PAGE_VERBS: PageVerb[] = [
     },
   },
   {
+    name: "getLocation",
+    description: "Read the owner's rough location from this browser, rounded to about 1 km. Off unless the owner turned on Share location in Settings; the browser asks first; every read shows a toast. Input: {}. Returns {ok, position:{latitude, longitude, accuracyMeters}} or {ok:false, reason}.",
+    resolution: "receipt",
+    run: async () => {
+      const { handleLocationRequest } = await import("./location-request");
+      const { webFeatures, recordWebReceipt } = await import("./web-platform.svelte");
+      const pushSystem = (text: string) => window.dispatchEvent(new CustomEvent("my-ax:toast", { detail: { text, kind: "system" } }));
+      const result = await handleLocationRequest({ enabled: () => webFeatures.location, pushSystem, receipt: (text) => recordWebReceipt("location", text) });
+      return { result };
+    },
+  },
+  {
     name: "listArtifactTools",
     description: "List tools that live artifact widgets have self-registered: [{artifactId,name,description}]. These are NOT in work_search; discover them here, then call invokeArtifactTool.",
     resolution: "receipt",

@@ -13,7 +13,6 @@
     virtualKeyboard: () => "virtualKeyboard" in navigator || "visualViewport" in window,
     scrollProgress: () => typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("animation-timeline: scroll()"),
     location: () => "geolocation" in navigator,
-    gzipExport: () => typeof CompressionStream !== "undefined",
   };
 
   let supported = $state<Partial<Record<WebFeature, boolean>>>({});

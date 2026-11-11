@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { wantsWakeLock } from "../wake-lock";
 import { HEARTBEAT_STALE_MS, initialLeader, mirrorIsStale, runsSharedStream, stepLeader } from "./tab-leader";
 import { coarsen, decideLocation, locationToast } from "./location";
-import { GZIP_MIN_BYTES, gzipPlan } from "./gzip-plan";
 import { keyboardInset } from "./keyboard-inset";
 
 const on = { supported: true, enabled: true, visible: true, busy: false, manual: false };
@@ -77,22 +76,6 @@ test("location: read only when enabled and not denied or unsupported", () => {
 test("location: the toast names the rounded point and accuracy in km", () => {
   assert.equal(locationToast({ latitude: 40.71, longitude: -74.01, accuracyMeters: 1000 }), "Shared your location (40.71, -74.01, about 1 km)");
   assert.equal(locationToast({ latitude: 51.5, longitude: -0.13, accuracyMeters: 3500 }), "Shared your location (51.50, -0.13, about 4 km)");
-});
-
-test("gzip: compress text-like content at or above the minimum when supported", () => {
-  assert.deepEqual(gzipPlan({ bytes: GZIP_MIN_BYTES, contentType: "application/json", name: "receipt.json", supported: true }), { compress: true, name: "receipt.json.gz", contentType: "application/json", contentEncoding: "gzip" });
-  assert.equal(gzipPlan({ bytes: 5000, contentType: "text/plain; charset=utf-8", name: "log.txt", supported: true }).compress, true);
-  assert.equal(gzipPlan({ bytes: 5000, contentType: "text/markdown", name: "t.md", supported: true }).compress, true);
-  assert.equal(gzipPlan({ bytes: 5000, contentType: "application/x-ndjson", name: "t.ndjson", supported: true }).compress, true);
-});
-
-test("gzip: leave small, binary, already-compressed or unsupported content alone", () => {
-  const same = (input: Parameters<typeof gzipPlan>[0]) => assert.deepEqual(gzipPlan(input), { compress: false, name: input.name, contentType: input.contentType, contentEncoding: null });
-  same({ bytes: GZIP_MIN_BYTES - 1, contentType: "application/json", name: "a.json", supported: true });
-  same({ bytes: 9000, contentType: "image/png", name: "a.png", supported: true });
-  same({ bytes: 9000, contentType: "application/gzip", name: "a.json.gz", supported: true });
-  same({ bytes: 9000, contentType: "application/json", name: "a.json.gz", supported: true });
-  same({ bytes: 9000, contentType: "application/json", name: "a.json", supported: false });
 });
 
 test("keyboard inset: prefers the virtual keyboard height", () => {

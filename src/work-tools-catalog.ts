@@ -31,6 +31,7 @@ export const PAGE_WORK_METHODS = [
   { name: "notify", description: "Show a transient in-app toast to the owner in the live UI. Input: {text, kind?}." },
   { name: "reload", description: "Hard-reload the owner's live UI including iOS PWA (skipWaiting + cache-bust)." },
   { name: "navigate", description: "Navigate the owner's UI to an in-app deep link (/?session=<id>, /?action=attention|settings, /runs/<id>). Input: {target}." },
+  { name: "getLocation", description: "Read the owner's rough location (about 1 km) from the live browser. Off unless the owner enabled Share location; the browser asks first; each read shows a toast. Returns {ok, position} or {ok:false, reason}." },
   { name: "listArtifactTools", description: "List tools that live artifact widgets have self-registered: [{artifactId,name,description}]. Discover them here, then call invokeArtifactTool." },
   { name: "invokeArtifactTool", description: "Invoke a tool a live artifact widget self-registered (agent-drivable UI). Input: {artifactId, name, args?}. Parent-mediated + arg-validated." },
   { name: "openDesk", description: "Open the owner's desk control board." },

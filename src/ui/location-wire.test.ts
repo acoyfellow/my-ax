@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { handleLocationRequest } from "./location-request";
-import { downloadMaybeGzip } from "./gzip-download";
 
 function setNav(value: unknown) {
   Object.defineProperty(globalThis, "navigator", { value, configurable: true });
@@ -23,14 +22,12 @@ test("location refuses when disabled and coarsens when enabled", async () => {
   assert.equal(receipts.length, 2);
 });
 
-test("downloadMaybeGzip plans compression from the blob", async () => {
-  const saved: string[] = [];
-  const receipts: string[] = [];
-  const big = new Blob(["x".repeat(5000)], { type: "text/plain" });
-  await downloadMaybeGzip(big, "a.txt", { enabled: () => true, receipt: (t) => receipts.push(t), save: (_b, n) => saved.push(n) });
-  assert.deepEqual(saved, ["a.txt.gz"]);
-  assert.match(receipts[0], /^Downloaded a\.txt\.gz \(gzip, 4\.9 KB to /);
-  await downloadMaybeGzip(big, "b.txt", { enabled: () => false, receipt: (t) => receipts.push(t), save: (_b, n) => saved.push(n) });
-  assert.equal(saved[1], "b.txt");
-  assert.equal(receipts.length, 1);
+
+test("the agent reaches location only through the getLocation page verb, which reads the owner switch", async () => {
+  const { readFileSync } = await import("node:fs");
+  const registry = readFileSync(new URL("./page-registry.ts", import.meta.url), "utf8");
+  const verb = registry.slice(registry.indexOf('name: "getLocation"'), registry.indexOf('name: "listArtifactTools"'));
+  assert.ok(verb.includes("handleLocationRequest"), "the verb uses the coarsening handler");
+  assert.ok(verb.includes("enabled: () => webFeatures.location"), "the verb is gated on the owner switch");
+  assert.ok(verb.includes('recordWebReceipt("location"'), "every call leaves a receipt");
 });
