@@ -10,6 +10,7 @@
 
   import { onMount, tick } from "svelte";
   import TokenUsage from "./TokenUsage.svelte";
+  import WebPlatform from "./WebPlatform.svelte";
   import SkillsPanel from "./SkillsPanel.svelte";
   import {
     modelState,
@@ -1065,6 +1066,7 @@
     <div class="settings-content min-h-0 max-h-full overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:thin] p-4 sm:p-5" data-settings-scroll>
       <div class="space-y-4" hidden={activeSection !== "general"}>
     <TokenUsage />
+    <WebPlatform />
     {#if identityEmail}
       <div>
         <span class="block text-xs font-medium text-fg-mut mb-1.5">Signed in</span>

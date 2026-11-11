@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SessionSignalDot from "./SessionSignal.svelte";
+  import { sessionSignalOf, type SessionSignal } from "./session-signal";
   import { emptyListView } from "./session-list-empty";
   // 1:1 port of src/views/SessionsSidebar.tsx + the conversations-sidebar
   // block of chat.js (~250 lines: refreshSessions, loadMoreSessions,
@@ -17,6 +19,8 @@
   // bootstrap than a stateful in-page swap.
 
   import { onMount } from "svelte";
+  import { downloadMaybeGzip, saveBlob } from "./gzip-download";
+  import { recordWebReceipt, webFeatures } from "./web-platform.svelte";
   import { captureTitleEpoch, readTabSession, writeTabSession, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
   import { groupByTime, matchesTitle, runStateOf } from "./session-groups";
@@ -131,20 +135,11 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  type SessionSignal = "idle" | "running" | "error";
-
   function sessionSignal(row: SessionRow, active: boolean): SessionSignal {
     if (active && (wsState.status === "thinking" || wsState.status === "running")) return "running";
     const status = (row.status || "active").toLowerCase();
     if (status === "running" || status === "thinking") return "running";
-    if (status === "error" || status === "failed") return "error";
-    return "idle";
-  }
-
-  function sessionSignalLabel(signal: SessionSignal): string {
-    if (signal === "running") return "Response in progress";
-    if (signal === "error") return "Last turn failed";
-    return "Idle";
+    return sessionSignalOf(row.status);
   }
 
   function shortSessionTime(iso: string | null | undefined): string {
@@ -164,6 +159,19 @@
     menuFor = menuFor === id ? null : id;
   }
   function closeMenu() { menuFor = null; }
+  async function downloadConversation(row: SessionRow) {
+    try {
+      const r = await fetch(`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`, { credentials: "include" });
+      if (!r.ok) return;
+      const text = await r.text();
+      const base = (row.name || "conversation").replace(/[^\w.-]+/g, "-").slice(0, 60) || "conversation";
+      await downloadMaybeGzip(new Blob([text], { type: "text/markdown" }), `${base}.md`, {
+        enabled: () => webFeatures.gzipExport,
+        receipt: (t) => recordWebReceipt("gzipExport", t),
+        save: saveBlob,
+      });
+    } catch {}
+  }
 
   // ── data ──────────────────────────────────────────────────────────
   function uniqueSessions(rows: SessionRow[]): SessionRow[] {
@@ -584,7 +592,7 @@
   tabindex={-1}
   style={docked ? `width:${panelWidth}px` : undefined}
   class={docked
-    ? "fixed z-30 top-[52px] bottom-0 left-0 bg-bg-alt border-r border-line flex flex-col"
+    ? "fixed z-30 top-[var(--appbar-height,52px)] bottom-0 left-0 bg-bg-alt border-r border-line flex flex-col"
     : "fixed z-50 top-0 bottom-0 left-0 w-[88vw] max-w-[360px] bg-bg-alt border-r border-line shadow-2xl transition-all duration-200 flex flex-col"}
   class:hidden={docked && !dockOpen}
   class:translate-x-0={shown}
@@ -675,6 +683,7 @@
               >{row.pinned === 1 ? "Unpin" : "Pin"}</button>
               <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>Rename</button>
               <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>Export markdown</a>
+              <button type="button" role="menuitem" aria-label={`Download ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); void downloadConversation(row); }}>Download this conversation</button>
               <button type="button" role="menuitem" aria-label={row.status === "archived" ? `Unarchive ${title}` : `Archive ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); setArchived(row, row.status !== "archived"); }}>{row.status === "archived" ? "Unarchive" : "Archive"}</button>
               <hr />
               <button type="button" role="menuitem" class="danger" aria-label={`Delete ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); del(row); }}>Delete</button>
@@ -702,7 +711,7 @@
           ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}
           ondragend={pinnedGroup ? onPinDragEnd : undefined}
         >
-          <span class="session-row__signal" data-signal={signal} role="img" aria-label={sessionSignalLabel(signal)} title={sessionSignalLabel(signal)}></span>
+          <SessionSignalDot {signal} />
           <div
             class="session-row__main"
             data-run-state={runStateOf(signal)}
@@ -814,12 +823,7 @@
   :global(.session-tile .session-row__signal) { position: absolute; top: 10px; right: 10px; }
   :global(.session-tile .session-row__actions) { position: absolute; right: 4px; bottom: 4px; }
 
-  :global(.session-row__signal) { flex: none; width: 7px; height: 7px; border-radius: 999px; background: color-mix(in srgb, var(--fg-mut) 45%, transparent); }
-  :global(.session-row__signal[data-signal="error"]) { background: var(--bad); }
-  :global(.session-row__signal[data-signal="running"]) { width: 10px; height: 10px; background: transparent; box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--good) 25%, transparent); border-top-color: var(--good); animation: session-signal-spin 700ms linear infinite; }
   :global(.session-tile .session-row__signal[data-signal="running"]) { top: 9px; right: 9px; }
-  @keyframes session-signal-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { :global(.session-row__signal[data-signal="running"]) { animation-duration: 1.8s; } }
 
   :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
   :global(.session-tiles > li:nth-child(odd) .session-menu) { right: auto; left: -2px; }

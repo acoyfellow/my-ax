@@ -7,8 +7,11 @@
 
   interface Props {
     binding?: SessionBinding;
+    onStatus?: (status: string) => void;
+    composerHidden?: boolean;
+    onSender?: (send: ((text: string) => void) | null) => void;
   }
-  const { binding = tabSessionBinding() }: Props = $props();
+  const { binding = tabSessionBinding(), onStatus, composerHidden = false, onSender }: Props = $props();
   const instanceId = $props.id();
   const composerShortcutId = `composer-shortcut-${instanceId}`;
   let imageFileEl: HTMLInputElement | null = $state(null);
@@ -19,7 +22,7 @@
   const embeddedWsState = $state({ conn: pageWsState.conn, status: pageWsState.status });
   const wsState = binding.followsTab ? pageWsState : embeddedWsState;
   const setConn = (state: typeof wsState.conn) => { if (binding.followsTab) setPageConn(state); else embeddedWsState.conn = state; };
-  const setStatus = (status: typeof wsState.status) => { if (binding.followsTab) setPageStatus(status); else embeddedWsState.status = status; };
+  const setStatus = (status: typeof wsState.status) => { if (binding.followsTab) setPageStatus(status); else embeddedWsState.status = status; onStatus?.(status); };
   import { isFileDrag, planDroppedFiles, withAttachedFilesNote } from "../dropped-files";
   import { PiSnapshotStore } from "./snapshot-store";
   import { marked } from "marked";
@@ -90,6 +93,11 @@
     knowsSessionEngine,
   } from "@my-ax/store";
   import { tabSessionBinding, type SessionBinding } from "./session-binding";
+  import { composerRoute, shouldSendToRoot } from "./composer-route.svelte";
+  import { wantsWakeLock } from "./wake-lock";
+  import SessionSignalDot from "./SessionSignal.svelte";
+  import { recordWebReceipt, wakeLockState, webFeatures } from "./web-platform.svelte";
+  import { installLocationBridge } from "./location-request";
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
@@ -856,15 +864,22 @@
   let wakeLockSentinel: any = null;
   async function syncWakeLock() {
     if (typeof document === "undefined" || typeof navigator === "undefined") return;
-    const shouldHold = composerLocked && document.visibilityState === "visible" && "wakeLock" in navigator;
+    if (!binding.followsTab) return;
+    const busy = composerLocked || piBusy;
+    const shouldHold = wantsWakeLock({ supported: "wakeLock" in navigator, enabled: webFeatures.wakeLock, visible: document.visibilityState === "visible", busy, manual: wakeLockState.manual });
     if (shouldHold && !wakeLockSentinel) {
       try {
         wakeLockSentinel = await (navigator as any).wakeLock.request("screen");
-        wakeLockSentinel.addEventListener?.("release", () => { wakeLockSentinel = null; });
-      } catch {}
+        wakeLockState.held = true;
+        recordWebReceipt("wakeLock", busy ? "Held the screen on during a turn" : "Held the screen on by request");
+        wakeLockSentinel.addEventListener?.("release", () => { wakeLockSentinel = null; wakeLockState.held = false; });
+      } catch (error) {
+        recordWebReceipt("wakeLock", `The browser refused to keep the screen on (${error instanceof Error ? error.name : "error"})`);
+      }
     } else if (!shouldHold && wakeLockSentinel) {
       const held = wakeLockSentinel;
       wakeLockSentinel = null;
+      wakeLockState.held = false;
       await held.release?.().catch?.(() => {});
     }
   }
@@ -904,6 +919,9 @@
   }
   $effect(() => {
     void composerLocked;
+    void piBusy;
+    void webFeatures.wakeLock;
+    void wakeLockState.manual;
     void syncWakeLock();
   });
   // Rendering/recovery errors must never trap the user behind an infinite
@@ -2241,6 +2259,41 @@
 
   // ── Composer ──────────────────────────────────────────────────────
   let formEl = $state<HTMLFormElement | undefined>(undefined);
+  let composerEl = $state<HTMLDivElement | undefined>(undefined);
+
+  function sendFromOutside(text: string) {
+    composerText = text;
+    void tick().then(() => formEl?.requestSubmit());
+  }
+
+  $effect(() => {
+    if (!onSender) return;
+    onSender(sendFromOutside);
+    return () => onSender(null);
+  });
+
+  $effect(() => {
+    if (!binding.followsTab) return;
+    const onVoiceAsk = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: unknown }>).detail?.text;
+      if (typeof text === "string" && text.trim()) sendFromOutside(text);
+    };
+    const onVoiceStop = () => cancelAgent();
+    window.addEventListener("my-ax:voice-ask", onVoiceAsk);
+    window.addEventListener("my-ax:voice-stop", onVoiceStop);
+    return () => {
+      window.removeEventListener("my-ax:voice-ask", onVoiceAsk);
+      window.removeEventListener("my-ax:voice-stop", onVoiceStop);
+    };
+  });
+
+  $effect(() => {
+    if (!binding.followsTab || !composerEl || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty("--page-composer-height", `${composerEl?.getBoundingClientRect().height ?? 0}px`));
+    observer.observe(composerEl);
+    return () => observer.disconnect();
+  });
   let slashMenu = $state<{ handleKey: (event: KeyboardEvent) => boolean; invalidate: () => void } | undefined>(undefined);
 
   async function applySlashReplacement(replacement: Replacement) {
@@ -2502,6 +2555,15 @@
 
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
+    if (shouldSendToRoot(binding.followsTab, composerRoute)) {
+      const text = composerText;
+      if (!text.trim()) return;
+      composerText = "";
+      composerRoute.sendToRoot?.(text);
+      await tick();
+      autoGrow();
+      return;
+    }
     if (agentIsBusy() && ws) {
       if (composerText.trim()) queueComposerText();
       return;
@@ -2775,6 +2837,7 @@
 
   // ── Lifecycle ─────────────────────────────────────────────────────
   onMount(() => {
+    const removeLocationBridge = typeof window === "undefined" ? () => {} : installLocationBridge(window, { enabled: () => webFeatures.location, pushSystem, receipt: (text) => recordWebReceipt("location", text) });
     ensureMarkedHljs().then(async () => {
       // Re-render completed text once lazy syntax highlighting is ready so
       // fenced code receives the same finalized styling as restored history.
@@ -3012,6 +3075,7 @@
     }
     window.addEventListener("message", onArtifactMessage);
     return () => {
+      removeLocationBridge();
       window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
       window.removeEventListener("my-ax:starters-refresh", onStartersRefresh);
       document.removeEventListener("keydown", onGlobalKeydown);
@@ -3142,6 +3206,9 @@
         aria-label="Conversation"
         onscroll={syncScrollToBottom}
       >
+        {#if webFeatures.scrollProgress}
+          <div data-scroll-progress aria-hidden="true"></div>
+        {/if}
         <!-- Onboarding -->
         {#if !bootstrapPending && !onboardingHidden && messages.length === 0}
           <div class="max-w-3xl mx-auto mt-6 sm:mt-12 px-1 sm:px-6 text-center">
@@ -3331,7 +3398,7 @@
           </div>
         {/if}
         {#if taskRunning && taskElapsedText}
-          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off">Running for {taskElapsedText}</div>
+          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off">Running for {taskElapsedText}<SessionSignalDot signal="running" /></div>
         {/if}
         {#if terminalOpen}
           <Terminal onClose={() => (terminalOpen = false)} />
@@ -3352,7 +3419,7 @@
       {/if}
 
       <!-- Composer -->
-      <div class="flex-none border-t border-line bg-bg-alt">
+      <div bind:this={composerEl} class="flex-none border-t border-line bg-bg-alt" class:hidden={composerHidden} data-composer-target={binding.followsTab ? composerRoute.target : "embedded"}>
         {#if queuedMessages.length > 0}
           <div class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 flex flex-col gap-1" aria-label="Queued messages">
             {#each queuedMessages as queued (queued.id)}
@@ -3455,7 +3522,7 @@
                 onkeydown={onInputKeydown}
                 onpaste={onInputPaste}
                 rows={1}
-                placeholder={isMobileComposer() ? "Message my ax" : "Message my ax · Enter to send, Shift + Enter for new line"}
+                placeholder={binding.followsTab && composerRoute.target === "root" ? "Message root" : isMobileComposer() ? "Message my ax" : "Message my ax · Enter to send, Shift + Enter for new line"}
                 aria-describedby={composerShortcutId}
                 class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 aria-label="Message"

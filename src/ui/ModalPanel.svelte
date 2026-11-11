@@ -63,9 +63,15 @@
     <div class="flex items-center gap-2">
       {#if actions}{@render actions()}{/if}
       {#if maximizable}
-        <button type="button" class="modal-panel__control" onclick={() => (maximized = !maximized)} aria-label={maximized ? "Restore size" : "Maximize"} aria-pressed={maximized} title={maximized ? "Restore size" : "Maximize"}>{maximized ? "⤡" : "⤢"}</button>
+        <button type="button" class="modal-panel__control modal-panel__icon" onclick={() => (maximized = !maximized)} aria-label={maximized ? "Restore size" : "Maximize"} aria-pressed={maximized} title={maximized ? "Restore size" : "Maximize"}>
+          {#if maximized}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg>
+          {:else}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+          {/if}
+        </button>
       {/if}
-      <button type="button" class="modal-panel__control" onclick={close} aria-label={closeLabel}>×</button>
+      <button type="button" class="modal-panel__control modal-panel__icon" onclick={close} aria-label={closeLabel} title={closeLabel}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
     </div>
   </div>
   <div class="modal-panel__body" data-fill={fill ? "true" : "false"}>
@@ -129,6 +135,8 @@
   }
   .modal-panel__header :global(.modal-panel__control:hover:not(:disabled)) { color: var(--fg); background: var(--surface-2); }
   .modal-panel__header :global(.modal-panel__control:disabled) { opacity: 0.45; }
+  .modal-panel__header :global(.modal-panel__icon) { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 8px; }
+  .modal-panel__header :global(.modal-panel__icon svg) { width: 18px; height: 18px; }
   .modal-panel__body[data-fill="true"] { display: flex; flex-direction: column; overflow: hidden; }
   .modal-panel__body {
     flex: 1;

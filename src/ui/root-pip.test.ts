@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ROOT_PIP_OPTIONS, ROOT_PIP_SIZE, copiedStyles, documentPip, mirroredAttributes } from "./root-pip";
+import { APP_PIP_OPTIONS, APP_PIP_SIZE, copiedStyles, documentPip, mirroredAttributes } from "./root-pip";
 
 test("pop-out is offered only where Document Picture-in-Picture exists", () => {
   assert.equal(documentPip({}), null);
@@ -22,6 +22,6 @@ test("the theme on the page root carries into the pop-out", () => {
 });
 
 test("the pop-out hides the browser's back-to-tab button", () => {
-  assert.equal(ROOT_PIP_OPTIONS.disallowReturnToOpener, true);
-  assert.equal(ROOT_PIP_OPTIONS.width, ROOT_PIP_SIZE.width);
+  assert.equal(APP_PIP_OPTIONS.disallowReturnToOpener, true);
+  assert.equal(APP_PIP_OPTIONS.width, APP_PIP_SIZE.width);
 });
