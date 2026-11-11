@@ -113,10 +113,10 @@
 </script>
 
 <NavIconButton label={pipWindow ? "Root is popped out" : "Open root"} title={pipWindow ? "Root (popped out)" : "Root"} aria-haspopup="dialog" onclick={() => void openPanel()} data-root-button="" data-popped={pipWindow ? "true" : "false"}>
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="19" r="2" /><path d="M12 7v4M12 11l-6 6M12 11l6 6" /></svg>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" /></svg>
 </NavIconButton>
 
-<ModalPanel {open} title="Root" size="wide" maximizable bind:maximized onClose={closePanel} panelAttributes={{ "data-root-panel": "" }}>
+<ModalPanel {open} title="Root" size="wide" maximizable fill bind:maximized onClose={closePanel} panelAttributes={{ "data-root-panel": "" }}>
   {#snippet actions()}
     <button type="button" class="modal-panel__control" onclick={clear} disabled={clearing || !rootId}>Clear</button>
     {#if pipSupported}
@@ -146,7 +146,7 @@
 </ModalPanel>
 
 <style>
-  .root-content { height: 100%; display: flex; flex-direction: column; }
+  .root-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .root-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .root-error { padding: 0.75rem 1rem; font-size: 0.875rem; }
   .root-tree { flex: none; border-top: 1px solid var(--line); padding: 10px 16px; display: flex; flex-direction: column; gap: 4px; max-height: 30%; overflow-y: auto; }

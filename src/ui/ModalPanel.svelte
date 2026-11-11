@@ -9,6 +9,7 @@
     maximizable?: boolean;
     maximized?: boolean;
     panelAttributes?: Record<string, string>;
+    fill?: boolean;
     header?: Snippet;
     actions?: Snippet;
     children: Snippet;
@@ -23,6 +24,7 @@
     maximizable = false,
     maximized = $bindable(false),
     panelAttributes = {},
+    fill = false,
     header,
     actions,
     children,
@@ -66,7 +68,7 @@
       <button type="button" class="modal-panel__control" onclick={close} aria-label={closeLabel}>×</button>
     </div>
   </div>
-  <div class="modal-panel__body">
+  <div class="modal-panel__body" data-fill={fill ? "true" : "false"}>
     {@render children()}
   </div>
 </dialog>
@@ -127,6 +129,7 @@
   }
   .modal-panel__header :global(.modal-panel__control:hover:not(:disabled)) { color: var(--fg); background: var(--surface-2); }
   .modal-panel__header :global(.modal-panel__control:disabled) { opacity: 0.45; }
+  .modal-panel__body[data-fill="true"] { display: flex; flex-direction: column; overflow: hidden; }
   .modal-panel__body {
     flex: 1;
     min-height: 0;
