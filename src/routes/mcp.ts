@@ -25,8 +25,9 @@ import { observeSessionTurns } from "../observe";
 import { sessionControl, sessionEngineOf } from "../session-control";
 import { recentObserveEvents } from "../observe-events";
 import { summarizeCoordinatorJob, wrapCoordinatorCode } from "../coordinator-code";
+import { runComputerMethod, isComputerMethod } from "../computer-coordinator";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment"] as const;
+const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment", "computer_create", "computer_exec", "computer_input", "computer_screenshot", "computer_wait"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -265,6 +266,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: R
   if (method === "desk_clear") {
     return ownerDeskClear(c.env, email);
   }
+  if (isComputerMethod(method)) return runComputerMethod(c.env, c.get("identity"), method, args);
   if (method === "deployment") {
     const versionId = (c.env as { CF_VERSION_METADATA?: { id?: string; timestamp?: string } }).CF_VERSION_METADATA?.id ?? null;
     const versionTimestamp = (c.env as { CF_VERSION_METADATA?: { id?: string; timestamp?: string } }).CF_VERSION_METADATA?.timestamp ?? null;
@@ -482,6 +484,11 @@ const CODE_METHODS: Record<string, Method> = {
   deskRemove: "desk_remove",
   deskClear: "desk_clear",
   deployment: "deployment",
+  computerCreate: "computer_create",
+  computerExec: "computer_exec",
+  computerInput: "computer_input",
+  computerScreenshot: "computer_screenshot",
+  computerWait: "computer_wait",
 };
 
 const CODE_METHOD_NAMES = Object.keys(CODE_METHODS);
@@ -530,6 +537,11 @@ const CODE_TYPES = `declare const codemode: {
   deskRemove(args: { id: string }): Promise<unknown>;
   deskClear(): Promise<unknown>;
   deployment(): Promise<unknown>;
+  computerCreate(args: { id: string }): Promise<{ computerId: string; home: string }>;
+  computerExec(args: { id: string; command: string; cwd?: string; timeout?: number }): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+  computerInput(args: { id: string; action: "click" | "move" | "type" | "key" | "scroll"; x?: number; y?: number; button?: "left" | "right" | "middle"; double?: boolean; text?: string; keys?: string; dy?: number }): Promise<{ ok: true }>;
+  computerScreenshot(args: { id: string }): Promise<{ url: string; seq?: number }>;
+  computerWait(args: { id: string; idle?: number; change?: boolean; region?: string; since?: number; timeout?: number }): Promise<unknown>;
 };`;
 
 /** Owner-scoped coordinator MCP. Cloudflare Access remains the only auth boundary. */
