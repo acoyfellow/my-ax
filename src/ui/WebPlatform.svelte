@@ -6,6 +6,7 @@
 
   const supportChecks: Record<WebFeature, () => boolean> = {
     wakeLock: () => "wakeLock" in navigator,
+    paintRing: () => "CSS" in window && "paintWorklet" in CSS,
     voice: () => "SpeechRecognition" in window || "webkitSpeechRecognition" in window,
     storagePersist: () => "storage" in navigator && typeof navigator.storage.persist === "function",
     tabLeader: () => "locks" in navigator && "BroadcastChannel" in window,

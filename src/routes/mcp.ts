@@ -1,4 +1,5 @@
 import { assertNotForgedDecision } from "../decision-forgery-guard";
+import { resolveSessionAlias } from "../session-alias";
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import * as rpcContract from "../rpc/contract";
 import { markAttentionSeen } from "../fsm/attention-item";
@@ -38,7 +39,7 @@ function isMcpNotificationKind(value: unknown): value is McpNotificationKind {
 const TOOLS = [
   {
     name: "my_ax_code",
-    description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations and workspace. Preferred for multi-step inspection and steering. Available typed methods include listSessions, workspaceList, workspaceRead, getSession, entries, inject. No raw fetch or outbound network.",
+    description: "Execute bounded JavaScript orchestration against this owner's my-ax conversations and workspace. Preferred for multi-step inspection and steering. Pass sessionId \"root\" to reach the owner's root conversation. Available typed methods include listSessions, workspaceList, workspaceRead, getSession, entries, inject. No raw fetch or outbound network.",
     inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript async arrow function. Call codemode.<method>(args) or the bare method name." } }, required: ["code"] },
   },
   {
@@ -152,8 +153,9 @@ async function ownedSession(c: CoordinatorContext, sessionId: string) {
   return row;
 }
 
-async function coordinatorCall(c: CoordinatorContext, method: Method, args: Record<string, unknown>) {
+async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: Record<string, unknown>) {
   const email = c.get("identity").email.toLowerCase();
+  const args = rawArgs.sessionId === "root" ? { ...rawArgs, sessionId: await resolveSessionAlias(c.env.DB, email, "root") } : rawArgs;
   if (method.startsWith("jobs_")) {
     const jobs = new JobService(c.env, email);
     const id = typeof args.id === "string" ? args.id : "";

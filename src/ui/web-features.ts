@@ -7,6 +7,7 @@ export const WEB_FEATURES = {
   scrollProgress: { label: "Scroll progress bar", hint: "Thin bar at the top of the chat showing how far you have scrolled.", defaultOn: true },
   location: { label: "Share location with the agent", hint: "Lets the agent ask for your rough location (rounded to about 1 km). The browser asks first.", defaultOn: false },
   gzipExport: { label: "Compress exports", hint: "Downloads large text and JSON exports as .gz files.", defaultOn: true },
+  paintRing: { label: "Status rings on Desk cards", hint: "Draws a ring on each Desk card status pill with a CSS paint worklet.", defaultOn: true },
 } as const;
 
 export type WebFeature = keyof typeof WEB_FEATURES;
