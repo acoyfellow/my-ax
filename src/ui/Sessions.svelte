@@ -577,7 +577,7 @@
   tabindex={-1}
   style={docked ? `width:${panelWidth}px` : undefined}
   class={docked
-    ? "fixed z-30 top-[52px] bottom-0 left-0 bg-bg-alt border-r border-line flex flex-col"
+    ? "fixed z-30 top-[var(--appbar-height,52px)] bottom-0 left-0 bg-bg-alt border-r border-line flex flex-col"
     : "fixed z-50 top-0 bottom-0 left-0 w-[88vw] max-w-[360px] bg-bg-alt border-r border-line shadow-2xl transition-all duration-200 flex flex-col"}
   class:hidden={docked && !dockOpen}
   class:translate-x-0={shown}

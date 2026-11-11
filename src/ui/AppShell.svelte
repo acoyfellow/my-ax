@@ -52,9 +52,14 @@
     else if (event.key === "Escape") { event.preventDefault(); cancelRename(); }
   }
 
+  let appBarHeight = $state(52);
+  $effect(() => {
+    document.documentElement.style.setProperty("--appbar-height", `${appBarHeight}px`);
+  });
 </script>
 
 <header
+  bind:offsetHeight={appBarHeight}
   class="safe-area-appbar relative z-30 flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-line bg-bg-alt text-fg min-h-[52px]"
   role="banner"
 >
