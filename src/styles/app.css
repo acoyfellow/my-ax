@@ -871,6 +871,10 @@ html {
     flex-direction: column;
     gap: 3px;
     min-height: 64px;
+    height: auto;
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
   }
   @media (min-width: 640px) { .prompt-card { padding: 14px 16px; gap: 4px; } }
   @media (hover: hover) {
@@ -878,7 +882,8 @@ html {
   }
   .prompt-card:active { background: var(--color-surface-2); border-color: rgba(246,130,31,0.4); }
   .prompt-card__title { color: var(--fg); font-weight: 600; font-size: 14px; }
-  .prompt-card__hint { color: var(--fg-mut); font-size: 14px; line-height: 1.4; }
+  .prompt-card__hint { color: var(--fg-mut); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+  .prompt-card__title, .prompt-card__hint { display: block; }
 
   .msg {
     width: 100%; max-width: 48rem; min-width: 0; margin: 0 auto 18px; overflow-x: hidden;

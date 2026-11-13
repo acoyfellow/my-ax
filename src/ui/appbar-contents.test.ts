@@ -28,3 +28,10 @@ test("the sidebar has no Home tile; pins carry a size instead", () => {
   assert.match(sessions, /data-size=\{pinnedGroup \? pinSizeOf\(row\.pin_size\) : undefined\}/);
   assert.match(sessions, /\/pin-size`/);
 });
+
+test("Today and Older groups collapse, remember it, and open while searching", () => {
+  const sessions = readFileSync(new URL("./Sessions.svelte", import.meta.url), "utf8");
+  assert.match(sessions, /collapsed = !searchQuery && collapsedGroups\.includes\(bucket\.group\)/);
+  assert.match(sessions, /aria-expanded=\{!collapsed\}/);
+  assert.match(sessions, /localStorage\.setItem\(COLLAPSED_GROUPS_KEY/);
+});

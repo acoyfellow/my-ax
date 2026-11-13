@@ -155,6 +155,18 @@
 
   let menuFor = $state<string | null>(null);
   let menuAlign = $state<"start" | "end">("end");
+  const COLLAPSED_GROUPS_KEY = "my-ax-collapsed-session-groups";
+  let collapsedGroups = $state<string[]>(readCollapsedGroups());
+  function readCollapsedGroups(): string[] {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+    } catch { return []; }
+  }
+  function toggleGroup(group: string) {
+    collapsedGroups = collapsedGroups.includes(group) ? collapsedGroups.filter((item) => item !== group) : [...collapsedGroups, group];
+    try { localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(collapsedGroups)); } catch {}
+  }
   function toggleMenu(event: Event, id: string) {
     event.stopPropagation();
     if (menuFor === id) { menuFor = null; return; }
@@ -749,12 +761,21 @@
         <div class="session-sep" aria-hidden="true"></div>
       {/if}
       {#each unpinnedGroups as bucket (bucket.group)}
-        <h3 class="session-group-header">{bucket.group}</h3>
-        <ul class="flex flex-col" aria-label={`${bucket.group} conversations`}>
-          {#each bucket.rows as row (row.id)}
-            {@render sessionRowItem(row, false, 0, 0)}
-          {/each}
-        </ul>
+        {@const collapsed = !searchQuery && collapsedGroups.includes(bucket.group)}
+        <h3 class="session-group-header">
+          <button type="button" class="session-group-toggle" aria-expanded={!collapsed} aria-controls={`session-group-${bucket.group}`} onclick={() => toggleGroup(bucket.group)}>
+            <svg class="session-group-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            <span>{bucket.group}</span>
+            {#if collapsed}<span class="session-group-count">{bucket.rows.length}</span>{/if}
+          </button>
+        </h3>
+        {#if !collapsed}
+          <ul id={`session-group-${bucket.group}`} class="flex flex-col" aria-label={`${bucket.group} conversations`}>
+            {#each bucket.rows as row (row.id)}
+              {@render sessionRowItem(row, false, 0, 0)}
+            {/each}
+          </ul>
+        {/if}
       {/each}
       {#if visibleSessions.length === 0}
         <p class="px-3 py-4 text-center text-xs text-fg-mut">No conversation matches “{searchQuery}”.</p>
@@ -802,6 +823,12 @@
 <svelte:window onclick={closeMenu} />
 
 <style>
+  .session-group-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .session-group-toggle:hover { color: var(--fg); }
+  .session-group-chevron { flex: none; transition: transform 160ms ease; }
+  .session-group-toggle[aria-expanded="false"] .session-group-chevron { transform: rotate(-90deg); }
+  .session-group-count { margin-left: auto; font-weight: 400; font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { .session-group-chevron { transition: none; } }
   .sessions-new { color: var(--fg); }
   .session-archive-link { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--fg-mut); }
   .session-archive-link:hover { color: var(--fg); background: var(--color-surface-1); }
