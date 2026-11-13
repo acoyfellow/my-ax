@@ -1,5 +1,6 @@
 <script lang="ts">
   import { portal } from "./portal";
+  import { backgroundScale, dragOffset, revealProgress, rubberBand, settlesOpenAfterRelease, velocityOf } from "./top-drawer-drag";
   import { onMount } from "svelte";
   import { registerStatusRing } from "./paint-ring";
   import NavIconButton from "./NavIconButton.svelte";
@@ -9,6 +10,43 @@
   import { handlePageCall, type PageCallFrame } from "./page-registry";
 
   let open = $state(false);
+  type DeskDrag = { pointerId: number; startY: number; direction: "open" | "close"; height: number; offset: number; overshoot: number; moved: boolean; samples: Array<{ y: number; t: number }> };
+  let drag = $state<DeskDrag | null>(null);
+  const viewportHeight = () => window.innerHeight || 800;
+  const offsetNow = $derived(drag ? drag.offset : open ? viewportHeight() : 0);
+  const progress = $derived(revealProgress(offsetNow, drag?.height ?? viewportHeight()));
+  $effect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--desk-progress", String(progress));
+    root.style.setProperty("--desk-bg-scale", String(backgroundScale(progress)));
+    root.dataset.deskDragging = drag ? "1" : "0";
+    root.dataset.deskOpen = open || drag ? "1" : "0";
+  });
+  function startDrag(event: PointerEvent, direction: "open" | "close") {
+    if (event.button !== 0) return;
+    const height = viewportHeight();
+    drag = { pointerId: event.pointerId, startY: event.clientY, direction, height, offset: direction === "open" ? 0 : height, overshoot: 0, moved: false, samples: [{ y: event.clientY, t: event.timeStamp }] };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+  function moveDrag(event: PointerEvent) {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const delta = event.clientY - drag.startY;
+    const raw = drag.direction === "open" ? delta : drag.height + delta;
+    const overshoot = raw > drag.height ? rubberBand(raw - drag.height) : 0;
+    const samples = [...drag.samples.slice(-8), { y: event.clientY, t: event.timeStamp }];
+    drag = { ...drag, offset: dragOffset(drag.startY, event.clientY, drag.height, drag.direction), overshoot, moved: drag.moved || Math.abs(delta) > 6, samples };
+  }
+  function endDrag(event: PointerEvent) {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const finished = drag;
+    drag = null;
+    if (!finished.moved) {
+      if (finished.direction === "open") void openPanel();
+      return;
+    }
+    if (settlesOpenAfterRelease(finished.offset, finished.height, velocityOf(finished.samples))) void openPanel();
+    else closePanel();
+  }
   let board = $state<DeskBoard>({ cards: [], updatedAt: "" });
   let deskApp = $state<DeskApp>({ artifactId: null, state: null, updatedAt: "", updatedBy: null });
   let error = $state<string | null>(null);
@@ -134,13 +172,15 @@
   });
 </script>
 
-<NavIconButton label="Open desk" title="Desk" onclick={() => void openPanel()}>
+<NavIconButton label="Open desk" title="Desk (click or pull down)" class="desk-button" aria-expanded={open} aria-controls="desk-drawer" onpointerdown={(event) => startDrag(event, "open")} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openPanel(); } }}>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /></svg>
 </NavIconButton>
 
 <svelte:window onkeydown={(event) => { if (open && event.key === "Escape") closePanel(); }} />
 
-<section use:portal class="desk-drawer" data-desk-panel="" data-open={open ? "1" : "0"} aria-label="Desk" aria-hidden={!open} inert={!open}>
+<button use:portal type="button" class="desk-scrim" aria-label="Close desk" tabindex="-1" onclick={closePanel} data-open={open || drag ? "1" : "0"}></button>
+<section use:portal id="desk-drawer" class="desk-drawer" data-desk-panel="" data-open={open ? "1" : "0"} data-dragging={drag ? "1" : "0"} aria-label="Desk" aria-hidden={!open && !drag} inert={!open}
+  style:transform={drag ? `translateY(calc(-100% + ${drag.offset + drag.overshoot}px))` : undefined}>
   <header class="desk-drawer__bar">
     <h2 class="desk-drawer__title">Desk</h2>
     <button type="button" class="desk-drawer__close" onclick={closePanel} aria-label="Close desk" title="Close (Esc)">
@@ -182,18 +222,31 @@
       </ul>
     {/if}
   </div>
+  <div class="desk-drawer__handle" role="presentation" onpointerdown={(event) => startDrag(event, "close")} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag}>
+    <span aria-hidden="true"></span>
+  </div>
 </section>
 
 <style>
-  .desk-drawer { position: fixed; inset: 0; z-index: 2147483001; display: flex; flex-direction: column; background: var(--bg); transform: translateY(-100%); transition: transform 340ms cubic-bezier(0.32, 0.72, 0, 1); }
-  .desk-drawer[data-open="1"] { transform: translateY(0); box-shadow: 0 1px 0 var(--line); }
+  :global(.desk-button) { touch-action: none; }
+  .desk-scrim { position: fixed; inset: 0; z-index: 2147483000; border: 0; padding: 0; background: rgb(0 0 0 / 0.4); opacity: var(--desk-progress, 0); pointer-events: none; transition: opacity 500ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .desk-scrim[data-open="1"] { pointer-events: auto; }
+  :global(html[data-desk-dragging="1"]) .desk-scrim { transition: none; }
+  .desk-drawer { position: fixed; inset: 0 0 auto 0; height: 100dvh; z-index: 2147483001; display: flex; flex-direction: column; background: var(--bg); border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgb(0 0 0 / 0.18); transform: translateY(calc(-100% - 48px)); transition: transform 500ms cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; }
+  .desk-drawer[data-open="1"] { transform: translateY(0); border-radius: 0; box-shadow: none; }
+  .desk-drawer[data-dragging="1"] { transition: none; border-radius: 0 0 16px 16px; }
+  .desk-drawer__handle { flex: none; display: grid; place-items: center; height: 28px; cursor: grab; touch-action: none; }
+  .desk-drawer__handle:active { cursor: grabbing; }
+  .desk-drawer__handle span { width: 44px; height: 5px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 22%, transparent); }
+  :global(html[data-desk-open="1"] body > div.contents > *) { transform: scale(var(--desk-bg-scale, 1)); transform-origin: 50% 100%; border-radius: calc(16px * var(--desk-progress, 0)); overflow: hidden; transition: transform 500ms cubic-bezier(0.32, 0.72, 0, 1), border-radius 500ms cubic-bezier(0.32, 0.72, 0, 1); }
+  :global(html[data-desk-dragging="1"] body > div.contents > *) { transition: none; }
   .desk-drawer__bar { flex: none; display: flex; align-items: center; gap: 8px; height: var(--appbar-height, 52px); padding: 0 16px; border-bottom: 1px solid var(--line); }
   .desk-drawer__title { flex: 1; font-size: 14px; font-weight: 600; color: var(--fg); }
   .desk-drawer__close { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; color: var(--fg-mut); }
   .desk-drawer__close:hover { background: var(--color-surface-1); color: var(--fg); }
   .desk-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; }
   .desk-drawer__body :global(.desk-app-frame) { flex: 1; width: 100%; min-height: 0; border: 0; }
-  @media (prefers-reduced-motion: reduce) { .desk-drawer { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .desk-drawer, .desk-scrim { transition: none; } :global(html[data-desk-open="1"] body > div.contents > *) { transform: none; } }
   .notif-empty {
     padding: 2.5rem 1.25rem;
     text-align: center;

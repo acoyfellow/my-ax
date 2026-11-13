@@ -86,9 +86,6 @@
     {/if}
   </div>
 
-  {#if identityEmail}
-    <span id="identity-email-anchor" class="hidden lg:inline max-w-[14rem] truncate text-xs text-fg-mut" title={`Signed in as ${identityEmail}`}>{identityEmail}</span>
-  {/if}
 
   <VoiceListen />
 

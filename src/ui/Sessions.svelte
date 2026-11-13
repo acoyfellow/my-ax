@@ -802,7 +802,7 @@
   .session-archive-link:hover { color: var(--fg); background: var(--color-surface-1); }
   .sessions-icon:hover { background: var(--color-surface-1); color: var(--fg); }
   .sessions-docked-motion { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms ease; will-change: transform; }
-  #sessions-panel[data-open="1"] :global(.session-row), #sessions-panel[data-open="1"] .session-home { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+  #sessions-panel[data-open="1"] :global(.session-row), #sessions-panel[data-open="1"] .session-home { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) backwards; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(2)) { animation-delay: 20ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(3)) { animation-delay: 40ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(4)) { animation-delay: 60ms; }
@@ -856,6 +856,7 @@
   :global(.session-row__reorder) { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
   :global(.session-row__reorder:focus-visible) { position: static; width: 22px; height: 22px; opacity: 1; border-radius: 5px; box-shadow: 0 0 0 2px var(--brand); }
 
+  :global(.session-row[data-menu-open="1"]), :global(.session-tiles > li:has(.session-row[data-menu-open="1"])) { z-index: 30; }
   :global(.session-menu) { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 172px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28); cursor: default; }
   :global(.session-menu > button), :global(.session-menu > a) { display: flex; align-items: center; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--fg); text-decoration: none; text-align: left; }
   :global(.session-menu > button:hover), :global(.session-menu > a:hover) { background: var(--color-surface-1); }
