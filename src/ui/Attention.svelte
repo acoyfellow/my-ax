@@ -1,6 +1,6 @@
 <script lang="ts">
+  import { portal } from "./portal";
   import { onMount } from "svelte";
-  import ModalPanel from "./ModalPanel.svelte";
   import NavIconButton from "./NavIconButton.svelte";
   import { parseMyAxDeepLink } from "./deep-links";
   import { attentionSourceLabel, isExternalSourceHref } from "../source-href";
@@ -157,6 +157,11 @@
     if (!item?.id) throw new Error("That notification is no longer available");
     items = [item, ...items.filter((candidate) => candidate.id !== item.id)];
   }
+  const RAIL_WIDTH = 360;
+  $effect(() => {
+    const docks = open && window.innerWidth >= 1024;
+    document.documentElement.style.setProperty("--attention-dock-width", docks ? `${RAIL_WIDTH}px` : "0px");
+  });
   function closePanel() {
     open = false;
     selectedId = null;
@@ -261,24 +266,25 @@
   });
 </script>
 
+<svelte:window onkeydown={(event) => { if (open && event.key === "Escape") closePanel(); }} />
+
 <div class="relative h-10 w-10 flex-shrink-0" data-attention-root>
   <NavIconButton label={unread ? `${unread} unread notifications` : "Notifications"} title="Notifications" class="relative" onclick={toggle} aria-haspopup="dialog" aria-expanded={open}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     {#if unread > 0}<span class="absolute top-0.5 right-0.5 min-w-3 h-3 px-0.5 rounded-full bg-brand text-white text-[8px] leading-3 text-center">{unread > 9 ? "9+" : unread}</span>{/if}
   </NavIconButton>
-  <ModalPanel {open} title={selectedId ? "Notification" : "Notifications"} closeLabel="Close notifications" onClose={closePanel} panelAttributes={{ "data-attention-owner-panel": "" }}>
-    {#snippet header()}
+  <aside use:portal class="notif-rail" data-attention-owner-panel="" data-open={open ? "1" : "0"} aria-label="Notifications" aria-hidden={!open} inert={!open}>
+    <header class="notif-rail__bar">
       {#if selectedId}
         <button type="button" onclick={showList} class="modal-panel__control" aria-label="Back to notifications">←</button>
       {/if}
-      <h2 class="truncate text-sm font-semibold text-fg">{selectedId ? "Notification" : "Notifications"}</h2>
-    {/snippet}
-    {#snippet actions()}
+      <h2 class="flex-1 truncate text-sm font-semibold text-fg">{selectedId ? "Notification" : "Notifications"}</h2>
       {#if !selectedId && stream.length > 0}
         <button type="button" onclick={clearAll} disabled={clearing} class="notif-clear-all">{clearing ? "Clearing…" : "Clear all"}</button>
       {/if}
-    {/snippet}
-    <div data-attention-owner-content>
+      <button type="button" class="modal-panel__control" onclick={closePanel} aria-label="Close notifications" title="Close (Esc)">×</button>
+    </header>
+    <div class="notif-rail__body" data-attention-owner-content>
         {#if selected}
           <article class="notif-detail" data-notification-detail={selected.id}>
             <div class="flex items-center gap-2">
@@ -326,10 +332,15 @@
           </ul>
         {/if}
       </div>
-  </ModalPanel>
+  </aside>
 </div>
 
 <style>
+  .notif-rail { position: fixed; z-index: 40; top: var(--appbar-height, 52px); right: 0; bottom: 0; width: min(360px, 100vw); display: flex; flex-direction: column; background: var(--bg-alt); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .notif-rail[data-open="1"] { transform: translateX(0); }
+  .notif-rail__bar { flex: none; display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); }
+  .notif-rail__body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+  @media (prefers-reduced-motion: reduce) { .notif-rail { transition: none; } }
   .notif-clear-all {
     border: 1px solid var(--line);
     border-radius: 0.375rem;

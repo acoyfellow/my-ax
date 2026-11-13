@@ -1,7 +1,7 @@
 <script lang="ts">
+  import { portal } from "./portal";
   import { onMount } from "svelte";
   import { registerStatusRing } from "./paint-ring";
-  import ModalPanel from "./ModalPanel.svelte";
   import NavIconButton from "./NavIconButton.svelte";
   import { parseDeskBoard, type DeskBoard } from "../desk-board";
   import { parseDeskApp, type DeskApp } from "../desk-app";
@@ -138,7 +138,16 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /></svg>
 </NavIconButton>
 
-<ModalPanel {open} title="Desk" closeLabel="Close desk" onClose={closePanel} panelAttributes={{ "data-desk-panel": "" }}>
+<svelte:window onkeydown={(event) => { if (open && event.key === "Escape") closePanel(); }} />
+
+<section use:portal class="desk-drawer" data-desk-panel="" data-open={open ? "1" : "0"} aria-label="Desk" aria-hidden={!open} inert={!open}>
+  <header class="desk-drawer__bar">
+    <h2 class="desk-drawer__title">Desk</h2>
+    <button type="button" class="desk-drawer__close" onclick={closePanel} aria-label="Close desk" title="Close (Esc)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+    </button>
+  </header>
+  <div class="desk-drawer__body">
     {#if hostedArtifactId}
       <iframe
         bind:this={appFrameEl}
@@ -172,9 +181,19 @@
         {/each}
       </ul>
     {/if}
-  </ModalPanel>
+  </div>
+</section>
 
 <style>
+  .desk-drawer { position: fixed; inset: 0; z-index: 2147483001; display: flex; flex-direction: column; background: var(--bg); transform: translateY(-100%); transition: transform 340ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .desk-drawer[data-open="1"] { transform: translateY(0); box-shadow: 0 1px 0 var(--line); }
+  .desk-drawer__bar { flex: none; display: flex; align-items: center; gap: 8px; height: var(--appbar-height, 52px); padding: 0 16px; border-bottom: 1px solid var(--line); }
+  .desk-drawer__title { flex: 1; font-size: 14px; font-weight: 600; color: var(--fg); }
+  .desk-drawer__close { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; color: var(--fg-mut); }
+  .desk-drawer__close:hover { background: var(--color-surface-1); color: var(--fg); }
+  .desk-drawer__body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; }
+  .desk-drawer__body :global(.desk-app-frame) { flex: 1; width: 100%; min-height: 0; border: 0; }
+  @media (prefers-reduced-motion: reduce) { .desk-drawer { transition: none; } }
   .notif-empty {
     padding: 2.5rem 1.25rem;
     text-align: center;
