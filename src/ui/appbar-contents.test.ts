@@ -21,3 +21,9 @@ test("inside the pop-out the button turns into a return control and the docked s
   assert.match(popOut, /"--sessions-dock-width"/);
   assert.match(popOut, /dataset\.pip = "1"/);
 });
+
+test("sidebar search filters the Home tile by its visible name like any other conversation", () => {
+  const sessions = readFileSync(new URL("./Sessions.svelte", import.meta.url), "utf8");
+  assert.match(sessions, /homeVisible = \$derived\(Boolean\(rootId\) && !showArchived && matchesTitle\(HOME_TITLE, searchQuery\)\)/);
+  assert.match(sessions, /\{#if homeVisible\}/);
+});

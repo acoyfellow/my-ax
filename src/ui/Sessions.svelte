@@ -119,6 +119,7 @@
   // defensive re-sort). See ./pinned-reorder.ts.
   let searchQuery = $state("");
   let visibleSessions = $derived(sessions.filter((row) => matchesTitle(row.name || "Untitled", searchQuery)));
+  let homeVisible = $derived(Boolean(rootId) && !showArchived && matchesTitle(HOME_TITLE, searchQuery));
   let pinnedRows = $derived(splitPinned(visibleSessions).pinned);
   let unpinnedRows = $derived(splitPinned(visibleSessions).unpinned);
   let unpinnedGroups = $derived(groupByTime(unpinnedRows, (row) => parseServerTime(row.updated_at), new Date()));
@@ -624,7 +625,7 @@
     bind:this={scrollEl}
     class="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] px-2 pb-3"
   >
-    {#if rootId && !showArchived}
+    {#if homeVisible}
       <button type="button" class="session-home" data-root-row="" data-active={rootId === currentId ? "1" : "0"} aria-current={rootId === currentId ? "page" : undefined} onclick={() => { if (!rootId) return; try { localStorage.setItem(`my-ax-session-title:${rootId}`, HOME_TITLE); } catch {} switchTo(rootId); }}>
         <span class="session-home__label">{HOME_TITLE}</span>
         <span class="session-home__meta">{rootUpdatedAt ? `Active ${shortSessionTime(rootUpdatedAt)}` : "Always here"}</span>
@@ -751,7 +752,7 @@
           {/each}
         </ul>
       {/each}
-      {#if visibleSessions.length === 0}
+      {#if visibleSessions.length === 0 && !homeVisible}
         <p class="px-3 py-4 text-center text-xs text-fg-mut">No conversation matches “{searchQuery}”.</p>
       {/if}
       {#if cursor}
@@ -812,8 +813,8 @@
   .sessions-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--fg-mut); }
   .sessions-icon:hover { background: var(--color-surface-2); color: var(--fg); }
   .sessions-tools { display: flex; align-items: center; gap: 6px; }
-  .sessions-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px; border-radius: 8px; border: 1px solid transparent; color: var(--fg-mut); transition: border-color 140ms ease, background-color 140ms ease; }
-  .sessions-search:hover { background: var(--color-surface-1); }
+  .sessions-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); background: color-mix(in srgb, var(--color-surface-1) 70%, var(--bg)); color: var(--fg-mut); transition: border-color 140ms ease, background-color 140ms ease; }
+  .sessions-search:hover { background: var(--color-surface-1); border-color: var(--line); }
   .sessions-search:focus-within { background: var(--bg); border-color: var(--line); }
   .sessions-plus { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
   .sessions-plus:hover { border-color: color-mix(in srgb, var(--fg) 25%, transparent); }
