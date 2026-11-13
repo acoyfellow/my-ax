@@ -391,6 +391,17 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return entries.length;
   }
 
+  async replaceFromImport(entries: readonly ForkEntry[]): Promise<number> {
+    if (await this.isBusy()) throw new Error("TURN_RUNNING");
+    const conversation = await this.harness.conversation("1");
+    await conversation.reset(undefined, BACKGROUND_CONTEXT);
+    await conversation.commit(async (tx) => {
+      for (const entry of entries) await tx.appendEntry(conversation.id, entry as never);
+    }, BACKGROUND_CONTEXT);
+    await this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) }));
+    return entries.length;
+  }
+
   async clearContext(): Promise<{ cleared: boolean }> {
     if (await this.isBusy()) throw new Error("TURN_RUNNING");
     const conversation = await this.harness.conversation("1");

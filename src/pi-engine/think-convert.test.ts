@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PiTranscript } from "../ui/pi-transcript";
-import { thinkMessagesToPiEntries } from "./think-convert";
+import { thinkMessagesToPiEntries, transcriptRowsToPiEntries } from "./think-convert";
 
 test("a think conversation converts to pi entries that render in the same order", () => {
   const entries = thinkMessagesToPiEntries([
@@ -47,4 +47,16 @@ test("every new conversation row names its engine so the D1 default of think is 
   };
   walk(root);
   assert.deepEqual(offenders, []);
+});
+
+test("the full D1 transcript converts with tool rows folded into the assistant turn that ran them", () => {
+  const entries = transcriptRowsToPiEntries([
+    { ts: "2026-06-10T07:25:29Z", role: "user", tool: null, is_error: 0, content: "open the repo", meta_json: null },
+    { ts: "2026-06-10T07:25:40Z", role: "tool", tool: "browser_open", is_error: 0, content: "{\"title\":\"repo\"}", meta_json: JSON.stringify({ toolCallId: "t1", args: { url: "https://x" } }) },
+    { ts: "2026-06-10T07:25:50Z", role: "assistant", tool: null, is_error: 0, content: "It is a runtime.", meta_json: JSON.stringify({ reasoning: "read the page" }) },
+    { ts: "2026-06-10T07:26:00Z", role: "user", tool: null, is_error: 0, content: "thanks", meta_json: null },
+  ]);
+  assert.deepEqual(entries.map((entry) => entry.kind), ["pi.user", "pi.assistant", "pi.tool-result", "pi.user"]);
+  const assistant = entries[1].model?.[0] as { content: Array<{ type: string }> };
+  assert.deepEqual(assistant.content.map((block) => block.type), ["toolCall", "thinking", "text"]);
 });

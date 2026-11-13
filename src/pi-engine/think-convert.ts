@@ -47,3 +47,33 @@ export function thinkMessagesToPiEntries(messages: readonly ThinkMessage[], now 
   });
   return entries;
 }
+
+export type TranscriptRow = { ts: string; role: string; tool: string | null; is_error: number; content: string | null; meta_json: string | null };
+
+function metaOf(row: TranscriptRow): Record<string, unknown> {
+  try { return row.meta_json ? (JSON.parse(row.meta_json) as Record<string, unknown>) : {}; } catch { return {}; }
+}
+
+export function transcriptRowsToPiEntries(rows: readonly TranscriptRow[]): ForkEntry[] {
+  const messages: ThinkMessage[] = [];
+  let assistant: ThinkMessage | null = null;
+  rows.forEach((row, index) => {
+    const meta = metaOf(row);
+    if (row.role === "user") {
+      assistant = null;
+      messages.push({ role: "user", parts: [{ type: "text", text: row.content ?? "" }], createdAt: row.ts });
+      return;
+    }
+    if (row.role !== "assistant" && row.role !== "tool") return;
+    if (!assistant) { assistant = { role: "assistant", parts: [], createdAt: row.ts }; messages.push(assistant); }
+    if (row.role === "tool") {
+      const toolCallId = typeof meta.toolCallId === "string" ? meta.toolCallId : `d1-tool-${index}`;
+      assistant.parts!.push({ type: `tool-${row.tool ?? "unknown"}`, toolName: row.tool ?? "unknown", toolCallId, input: meta.args ?? {}, output: row.content ?? "", state: row.is_error ? "output-error" : "output-available" });
+      return;
+    }
+    if (typeof meta.reasoning === "string" && meta.reasoning.trim()) assistant.parts!.push({ type: "reasoning", text: meta.reasoning });
+    if (row.content) assistant.parts!.push({ type: "text", text: row.content });
+    assistant = null;
+  });
+  return thinkMessagesToPiEntries(messages);
+}

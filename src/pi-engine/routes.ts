@@ -5,7 +5,7 @@ import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
 import { parseForkPoint } from "./fork";
-import { thinkMessagesToPiEntries } from "./think-convert";
+import { transcriptRowsToPiEntries, type TranscriptRow } from "./think-convert";
 import { copyWorkspaceDisk, listWorkspaceSnapshots, workspaceDiskState } from "../workspace";
 import type { AccessIdentity } from "../auth";
 
@@ -68,22 +68,17 @@ export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceI
   }
 }
 
-export async function convertThinkChatToPi(env: AppEnv["Bindings"], identity: AccessIdentity, sessionId: string): Promise<{ sessionId: string; entries: number }> {
+export async function convertThinkChatToPi(env: AppEnv["Bindings"], identity: AccessIdentity, sessionId: string, options: { force?: boolean } = {}): Promise<{ sessionId: string; entries: number }> {
   const owner = identity.email.toLowerCase();
   const row = await env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, owner).first<{ engine: string | null }>();
   if (!row) throw new Error("conversation not found");
-  if (row.engine === "pi") return { sessionId, entries: 0 };
-  const { getSessionAgent } = await import("../agent-stub");
-  const messages = await rpc.query("Session.convertRead", async () => {
-    const think = await getSessionAgent(env, owner, sessionId);
-    await think.seedIdentity(identity);
-    return think.getMessages();
-  });
-  const entries = thinkMessagesToPiEntries(messages as never);
+  if (row.engine === "pi" && !options.force) return { sessionId, entries: 0 };
+  const rows = await env.DB.prepare("SELECT ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id ASC").bind(sessionId, owner).all<TranscriptRow>();
+  const entries = transcriptRowsToPiEntries(rows.results ?? []);
   const seeded = await rpc.command("PiChat.seedFromThink", async () => {
     const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, sessionId));
     await target.bind({ email: owner }, sessionId);
-    return target.seedFromFork(entries);
+    return target.replaceFromImport(entries);
   });
   await env.DB.prepare("UPDATE sessions SET engine = 'pi' WHERE id = ? AND owner_email = ?").bind(sessionId, owner).run();
   return { sessionId, entries: seeded };
@@ -92,7 +87,7 @@ export async function convertThinkChatToPi(env: AppEnv["Bindings"], identity: Ac
 export function registerPiEngineRoutes(app: Hono<AppEnv>) {
   app.post("/api/pi/convert-think/:id", async (c) => {
     try {
-      const result = await convertThinkChatToPi(c.env, c.get("identity"), c.req.param("id"));
+      const result = await convertThinkChatToPi(c.env, c.get("identity"), c.req.param("id"), { force: c.req.query("force") === "1" });
       return c.json({ ok: true, command: "POST /api/pi/convert-think/:id", result });
     } catch (error) {
       return c.json({ ok: false, command: "POST /api/pi/convert-think/:id", error: { code: "CONVERT_FAILED", message: error instanceof Error ? error.message : String(error) } }, 500);
