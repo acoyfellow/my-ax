@@ -79,7 +79,7 @@
 
 <div class="h-full flex flex-col">
   <AppShell {identityEmail} />
-  <div class="flex-1 min-h-0 flex flex-col" style="padding-left: var(--sessions-dock-width, 0px)">
+  <div class="flex-1 min-h-0 flex flex-col" class:sessions-content-motion={true} style="padding-left: var(--sessions-dock-width, 0px)">
     <Chat />
   </div>
 </div>
@@ -91,3 +91,8 @@
 <div id="settings-drawer-extra-mounts" class="hidden" aria-hidden="true">
   <Connectors />
 </div>
+
+<style>
+  .sessions-content-motion { transition: padding-left 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+  @media (prefers-reduced-motion: reduce) { .sessions-content-motion { transition: none; } }
+</style>

@@ -44,6 +44,7 @@
   let dockOpen = $state(DEFAULT_LAYOUT.open);
   let panelWidth = $state(DEFAULT_LAYOUT.width);
   let shown = $derived(docked ? dockOpen : open);
+  let rootId = $state<string | null>(null);
   let resizing = false;
 
   function saveLayout() {
@@ -477,6 +478,14 @@
     // Return focus to whatever opened us. chat.js still owns the hamburger.
     document.getElementById("sessions-button")?.focus();
   }
+  async function loadRoot() {
+    const response = await fetch("/api/root", { credentials: "include" }).catch(() => null);
+    const body = await response?.json().catch(() => null);
+    if (!response?.ok || !body?.ok) return;
+    rootId = body.result.id as string;
+    try { localStorage.setItem(`my-ax-session-title:${rootId}`, "root"); } catch {}
+    if (sessionState.id === rootId) setActiveSession(rootId, "root");
+  }
   function dismissPanel() {
     if (docked) {
       dockOpen = false;
@@ -536,6 +545,7 @@
     window.addEventListener("resize", onViewportResize, { passive: true });
     // Eager-fetch so opening the drawer reveals an already-rendered list.
     refresh();
+    void loadRoot();
     window.addEventListener("my-ax:sessions-open", openSidebar);
     window.addEventListener("my-ax:sessions-close", close);
     window.addEventListener("my-ax:sessions-toggle", toggle);
@@ -579,7 +589,8 @@
   class={docked
     ? "fixed z-30 top-[var(--appbar-height,52px)] bottom-0 left-0 bg-bg-alt border-r border-line flex flex-col"
     : "fixed z-50 top-0 bottom-0 left-0 w-[88vw] max-w-[360px] bg-bg-alt border-r border-line shadow-2xl transition-all duration-200 flex flex-col"}
-  class:hidden={docked && !dockOpen}
+  inert={!shown}
+  class:sessions-docked-motion={docked}
   class:translate-x-0={shown}
   class:-translate-x-full={!shown}
   class:opacity-100={shown}
@@ -587,16 +598,17 @@
   class:pointer-events-auto={shown}
   class:pointer-events-none={!shown}
 >
-  <div class="safe-area-appbar flex-none flex flex-col gap-2 p-2.5">
-    <div class="flex items-center gap-1">
-      <button type="button" onclick={newConversation} class="sessions-new flex-1" aria-label="New conversation" title="New conversation">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-        <span>New conversation</span>
-      </button>
-      <button type="button" onclick={dismissPanel} class="sessions-icon" aria-label={docked ? "Hide conversations panel" : "Close sidebar"} title={docked ? "Hide (⌘B)" : "Close"}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
-      </button>
-    </div>
+  <div class="flex-none flex flex-col p-2.5" class:safe-area-appbar={!docked}>
+    {#if !docked}
+      <div class="flex items-center justify-between pb-2">
+        <button type="button" onclick={dismissPanel} class="sessions-icon" aria-label="Close sidebar" title="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+        <button type="button" onclick={newConversation} class="sessions-icon sessions-new" aria-label="New conversation" title="New conversation">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+        </button>
+      </div>
+    {/if}
     <label class="sessions-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
       <input type="search" bind:value={searchQuery} placeholder="Search" aria-label="Search conversations" />
@@ -607,6 +619,11 @@
     bind:this={scrollEl}
     class="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] px-2 pb-3"
   >
+    {#if rootId && !showArchived}
+      <button type="button" class="session-root" data-root-row="" data-active={rootId === currentId ? "1" : "0"} aria-current={rootId === currentId ? "page" : undefined} onclick={() => { if (!rootId) return; try { localStorage.setItem(`my-ax-session-title:${rootId}`, "root"); } catch {} switchTo(rootId); }}>
+        <span class="session-root__title">root</span>
+      </button>
+    {/if}
     {#if loading}
       <div class="px-3 py-4 text-center text-xs text-fg-mut">Loading…</div>
     {:else if errorText}
@@ -620,16 +637,12 @@
       </ul>
     {:else if sessions.length === 0}
       {@const empty = emptyListView(showArchived)}
-      <div class="px-3 py-6 text-center text-xs text-fg-mut">
-        {empty.text}{#if empty.hint}<br />{empty.hint}{/if}
-      </div>
-      <div class="px-2 pt-2 pb-2">
-        <button
-          type="button"
-          class="session-archive-toggle w-full rounded-md text-fg-mut text-xs px-3 py-2 min-h-[36px] hover:bg-surface-1 hover:text-fg transition-colors"
-          aria-pressed={showArchived}
-          onclick={toggleArchivedView}
-        >{empty.toggleLabel}</button>
+      <div class="flex flex-col items-center gap-3 px-3 py-8">
+        <p class="text-xs text-fg-mut">{empty.text}</p>
+        <button type="button" class="session-archive-toggle session-archive-link" aria-pressed={showArchived} onclick={toggleArchivedView}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10h14V9M10 13h4" /></svg>
+          {empty.toggleLabel}
+        </button>
       </div>
     {:else}
       {#snippet rowMenu(row: SessionRow, title: string, pinnedGroup: boolean, indexInGroup: number, groupTotal: number)}
@@ -747,13 +760,11 @@
           </button>
         </div>
       {/if}
-      <div class="px-2 pt-2 pb-2">
-        <button
-          type="button"
-          class="session-archive-toggle w-full rounded-md text-fg-mut text-xs px-3 py-2 min-h-[36px] hover:bg-surface-1 hover:text-fg transition-colors"
-          aria-pressed={showArchived}
-          onclick={toggleArchivedView}
-        >{showArchived ? "Back to conversations" : "Show archived"}</button>
+      <div class="flex justify-center px-2 pt-3 pb-2">
+        <button type="button" class="session-archive-toggle session-archive-link" aria-pressed={showArchived} onclick={toggleArchivedView}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10h14V9M10 13h4" /></svg>
+          {showArchived ? "Back to conversations" : "Archived"}
+        </button>
       </div>
     {/if}
   </div>
@@ -780,8 +791,22 @@
 <svelte:window onclick={closeMenu} />
 
 <style>
-  .sessions-new { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: var(--fg); }
-  .sessions-new:hover { background: var(--color-surface-1); }
+  .sessions-new { color: var(--fg); }
+  .session-root { display: flex; align-items: center; gap: 9px; min-height: 36px; width: 100%; margin: 2px 0 6px; padding: 7px 8px; border-radius: 8px; text-align: left; font-size: 13.5px; font-weight: 600; color: var(--fg); }
+  .session-root:hover { background: var(--color-surface-1); }
+  .session-root[data-active="1"] { background: var(--color-surface-2); }
+  .session-archive-link { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--fg-mut); }
+  .session-archive-link:hover { color: var(--fg); background: var(--color-surface-1); }
+  .sessions-icon:hover { background: var(--color-surface-1); color: var(--fg); }
+  .sessions-docked-motion { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms ease; will-change: transform; }
+  #sessions-panel[data-open="1"] :global(.session-row), #sessions-panel[data-open="1"] .session-root { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+  #sessions-panel[data-open="1"] :global(li.session-row:nth-child(2)) { animation-delay: 20ms; }
+  #sessions-panel[data-open="1"] :global(li.session-row:nth-child(3)) { animation-delay: 40ms; }
+  #sessions-panel[data-open="1"] :global(li.session-row:nth-child(4)) { animation-delay: 60ms; }
+  #sessions-panel[data-open="1"] :global(li.session-row:nth-child(n+5)) { animation-delay: 80ms; }
+  @keyframes session-row-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  .session-root, :global(.session-row) { transition: background-color 140ms ease, color 140ms ease; }
+  @media (prefers-reduced-motion: reduce) { .sessions-docked-motion { transition: none; } #sessions-panel :global(.session-row), #sessions-panel .session-root { animation: none; } }
   .sessions-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--fg-mut); }
   .sessions-icon:hover { background: var(--color-surface-2); color: var(--fg); }
   .sessions-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--color-surface-1); color: var(--fg-mut); }

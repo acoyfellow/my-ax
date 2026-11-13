@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dispatchBuiltin } from "./command-runner";
   // 1:1 port of src/views/AppShell.tsx + chat.js's header-controls block
   // and connection-pill block.
 
@@ -9,7 +10,6 @@
   import Attention from "./Attention.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
-  import Root from "./Root.svelte";
   import NavIconButton from "./NavIconButton.svelte";
   import ActivitySignal from "./ActivitySignal.svelte";
   import AppPopOut from "./AppPopOut.svelte";
@@ -22,6 +22,9 @@
 
   function openSessions() {
     window.dispatchEvent(new Event("my-ax:sessions-toggle"));
+  }
+  function newConversation() {
+    dispatchBuiltin("new", {}, null);
   }
   function openSettings() {
     window.dispatchEvent(new Event("my-ax:settings-toggle"));
@@ -70,12 +73,11 @@
   class="safe-area-appbar relative z-30 flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-line bg-bg-alt text-fg min-h-[52px]"
   role="banner"
 >
-    <NavIconButton label="Open conversations sidebar" title="Conversations (⌘B)" onclick={openSessions} aria-controls="sessions-panel">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="3" y1="6" x2="21" y2="6" />
-        <line x1="3" y1="12" x2="21" y2="12" />
-        <line x1="3" y1="18" x2="21" y2="18" />
-      </svg>
+    <NavIconButton label="Toggle conversations sidebar" title="Conversations (⌘B)" onclick={openSessions} aria-controls="sessions-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
+    </NavIconButton>
+    <NavIconButton label="New conversation" title="New conversation" onclick={newConversation}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
     </NavIconButton>
 
   <ActivitySignal />
@@ -85,7 +87,7 @@
       <input bind:this={titleInput} bind:value={titleDraft} onkeydown={renameKeydown} onblur={saveRename} maxlength={200} class="w-full min-w-0 rounded border border-brand/40 bg-bg px-2 py-1 text-sm text-fg outline-none" aria-label="Rename active conversation" />
     {:else}
       <button type="button" onclick={beginRename} disabled={!sessionState.id} class="group block max-w-full min-w-0 text-left disabled:cursor-default" aria-label={sessionState.id ? "Rename active conversation" : "New conversation"} title={sessionState.id ? "Rename active conversation" : "New conversation"}>
-        <span class="flex items-center gap-1.5 min-w-0"><span class="block truncate text-sm font-semibold text-fg">{sessionState.title}</span>{#if sessionState.id}<span class="hidden sm:inline text-sm text-fg-mut opacity-0 group-hover:opacity-70">✎</span>{/if}</span>
+        <span class="flex items-center gap-1.5 min-w-0">{#if sessionState.id}<span class="block truncate text-sm font-semibold text-fg">{sessionState.title}</span>{/if}{#if sessionState.id}<span class="hidden sm:inline text-sm text-fg-mut opacity-0 group-hover:opacity-70">✎</span>{/if}</span>
         {#if sessionState.id}<span data-active-session-id={sessionState.id} class="block font-mono text-[0.8em] leading-tight text-fg-mut/70">{sessionState.id.slice(0, 8)}</span>{/if}
       </button>
     {/if}
@@ -99,7 +101,6 @@
 
   <AppPopOut />
 
-  <Root />
 
   <Desk />
 
