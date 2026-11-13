@@ -33,7 +33,7 @@ export async function resolveRecurringJobTargetSession(env: Env, row: Pick<JobRo
   // a brand-new conversation and running work in the wrong place.
   if (row.thread_mode !== "new_session_per_run") throw new Error(`invalid recurring job thread mode: ${row.thread_mode}`);
   const targetSessionId = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, ?, ?)")
+  await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', ?, ?)")
     .bind(targetSessionId, recurringRunSessionTitle(row, now), row.owner_email, now.toISOString(), now.toISOString()).run();
   return { targetSessionId, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: true };
 }

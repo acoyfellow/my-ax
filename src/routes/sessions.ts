@@ -324,7 +324,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       name = requestedStableName;
       try {
         const insert = await c.env.DB.prepare(
-          "INSERT INTO sessions (id, name, stable_name, status, owner_email, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
+          "INSERT INTO sessions (id, name, stable_name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, 'pi', datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
         ).bind(id, name, requestedStableName, identity.email).run();
         created = (insert.meta?.changes ?? 0) === 1;
         if (!created) {
@@ -346,17 +346,12 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     } else {
       try {
         await c.env.DB.prepare(
-          "INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))",
+          "INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))",
         )
           .bind(id, name, identity.email)
           .run();
       } catch {
       }
-    }
-
-    try {
-      await rpc.command("Session.seedIdentity", async () => (await getSessionAgent(c.env, identity.email, id)).seedIdentity(identity));
-    } catch {
     }
 
     if (created) writeUsage(c.env, { name: "session_created", owner: identity.email, sessionId: id });
@@ -447,7 +442,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       });
       forkId = crypto.randomUUID();
       const forkName = `Fork · ${source.name}`.slice(0, 200);
-      await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, created_at, updated_at) VALUES (?, ?, 'active', ?, datetime('now'), datetime('now'))").bind(forkId, forkName, identity.email).run();
+      await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'think', datetime('now'), datetime('now'))").bind(forkId, forkName, identity.email).run();
       const newForkId = forkId;
       await rpc.command("Session.seedForkHistory", async () => (await getSessionAgent(c.env, identity.email, newForkId)).seedForkHistory(identity, history));
       const cutoff = await c.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND json_extract(meta_json, '$.uiMessageId') = ? ORDER BY id DESC LIMIT 1").bind(sourceId, identity.email, atMessageId).first<{ id: number }>();

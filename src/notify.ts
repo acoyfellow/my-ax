@@ -273,7 +273,7 @@ async function ensureNotificationSession(env: Env, email: string, stableName: st
   const existing = await env.DB.prepare("SELECT id FROM sessions WHERE owner_email = ? AND stable_name = ? LIMIT 1").bind(email, normalized).first<{ id: string }>().catch(() => null);
   if (existing?.id) return existing.id;
   const id = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO sessions (id, name, stable_name, status, owner_email, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, datetime('now'), datetime('now'))").bind(id, normalized, normalized, email).run().catch(() => undefined);
+  await env.DB.prepare("INSERT INTO sessions (id, name, stable_name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))").bind(id, normalized, normalized, email).run().catch(() => undefined);
   return id;
 }
 

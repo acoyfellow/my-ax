@@ -24,7 +24,7 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     let attentionId: string | null = null;
     const started = Date.now();
     try {
-      await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email) VALUES (?, ?, 'running', ?)")
+      await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine) VALUES (?, ?, 'running', ?, 'pi')")
         .bind(sessionId, "Recovery receipt proof", identity.email)
         .run();
       await recordRecoveryExhaustion(c.env, identity, sessionId, {

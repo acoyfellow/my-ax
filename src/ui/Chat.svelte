@@ -1236,10 +1236,13 @@
     let m = messages.find((x) => x.id === id);
     if (!m) m = getOrCreateMessage(id, "assistant");
     const wasPinned = isLogPinned();
-    updateMessage(id, (msg) => ({
-      ...msg,
-      reasoning: (msg.reasoning || "") + delta,
-    }));
+    updateMessage(id, (msg) => {
+      const parts = [...msg.parts];
+      const last = parts[parts.length - 1];
+      if (last && last.kind === "thinking") parts[parts.length - 1] = { kind: "thinking", text: last.text + delta };
+      else parts.push({ kind: "thinking", text: delta });
+      return { ...msg, parts, reasoning: (msg.reasoning || "") + delta };
+    });
     if (wasPinned) queueScrollToBottom();
   }
   function appendToolCall(messageId: string, tool: { id: string; name: string; arguments: any }) {
@@ -2158,6 +2161,8 @@
       for (const part of message.parts || []) {
         if (part.type === "text" && part.text) {
           orderedParts.push({ kind: "text", text: part.text, rendered: message.role === "assistant" ? renderMarkdown(part.text) : undefined });
+        } else if (part.type === "reasoning" && typeof part.text === "string" && part.text.trim()) {
+          orderedParts.push({ kind: "thinking", text: part.text });
         } else if (part.type?.startsWith("tool-") && part.toolCallId) {
           const isErr = part.state === "output-error" || part.state === "output-denied";
           const done = part.state === "output-available";
