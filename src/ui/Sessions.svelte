@@ -45,6 +45,8 @@
   let panelWidth = $state(DEFAULT_LAYOUT.width);
   let shown = $derived(docked ? dockOpen : open);
   let rootId = $state<string | null>(null);
+  let rootUpdatedAt = $state<string | null>(null);
+  const HOME_TITLE = "Home";
   let resizing = false;
 
   function saveLayout() {
@@ -483,8 +485,9 @@
     const body = await response?.json().catch(() => null);
     if (!response?.ok || !body?.ok) return;
     rootId = body.result.id as string;
-    try { localStorage.setItem(`my-ax-session-title:${rootId}`, "root"); } catch {}
-    if (sessionState.id === rootId) setActiveSession(rootId, "root");
+    rootUpdatedAt = typeof body.result.updated_at === "string" ? body.result.updated_at : null;
+    try { localStorage.setItem(`my-ax-session-title:${rootId}`, HOME_TITLE); } catch {}
+    if (sessionState.id === rootId) setActiveSession(rootId, HOME_TITLE);
   }
   function dismissPanel() {
     if (docked) {
@@ -604,15 +607,17 @@
         <button type="button" onclick={dismissPanel} class="sessions-icon" aria-label="Close sidebar" title="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
-        <button type="button" onclick={newConversation} class="sessions-icon sessions-new" aria-label="New conversation" title="New conversation">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-        </button>
       </div>
     {/if}
-    <label class="sessions-search">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-      <input type="search" bind:value={searchQuery} placeholder="Search" aria-label="Search conversations" />
-    </label>
+    <div class="sessions-tools">
+      <label class="sessions-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input type="search" bind:value={searchQuery} placeholder="Search" aria-label="Search conversations" />
+      </label>
+      <button type="button" onclick={newConversation} class="sessions-plus" aria-label="New conversation" title="New conversation">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+      </button>
+    </div>
   </div>
 
   <div
@@ -620,8 +625,9 @@
     class="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] px-2 pb-3"
   >
     {#if rootId && !showArchived}
-      <button type="button" class="session-root" data-root-row="" data-active={rootId === currentId ? "1" : "0"} aria-current={rootId === currentId ? "page" : undefined} onclick={() => { if (!rootId) return; try { localStorage.setItem(`my-ax-session-title:${rootId}`, "root"); } catch {} switchTo(rootId); }}>
-        <span class="session-root__title">root</span>
+      <button type="button" class="session-home" data-root-row="" data-active={rootId === currentId ? "1" : "0"} aria-current={rootId === currentId ? "page" : undefined} onclick={() => { if (!rootId) return; try { localStorage.setItem(`my-ax-session-title:${rootId}`, HOME_TITLE); } catch {} switchTo(rootId); }}>
+        <span class="session-home__label">{HOME_TITLE}</span>
+        <span class="session-home__meta">{rootUpdatedAt ? `Active ${shortSessionTime(rootUpdatedAt)}` : "Always here"}</span>
       </button>
     {/if}
     {#if loading}
@@ -792,28 +798,34 @@
 
 <style>
   .sessions-new { color: var(--fg); }
-  .session-root { display: flex; align-items: center; gap: 9px; min-height: 36px; width: 100%; margin: 2px 0 6px; padding: 7px 8px; border-radius: 8px; text-align: left; font-size: 13.5px; font-weight: 600; color: var(--fg); }
-  .session-root:hover { background: var(--color-surface-1); }
-  .session-root[data-active="1"] { background: var(--color-surface-2); }
   .session-archive-link { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; color: var(--fg-mut); }
   .session-archive-link:hover { color: var(--fg); background: var(--color-surface-1); }
   .sessions-icon:hover { background: var(--color-surface-1); color: var(--fg); }
   .sessions-docked-motion { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms ease; will-change: transform; }
-  #sessions-panel[data-open="1"] :global(.session-row), #sessions-panel[data-open="1"] .session-root { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+  #sessions-panel[data-open="1"] :global(.session-row), #sessions-panel[data-open="1"] .session-home { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(2)) { animation-delay: 20ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(3)) { animation-delay: 40ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(4)) { animation-delay: 60ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(n+5)) { animation-delay: 80ms; }
   @keyframes session-row-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
-  .session-root, :global(.session-row) { transition: background-color 140ms ease, color 140ms ease; }
   @media (prefers-reduced-motion: reduce) { .sessions-docked-motion { transition: none; } #sessions-panel :global(.session-row), #sessions-panel .session-root { animation: none; } }
   .sessions-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--fg-mut); }
   .sessions-icon:hover { background: var(--color-surface-2); color: var(--fg); }
-  .sessions-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--color-surface-1); color: var(--fg-mut); }
+  .sessions-tools { display: flex; align-items: center; gap: 6px; }
+  .sessions-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px; border-radius: 8px; border: 1px solid transparent; color: var(--fg-mut); transition: border-color 140ms ease, background-color 140ms ease; }
+  .sessions-search:hover { background: var(--color-surface-1); }
+  .sessions-search:focus-within { background: var(--bg); border-color: var(--line); }
+  .sessions-plus { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+  .sessions-plus:hover { border-color: color-mix(in srgb, var(--fg) 25%, transparent); }
+  .session-home { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; width: calc(100% - 8px); height: 96px; margin: 6px 4px 6px; padding: 12px 14px; border-radius: 12px; text-align: left; background: var(--bg); border: 1px solid var(--line); transition: border-color 140ms ease, box-shadow 140ms ease; }
+  .session-home:hover { border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
+  .session-home[data-active="1"] { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
+  .session-home__label { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
+  .session-home__meta { font-size: 11.5px; color: var(--fg-mut); }
   .sessions-search:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 55%, transparent); }
   .sessions-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 13px; color: var(--fg); appearance: none; }
   .sessions-search input::placeholder { color: var(--fg-mut); }
-  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px 4px 8px; }
+  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 0 4px 8px; }
   .session-sep { height: 1px; background: var(--line); margin: 2px 8px 2px; }
 
   :global(.session-row) { position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 7px; color: var(--fg); cursor: pointer; }

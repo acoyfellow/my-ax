@@ -1689,7 +1689,7 @@
     const id = body?.result?.id;
     if (typeof id !== "string" || !id) return null;
     rememberSessionEngine(id, "pi");
-    try { localStorage.setItem(`my-ax-session-title:${id}`, "root"); } catch {}
+    try { localStorage.setItem(`my-ax-session-title:${id}`, "Home"); } catch {}
     return id;
   }
   async function sessionForBootstrap(): Promise<string | null> {

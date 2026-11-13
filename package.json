@@ -5,7 +5,7 @@
   "private": true,
   "description": "A personal AI agent operating environment you self-host on Cloudflare.",
   "scripts": {
-    "dev": "npm run build:assets && wrangler dev --env dev",
+    "dev": "npm run build:assets && npm run db:migrate:local && wrangler dev --env dev",
     "dev:e2e": "node scripts/dev-e2e.mjs",
     "dev:e2e:keep": "node scripts/dev-e2e.mjs --keep",
     "dev:access": "bash scripts/dev-access.sh worker",
@@ -23,7 +23,7 @@
     "check": "npm run build:assets && npm run typecheck && npm run test:unit",
     "cf-typegen": "wrangler types",
     "db:migrate": "wrangler d1 migrations apply my-ax-db --remote",
-    "db:migrate:local": "wrangler d1 migrations apply my-ax-db --local --env dev",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --env dev",
     "build:css": "tailwindcss -i src/styles/app.css -o public/static/styles.css --minify",
     "build:brand": "node scripts/build-brand.mjs",
     "build:assets": "npm run build:css && npm run build:brand && npm run build:vendor && npm run build:docs && npm run build:svelte",

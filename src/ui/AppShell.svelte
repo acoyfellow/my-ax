@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { dispatchBuiltin } from "./command-runner";
   // 1:1 port of src/views/AppShell.tsx + chat.js's header-controls block
   // and connection-pill block.
 
@@ -22,9 +21,6 @@
 
   function openSessions() {
     window.dispatchEvent(new Event("my-ax:sessions-toggle"));
-  }
-  function newConversation() {
-    dispatchBuiltin("new", {}, null);
   }
   function openSettings() {
     window.dispatchEvent(new Event("my-ax:settings-toggle"));
@@ -75,9 +71,6 @@
 >
     <NavIconButton label="Toggle conversations sidebar" title="Conversations (⌘B)" onclick={openSessions} aria-controls="sessions-panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
-    </NavIconButton>
-    <NavIconButton label="New conversation" title="New conversation" onclick={newConversation}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
     </NavIconButton>
 
   <ActivitySignal />

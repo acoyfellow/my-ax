@@ -120,15 +120,13 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
           { command: "POST /api/sessions", description: "Create a new session" },
         ],
       });
-    } catch {
+    } catch (error) {
       return c.json<ApiResponse>({
-        ok: true,
+        ok: false,
         command: "GET /api/sessions",
-        result: { sessions: [], nextCursor: null, limit },
-        next_actions: [
-          { command: "POST /api/sessions", description: "Create a new session" },
-        ],
-      });
+        error: { code: "DBError", message: error instanceof Error ? error.message : String(error) },
+        next_actions: [{ command: "npm run db:migrate:local", description: "Apply missing D1 migrations" }],
+      }, 500);
     }
   });
 
@@ -465,10 +463,10 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       await c.env.DB.prepare(
         "INSERT INTO sessions (id, name, stable_name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, 'pi', datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
       ).bind(crypto.randomUUID(), "Root", ROOT_STABLE_NAME, identity.email).run();
-      const row = await c.env.DB.prepare("SELECT id, name, status FROM sessions WHERE owner_email = ? AND stable_name = ?")
-        .bind(identity.email, ROOT_STABLE_NAME).first<{ id: string; name: string; status: string }>();
+      const row = await c.env.DB.prepare("SELECT id, name, status, updated_at FROM sessions WHERE owner_email = ? AND stable_name = ?")
+        .bind(identity.email, ROOT_STABLE_NAME).first<{ id: string; name: string; status: string; updated_at: string }>();
       if (!row) throw new Error("root was not found after upsert");
-      return c.json<ApiResponse>({ ok: true, command, result: { id: row.id, name: row.name, status: row.status }, next_actions: [{ command: `POST /api/root/clear`, description: "Clear root's history and keep its id" }] });
+      return c.json<ApiResponse>({ ok: true, command, result: { id: row.id, name: row.name, status: row.status, updated_at: row.updated_at }, next_actions: [{ command: `POST /api/root/clear`, description: "Clear root's history and keep its id" }] });
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "ROOT_UNAVAILABLE", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 503);
     }
