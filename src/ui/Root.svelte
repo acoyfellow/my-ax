@@ -139,7 +139,6 @@
 >
   <div class="root-drawer__header">
     <SessionSignalDot signal={rootSignal} />
-    <h2 class="truncate text-sm font-semibold text-fg">Root</h2>
     <div class="root-menu" data-root-menu>
       <button type="button" class="root-drawer__icon" onclick={() => (menuOpen = !menuOpen)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Root actions" title="More">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
@@ -183,8 +182,8 @@
 
 <style>
   :global(.root-button) { touch-action: none; }
-  .root-scrim { position: fixed; inset: 0 0 var(--page-composer-height, 72px) 0; z-index: 2147483000; background: rgb(0 0 0 / 0.35); border: 0; padding: 0; transition: opacity 220ms ease; }
-  .root-drawer { position: fixed; top: 0; left: 0; right: 0; z-index: 2147483001; height: calc(100dvh - var(--page-composer-height, 72px)); display: flex; flex-direction: column; background: var(--bg-alt); color: var(--fg); border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.45); padding-top: env(safe-area-inset-top); transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; }
+  .root-scrim { position: fixed; inset: 0 0 var(--page-composer-height, 72px) var(--sessions-dock-width, 0px); z-index: 2147483000; background: rgb(0 0 0 / 0.35); border: 0; padding: 0; transition: opacity 220ms ease; }
+  .root-drawer { position: fixed; top: 0; left: var(--sessions-dock-width, 0px); right: 0; z-index: 2147483001; height: calc(100dvh - var(--page-composer-height, 72px)); display: flex; flex-direction: column; background: var(--bg-alt); color: var(--fg); border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.45); padding-top: env(safe-area-inset-top); transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; }
   .root-drawer[data-dragging="true"] { transition: none; }
   .root-drawer[data-root-drawer="open"][data-dragging="false"] { box-shadow: none; }
   .root-drawer__header { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
