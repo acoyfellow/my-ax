@@ -3229,12 +3229,7 @@
         <!-- Onboarding -->
         {#if !bootstrapPending && !onboardingHidden && messages.length === 0}
           <div class="max-w-3xl mx-auto mt-6 sm:mt-12 px-1 sm:px-6 text-center">
-            <h1 class="flex justify-center" aria-label="my · ax">
-              <img src="/static/brand/wordmark.svg" alt="my · ax" class="block dark:hidden h-[38px] sm:h-[56px] w-auto" />
-              <img src="/static/brand/wordmark-dark.svg" alt="my · ax" class="hidden dark:block h-[38px] sm:h-[56px] w-auto" />
-            </h1>
-            <p class="mt-4 text-base text-fg">What should we get done?</p>
-            <div class="mt-6 sm:mt-8 grid sm:grid-cols-2 gap-2 text-left">
+            <div class="grid sm:grid-cols-2 gap-2 text-left">
               {#each prompts.slice(0, 5) as p (p.title)}
                 <button type="button" class="prompt-card" onclick={() => pickPrompt(p.prompt)}>
                   <span class="prompt-card__title">{p.title}</span>
@@ -3544,7 +3539,7 @@
                 onkeydown={onInputKeydown}
                 onpaste={onInputPaste}
                 rows={1}
-                placeholder={binding.followsTab && composerRoute.target === "root" ? "Message root" : isMobileComposer() ? "Message my ax" : "Message my ax · Enter to send, Shift + Enter for new line"}
+                placeholder="Message"
                 aria-describedby={composerShortcutId}
                 class="w-full resize-none rounded-lg bg-bg border border-line text-fg placeholder:text-fg-mut/70 px-3.5 py-2.5 text-base sm:text-sm leading-snug focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40 min-h-[44px] max-h-40 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 aria-label="Message"
