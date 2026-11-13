@@ -1683,15 +1683,16 @@
   }
 
   async function latestServerSessionId(): Promise<string | null> {
-    const response = await fetch("/api/root", { credentials: "include" });
+    const response = await fetch("/api/sessions?limit=1", { credentials: "include" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.json();
-    const id = body?.result?.id;
+    const first = body?.result?.sessions?.[0];
+    const id = first?.id;
     if (typeof id !== "string" || !id) return null;
-    rememberSessionEngine(id, "pi");
-    try { localStorage.setItem(`my-ax-session-title:${id}`, "Home"); } catch {}
+    if (first.engine === "pi" || first.engine === "think") rememberSessionEngine(id, first.engine);
     return id;
   }
+
   async function sessionForBootstrap(): Promise<string | null> {
     if (!binding.followsTab) {
       const fixed = readTabSession();

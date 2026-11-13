@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN pin_size TEXT NOT NULL DEFAULT 'small';

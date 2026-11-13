@@ -22,6 +22,7 @@
   import { captureTitleEpoch, readTabSession, writeTabSession, FIRST_SEND_SESSION_ONCE_KEY, isTitleEpochCurrent, RESUME_SESSION_ONCE_KEY, SESSION_KEY, sessionState, setActiveSession, wsState, rememberSessionEngine } from "@my-ax/store";
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
   import { groupByTime, matchesTitle, runStateOf } from "./session-groups";
+  import { PIN_SIZES, PIN_SIZE_LABEL, pinSizeOf, type PinSize } from "../session-pin-size";
   import { COMMAND_EVENT, type CommandEventDetail } from "./command-runner";
   import { DEFAULT_LAYOUT, LAYOUT_STORAGE_KEY, PANEL_DEFAULT_WIDTH, canDock, clampPanelWidth, parseLayout } from "./side-panel-layout";
 
@@ -32,6 +33,7 @@
     status?: string | null;
     pinned?: number | null;
     pin_rank?: string | null;
+    pin_size?: string | null;
     engine?: string | null;
   };
 
@@ -44,9 +46,6 @@
   let dockOpen = $state(DEFAULT_LAYOUT.open);
   let panelWidth = $state(DEFAULT_LAYOUT.width);
   let shown = $derived(docked ? dockOpen : open);
-  let rootId = $state<string | null>(null);
-  let rootUpdatedAt = $state<string | null>(null);
-  const HOME_TITLE = "Home";
   let resizing = false;
 
   function saveLayout() {
@@ -119,7 +118,6 @@
   // defensive re-sort). See ./pinned-reorder.ts.
   let searchQuery = $state("");
   let visibleSessions = $derived(sessions.filter((row) => matchesTitle(row.name || "Untitled", searchQuery)));
-  let homeVisible = $derived(Boolean(rootId) && !showArchived && matchesTitle(HOME_TITLE, searchQuery));
   let pinnedRows = $derived(splitPinned(visibleSessions).pinned);
   let unpinnedRows = $derived(splitPinned(visibleSessions).unpinned);
   let unpinnedGroups = $derived(groupByTime(unpinnedRows, (row) => parseServerTime(row.updated_at), new Date()));
@@ -354,6 +352,14 @@
 
   // Pin/unpin: server holds the authoritative pinned flag + fractional rank so
   // it syncs across devices. Optimistic local update, reconciled by refresh().
+  async function setPinSize(row: SessionRow, size: PinSize) {
+    const previous = row.pin_size ?? null;
+    row.pin_size = size;
+    sessions = [...sessions];
+    const response = await fetch(`/api/sessions/${encodeURIComponent(row.id)}/pin-size`, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ size }) }).catch(() => null);
+    if (!response?.ok) { row.pin_size = previous; sessions = [...sessions]; pinAnnounce = "Could not resize the tile."; return; }
+    pinAnnounce = `${row.name || "Conversation"} is now ${PIN_SIZE_LABEL[size].toLowerCase()}.`;
+  }
   async function togglePin(row: SessionRow) {
     const nextPinned = row.pinned === 1 ? false : true;
     const prev = row.pinned;
@@ -481,15 +487,6 @@
     // Return focus to whatever opened us. chat.js still owns the hamburger.
     document.getElementById("sessions-button")?.focus();
   }
-  async function loadRoot() {
-    const response = await fetch("/api/root", { credentials: "include" }).catch(() => null);
-    const body = await response?.json().catch(() => null);
-    if (!response?.ok || !body?.ok) return;
-    rootId = body.result.id as string;
-    rootUpdatedAt = typeof body.result.updated_at === "string" ? body.result.updated_at : null;
-    try { localStorage.setItem(`my-ax-session-title:${rootId}`, HOME_TITLE); } catch {}
-    if (sessionState.id === rootId) setActiveSession(rootId, HOME_TITLE);
-  }
   function dismissPanel() {
     if (docked) {
       dockOpen = false;
@@ -549,7 +546,6 @@
     window.addEventListener("resize", onViewportResize, { passive: true });
     // Eager-fetch so opening the drawer reveals an already-rendered list.
     refresh();
-    void loadRoot();
     window.addEventListener("my-ax:sessions-open", openSidebar);
     window.addEventListener("my-ax:sessions-close", close);
     window.addEventListener("my-ax:sessions-toggle", toggle);
@@ -625,12 +621,6 @@
     bind:this={scrollEl}
     class="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] px-2 pb-3"
   >
-    {#if homeVisible}
-      <button type="button" class="session-home" data-root-row="" data-active={rootId === currentId ? "1" : "0"} aria-current={rootId === currentId ? "page" : undefined} onclick={() => { if (!rootId) return; try { localStorage.setItem(`my-ax-session-title:${rootId}`, HOME_TITLE); } catch {} switchTo(rootId); }}>
-        <span class="session-home__label">{HOME_TITLE}</span>
-        <span class="session-home__meta">{rootUpdatedAt ? `Active ${shortSessionTime(rootUpdatedAt)}` : "Always here"}</span>
-      </button>
-    {/if}
     {#if loading}
       <div class="px-3 py-4 text-center text-xs text-fg-mut">Loading…</div>
     {:else if errorText}
@@ -686,6 +676,13 @@
                 aria-label={row.pinned === 1 ? `Unpin ${title}` : `Pin ${title}`}
                 onclick={(e) => { e.stopPropagation(); closeMenu(); togglePin(row); }}
               >{row.pinned === 1 ? "Unpin" : "Pin"}</button>
+              {#if row.pinned === 1}
+                <div class="session-menu__sizes" role="group" aria-label={`Tile size for ${title}`}>
+                  {#each PIN_SIZES as size (size)}
+                    <button type="button" role="menuitemradio" aria-checked={pinSizeOf(row.pin_size) === size} data-size-option={size} onclick={(e) => { e.stopPropagation(); closeMenu(); void setPinSize(row, size); }}>{PIN_SIZE_LABEL[size]}</button>
+                  {/each}
+                </div>
+              {/if}
               <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>Rename</button>
               <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>Export markdown</a>
               <button type="button" role="menuitem" aria-label={row.status === "archived" ? `Unarchive ${title}` : `Archive ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); setArchived(row, row.status !== "archived"); }}>{row.status === "archived" ? "Unarchive" : "Archive"}</button>
@@ -703,6 +700,7 @@
         {@const fullTime = parseServerTime(row.updated_at)?.toLocaleString() || ""}
         <li
           class={pinnedGroup ? "session-row session-tile" : "session-row"}
+          data-size={pinnedGroup ? pinSizeOf(row.pin_size) : undefined}
           data-session-id={row.id}
           data-active={active ? "1" : "0"}
           data-pinned={row.pinned === 1 ? "1" : "0"}
@@ -752,7 +750,7 @@
           {/each}
         </ul>
       {/each}
-      {#if visibleSessions.length === 0 && !homeVisible}
+      {#if visibleSessions.length === 0}
         <p class="px-3 py-4 text-center text-xs text-fg-mut">No conversation matches “{searchQuery}”.</p>
       {/if}
       {#if cursor}
@@ -803,7 +801,7 @@
   .session-archive-link:hover { color: var(--fg); background: var(--color-surface-1); }
   .sessions-icon:hover { background: var(--color-surface-1); color: var(--fg); }
   .sessions-docked-motion { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms ease; will-change: transform; }
-  #sessions-panel[data-open="1"] :global(.session-row), #sessions-panel[data-open="1"] .session-home { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) backwards; }
+  #sessions-panel[data-open="1"] :global(.session-row) { animation: session-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) backwards; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(2)) { animation-delay: 20ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(3)) { animation-delay: 40ms; }
   #sessions-panel[data-open="1"] :global(li.session-row:nth-child(4)) { animation-delay: 60ms; }
@@ -818,15 +816,16 @@
   .sessions-search:focus-within { background: var(--bg); border-color: var(--line); }
   .sessions-plus { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
   .sessions-plus:hover { border-color: color-mix(in srgb, var(--fg) 25%, transparent); }
-  .session-home { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; width: calc(100% - 8px); height: 96px; margin: 6px 4px 6px; padding: 12px 14px; border-radius: 12px; text-align: left; background: var(--bg); border: 1px solid var(--line); transition: border-color 140ms ease, box-shadow 140ms ease; }
-  .session-home:hover { border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
-  .session-home[data-active="1"] { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
-  .session-home__label { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg); }
-  .session-home__meta { font-size: 11.5px; color: var(--fg-mut); }
   .sessions-search:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 55%, transparent); }
   .sessions-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 13px; color: var(--fg); appearance: none; }
   .sessions-search input::placeholder { color: var(--fg-mut); }
-  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 0 4px 8px; }
+  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 6px; padding: 6px 4px 8px; }
+  :global(.session-tile[data-size="medium"]) { grid-column: span 2; }
+  :global(.session-tile[data-size="large"]) { grid-column: span 2; height: 112px; padding: 14px; }
+  :global(.session-tile[data-size="large"] .session-row__title) { font-size: 16px; font-weight: 600; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  :global(.session-menu__sizes) { display: flex; gap: 2px; padding: 2px; margin-bottom: 4px; border-radius: 7px; background: var(--color-surface-1); }
+  :global(.session-menu__sizes > button) { flex: 1; height: 26px; border-radius: 5px; font-size: 12px; color: var(--fg-mut); }
+  :global(.session-menu__sizes > button[aria-checked="true"]) { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
   .session-sep { height: 1px; background: var(--line); margin: 2px 8px 2px; }
 
   :global(.session-row) { position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 7px; color: var(--fg); cursor: pointer; }

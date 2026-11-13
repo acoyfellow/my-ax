@@ -15,6 +15,7 @@ import { forkPiChat } from "../pi-engine/routes";
 import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
+import { parsePinSize } from "../session-pin-size";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { databaseLayer } from "../effect/database";
 import { PinLimitError } from "../session-pinning";
@@ -86,7 +87,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const limit = Math.min(100, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 50));
     const before = url.searchParams.get("before"); // ISO-ish; passed through as-is to D1
     const archivedOnly = url.searchParams.get("archived") === "1";
-    const archiveFilter = `${archivedOnly ? "status = 'archived'" : "status != 'archived'"} AND (stable_name IS NULL OR stable_name != '${ROOT_STABLE_NAME}')`;
+    const archiveFilter = archivedOnly ? "status = 'archived'" : "status != 'archived'";
 
     try {
       const email = c.get("identity").email;
@@ -97,11 +98,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       const pinned = before
         ? []
         : ((await c.env.DB.prepare(
-            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
+            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
           ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
-        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
+        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
+        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
       const stmt = before
         ? c.env.DB.prepare(query).bind(email, before, limit)
         : c.env.DB.prepare(query).bind(email, limit);
@@ -211,6 +212,17 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       }
       return c.json<ApiResponse>({ ok: false, command, error: { code: "DBError", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
     }
+  });
+
+  app.post("/api/sessions/:id/pin-size", async (c) => {
+    const id = c.req.param("id");
+    const command = `POST /api/sessions/${id}/pin-size`;
+    const body = (await c.req.json<{ size?: unknown }>().catch(() => ({}))) as { size?: unknown };
+    const size = parsePinSize(body.size);
+    if (!size) return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "size must be small, medium or large" }, next_actions: [] }, 400);
+    const result = await c.env.DB.prepare("UPDATE sessions SET pin_size = ? WHERE id = ? AND owner_email = ? AND pinned = 1").bind(size, id, c.get("identity").email).run();
+    if (!result.meta.changes) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "pinned session not found or not owned" }, next_actions: [] }, 404);
+    return c.json<ApiResponse>({ ok: true, command, result: { id, size }, next_actions: [] });
   });
 
   app.post("/api/sessions/:id/archive", async (c) => {
