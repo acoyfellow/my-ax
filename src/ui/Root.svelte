@@ -184,8 +184,9 @@
 <style>
   :global(.root-button) { touch-action: none; }
   .root-scrim { position: fixed; inset: 0 0 var(--page-composer-height, 72px) 0; z-index: 2147483000; background: rgb(0 0 0 / 0.35); border: 0; padding: 0; transition: opacity 220ms ease; }
-  .root-drawer { position: fixed; top: 0; left: 0; right: 0; z-index: 2147483001; height: calc(100dvh - var(--page-composer-height, 72px)); display: flex; flex-direction: column; background: var(--bg-alt); color: var(--fg); border-bottom: 1px solid var(--line); border-radius: 0 0 14px 14px; box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.45); padding-top: env(safe-area-inset-top); transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; }
+  .root-drawer { position: fixed; top: 0; left: 0; right: 0; z-index: 2147483001; height: calc(100dvh - var(--page-composer-height, 72px)); display: flex; flex-direction: column; background: var(--bg-alt); color: var(--fg); border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.45); padding-top: env(safe-area-inset-top); transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; }
   .root-drawer[data-dragging="true"] { transition: none; }
+  .root-drawer[data-root-drawer="open"][data-dragging="false"] { box-shadow: none; }
   .root-drawer__header { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
   .root-drawer__icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; color: var(--fg-mut); }
   .root-drawer__icon:hover { color: var(--fg); background: var(--surface-2); }

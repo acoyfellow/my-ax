@@ -77,3 +77,15 @@ test("a user message lists the images it carried, with upload keys when recorded
   assert.equal(user!.content, "look");
   assert.deepEqual(user!.images, [{ uploadKey: "u/abc.jpg", mime: "image/jpeg" }, { mime: "image/png" }]);
 });
+
+test("each thinking block stays in timeline order between tool calls", () => {
+  const t = new PiTranscript();
+  t.applySnapshot({ busy: false, model: "", entries: [
+    { id: 1, kind: "pi.user", model: [{ role: "user", content: "go" }] },
+    { id: 2, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "thinking", thinking: "first idea" }, { type: "toolCall", id: "c1", name: "exec", arguments: {} }], stopReason: "toolUse" }] },
+    { id: 3, kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: "c1", content: [{ type: "text", text: "ok" }], isError: false }] },
+    { id: 4, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "thinking", thinking: "second idea" }, { type: "toolCall", id: "c2", name: "exec", arguments: {} }], stopReason: "toolUse" }] },
+  ], partial: null, tools: [], queued: 0 });
+  const parts = t.messages()[1].parts;
+  assert.deepEqual(parts.map((part) => part.kind === "tool" ? `tool:${part.tool.id}` : `${part.kind}:${part.text}`), ["thinking:first idea", "tool:c1", "thinking:second idea", "tool:c2"]);
+});

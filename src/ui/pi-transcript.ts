@@ -4,6 +4,7 @@ export type PiToolState = "pending" | "done" | "error";
 
 export type PiChatPart =
   | { kind: "text"; text: string }
+  | { kind: "thinking"; text: string }
   | { kind: "tool"; tool: { id: string; name: string; arguments: Record<string, unknown>; state: PiToolState; result?: string; isError?: boolean } };
 
 export type PiChatMessage = {
@@ -54,7 +55,10 @@ function assistantParts(message: ModelMessage): { parts: PiChatPart[]; reasoning
   let reasoning = "";
   for (const block of Array.isArray(message.content) ? (message.content as Array<Record<string, unknown>>) : []) {
     if (block.type === "text" && typeof block.text === "string" && block.text) parts.push({ kind: "text", text: block.text });
-    if (block.type === "thinking" && typeof block.thinking === "string") reasoning += block.thinking;
+    if (block.type === "thinking" && typeof block.thinking === "string") {
+      reasoning += block.thinking;
+      if (block.thinking.trim()) parts.push({ kind: "thinking", text: block.thinking });
+    }
     if (block.type === "toolCall") {
       parts.push({ kind: "tool", tool: { id: String(block.id ?? ""), name: String(block.name ?? "tool"), arguments: (block.arguments as Record<string, unknown>) ?? {}, state: "pending" } });
     }

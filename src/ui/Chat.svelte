@@ -175,12 +175,14 @@
   // text before all tools, which surfaced 'DONE' before the write call.
   type Part =
     | { kind: "text"; text: string; rendered?: string }
+    | { kind: "thinking"; text: string }
     | { kind: "tool"; tool: ToolCallView };
   // Render block: a standalone text part, or a RUN of consecutive tool parts
   // grouped into one container so back-to-back tool calls share a single
   // bordered card instead of stacking N separate boxes.
   type RenderBlock =
     | { kind: "text"; text: string; rendered?: string }
+    | { kind: "thinking"; text: string }
     | { kind: "tools"; tools: ToolCallView[] };
   // Per-tool open/closed state, keyed by tool id, so a stream re-render never
   // slams a tool a user manually opened. We only auto-decide the FIRST time we
@@ -292,6 +294,10 @@
     for (const part of parts) {
       if (part.kind === "text") {
         blocks.push({ kind: "text", text: part.text, rendered: part.rendered });
+      } else if (part.kind === "thinking") {
+        const last = blocks[blocks.length - 1];
+        if (last && last.kind === "thinking") last.text += part.text;
+        else blocks.push({ kind: "thinking", text: part.text });
       } else {
         const last = blocks[blocks.length - 1];
         if (last && last.kind === "tools") last.tools.push(part.tool);
@@ -1061,6 +1067,7 @@
     if (!message.parts.length) return message.content || "";
     return message.parts.map((part) => {
       if (part.kind === "text") return part.text;
+      if (part.kind === "thinking") return "";
       const args = briefArgs(part.tool.arguments);
       const status = part.tool.state === "pending" ? "running" : part.tool.state;
       return `
@@ -1424,6 +1431,8 @@
       content: message.content,
       parts: message.parts.map((part) => part.kind === "text"
         ? { kind: "text" as const, text: part.text, rendered: message.streaming ? undefined : renderMarkdown(part.text) }
+        : part.kind === "thinking"
+        ? { kind: "thinking" as const, text: part.text }
         : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: piToolStart(part.tool.id), elapsedText: piToolElapsed(part.tool.id, part.tool.state), result: part.tool.result, isError: part.tool.isError } }),
       reasoning: message.reasoning,
       attachments: piImageAttachments(message.images),
@@ -3278,7 +3287,7 @@
                   </button>
                 {/if}
               </header>
-              {#if m.role === "assistant" && m.reasoning}
+              {#if m.role === "assistant" && m.reasoning && !m.parts.some((part) => part.kind === "thinking")}
                 <details class="msg-reasoning" ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
                   <summary>Thinking</summary>
                   <pre class="msg-reasoning__body">{m.reasoning}</pre>
@@ -3309,6 +3318,11 @@
                   {#each groupParts(m.parts) as block, blockIdx (blockIdx)}
                     {#if block.kind === "text"}
                       <div class="msg-body">{@render textBlock(block)}</div>
+                    {:else if block.kind === "thinking"}
+                      <details class="msg-reasoning" data-thinking-step={blockIdx} ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
+                        <summary>Thinking</summary>
+                        <pre class="msg-reasoning__body">{block.text}</pre>
+                      </details>
                     {:else}
                       <!-- Consecutive tool calls share one container; each is a
                            row with internal separators (see .msg-tools--group). -->
