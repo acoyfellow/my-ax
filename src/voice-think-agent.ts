@@ -1,5 +1,7 @@
 import { Agent, getAgentByName, getSubAgentByName, type Connection } from "agents";
-import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type VoiceTurnContext } from "@cloudflare/voice";
+import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type Transcriber, type VoiceTurnContext } from "@cloudflare/voice";
+import { EchoGatedTranscriber, SpokenRecord } from "./voice-echo-gate";
+import { speakable } from "./voice-speakable";
 import { MyAgent } from "./agent";
 import * as rpc from "./rpc/contract";
 import { openPiChat } from "./pi-engine/routes";
@@ -46,12 +48,18 @@ async function sessionEngine(env: Env, ownerEmail: string, sessionId: string): P
   return row?.engine === "pi" ? "pi" : "think";
 }
 
-export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, sessionId: string, transcript: string): Promise<string> {
+export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, sessionId: string, transcript: string, signal?: AbortSignal): Promise<string> {
   if (await sessionEngine(env, identity.email, sessionId) === "pi") {
     const chat = await openPiChat(env, identity.email, sessionId);
     const receipt = await chat.submit(transcript);
-    const result = await chat.wait(receipt.operationId);
-    return result.text ?? (result.reason ? `The turn ended: ${result.reason}` : "");
+    const stop = () => { void chat.abortAll().catch(() => undefined); };
+    signal?.addEventListener("abort", stop, { once: true });
+    try {
+      const result = await chat.wait(receipt.operationId);
+      return result.text ?? (result.reason ? `The turn ended: ${result.reason}` : "");
+    } finally {
+      signal?.removeEventListener("abort", stop);
+    }
   }
   const facet = await rpc.command("MyAgent.voiceFacet", async () => {
     const parent = await getAgentByName(env.USER_AGENT, identity.email.toLowerCase());
@@ -64,8 +72,23 @@ export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, ses
 
 export class VoiceThinkAgent extends VoiceAgent<Env> {
   static options = { ...VoiceAgent.options, sendIdentityOnConnect: false };
-  transcriber = new WorkersAIFluxSTT(this.env.AI, { keyterms: [...VOICE_STT_KEYTERMS] });
   tts = new WorkersAITTS(this.env.AI, { speaker: "asteria" });
+  private readonly spokenRecord = new SpokenRecord();
+
+  override createTranscriber(): Transcriber {
+    const flux = new WorkersAIFluxSTT(this.env.AI, { keyterms: [...VOICE_STT_KEYTERMS], eotThreshold: 0.75, eotTimeoutMs: 3500 });
+    return new EchoGatedTranscriber(flux, this.spokenRecord, (event, heard) => console.info("voice_echo_gate", { event, heard: heard.slice(0, 120) }));
+  }
+
+  override onInterrupt(): void {
+    this.spokenRecord.silenced();
+  }
+
+  override beforeSynthesize(text: string): string | null {
+    const spoken = speakable(text);
+    if (spoken !== "") this.spokenRecord.spoke(spoken);
+    return spoken === "" ? null : spoken;
+  }
 
   /** Seeded by the route before the socket opens: which owner + Think session
    *  this voice call delegates into. */
@@ -93,13 +116,23 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
   // heavier change (see designs/1c-server-narration-checkins.md).
   // Returns an AsyncIterable<string> (a TextSource); @cloudflare/voice speaks
   // each yielded segment as its own utterance.
-  async onTurn(transcript: string, _context: VoiceTurnContext): Promise<AsyncGenerator<string>> {
+  async onTurn(transcript: string, context: VoiceTurnContext): Promise<AsyncGenerator<string>> {
     const cfg = resolveVoiceThinkConfig((this.state ?? {}) as VoiceThinkConfig, this.name);
     if (!(this.state as VoiceThinkConfig | undefined)?.identity || !(this.state as VoiceThinkConfig | undefined)?.sessionId) {
       if (cfg.identity && cfg.sessionId) this.setState({ ...(this.state as VoiceThinkConfig | undefined), ...cfg } as VoiceThinkConfig);
     }
     const env = this.env;
+    const record = this.spokenRecord;
+    const signal = context.signal;
     async function* stream(): AsyncGenerator<string> {
+      record.turnStarted();
+      try {
+        yield* turn();
+      } finally {
+        record.turnEnded();
+      }
+    }
+    async function* turn(): AsyncGenerator<string> {
       if (!cfg.identity || !cfg.sessionId) { yield "Voice session is not linked to a conversation yet."; return; }
 
       try {
@@ -118,7 +151,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
       let outcome: { reply: string } | { error: string } | null = null;
       const runReply = (async () => {
         try {
-          const reply = await runEngineVoiceTurn(env, cfg.identity!, cfg.sessionId!, transcript);
+          const reply = await runEngineVoiceTurn(env, cfg.identity!, cfg.sessionId!, transcript, signal);
           outcome = { reply: reply || "Sorry, I didn't catch a response." };
         } catch (e) {
           console.error("voice_turn_failed", { err: e instanceof Error ? e.message : String(e) });
@@ -135,7 +168,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
         const checkins = new StillWorkingTimer(VOICE_CHECKIN_IDLE_MS, now);
         checkins.markSpoken(now);
         yield WORK_ACK;
-        while (!outcome) {
+        while (!outcome && !signal.aborted) {
           await settledWithin(runReply, VOICE_CHECKIN_POLL_MS);
           if (outcome) break;
           const line = checkins.tick(Date.now());
@@ -143,6 +176,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
         }
       }
 
+      if (signal.aborted || !outcome) return;
       const settled = outcome as { reply: string } | { error: string };
       yield "error" in settled ? settled.error : settled.reply;
     }

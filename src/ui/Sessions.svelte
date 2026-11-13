@@ -154,10 +154,16 @@
   }
 
   let menuFor = $state<string | null>(null);
+  let menuAlign = $state<"start" | "end">("end");
   function toggleMenu(event: Event, id: string) {
     event.stopPropagation();
-    menuFor = menuFor === id ? null : id;
+    if (menuFor === id) { menuFor = null; return; }
+    const trigger = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const panel = (event.currentTarget as HTMLElement).closest("#sessions-panel")?.getBoundingClientRect();
+    menuAlign = panel && trigger.right - panel.left < MENU_WIDTH + 8 ? "start" : "end";
+    menuFor = id;
   }
+  const MENU_WIDTH = 172;
   function closeMenu() { menuFor = null; }
 
   // ── data ──────────────────────────────────────────────────────────
@@ -619,7 +625,7 @@
 
   <div
     bind:this={scrollEl}
-    class="flex-1 min-h-0 overflow-y-auto [scrollbar-width:thin] px-2 pb-3"
+    class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] px-2 pb-3"
   >
     {#if loading}
       <div class="px-3 py-4 text-center text-xs text-fg-mut">Loading…</div>
@@ -666,7 +672,7 @@
             ></button>
           {/if}
           {#if menuFor === row.id}
-            <div class="session-menu" role="menu">
+            <div class="session-menu" role="menu" data-align={menuAlign}>
               <button
                 type="button"
                 role="menuitem"
@@ -847,7 +853,7 @@
   :global(.session-tile .session-row__signal[data-signal="running"]) { top: 9px; right: 9px; }
 
   :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
-  :global(.session-tiles > li:nth-child(odd) .session-menu) { right: auto; left: -2px; }
+  :global(.session-menu[data-align="start"]) { right: auto; left: -2px; }
   :global(.session-row__more) { display: grid; width: 22px; height: 22px; border-radius: 5px; place-items: center; color: var(--fg-mut); font-size: 15px; line-height: 1; opacity: 0; }
   :global(.session-row__more:hover) { background: var(--color-surface-2); color: var(--fg); }
   :global(.session-row:hover .session-row__more), :global(.session-row:focus-within .session-row__more), :global(.session-row[data-menu-open="1"] .session-row__more) { opacity: 1; }
