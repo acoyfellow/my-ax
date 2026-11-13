@@ -20,8 +20,15 @@
     root.style.setProperty("--desk-progress", String(progress));
     root.style.setProperty("--desk-bg-scale", String(backgroundScale(progress)));
     root.dataset.deskDragging = drag ? "1" : "0";
-    root.dataset.deskOpen = open || drag ? "1" : "0";
+    if (open || drag) {
+      if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; }
+      root.dataset.deskOpen = "1";
+    } else if (root.dataset.deskOpen === "1" && !settleTimer) {
+      settleTimer = setTimeout(() => { settleTimer = null; if (!open && !drag) root.dataset.deskOpen = "0"; }, DESK_SETTLE_MS);
+    }
   });
+  const DESK_SETTLE_MS = 460;
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
   function startDrag(event: PointerEvent, direction: "open" | "close") {
     if (event.button !== 0) return;
     const height = viewportHeight();
@@ -182,7 +189,7 @@
 <section use:portal id="desk-drawer" class="desk-drawer" data-desk-panel="" data-open={open ? "1" : "0"} data-dragging={drag ? "1" : "0"} aria-label="Desk" aria-hidden={!open && !drag} inert={!open}
   style:transform={drag ? `translateY(calc(-100% + ${drag.offset + drag.overshoot}px))` : undefined}>
   <button type="button" class="desk-drawer__close" onclick={closePanel} aria-label="Close desk" title="Close (Esc)">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
   </button>
   <div class="desk-drawer__body">
     {#if hostedArtifactId}
@@ -226,19 +233,20 @@
 
 <style>
   :global(.desk-button) { touch-action: none; }
-  .desk-scrim { position: fixed; inset: 0; z-index: 2147483000; border: 0; padding: 0; background: rgb(0 0 0 / 0.4); opacity: var(--desk-progress, 0); pointer-events: none; transition: opacity 500ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .desk-scrim { position: fixed; inset: 0; z-index: 2147483000; border: 0; padding: 0; background: rgb(0 0 0 / 0.4); opacity: var(--desk-progress, 0); pointer-events: none; transition: opacity 500ms cubic-bezier(0.22, 1, 0.36, 1); }
   .desk-scrim[data-open="1"] { pointer-events: auto; }
   :global(html[data-desk-dragging="1"]) .desk-scrim { transition: none; }
-  .desk-drawer { position: fixed; inset: 0 0 auto 0; height: 100dvh; z-index: 2147483001; display: flex; flex-direction: column; background: var(--bg); border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgb(0 0 0 / 0.18); transform: translateY(calc(-100% - 48px)); transition: transform 500ms cubic-bezier(0.32, 0.72, 0, 1); will-change: transform; }
+  .desk-drawer { position: fixed; inset: 0 0 auto 0; height: 100dvh; z-index: 2147483001; display: flex; flex-direction: column; background: var(--bg); border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgb(0 0 0 / 0.18); transform: translateY(calc(-100% - 48px)); transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
   .desk-drawer[data-open="1"] { transform: translateY(0); border-radius: 0; box-shadow: none; }
   .desk-drawer[data-dragging="1"] { transition: none; border-radius: 0 0 16px 16px; }
   .desk-drawer__handle { position: absolute; left: 50%; bottom: 0; width: 120px; transform: translateX(-50%); z-index: 2; display: grid; place-items: center; height: 28px; cursor: grab; touch-action: none; }
   .desk-drawer__handle:active { cursor: grabbing; }
   .desk-drawer__handle span { width: 44px; height: 5px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 22%, transparent); }
-  :global(html[data-desk-open="1"] body > div.contents > *) { transform: scale(var(--desk-bg-scale, 1)); transform-origin: 50% 100%; border-radius: calc(16px * var(--desk-progress, 0)); overflow: hidden; transition: transform 500ms cubic-bezier(0.32, 0.72, 0, 1), border-radius 500ms cubic-bezier(0.32, 0.72, 0, 1); }
+  :global(html[data-desk-open="1"] body > div.contents > *) { transform: scale(var(--desk-bg-scale, 1)); transform-origin: 50% 100%; border-radius: calc(16px * var(--desk-progress, 0)); overflow: hidden; transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 500ms cubic-bezier(0.22, 1, 0.36, 1); }
   :global(html[data-desk-dragging="1"] body > div.contents > *) { transition: none; }
-  .desk-drawer__close { position: absolute; z-index: 2; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 40px; height: 40px; display: grid; place-items: center; border-radius: 999px; color: var(--fg); background: color-mix(in srgb, var(--bg) 78%, transparent); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); box-shadow: 0 4px 16px rgb(0 0 0 / 0.12); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-  .desk-drawer__close:hover { background: var(--bg); }
+  .desk-drawer__close { position: absolute; z-index: 2; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); width: 40px; height: 40px; display: grid; place-items: center; border-radius: 6px; color: var(--fg-mut); background: transparent; }
+  .desk-drawer__close:hover { color: var(--fg); background: var(--color-surface-2); }
+  .desk-drawer__close:active { background: var(--color-surface-3); }
   .desk-drawer__body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
   .desk-drawer__body > :global(:not(iframe)) { margin: 16px; }
   .desk-drawer__body :global(.desk-app-frame) { flex: 1; width: 100%; min-height: 0; border: 0; }
