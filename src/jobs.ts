@@ -7,15 +7,19 @@ import type { AccessIdentity } from "./auth";
 
 import { CLAIM_RUN_SQL } from "./fsm/job-status";
 import type { Env } from "./types";
+import * as rpc from "./rpc/contract";
 import { completeRecurringJobRun } from "./recurring-job-run";
 import { scheduledJobRunPrompt } from "./jobs-prompt";
 import { MAX_GENERATED_SESSION_TITLE_CODE_POINTS, truncateUnicodeCodePoints } from "./unicode-text";
 
-async function sessionAgent(env: Env, ownerEmail: string, sessionId: string) {
-  // Keep the Cloudflare-only agent stub out of module initialization so pure
-  // validation/service tests can run under Node.
-  const { getSessionAgent } = await import("./agent-stub");
-  return getSessionAgent(env, ownerEmail, sessionId);
+async function ownerAgent(env: Env, ownerEmail: string) {
+  const { getUserAgent } = await import("./agent-stub");
+  return getUserAgent(env, ownerEmail);
+}
+
+export async function loadActiveJob(env: Env, jobId: string, ownerEmail: string): Promise<JobRow | null> {
+  const row = await env.DB.prepare("SELECT * FROM jobs WHERE id = ? AND owner_email = ?").bind(jobId, ownerEmail.toLowerCase()).first<JobRow>().catch(() => null);
+  return row && row.status === "active" ? row : null;
 }
 
 function recurringRunSessionTitle(row: Pick<JobRow, "name">, now: Date): string {
@@ -204,14 +208,35 @@ export function requireScheduleId(schedule: { id?: string } | null | undefined):
 }
 
 export async function scheduleJob(env: Env, row: Pick<JobRow, "id" | "owner_email" | "session_id" | "thread_mode" | "prompt" | "cadence_secs">): Promise<string> {
-  const stub = await sessionAgent(env, row.owner_email, row.session_id);
-  await stub.seedIdentity({ email: row.owner_email, sub: `job:${row.owner_email}` });
-  return requireScheduleId(await stub.scheduleRecurringPrompt({ jobId: row.id, ownerEmail: row.owner_email, prompt: row.prompt, cadenceSecs: row.cadence_secs }));
+  const owner = await ownerAgent(env, row.owner_email);
+  return requireScheduleId(await owner.scheduleJobAlarm({ jobId: row.id, ownerEmail: row.owner_email, cadenceSecs: row.cadence_secs }));
 }
 
 /** Cancel a native agents alarm if one is registered. */
 export async function cancelJobSchedule(env: Env, row: Pick<JobRow, "owner_email" | "session_id" | "schedule_id">): Promise<void> {
   if (!row.schedule_id) return;
-  const stub = await sessionAgent(env, row.owner_email, row.session_id);
-  await stub.cancelRecurringPrompt(row.schedule_id);
+  const owner = await ownerAgent(env, row.owner_email);
+  await owner.cancelJobAlarm(row.schedule_id);
+}
+
+export async function moveJobAlarmsToOwner(env: Env, ownerEmail: string): Promise<{ moved: number; failed: Array<{ id: string; error: string }> }> {
+  const owner = ownerEmail.toLowerCase();
+  const rows = await env.DB.prepare("SELECT * FROM jobs WHERE owner_email = ? AND status = 'active'").bind(owner).all<JobRow>();
+  const { getSessionAgent } = await import("./agent-stub");
+  let moved = 0;
+  const failed: Array<{ id: string; error: string }> = [];
+  for (const row of rows.results ?? []) {
+    try {
+      if (row.schedule_id) {
+        const scheduleId = row.schedule_id;
+        await rpc.command("LegacySession.cancelRecurringPrompt", async () => (await getSessionAgent(env, owner, row.session_id)).cancelRecurringPrompt(scheduleId)).catch(() => undefined);
+      }
+      const scheduleId = await scheduleJob(env, row);
+      await env.DB.prepare("UPDATE jobs SET schedule_id = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(scheduleId, row.id, owner).run();
+      moved += 1;
+    } catch (error) {
+      failed.push({ id: row.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { moved, failed };
 }
