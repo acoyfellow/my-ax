@@ -1,6 +1,6 @@
 # Alchemy Domain for my.ax: plan
 
-Status: plan only. Nothing is built yet. It needs Jordan's go before step 1.
+Status: step 1 done (Jordan said to dogfood Domain). Step 2 is next.
 
 ## What Jordan asked for
 
@@ -29,7 +29,8 @@ Status: plan only. Nothing is built yet. It needs Jordan's go before step 1.
 
 ## Order of work (each step ships on its own and can be rolled back)
 
-1. **Spike, in memory only.** Port the `Job` aggregate to `@alchemy.run/domain` in `src/domain/`. Run it with `Domain.InMemory`. The proof is that the existing `job-status` tests and the TLA `JobSchedule` replay pass against it. No prod change. First, bump `effect` to 4.1.4 and run `npm run check`.
+1. **Done: spike, in memory only.** `src/domain/Job/` holds the aggregate, 5 commands and 5 rejections. `Job.story.test.ts` has 9 stories, including one that checks the aggregate against `nextJobStatus` for every status, command and last-run case. A mutation check broke 4 rules, and each one fails a story. `effect` is now 4.1.4 and `@alchemy.run/domain` is pinned at `2.0.0-beta.87`. The worker does not import it yet.
+   Original step: Port the `Job` aggregate to `@alchemy.run/domain` in `src/domain/`. Run it with `Domain.InMemory`. The proof is that the existing `job-status` tests and the TLA `JobSchedule` replay pass against it. No prod change. First, bump `effect` to 4.1.4 and run `npm run check`.
 2. **Session aggregate, in memory.** Same proof against `session-status` and the `SessionLifecycle` replay.
 3. **Shadow in prod.** The current D1 code stays the source of truth. Each command is also sent to the Domain model, and any difference is logged. Run it for one week.
 4. **Cut over jobs.** Job alarms move to a Domain deadline and policy. The `UserAgent` alarm code is deleted. A D1 projection keeps the old tables for reads.
@@ -46,3 +47,10 @@ Status: plan only. Nothing is built yet. It needs Jordan's go before step 1.
 ## The first question for Jordan
 
 Start step 1 (the in-memory `Job` spike, plus the `effect` 4.1.4 bump)?
+
+## Lessons from step 1
+
+- Stories run under `node:test` + tsx as plain Effects. Vitest is not needed.
+- Don't spread a command into an event (`{ ...cmd }`). The spread brings the command's `_tag` with it, and the event schema rejects it with a hard-to-read error. List the fields.
+- The type checker wants a `node:test` callback to return `Promise<void>`. Wrap `Effect.runPromise`.
+- A loop over a union of commands needs a cast at `Story.when`, because steps type-check against one command.
