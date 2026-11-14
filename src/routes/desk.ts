@@ -1,5 +1,6 @@
 import { getAgentByName } from "agents";
 import * as rpc from "../rpc/contract";
+import { putPreference, swapPreference, type PreferenceDb } from "../domain/OwnerPreference/OwnerPreference.store";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
@@ -33,18 +34,7 @@ async function compareAndSetPreference(
   value: unknown,
   expectedVersion: string | null,
 ): Promise<boolean> {
-  const now = new Date().toISOString();
-  const payload = JSON.stringify(value);
-  if (expectedVersion === null) {
-    const inserted = await env.DB.prepare(`INSERT INTO owner_preferences(owner_email, preference_key, value_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner_email, preference_key) DO NOTHING`)
-      .bind(email, key, payload, now, now).run();
-    return (inserted.meta?.changes ?? 0) > 0;
-  }
-  const updated = await env.DB.prepare(`UPDATE owner_preferences SET value_json = ?, updated_at = ?
-    WHERE owner_email = ? AND preference_key = ? AND value_json = ?`)
-    .bind(payload, now, email, key, expectedVersion).run();
-  return (updated.meta?.changes ?? 0) > 0;
+  return swapPreference(env.DB as unknown as PreferenceDb, email, key, JSON.stringify(value), new Date().toISOString(), expectedVersion);
 }
 
 export async function ownerDeskAppGet(env: AppEnv["Bindings"], email: string): Promise<DeskApp> {
@@ -120,11 +110,7 @@ async function broadcastBoard(env: AppEnv["Bindings"], email: string, board: Des
 }
 
 async function writeBoard(env: AppEnv["Bindings"], email: string, board: DeskBoard): Promise<void> {
-  const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO owner_preferences(owner_email, preference_key, value_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`)
-    .bind(email, DESK_PREFERENCE_KEY, JSON.stringify(board), now, now).run();
+  await putPreference(env.DB as unknown as PreferenceDb, email, DESK_PREFERENCE_KEY, JSON.stringify(board), new Date().toISOString());
   const owner = email.toLowerCase();
   const rows = await env.DB.prepare(
     "SELECT id FROM sessions WHERE owner_email = ? AND status != 'archived' ORDER BY updated_at DESC LIMIT 40",

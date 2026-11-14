@@ -6,6 +6,7 @@ import {
   type ConversationStarter,
 } from "./conversation-starters";
 import { Database, type DatabaseError } from "./effect/database";
+import { putPreferenceEffect } from "./domain/OwnerPreference/OwnerPreference.store";
 
 function ownerEmail(value: string): string {
   return value.trim().toLowerCase();
@@ -33,16 +34,10 @@ export function getConversationStarters(email: string): Effect.Effect<Conversati
 
 export function setConversationStarters(email: string, input: unknown): Effect.Effect<ConversationStarter[], DatabaseError, Database> {
   return Effect.gen(function* () {
-    const database = yield* Database;
     const starters = normalizeStarters(input);
     const toStore = starters.length ? starters : DEFAULT_STARTERS;
     const now = new Date(yield* Clock.currentTimeMillis).toISOString();
-    yield* database.run(
-      `INSERT INTO owner_preferences (owner_email, preference_key, value_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [ownerEmail(email), STARTERS_KEY, JSON.stringify({ starters: toStore }), now, now],
-    );
+    yield* putPreferenceEffect(ownerEmail(email), STARTERS_KEY, JSON.stringify({ starters: toStore }), now);
     return toStore;
   });
 }

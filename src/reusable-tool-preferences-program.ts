@@ -1,5 +1,6 @@
 import { Clock, Data, Effect } from "effect";
 import { Database, type DatabaseError } from "./effect/database";
+import { putPreferenceEffect } from "./domain/OwnerPreference/OwnerPreference.store";
 import {
   APPROVAL_MODE_KEY,
   parseApprovalMode,
@@ -41,14 +42,8 @@ export function setReusableToolApprovalMode(
     if (approvalMode !== "review" && approvalMode !== "auto") {
       return yield* Effect.fail(new InvalidApprovalModeError({ value: approvalMode }));
     }
-    const database = yield* Database;
     const now = new Date(yield* Clock.currentTimeMillis).toISOString();
-    yield* database.run(
-      `INSERT INTO owner_preferences (owner_email, preference_key, value_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [reusableToolOwnerEmail(email), APPROVAL_MODE_KEY, JSON.stringify({ approvalMode }), now, now],
-    );
+    yield* putPreferenceEffect(reusableToolOwnerEmail(email), APPROVAL_MODE_KEY, JSON.stringify({ approvalMode }), now);
     return approvalMode;
   });
 }

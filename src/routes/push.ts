@@ -4,6 +4,9 @@ import type { ApiResponse } from "../types";
 import { publicVapidKey, type PushSubscription } from "../push";
 import { notifyOwner } from "../notify";
 import { safePublicHttpUrl } from "../public-url";
+import { removePushSubscription, savePushSubscription, type PushDb } from "../domain/PushSubscription/PushSubscription.store";
+
+const pushDb = (db: unknown) => db as PushDb;
 
 export function registerPushRoutes(app: Hono<AppEnv>) {
   app.get("/api/push/public-key", (c) => c.json<ApiResponse>({ ok: true, command: c.req.path, result: { publicKey: publicVapidKey(c.env) }, next_actions: [] }));
@@ -20,12 +23,9 @@ export function registerPushRoutes(app: Hono<AppEnv>) {
     const existing = await c.env.DB.prepare("SELECT owner_email FROM push_subscriptions WHERE endpoint = ?").bind(sub.endpoint).first<{ owner_email: string }>();
     if (existing && existing.owner_email !== email) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ENDPOINT_OWNED", message: "Push endpoint is already registered to another owner" }, next_actions: [] }, 409);
     const id = crypto.randomUUID();
-    await c.env.DB.prepare(`INSERT INTO push_subscriptions(id, owner_email, endpoint, subscription_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-      ON CONFLICT(endpoint) DO UPDATE SET subscription_json=excluded.subscription_json, updated_at=datetime('now')`)
-      .bind(id, email, sub.endpoint, JSON.stringify(sub)).run();
+    await savePushSubscription(pushDb(c.env.DB), { id, owner: email, endpoint: sub.endpoint, subscriptionJson: JSON.stringify(sub) });
     if (oldEndpoint && oldEndpoint !== sub.endpoint) {
-      await c.env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND owner_email = ?").bind(oldEndpoint, email).run();
+      await removePushSubscription(pushDb(c.env.DB), email, oldEndpoint);
     }
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { subscribed: true }, next_actions: [] }, 201);
   });
@@ -34,7 +34,7 @@ export function registerPushRoutes(app: Hono<AppEnv>) {
     const endpoint = body.endpoint;
     if (!endpoint) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ENDPOINT", message: "Endpoint is required" }, next_actions: [] }, 400);
     const email = c.get("identity").email.toLowerCase();
-    await c.env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND owner_email = ?").bind(endpoint, email).run();
+    await removePushSubscription(pushDb(c.env.DB), email, endpoint);
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { unsubscribed: true }, next_actions: [] });
   });
   app.post("/api/push/test", async (c) => {

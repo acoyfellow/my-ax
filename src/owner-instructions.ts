@@ -1,6 +1,7 @@
 import type { Env } from "./types";
 import { Data, Effect } from "effect";
 import { Database, databaseLayer } from "./effect/database";
+import { deletePreferenceEffect, putPreferenceEffect } from "./domain/OwnerPreference/OwnerPreference.store";
 
 export class OwnerInstructionsInputError extends Data.TaggedError("OwnerInstructionsInputError")<{ cause: unknown; message: string }> {}
 
@@ -52,25 +53,15 @@ export function setOwnerInstructions(env: Env, email: string, value: unknown) {
       catch: (cause) => new OwnerInstructionsInputError({ cause, message: cause instanceof Error ? cause.message : "Invalid owner instructions" }),
     });
     if (!instructions) return yield* resetOwnerInstructions(env, email);
-    const db = yield* Database;
     const now = yield* Effect.sync(() => new Date().toISOString());
-    yield* db.run(
-      `INSERT INTO owner_preferences (owner_email, preference_key, value_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [ownerEmail(email), OWNER_INSTRUCTIONS_KEY, JSON.stringify({ instructions }), now, now],
-    );
+    yield* putPreferenceEffect(ownerEmail(email), OWNER_INSTRUCTIONS_KEY, JSON.stringify({ instructions }), now);
     return instructions;
   }).pipe(Effect.provide(databaseLayer(env.DB)));
 }
 
 export function resetOwnerInstructions(env: Env, email: string) {
   return Effect.gen(function* () {
-    const db = yield* Database;
-    yield* db.run(
-      "DELETE FROM owner_preferences WHERE owner_email = ? AND preference_key = ?",
-      [ownerEmail(email), OWNER_INSTRUCTIONS_KEY],
-    );
+    yield* deletePreferenceEffect(ownerEmail(email), OWNER_INSTRUCTIONS_KEY);
     return DEFAULT_OWNER_INSTRUCTIONS;
   }).pipe(Effect.provide(databaseLayer(env.DB)));
 }

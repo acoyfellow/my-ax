@@ -1,4 +1,5 @@
 import { DESK_PREFERENCE_KEY, emptyDeskBoard, parseDeskBoard, type DeskBoard } from "./desk-board";
+import { swapPreference, type PreferenceDb } from "./domain/OwnerPreference/OwnerPreference.store";
 
 export type DeskBoardDb = { DB: Pick<D1Database, "prepare"> };
 
@@ -12,16 +13,5 @@ export async function readVersionedBoard(env: DeskBoardDb, email: string): Promi
 }
 
 export async function compareAndSetBoard(env: DeskBoardDb, email: string, board: DeskBoard, expectedVersion: string | null): Promise<boolean> {
-  const now = new Date().toISOString();
-  const payload = JSON.stringify(board);
-  if (expectedVersion === null) {
-    const inserted = await env.DB.prepare(`INSERT INTO owner_preferences(owner_email, preference_key, value_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner_email, preference_key) DO NOTHING`)
-      .bind(email, DESK_PREFERENCE_KEY, payload, now, now).run();
-    return (inserted.meta?.changes ?? 0) > 0;
-  }
-  const updated = await env.DB.prepare(`UPDATE owner_preferences SET value_json = ?, updated_at = ?
-    WHERE owner_email = ? AND preference_key = ? AND value_json = ?`)
-    .bind(payload, now, email, DESK_PREFERENCE_KEY, expectedVersion).run();
-  return (updated.meta?.changes ?? 0) > 0;
+  return swapPreference(env.DB as unknown as PreferenceDb, email, DESK_PREFERENCE_KEY, JSON.stringify(board), new Date().toISOString(), expectedVersion);
 }

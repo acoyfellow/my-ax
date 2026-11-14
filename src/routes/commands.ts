@@ -20,6 +20,7 @@ import { expandMessage, type MentionResolver } from "../commands/expand";
 import { listWorkspaceFiles } from "../commands/mention-sources";
 import type { ConnectorExploreResult } from "../connector-explore";
 import * as rpc from "../rpc/contract";
+import { putPreference, type PreferenceDb } from "../domain/OwnerPreference/OwnerPreference.store";
 
 export const COMMANDS_ENABLED_KEY = "commands.enabled";
 
@@ -45,9 +46,7 @@ export async function commandsEnabled(env: AppEnv["Bindings"], email: string): P
 }
 
 async function setCommandsEnabled(env: AppEnv["Bindings"], email: string, enabled: boolean): Promise<void> {
-  const at = new Date().toISOString();
-  await env.DB.prepare("INSERT INTO owner_preferences(owner_email, preference_key, value_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner_email, preference_key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at")
-    .bind(email.toLowerCase(), COMMANDS_ENABLED_KEY, JSON.stringify(enabled), at, at).run();
+  await putPreference(env.DB as unknown as PreferenceDb, email.toLowerCase(), COMMANDS_ENABLED_KEY, JSON.stringify(enabled), new Date().toISOString());
 }
 
 async function usageRows(env: AppEnv["Bindings"], email: string): Promise<UsageRow[]> {

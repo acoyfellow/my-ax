@@ -1,5 +1,6 @@
 import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
+import { removePushSubscription, type PushDb } from "./domain/PushSubscription/PushSubscription.store";
 import { externalSourceHosts, parseInternalSourceHosts } from "./internal-source-hosts";
 import { sendPush, type PushSubscription } from "./push";
 
@@ -350,7 +351,7 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
       if (response.status === 404 || response.status === 410 || relinkRequired) {
         // VAPID mismatch / gone endpoint is permanent: drop it so routine
         // notifications stop retrying a known-bad device. Settings exposes Relink.
-        yield* Effect.promise(() => env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND owner_email = ?").bind(row.endpoint, email).run());
+        yield* Effect.promise(() => removePushSubscription(env.DB as unknown as PushDb, email, row.endpoint));
         return { kind: "expired", failure: relinkRequired ? { host, status: response.status, reason: `Relink required: ${reason}` } : undefined } as DeliveryOutcome;
       }
       console.warn("push_notify_rejected", { ownerEmail: email, kind: notification.kind, host, status: response.status, reason });
