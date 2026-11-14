@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { classifyAttentionItem } from "./attention-item-affordance";
 
 test("a rate-limit heads-up reads as benign 'Retrying'", () => {
@@ -36,4 +37,11 @@ test("an actionable kind wins over rate-limit body text (owner decision 2026-07-
 
 test("empty/unknown item is quiet info", () => {
   assert.deepEqual(classifyAttentionItem({}), { tone: "info", badge: null });
+});
+
+test("the open notifications rail dims and blurs the app behind it, and a tap there closes it", () => {
+  const source = readFileSync(new URL("./Attention.svelte", import.meta.url), "utf8");
+  assert.match(source, /class="notif-scrim" data-open=\{open \? "1" : "0"\}[^\n]*onclick=\{closePanel\}/);
+  assert.match(source, /\.notif-scrim \{[^}]*z-index: 39;[^}]*backdrop-filter: blur/);
+  assert.match(source, /\.notif-scrim\[data-open="1"\] \{ opacity: 1; pointer-events: auto; \}/);
 });

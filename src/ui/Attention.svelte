@@ -273,6 +273,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     {#if unread > 0}<span class="absolute top-0.5 right-0.5 min-w-3 h-3 px-0.5 rounded-full bg-brand text-white text-[8px] leading-3 text-center">{unread > 9 ? "9+" : unread}</span>{/if}
   </NavIconButton>
+  <button use:portal type="button" class="notif-scrim" data-open={open ? "1" : "0"} tabindex="-1" aria-label="Close notifications" aria-hidden={!open} onclick={closePanel}></button>
   <aside use:portal class="notif-rail" data-attention-owner-panel="" data-open={open ? "1" : "0"} aria-label="Notifications" aria-hidden={!open} inert={!open}>
     <header class="notif-rail__bar">
       {#if selectedId}
@@ -338,9 +339,11 @@
 <style>
   .notif-rail { position: fixed; z-index: 40; top: var(--appbar-height, 52px); right: 0; bottom: 0; width: min(360px, 100vw); display: flex; flex-direction: column; background: var(--bg-alt); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
   .notif-rail[data-open="1"] { transform: translateX(0); }
+  .notif-scrim { position: fixed; inset: 0; z-index: 39; border: 0; padding: 0; background: rgb(0 0 0 / 0.32); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 220ms ease; }
+  .notif-scrim[data-open="1"] { opacity: 1; pointer-events: auto; }
   .notif-rail__bar { flex: none; display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); }
   .notif-rail__body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
-  @media (prefers-reduced-motion: reduce) { .notif-rail { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .notif-rail, .notif-scrim { transition: none; } }
   .notif-clear-all {
     border: 1px solid var(--line);
     border-radius: 0.375rem;
