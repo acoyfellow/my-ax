@@ -247,28 +247,57 @@
 .msg-older { display: flex; justify-content: center; padding: 4px 0 12px; }
 .msg-older__button { font-size: 12px; color: var(--fg-mut); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; background: var(--bg); }
 .msg-older__button:hover:not(:disabled) { color: var(--fg); border-color: color-mix(in srgb, var(--brand) 60%, transparent); }
-.msg-reasoning {
-  margin: 0.25rem 0 0.65rem;
-  border: 1px solid var(--line);
-  border-radius: 0.65rem;
-  background: color-mix(in srgb, var(--bg) 90%, var(--brand) 10%);
-  overflow: hidden;
-}
-.msg-reasoning summary {
-  cursor: pointer;
-  padding: 0.55rem 0.75rem;
-  color: var(--fg-mut);
-  font-size: 0.78rem;
-  font-weight: 600;
-  list-style-position: inside;
-}
-.msg-reasoning__body {
+.step-row {
   margin: 0;
-  padding: 0 0.75rem 0.75rem;
-  white-space: pre-wrap;
-  color: var(--fg-mut);
-  font: 0.78rem/1.45 var(--font-mono);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-alt);
+  overflow: hidden;
+  font-size: 13px;
 }
+.step-row[data-step="thinking"] { background: color-mix(in srgb, var(--bg-alt) 94%, var(--brand) 6%); }
+.step-row + .step-row, .msg-tools > .step-row + .step-row { margin-top: 0; }
+.step-row__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--fg-mut);
+  font: 12px/1 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
+}
+.step-row__summary::-webkit-details-marker { display: none; }
+.step-row__status { display: inline-flex; width: 14px; justify-content: center; flex-shrink: 0; color: var(--fg-mut); }
+.step-row__status[data-status="running"] { color: var(--brand); }
+.step-row__status[data-status="ok"] { color: var(--good); }
+.step-row__status[data-status="error"] { color: var(--bad); }
+.step-row[data-step="thinking"] .step-row__status { color: var(--fg-mut); }
+.step-row__name { color: var(--fg); flex-shrink: 0; font-weight: 400; }
+.step-row[data-state="error"] .step-row__name { color: var(--bad); }
+.step-row__summary-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-mut); }
+.step-row__elapsed { flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--fg-mut); opacity: 0.75; }
+.step-row__chevron { flex-shrink: 0; color: var(--fg-mut); transition: transform 120ms ease; }
+.step-row[open] > .step-row__summary .step-row__chevron { transform: rotate(90deg); }
+.step-row[open] > .step-row__summary { border-bottom: 1px solid var(--line); }
+.step-row__body { padding: 8px 10px 10px; display: grid; gap: 6px; background: var(--bg); }
+.step-row__section-label { font: 10px/1 'JetBrains Mono Variable', monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-mut); opacity: 0.8; }
+.step-row__text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-mut);
+  font: 12px/1.5 'JetBrains Mono Variable', monospace;
+  max-height: 320px;
+  overflow: auto;
+}
+.step-row__args { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 0; font: 11px/1.5 'JetBrains Mono Variable', monospace; }
+.step-row__args dt { color: var(--fg-mut); }
+.step-row__args dd { margin: 0; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.step-row__args dd.step-row__arg-block { grid-column: 1 / -1; background: var(--color-surface-3); border-radius: 4px; padding: 6px 8px; max-height: 200px; overflow: auto; }
+.step-row__body .tool-call__result { border: 0; border-radius: 4px; margin: 0; }
+.step-row__waiting { color: var(--fg-mut) !important; font-style: italic; }
 
 .session-resume-spinner {
   width: 2.5rem;
@@ -915,8 +944,9 @@ html {
     font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
     font-size: 11px; color: var(--fg-mut); opacity: 0.7; font-variant-numeric: tabular-nums;
   }
-  .msg-duration--running { color: var(--brand); opacity: 1; display: inline-flex; align-items: center; gap: 6px; }
-  .msg-duration--running > * { order: -1; }
+  .msg-duration--running { color: var(--brand); opacity: 1; display: flex; align-items: center; gap: 6px; }
+  .msg-duration--running .agent-thinking { display: inline-flex; align-items: center; gap: 3px; }
+  .msg-duration--running .agent-thinking__dot { width: 4px; height: 4px; }
   .msg-body { min-width: 0; max-width: 100%; font-size: 14px; line-height: 1.55; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
   .msg-assistant .msg-body { white-space: normal; overflow-x: hidden; }
   .msg-assistant .prose { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
@@ -1030,62 +1060,14 @@ html {
   }
   .code-copy-btn:hover { color: var(--fg); background: var(--color-surface-3); }
 
-  .msg-tools { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
-  .tool-call {
-    background: var(--bg-alt); border: 1px solid var(--line); border-radius: 8px;
-    overflow: hidden; font-size: 14px;
-  }
-  /* Grouped run of consecutive tool calls: one shared border + radius, no
-     gap between rows, hairline dividers between them. */
-  .msg-tools--group {
-    gap: 0;
-    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
-    background: var(--bg-alt);
-  }
-  .msg-tools--group .tool-call {
-    border: 0; border-radius: 0; background: transparent;
-  }
-  .msg-tools--group .tool-call + .tool-call { border-top: 1px solid var(--line); }
-  .tool-call__summary {
-    display: flex; align-items: center; gap: 8px;
-    padding: 6px 10px; cursor: pointer; list-style: none;
-    color: var(--fg-mut); font-family: 'JetBrains Mono Variable', monospace;
-  }
-  .tool-call__summary::-webkit-details-marker { display: none; }
-  .tool-call__pip { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
-  /* While a tool call is open/in-flight (yellow, pending) show a clear
-     active/loading pulse so the step reads as "working", not stalled. The
-     animation only runs for the pending state; done/error are terminal and
-     static. */
-  .tool-call[data-state="pending"] .tool-call__pip {
-    animation: tool-call-pip-pulse 1s ease-in-out infinite;
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 60%, transparent);
-  }
-  @keyframes tool-call-pip-pulse {
-    0%   { opacity: 1;    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent); }
-    70%  { opacity: 0.55; box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 0%, transparent); }
-    100% { opacity: 1;    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 0%, transparent); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .tool-call[data-state="pending"] .tool-call__pip { animation: none; opacity: 1; box-shadow: none; }
-  }
-  .tool-call[data-state="done"] .tool-call__pip { background: var(--good); }
-  .tool-call[data-state="error"] .tool-call__pip { background: var(--bad); }
-  .tool-call__name { color: var(--fg); }
-  .tool-call__args { color: var(--fg-mut); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tool-call__elapsed { color: var(--fg-mut); font-size: 10px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; flex-shrink: 0; }
-  .tool-call[data-state="done"] .tool-call__elapsed,
-  .tool-call[data-state="error"] .tool-call__elapsed { opacity: 0.7; }
-  .tool-call__status { color: var(--fg-mut); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .tool-call[data-state="done"] .tool-call__status { color: var(--good); }
-  .tool-call[data-state="error"] .tool-call__status { color: var(--bad); }
-  .tool-call__argsfull, .tool-call__result {
-    background: var(--color-surface-3); border-top: 1px solid var(--line);
-    padding: 8px 12px; font-family: 'JetBrains Mono Variable', monospace;
+  .msg-tools { margin: 6px 0; display: flex; flex-direction: column; gap: 6px; }
+  .msg-body + .step-row, .step-row + .msg-body, .msg-tools + .msg-body, .msg-body + .msg-tools, .step-row + .msg-tools, .msg-tools + .step-row, .msg-head + .step-row { margin-top: 6px; }
+  .tool-call__result {
+    background: var(--color-surface-3);
+    padding: 8px 10px; font-family: 'JetBrains Mono Variable', monospace;
     font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
     color: var(--fg); max-height: 320px; overflow: auto;
   }
-  .tool-call__argsfull { color: var(--fg-mut); font-size: 10px; max-height: 100px; }
   .tool-call__inline-image {
     display: block;
     box-sizing: border-box;
@@ -1192,10 +1174,6 @@ body {
   margin-bottom: 20px;
 }
 
-#svelte-hono-chat-root .msg-tools--group,
-#svelte-hono-chat-root .tool-call {
-  border-radius: 6px;
-}
 
 #svelte-hono-chat-root .safe-area-composer {
   max-width: 52rem;
