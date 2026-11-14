@@ -48,6 +48,13 @@ export function thinkMessagesToPiEntries(messages: readonly ThinkMessage[], now 
   return entries;
 }
 
+export const IMPORTED_CONTEXT_ROW_LIMIT = 400;
+
+export function dropLeadingNonUserRows<T extends { role: string }>(rows: readonly T[]): T[] {
+  const firstUser = rows.findIndex((row) => row.role === "user");
+  return firstUser < 0 ? [] : rows.slice(firstUser);
+}
+
 export function emptyUsage() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 }

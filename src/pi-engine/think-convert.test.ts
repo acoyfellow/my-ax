@@ -70,3 +70,10 @@ test("every imported assistant message carries a usage record so pi can count co
   assert.ok(assistants.length > 0);
   for (const message of assistants) assert.equal(message.usage?.totalTokens, 0);
 });
+
+test("an imported tail starts at a user turn so pi never sees an orphaned tool result", async () => {
+  const { dropLeadingNonUserRows } = await import("./think-convert");
+  const rows = [{ role: "tool" }, { role: "assistant" }, { role: "user" }, { role: "assistant" }];
+  assert.deepEqual(dropLeadingNonUserRows(rows), [{ role: "user" }, { role: "assistant" }]);
+  assert.deepEqual(dropLeadingNonUserRows([{ role: "tool" }]), []);
+});

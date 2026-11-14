@@ -5,7 +5,7 @@ import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
 import { parseForkPoint } from "./fork";
-import { transcriptRowsToPiEntries, type TranscriptRow } from "./think-convert";
+import { dropLeadingNonUserRows, IMPORTED_CONTEXT_ROW_LIMIT, transcriptRowsToPiEntries, type TranscriptRow } from "./think-convert";
 import { copyWorkspaceDisk, listWorkspaceSnapshots, workspaceDiskState } from "../workspace";
 import type { AccessIdentity } from "../auth";
 
@@ -73,8 +73,8 @@ export async function convertThinkChatToPi(env: AppEnv["Bindings"], identity: Ac
   const row = await env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, owner).first<{ engine: string | null }>();
   if (!row) throw new Error("conversation not found");
   if (row.engine === "pi" && !options.force) return { sessionId, entries: 0 };
-  const rows = await env.DB.prepare("SELECT ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id ASC").bind(sessionId, owner).all<TranscriptRow>();
-  const entries = transcriptRowsToPiEntries(rows.results ?? []);
+  const rows = await env.DB.prepare("SELECT ts, role, tool, is_error, content, meta_json FROM (SELECT id, ts, role, tool, is_error, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id DESC LIMIT ?) ORDER BY id ASC").bind(sessionId, owner, IMPORTED_CONTEXT_ROW_LIMIT).all<TranscriptRow>();
+  const entries = transcriptRowsToPiEntries(dropLeadingNonUserRows(rows.results ?? []));
   const seeded = await rpc.command("PiChat.seedFromThink", async () => {
     const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, sessionId));
     await target.bind({ email: owner }, sessionId);
