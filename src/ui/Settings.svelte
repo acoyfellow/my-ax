@@ -95,7 +95,6 @@
       summary: "Human checkpoints and bounded child analysis.",
       items: [
         { name: "Human decisions", tools: "ask_user", description: "Pause for one multiple-choice decision." },
-        { name: "Read-only delegation", tools: "delegate_many", description: "Ask up to two child agents for independent read-only analysis." },
         { name: "Owner attention", tools: "notify_owner", description: "Leave an Attention item when background work needs you." },
       ],
     },

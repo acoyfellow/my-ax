@@ -22,7 +22,6 @@ export function toolNarrationPhrase(toolName: string): string {
     manage_jobs: "updating your scheduled jobs",
     notify_owner: "sending you a notification",
     ask_user: "waiting for your answer",
-    delegate_many: "handing parts off to helper agents",
   };
   if (name in exact) return exact[name];
   // Prefix fallbacks for tool families.

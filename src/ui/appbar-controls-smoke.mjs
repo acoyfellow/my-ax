@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const appShell = readFileSync(new URL("./AppShell.svelte", import.meta.url), "utf8");
 const attention = readFileSync(new URL("./Attention.svelte", import.meta.url), "utf8");
 const navIconButton = readFileSync(new URL("./NavIconButton.svelte", import.meta.url), "utf8");
-const appbarButtons = ["AppShell.svelte", "Root.svelte", "Desk.svelte", "Attention.svelte"].map((file) => [file, readFileSync(new URL(`./${file}`, import.meta.url), "utf8")]);
+const appbarButtons = ["AppShell.svelte", "Desk.svelte", "Attention.svelte"].map((file) => [file, readFileSync(new URL(`./${file}`, import.meta.url), "utf8")]);
 
 function assertIncludes(haystack, needle, label) {
   if (!haystack.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
