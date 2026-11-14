@@ -154,6 +154,7 @@
       { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
       { "name": "PI_CHAT", "class_name": "PiChatAgent" },
       { "name": "WORKSPACE_HUB", "class_name": "WorkspaceHub" },
+      { "name": "CONNECTOR_AGENT", "class_name": "ConnectorAgent" },
       // Direct-routed voice DO; delegates turns into the MyAgent facet by RPC.
       { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
       // NOTE: The native @cloudflare/codemode `CodemodeRuntime` Durable
@@ -185,7 +186,8 @@
     { "tag": "v12-desk-hub" },
     { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] },
     { "tag": "v14-pi-chat", "new_sqlite_classes": ["PiChatAgent"] },
-    { "tag": "v15-workspace-hub", "new_sqlite_classes": ["WorkspaceHub"] }
+    { "tag": "v15-workspace-hub", "new_sqlite_classes": ["WorkspaceHub"] },
+    { "tag": "v16-connector-agent", "new_sqlite_classes": ["ConnectorAgent"] }
   ],
 
   // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
@@ -327,6 +329,7 @@
           { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
           { "name": "PI_CHAT", "class_name": "PiChatAgent" },
           { "name": "WORKSPACE_HUB", "class_name": "WorkspaceHub" },
+          { "name": "CONNECTOR_AGENT", "class_name": "ConnectorAgent" },
           { "name": "VoiceThinkAgent", "class_name": "VoiceThinkAgent" }
           // CODEMODE_RUNTIME intentionally held — see top-level note.
         ]

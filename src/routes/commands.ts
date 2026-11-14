@@ -18,7 +18,7 @@ import {
 import { draftSkillFromTranscript, parseSkillMarkdown, SkillError, SkillService, skillInjection, skillMarkdown } from "../commands/skills";
 import { expandMessage, type MentionResolver } from "../commands/expand";
 import { listWorkspaceFiles } from "../commands/mention-sources";
-import { explorerSessionId } from "./mcp-explore";
+import type { ConnectorExploreResult } from "../connector-explore";
 import * as rpc from "../rpc/contract";
 
 export const COMMANDS_ENABLED_KEY = "commands.enabled";
@@ -60,12 +60,8 @@ async function connectorTools(c: Ctx): Promise<ConnectorToolSource[]> {
   const identity = c.get("identity");
   const mcps = await oauthStoreFor(c).listUserMcps(identity.email).catch(() => []);
   const labels = new Map(mcps.map((mcp) => [mcp.id, mcp.displayName || mcp.id]));
-  const { getSessionAgent } = await import("../agent-stub");
-  const explored = await rpc.query("Session.connectorExplore", async () => {
-    const agent = await getSessionAgent(c.env, identity.email, explorerSessionId(identity.email));
-    await agent.seedIdentity(identity);
-    return agent.connectorExplore();
-  }, 20_000).catch(() => null);
+  const { getConnectorAgent } = await import("../agent-stub");
+  const explored: ConnectorExploreResult | null = await rpc.query("Connector.explore", async (): Promise<ConnectorExploreResult> => (await getConnectorAgent(c.env, identity)).connectorExplore() as Promise<ConnectorExploreResult>, 20_000).catch(() => null);
   if (!explored) return [];
   const connected = new Set(explored.servers.filter((server) => server.state === "ready").map((server) => server.id));
   return Object.entries(explored.tools).flatMap(([server, tools]) => tools.map((tool) => ({

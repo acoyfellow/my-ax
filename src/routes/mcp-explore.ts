@@ -12,12 +12,8 @@ export function explorerSessionId(email: string): string {
 
 async function explorerAgent(c: { env: AppEnv["Bindings"]; get: (key: "identity") => AppEnv["Variables"]["identity"] }) {
   const identity = c.get("identity");
-  const { getSessionAgent } = await import("../agent-stub");
-  return rpc.command("Session.explorer", async () => {
-    const agent = await getSessionAgent(c.env, identity.email, explorerSessionId(identity.email));
-    await agent.seedIdentity(identity);
-    return agent;
-  });
+  const { getConnectorAgent } = await import("../agent-stub");
+  return rpc.command("Connector.open", () => getConnectorAgent(c.env, identity));
 }
 
 async function recordTryIt(env: AppEnv["Bindings"], email: string, receipt: { server: string; tool: string; ok: boolean; ms: number }) {
@@ -31,7 +27,7 @@ export function registerMcpExploreRoutes(app: Hono<AppEnv>) {
   app.get("/api/mcps/explore", async (c) => {
     try {
       const agent = await explorerAgent(c);
-      const result = await rpc.query("Session.connectorExplore", () => agent.connectorExplore(), 45_000);
+      const result = await rpc.query("Connector.explore", () => agent.connectorExplore(), 45_000);
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result, next_actions: [] });
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, result: EMPTY_EXPLORE, error: { message: error instanceof Error ? error.message : String(error), code: "EXPLORE_FAILED" }, next_actions: [] }, 502);
@@ -49,7 +45,7 @@ export function registerMcpExploreRoutes(app: Hono<AppEnv>) {
     const email = c.get("identity").email;
     try {
       const agent = await explorerAgent(c);
-      const raw = await rpc.command("Session.connectorCallByName", () => agent.connectorCallByName(server, tool, body.arguments ?? {}), 60_000);
+      const raw = await rpc.command("Connector.callByName", () => agent.connectorCallByName(server, tool, body.arguments ?? {}), 60_000);
       const ms = Date.now() - started;
       await recordTryIt(c.env, email, { server, tool, ok: true, ms });
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { server, tool, ms, output: JSON.parse(raw) }, next_actions: [] });

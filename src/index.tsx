@@ -86,6 +86,7 @@ export { WorkspaceObject as Sandbox } from "./workspace-object";
 export { Sandbox as NamedComputer } from "@cloudflare/sandbox";
 export { ComputerWorkspace } from "./computer-workspace";
 export { PiChatAgent } from "./pi-engine/pi-chat-agent";
+export { ConnectorAgent } from "./connector-agent";
 export { RigPipeline } from "./rig-pipeline-workflow";
 const app = new Hono<AppEnv>();
 

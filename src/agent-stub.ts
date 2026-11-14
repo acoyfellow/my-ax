@@ -4,6 +4,7 @@
 import { getAgentByName, getSubAgentByName } from "agents";
 import { MyAgent } from "./agent";
 import type { Env } from "./types";
+import type { AccessIdentity } from "./auth";
 import { resolveStub } from "./rpc/bounded-stub";
 
 export async function getUserAgent(env: Pick<Env, "USER_AGENT">, ownerEmail: string) {
@@ -13,4 +14,12 @@ export async function getUserAgent(env: Pick<Env, "USER_AGENT">, ownerEmail: str
 export async function getSessionAgent(env: Env, ownerEmail: string, sessionId: string) {
   const parent = await getUserAgent(env, ownerEmail);
   return resolveStub("MyAgent.facet", () => getSubAgentByName(parent, MyAgent, sessionId));
+}
+
+type ConnectorEnv = { CONNECTOR_AGENT: DurableObjectNamespace<import("./connector-agent").ConnectorAgent> };
+
+export async function getConnectorAgent(env: Env, identity: AccessIdentity) {
+  const stub = await resolveStub("ConnectorAgent.init", () => getAgentByName((env as unknown as ConnectorEnv).CONNECTOR_AGENT, identity.email.toLowerCase()));
+  await stub.seedIdentity(identity);
+  return stub;
 }

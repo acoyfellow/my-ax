@@ -291,6 +291,12 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     });
   }
 
+  private async connectorAgent() {
+    const { getConnectorAgent } = await import("../agent-stub");
+    const { command } = await import("../rpc/contract");
+    return command("Connector.open", () => getConnectorAgent(this.env, this.identity()));
+  }
+
   private async helperAgent() {
     const identity = this.identity();
     const { getSessionAgent } = await import("../agent-stub");
@@ -304,8 +310,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private connectorRunner(): ConnectorRunner {
     return withRadar({
-      list: async () => (await this.helperAgent()).connectorCatalog(),
-      call: async (serverId, toolName, args) => (await this.helperAgent()).connectorCall(serverId, toolName, args),
+      list: async () => (await this.connectorAgent()).connectorCatalog(),
+      call: async (serverId, toolName, args) => (await this.connectorAgent()).connectorCall(serverId, toolName, args),
     }, this.env.RADAR);
   }
 
