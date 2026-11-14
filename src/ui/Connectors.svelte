@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   // Connectors panel — public/self-host engine.
   //
   // The panel owns:
@@ -119,7 +120,7 @@
   }
 
   async function deleteMcp(id: string) {
-    if (!window.confirm(`Remove "${id}" and forget its OAuth tokens?`)) return;
+    if (!(await confirmDialog({ title: `Remove ${id}?`, body: "Its sign-in is forgotten.", confirmLabel: "Remove", tone: "danger" }))) return;
     try {
       const r = await fetch(`/api/mcps/${encodeURIComponent(id)}`, {
         method: "DELETE",

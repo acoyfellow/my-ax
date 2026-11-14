@@ -51,7 +51,7 @@ test("the artifacts library can put an artifact on the desk", () => {
   const settings = readFileSync(new URL("./ui/Settings.svelte", import.meta.url), "utf8");
   assert.match(settings, /Put on desk/, "the artifacts list needs a promote control");
   assert.match(settings, /promotion-preview/, "promoting must first ask what it would replace");
-  assert.match(settings, /window\.confirm\(summary\)/, "the owner must confirm the named replacement");
+  assert.match(settings, /replaces && !\(await confirmDialog\(\{ title: "Replace the desk app\?", body: summary/, "the owner must confirm the named replacement");
   assert.match(settings, /On the desk/, "the artifact already hosted must be marked, not offered again");
 });
 

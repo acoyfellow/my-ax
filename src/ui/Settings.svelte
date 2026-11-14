@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   // Settings command modal: model/theme/PWA, capabilities, jobs, push,
   // health, and connector configuration.
   //
@@ -233,7 +234,7 @@
     if (!preview.ok) { artifactStatus = previewBody?.error?.message || "Could not check the desk"; return; }
     const { summary, replaces, isNoop } = previewBody.result as { summary: string; replaces: { id: string; title: string } | null; isNoop: boolean };
     if (isNoop) { artifactStatus = summary; return; }
-    if (replaces && !window.confirm(summary)) return;
+    if (replaces && !(await confirmDialog({ title: "Replace the desk app?", body: summary, confirmLabel: "Replace" }))) return;
     const response = await fetch("/api/desk/app/promote", {
       method: "POST", credentials: "include", headers: { "content-type": "application/json" },
       body: JSON.stringify({ artifactId: artifact.id, replacing: replaces?.id ?? null }),
@@ -245,7 +246,7 @@
   }
   function openArtifactConversation(artifact: LibraryArtifact) { closeDrawer(); window.location.href = "/?session=" + encodeURIComponent(artifact.sessionId); }
   async function renameArtifact(artifact: LibraryArtifact) {
-    const title = window.prompt("Rename widget", artifact.title)?.trim();
+    const title = (await promptDialog({ title: "Rename widget", value: artifact.title }))?.trim();
     if (!title || title === artifact.title) return;
     const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
     const body = await response.json();
@@ -253,7 +254,7 @@
     await refreshArtifacts(); artifactStatus = "Widget renamed.";
   }
   async function deleteArtifact(artifact: LibraryArtifact) {
-    if (!window.confirm("Delete ‘" + artifact.title + "’ from your widget library?")) return;
+    if (!(await confirmDialog({ title: `Delete “${artifact.title}”?`, confirmLabel: "Delete", tone: "danger" }))) return;
     const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "DELETE", credentials: "include" });
     const body = await response.json();
     if (!response.ok) { artifactStatus = body?.error?.message || "Delete failed"; return; }
@@ -597,7 +598,7 @@
     }));
   }
   async function deleteJob(id: string) {
-    if (!confirm("Delete this recurring job? Existing run receipts stay, but it will not run again.")) return;
+    if (!(await confirmDialog({ title: "Delete this job?", body: "Delete this recurring job? Existing run receipts stay, but it will not run again.", confirmLabel: "Delete", tone: "danger" }))) return;
     await jobAction(id, "delete", () => fetch(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" }));
   }
   async function submitJob(e: SubmitEvent) {
@@ -878,7 +879,7 @@
     }), "Reusable tool approved and enabled.");
   }
   async function deleteRecipe(id: string) {
-    if (!confirm("Delete this reusable tool? Existing run receipts stay, but Code Mode can no longer use it.")) return;
+    if (!(await confirmDialog({ title: "Delete this tool?", body: "Receipts stay.", confirmLabel: "Delete", tone: "danger" }))) return;
     await recipeAction(id, "delete", () => fetch(`/api/recipes/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" }), "Reusable tool deleted.");
     if (editingRecipeId === id) resetRecipeForm();
   }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import { postSessionWithRetry, sessionCreateErrorMessage } from "./session-create";
   // Canonical conversation UI and browser runtime: transport recovery,
   // transcript rendering, composer, attachments, voice, and tool results.
@@ -2689,7 +2690,7 @@
     if (!cancellable) return;
     e.preventDefault();
     e.stopPropagation();
-    if (window.confirm("Stop the agent?")) cancelAgent();
+    void confirmDialog({ title: "Stop the agent?", confirmLabel: "Stop", tone: "danger" }).then((stop) => { if (stop) cancelAgent(); });
   }
   function cancelAgent() {
     if (wsState.status === "idle" || wsState.status === "done") return;

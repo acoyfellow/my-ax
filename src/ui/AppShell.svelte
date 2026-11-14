@@ -7,6 +7,7 @@
   import { startKeyboardInset } from "./keyboard-inset.svelte";
   import { sessionState, setActiveSession } from "@my-ax/store";
   import Attention from "./Attention.svelte";
+  import Alert from "./Alert.svelte";
   import Desk from "./Desk.svelte";
   import RunReceiptModal from "./RunReceiptModal.svelte";
   import NavIconButton from "./NavIconButton.svelte";
@@ -95,6 +96,7 @@
   <Desk />
 
   <Attention />
+  <Alert />
 
   <NavIconButton id="settings-button" label="Settings" onclick={openSettings} aria-haspopup="dialog">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

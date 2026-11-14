@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import { onMount } from "svelte";
   import { argsFromFields, EMPTY_EXPLORE, schemaFields, type ConnectorExploreResult, type ExploredTool } from "../connector-explore";
 
@@ -47,7 +48,7 @@
   async function tryTool(tool: ExploredTool) {
     const parsed = argsFromFields(schemaFields(tool.inputSchema), values);
     if (!parsed.ok) { output = { ok: false, ms: 0, text: parsed.error }; return; }
-    if (!window.confirm(`Run ${label} · ${tool.name} now? MCP tools can change things.`)) return;
+    if (!(await confirmDialog({ title: `Run ${tool.name}?`, body: `${label} tools can change things.`, confirmLabel: "Run" }))) return;
     running = true;
     output = null;
     try {

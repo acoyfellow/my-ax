@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import SessionSignalDot from "./SessionSignal.svelte";
   import { sessionSignalOf, type SessionSignal } from "./session-signal";
   import { emptyListView } from "./session-list-empty";
@@ -287,7 +288,7 @@
 
   async function rename(row: SessionRow) {
     const current = row.name || "";
-    const next = window.prompt("Rename conversation", current);
+    const next = await promptDialog({ title: "Rename", value: current, placeholder: "Conversation name" });
     if (next === null) return;
     const trimmed = next.trim();
     if (!trimmed || trimmed === current) return;
@@ -316,12 +317,7 @@
 
   async function del(row: SessionRow) {
     const title = row.name || "Untitled";
-    if (
-      !confirm(
-        `Delete conversation "${title}"?\nServer-side history will also be removed.`,
-      )
-    )
-      return;
+    if (!(await confirmDialog({ title: `Delete “${title}”?`, body: "Its history goes too.", confirmLabel: "Delete", tone: "danger" }))) return;
     try {
       const r = await fetch(`/api/sessions/${encodeURIComponent(row.id)}`, {
         method: "DELETE",

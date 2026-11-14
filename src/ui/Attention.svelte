@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import { portal } from "./portal";
   import { onMount } from "svelte";
   import NavIconButton from "./NavIconButton.svelte";
@@ -80,7 +81,7 @@
   }
   async function clearAll() {
     if (!stream.length || clearing) return;
-    if (!window.confirm("Clear all notifications? This removes the notification entries (including failed-run alerts), not the source conversations or runs.")) return;
+    if (!(await confirmDialog({ title: "Clear all?", body: "Chats and runs stay.", confirmLabel: "Clear", tone: "danger" }))) return;
     clearing = true;
     try {
       // Clear attention pings and dismiss listed failed runs together.

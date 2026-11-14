@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import { onMount, untrack } from "svelte";
   type Skill = { id: string; name: string; description: string; instructions: string; allowedTools: string[]; updatedAt: string };
 
@@ -79,7 +80,7 @@
   }
 
   async function remove(skill: Skill) {
-    if (!window.confirm(`Delete the skill /${skill.name}?`)) return;
+    if (!(await confirmDialog({ title: `Delete /${skill.name}?`, confirmLabel: "Delete", tone: "danger" }))) return;
     try { await call(`/api/skills/${encodeURIComponent(skill.id)}`, { method: "DELETE" }); await load(); } catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
   }
 
