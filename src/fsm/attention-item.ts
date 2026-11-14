@@ -1,5 +1,16 @@
 export type AttentionState = "unseen" | "seen";
 
+export type AttentionEvent = "seen";
+
+const ATTENTION_TRANSITIONS: Readonly<Record<AttentionEvent, { from: readonly AttentionState[]; to: AttentionState }>> = {
+  seen: { from: ["unseen"], to: "seen" },
+};
+
+export function nextAttentionState(current: AttentionState, event: AttentionEvent): AttentionState | null {
+  const transition = ATTENTION_TRANSITIONS[event];
+  return transition.from.includes(current) ? transition.to : null;
+}
+
 export function attentionState(row: { seen_at: string | null }): AttentionState {
   return row.seen_at === null ? "unseen" : "seen";
 }
