@@ -241,7 +241,10 @@ test("buildSnippetHook forwards callerCapabilities to runSavedRecipe so capabili
 });
 
 test("saved recipe root budget is reserved before receipts and nested recipes remain disabled", () => {
-  assert.ok(agent.indexOf("reserveSavedRecipeInvocation(body.workCodeExecutionState)") < agent.indexOf("INSERT INTO runs"));
+  const reserved = agent.indexOf("reserveSavedRecipeInvocation(body.workCodeExecutionState)");
+  const runCreated = agent.indexOf("startRunRecord(env.DB");
+  assert.ok(reserved >= 0 && runCreated >= 0, "both the budget reservation and the run creation are present");
+  assert.ok(reserved < runCreated);
   assert.match(agent, /exposeSavedRecipes: false/);
 });
 

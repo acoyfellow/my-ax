@@ -1,3 +1,4 @@
+import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "./domain/Run/Run.store";
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { applyRunEvent, rigRunEvent } from "./fsm/run-status";
 import { notifyOwner } from "./notify";
@@ -29,8 +30,7 @@ export async function createRigDecision(env: Pick<Env, "DB">, params: RigPipelin
   const question = `Deploy ${params.commit.slice(0, 12)} to ${params.target}? Image ${image}`.slice(0, 200);
   const options = [RIG_APPROVE, RIG_REJECT];
   const bounds = { surface: "decision", question, options, sessionId: "", rigInstanceId: params.runId };
-  await env.DB.prepare("INSERT INTO runs(id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, NULL, 'open', ?, ?, ?, datetime('now'), datetime('now'))")
-    .bind(id, params.ownerEmail, "Rig deploy approval", question, JSON.stringify(bounds)).run();
+  await startRunRecord(env.DB as unknown as RunStoreDb, { id, ownerEmail: params.ownerEmail, sessionId: null, status: "open", title: "Rig deploy approval", taskSummary: question, boundsJson: JSON.stringify(bounds), createdAt: null });
   return { id, question, options };
 }
 

@@ -17,6 +17,7 @@ function makeRunsDb(script: { changes?: number; exists?: boolean }) {
       async first() {
         calls.push({ sql, binds: this._binds });
         if (/SELECT 1 AS ok FROM runs/.test(sql)) return script.exists ? { ok: 1 } : null;
+        if (/SELECT status FROM runs/.test(sql)) return script.exists ?? (script.changes ?? 0) > 0 ? { status: "failed" } : null;
         return null;
       },
       async all() { calls.push({ sql, binds: this._binds }); return { results: [] }; },

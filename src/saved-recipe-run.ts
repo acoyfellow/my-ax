@@ -1,3 +1,4 @@
+import { startRunRecord, type RunStoreDb } from "./domain/Run/Run.store";
 import type { AccessIdentity } from "./auth";
 import type { Env, ToolContext } from "./types";
 import { createToolContext } from "./tool-context";
@@ -46,23 +47,22 @@ export async function runSavedRecipe(host: SavedRecipeHost, body: SavedRecipeRun
   const codemodeExecutionId = await codemodeExecutionIdForRecipe(env, { id: recipe.id, name: recipe.name, owner_email: identity.email });
   const runId = crypto.randomUUID();
   const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO runs (id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at)
-    VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?)`).bind(
-      runId,
-      identity.email.toLowerCase(),
-      sessionId,
-      recipeRunTitle(recipe),
-      recipe.description,
-      JSON.stringify({
-        kind: "saved_recipe",
-        recipeId: recipe.id,
-        declaredCapabilities,
-        effectiveCapabilities,
-        codemodeExecutionId,
-      }),
-      now,
-      now,
-    ).run();
+  await startRunRecord(env.DB as unknown as RunStoreDb, {
+    id: runId,
+    ownerEmail: identity.email.toLowerCase(),
+    sessionId,
+    status: "running",
+    title: recipeRunTitle(recipe),
+    taskSummary: recipe.description,
+    boundsJson: JSON.stringify({
+      kind: "saved_recipe",
+      recipeId: recipe.id,
+      declaredCapabilities,
+      effectiveCapabilities,
+      codemodeExecutionId,
+    }),
+    createdAt: now,
+  });
   const actor = JSON.stringify({ id: "my-ax", kind: "coordinator", mode: "live" });
   await env.DB.prepare(`INSERT INTO run_events (run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(

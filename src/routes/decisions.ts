@@ -6,6 +6,7 @@
 // server-side, records a receipt event, and injects the decision back into the
 // originating Think session so the agent resumes.
 
+import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import { applyRunEvent } from "../fsm/run-status";
 import { sessionControl } from "../session-control";
 import { Effect } from "effect";
@@ -52,8 +53,7 @@ export async function createDecision(env: DecisionDb, ownerEmail: string, sessio
   if (identical) return { id: identical.id, href: `/api/decisions/${identical.id}`, reused: true };
   const id = `run-decision-${crypto.randomUUID()}`;
   const bounds: DecisionBounds = { surface: "decision", question, options, sessionId };
-  await env.DB.prepare("INSERT INTO runs(id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, ?, 'open', ?, ?, ?, datetime('now'), datetime('now'))")
-    .bind(id, ownerEmail, sessionId, "Decision requested", question.slice(0, 200), JSON.stringify(bounds)).run();
+  await startRunRecord(env.DB as unknown as RunStoreDb, { id, ownerEmail, sessionId, status: "open", title: "Decision requested", taskSummary: question.slice(0, 200), boundsJson: JSON.stringify(bounds), createdAt: null });
   const superseded = candidates.filter((candidate) => candidate.bounds?.question === question).map((candidate) => candidate.id);
   for (const staleId of superseded) await supersedeDecision(env, ownerEmail, staleId, id);
   return { id, href: `/api/decisions/${id}`, ...(superseded.length ? { superseded } : {}) };

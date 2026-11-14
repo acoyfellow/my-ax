@@ -1,3 +1,4 @@
+import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import type { Hono } from "hono";
 import { applyRunEvent, ownerTerminalEvent } from "../fsm/run-status";
 import { Layout } from "../views/Layout";
@@ -138,9 +139,7 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     const title = (body.title ?? task).slice(0, 200);
     const sessionId = body.session_id?.trim() || null;
 
-    await c.env.DB.prepare(
-      "INSERT INTO runs (id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?)",
-    ).bind(runId, identity.email, sessionId, title, task, JSON.stringify(bounds), createdAt, createdAt).run();
+    await startRunRecord(c.env.DB as unknown as RunStoreDb, { id: runId, ownerEmail: identity.email, sessionId, status: "open", title, taskSummary: task, boundsJson: JSON.stringify(bounds), createdAt });
 
     const humanEvent = {
       event_id: runEventId("human.command.created"),
@@ -233,14 +232,8 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
   app.post("/api/runs/:id/dismiss", async (c) => {
     const identity = c.get("identity");
     const runId = c.req.param("id");
-    const result = await c.env.DB.prepare(
-      "UPDATE runs SET dismissed_at = datetime('now') WHERE id = ? AND owner_email = ? AND dismissed_at IS NULL",
-    ).bind(runId, identity.email).run();
-    if ((result.meta?.changes ?? 0) === 0) {
-      // Idempotent: unknown run -> 404; already-dismissed -> ok:true no-op.
-      const exists = await c.env.DB.prepare("SELECT 1 AS ok FROM runs WHERE id = ? AND owner_email = ?").bind(runId, identity.email).first<{ ok: number }>();
-      if (!exists) return c.json(errorResponse(c.req.path, "RUN_NOT_FOUND", "run not found or not owned"), 404);
-    }
+    const dismissed = await dismissRunRecord(c.env.DB as unknown as RunStoreDb, runId, identity.email);
+    if (!dismissed.found) return c.json(errorResponse(c.req.path, "RUN_NOT_FOUND", "run not found or not owned"), 404);
     return c.json(jsonResponse(c.req.path, { runId, dismissed: true }));
   });
 
@@ -249,10 +242,8 @@ export function registerRunRoutes(app: Hono<AppEnv>) {
     const identity = c.get("identity");
     const body = (await c.req.json<{ status?: RunStatus }>().catch(() => ({}))) as { status?: RunStatus };
     const status = body.status && ["open", "running", "completed", "failed", "aborted"].includes(body.status) ? body.status : null;
-    const result = status
-      ? await c.env.DB.prepare("UPDATE runs SET dismissed_at = datetime('now') WHERE owner_email = ? AND status = ? AND dismissed_at IS NULL").bind(identity.email, status).run()
-      : await c.env.DB.prepare("UPDATE runs SET dismissed_at = datetime('now') WHERE owner_email = ? AND dismissed_at IS NULL").bind(identity.email).run();
-    return c.json(jsonResponse(c.req.path, { dismissed: Number(result.meta?.changes ?? 0) }));
+    const dismissed = await dismissRunRecords(c.env.DB as unknown as RunStoreDb, identity.email, status);
+    return c.json(jsonResponse(c.req.path, { dismissed }));
   });
 
   app.post("/api/runs/:id/stop", async (c) => {

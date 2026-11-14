@@ -10,6 +10,7 @@ import { StartRun, RunStarted } from "./StartRun.command";
 import { RunAlreadyExists, RunNotFound, RunTransitionRefused } from "./RunRejections.rejection";
 import { RecordReceipt, ReceiptRecorded } from "./RecordReceipt.command";
 import * as Commands from "./commands";
+import { DismissRun, RunDismissed } from "./DismissRun.command";
 
 const story = Story.make(MyAx);
 const ref = Run.ref("x1");
@@ -45,6 +46,22 @@ test("a Run is created once, in the stage asked for", () =>
       Story.rejected(new RunAlreadyExists()),
     ),
   ));
+
+test("a run in any stage can be dismissed, and keeps its stage", async () => {
+  for (const stage of ["Open", "Running", "Completed", "Failed", "Aborted"] as const) {
+    await run(
+      story(
+        Story.given(ref, new RunStarted({ ownerEmail: OWNER, stage })),
+        Story.when(ref, new DismissRun()),
+        Story.then(ref, new RunDismissed()),
+        Story.state(ref, { _tag: "Present", stage }),
+      ),
+    );
+  }
+});
+
+test("dismissing a run that does not exist is refused", () =>
+  run(story(Story.when(ref, new DismissRun()), Story.rejected(new RunNotFound()))));
 
 test("a command on a Run that does not exist is refused", () =>
   run(story(Story.when(ref, new RecordReceipt()), Story.rejected(new RunNotFound()))));

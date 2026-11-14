@@ -38,7 +38,7 @@ const SESSION_COMMAND: Record<string, keyof typeof SessionCommands.ALL> = {
   unarchived: "UnarchiveSession",
 };
 
-const RUN_COMMAND: Record<string, keyof typeof RunCommands.ALL> = {
+export const RUN_COMMAND: Record<string, keyof typeof RunCommands.ALL> = {
   receipt_recorded: "RecordReceipt",
   recipe_succeeded: "SucceedRecipe",
   recipe_failed: "FailRecipe",

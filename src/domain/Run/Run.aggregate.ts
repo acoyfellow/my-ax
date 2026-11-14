@@ -12,6 +12,7 @@ import { SupersedeDecision, DecisionSuperseded } from "./SupersedeDecision.comma
 import { CompleteRun, RunCompleted } from "./CompleteRun.command";
 import { FailRun, RunFailed } from "./FailRun.command";
 import { AbortRun, RunAborted } from "./AbortRun.command";
+import { DismissRun, RunDismissed } from "./DismissRun.command";
 
 export const RUN_STAGES = ["Open", "Running", "Completed", "Failed", "Aborted"] as const;
 export type RunStage = (typeof RUN_STAGES)[number];
@@ -50,7 +51,7 @@ export class Run extends Domain.Aggregate("Run", {
   id: RunId,
   state: RunState,
   initial: { _tag: "Missing" },
-  commands: [StartRun, RecordReceipt, SucceedRecipe, FailRecipe, AnswerDecision, ReopenDecision, SupersedeDecision, CompleteRun, FailRun, AbortRun],
+  commands: [StartRun, RecordReceipt, SucceedRecipe, FailRecipe, AnswerDecision, ReopenDecision, SupersedeDecision, CompleteRun, FailRun, AbortRun, DismissRun],
   decide: {
     StartRun: (current, cmd) => (current._tag !== "Missing" ? new RunAlreadyExists() : [new RunStarted({ ownerEmail: cmd.ownerEmail, stage: cmd.stage })]),
     RecordReceipt: (current) => transition(current, "RecordReceipt"),
@@ -62,6 +63,7 @@ export class Run extends Domain.Aggregate("Run", {
     CompleteRun: (current) => transition(current, "CompleteRun"),
     FailRun: (current) => transition(current, "FailRun"),
     AbortRun: (current) => transition(current, "AbortRun"),
+    DismissRun: (current) => (current._tag === "Missing" ? new RunNotFound() : [new RunDismissed()]),
   },
   evolve: {
     RunStarted: (_, e) => ({ _tag: "Present" as const, ownerEmail: e.ownerEmail, stage: e.stage }),
@@ -74,5 +76,6 @@ export class Run extends Domain.Aggregate("Run", {
     RunCompleted: (current) => moved(current, "Completed"),
     RunFailed: (current) => moved(current, "Failed"),
     RunAborted: (current) => moved(current, "Aborted"),
+    RunDismissed: (current) => current,
   },
 }) {}

@@ -57,6 +57,15 @@ test("a run transition and a job pause and resume are shadowed and agree", async
   ]);
 });
 
+test("run transitions are enforced by Domain: accepted, refused, missing", async () => {
+  const db = sqliteD1(SCHEMA);
+  db.raw.prepare("INSERT INTO runs VALUES ('r1', ?, 'open', 't')").run(OWNER);
+  assert.equal(await applyRunEvent(db, { id: "r1", ownerEmail: OWNER }, "receipt_recorded"), true);
+  assert.equal(await applyRunEvent(db, { id: "r1", ownerEmail: OWNER }, "decision_answered"), false);
+  assert.equal(await applyRunEvent(db, { id: "missing", ownerEmail: OWNER }, "receipt_recorded"), false);
+  assert.equal(db.raw.prepare("SELECT status FROM runs WHERE id = 'r1'").get()?.status, "running");
+});
+
 test("a disagreement is logged as a warning", () => {
   const record = shadowSession("archived", OWNER, "running", "accepted");
   assert.equal(record?.agree, false);

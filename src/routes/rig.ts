@@ -1,3 +1,4 @@
+import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import type { Context, Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
@@ -38,8 +39,7 @@ export function registerRigRoutes(app: Hono<AppEnv>) {
     if (typeof parsed === "string") return failure(c, 400, "BAD_INPUT", parsed);
     const ownerEmail = c.get("identity").email.toLowerCase();
     const runId = `rig-${crypto.randomUUID()}`;
-    await c.env.DB.prepare("INSERT INTO runs(id, owner_email, session_id, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, NULL, 'open', ?, ?, ?, datetime('now'), datetime('now'))")
-      .bind(runId, ownerEmail, "Rig pipeline", `Deploy ${parsed.commit} to ${parsed.target}`, JSON.stringify({ surface: "rig", ...parsed })).run();
+    await startRunRecord(c.env.DB as unknown as RunStoreDb, { id: runId, ownerEmail, sessionId: null, status: "open", title: "Rig pipeline", taskSummary: `Deploy ${parsed.commit} to ${parsed.target}`, boundsJson: JSON.stringify({ surface: "rig", ...parsed }), createdAt: null });
     const params: RigPipelineParams = { ownerEmail, runId, ...parsed };
     await c.env.RIG_PIPELINE.create({ id: runId, params });
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { runId, href: `/api/rig/runs/${runId}` }, next_actions: [] }, 201);

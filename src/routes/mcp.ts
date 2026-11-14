@@ -1,3 +1,4 @@
+import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import { assertNotForgedDecision } from "../decision-forgery-guard";
 import { resolveSessionAlias } from "../session-alias";
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
@@ -201,7 +202,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: R
     if (!item) throw new Error("attention item not found or not owned");
     await markAttentionSeen(c.env.DB, email, { ids: [id] });
     const runId = `run-glance-${crypto.randomUUID()}`;
-    await c.env.DB.prepare("INSERT INTO runs(id, owner_email, status, title, task_summary, bounds_json, created_at, updated_at) VALUES (?, ?, 'completed', ?, ?, ?, datetime('now'), datetime('now'))").bind(runId, email, "Glance reaction", `Acknowledged: ${item.title}`, JSON.stringify({ surface: "glance", action: "attention_acknowledge", attentionId: id })).run();
+    await startRunRecord(c.env.DB as unknown as RunStoreDb, { id: runId, ownerEmail: email, sessionId: null, status: "completed", title: "Glance reaction", taskSummary: `Acknowledged: ${item.title}`, boundsJson: JSON.stringify({ surface: "glance", action: "attention_acknowledge", attentionId: id }), createdAt: null });
     await c.env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)").bind(runId, `evt-${crypto.randomUUID()}`, email, new Date().toISOString(), JSON.stringify({ id: email, kind: "human", mode: "live" }), "attention.acknowledged", JSON.stringify({ attentionId: id, href: item.href, surface: "glance" })).run();
     return { acknowledged: true, id, receipt: `/api/runs/${runId}` };
   }

@@ -1,5 +1,5 @@
-import { shadowRun, safely } from "../domain/shadow";
-import { shadowReadStatus } from "../domain/shadow-read";
+import { RUN_COMMAND } from "../domain/shadow";
+import { guardedRunTransition, transitionRunRecord } from "../domain/Run/Run.store";
 export type RunStatus = "open" | "running" | "completed" | "failed" | "aborted";
 
 export type RunStatusEvent =
@@ -54,11 +54,8 @@ export function nextRunStatus(current: RunStatus, event: RunStatusEvent): RunSta
 
 export function runStatusStatement(event: RunStatusEvent): { sql: string; binds: (id: string, ownerEmail: string) => unknown[] } {
   const transition = RUN_TRANSITIONS[event];
-  const placeholders = transition.from.map(() => "?").join(", ");
-  return {
-    sql: `UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND status IN (${placeholders})`,
-    binds: (id, ownerEmail) => [transition.to, id, ownerEmail, ...transition.from],
-  };
+  const template = guardedRunTransition(transition.to, transition.from, "", "");
+  return { sql: template.sql, binds: (id, ownerEmail) => guardedRunTransition(transition.to, transition.from, id, ownerEmail).binds };
 }
 
 export interface RunStatusDb {
@@ -66,11 +63,6 @@ export interface RunStatusDb {
 }
 
 export async function applyRunEvent(db: RunStatusDb, run: { id: string; ownerEmail: string }, event: RunStatusEvent): Promise<boolean> {
-  const from = await shadowReadStatus(db, "runs", run.id, run.ownerEmail);
   const statement = runStatusStatement(event);
-  const result = await db.prepare(statement.sql).bind(...statement.binds(run.id, run.ownerEmail)).run();
-  const changes = (result as { meta?: { changes?: unknown } } | null)?.meta?.changes;
-  const applied = typeof changes === "number" && changes > 0;
-  if (from !== undefined) safely(() => shadowRun(event, run.ownerEmail, from, applied ? "accepted" : "rejected"));
-  return applied;
+  return transitionRunRecord(db, run.id, run.ownerEmail, RUN_COMMAND[event], { sql: statement.sql, binds: statement.binds(run.id, run.ownerEmail) });
 }
