@@ -1,6 +1,6 @@
 # Alchemy Domain for my.ax: plan
 
-Status: step 1 done (Jordan said to dogfood Domain). Step 2 is next.
+Status: steps 1 and 2 done (Jordan said to dogfood Domain). Step 3 (shadow in prod) is next, and needs Jordan's go because it touches the prod worker.
 
 ## What Jordan asked for
 
@@ -31,7 +31,8 @@ Status: step 1 done (Jordan said to dogfood Domain). Step 2 is next.
 
 1. **Done: spike, in memory only.** `src/domain/Job/` holds the aggregate, 5 commands and 5 rejections. `Job.story.test.ts` has 9 stories, including one that checks the aggregate against `nextJobStatus` for every status, command and last-run case. A mutation check broke 4 rules, and each one fails a story. `effect` is now 4.1.4 and `@alchemy.run/domain` is pinned at `2.0.0-beta.87`. The worker does not import it yet.
    Original step: Port the `Job` aggregate to `@alchemy.run/domain` in `src/domain/`. Run it with `Domain.InMemory`. The proof is that the existing `job-status` tests and the TLA `JobSchedule` replay pass against it. No prod change. First, bump `effect` to 4.1.4 and run `npm run check`.
-2. **Session aggregate, in memory.** Same proof against `session-status` and the `SessionLifecycle` replay.
+2. **Done: Session aggregate, in memory.** `src/domain/Session/` has `OpenSession` plus one command per fsm event (12). The rules are one `SESSION_RULES` table. `Session.story.test.ts` checks that every fsm event maps to exactly one command with the same from and to, and plays all 60 status × event cases against `nextSessionStatus`. A mutation check broke 3 rules, and each one fails stories.
+   Original step: Same proof against `session-status` and the `SessionLifecycle` replay.
 3. **Shadow in prod.** The current D1 code stays the source of truth. Each command is also sent to the Domain model, and any difference is logged. Run it for one week.
 4. **Cut over jobs.** Job alarms move to a Domain deadline and policy. The `UserAgent` alarm code is deleted. A D1 projection keeps the old tables for reads.
 5. **Cut over sessions.** The same for sessions.
@@ -54,3 +55,4 @@ Start step 1 (the in-memory `Job` spike, plus the `effect` 4.1.4 bump)?
 - Don't spread a command into an event (`{ ...cmd }`). The spread brings the command's `_tag` with it, and the event schema rejects it with a hard-to-read error. List the fields.
 - The type checker wants a `node:test` callback to return `Promise<void>`. Wrap `Effect.runPromise`.
 - A loop over a union of commands needs a cast at `Story.when`, because steps type-check against one command.
+- A table-driven aggregate (one `SESSION_RULES` record plus one `transition` guard) keeps 12 commands short, and lets a test compare the whole table with the fsm table in one assert.
