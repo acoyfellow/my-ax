@@ -36,11 +36,17 @@ else
   say FAIL "status-changing SQL outside src/domain: $(printf '%s\n' "$leaks" | wc -l | tr -d ' ') sites"; fail=1
 fi
 
-if [ -f alchemy.run.ts ] && [ -n "${PREVIEW_URL:-}" ] && [ -n "${EXPECT_VERSION:-}" ] \
-  && curl -fsS -m 20 "$PREVIEW_URL/api/version" | grep -q "$EXPECT_VERSION"; then
-  say PASS "preview from alchemy.run.ts serves $EXPECT_VERSION"
+PREVIEW_URL=${PREVIEW_URL:-}
+preview_version=""
+if [ -f alchemy.run.ts ] && [ -n "$PREVIEW_URL" ]; then
+  preview_token=$(cloudflared access token -app="$PREVIEW_URL" 2>.git/alchemy-gate-token.err || true)
+  preview_version=$(curl -sS -m 20 -D - -o .git/alchemy-gate-version.body -H "cf-access-token: $preview_token" "$PREVIEW_URL/api/version" 2>.git/alchemy-gate-curl.err \
+    | tr -d '\r' | awk -F': ' 'tolower($1)=="x-my-ax-version" {print $2}')
+fi
+if [ -n "$preview_version" ] && [ "$preview_version" != "dev" ] && { [ -z "${EXPECT_VERSION:-}" ] || [ "$preview_version" = "$EXPECT_VERSION" ]; }; then
+  say PASS "preview from alchemy.run.ts serves version $preview_version"
 else
-  say FAIL "preview deploy from alchemy.run.ts"; fail=1
+  say FAIL "preview deploy from alchemy.run.ts (set PREVIEW_URL; got '${preview_version}')"; fail=1
 fi
 
 exit $fail
