@@ -1,4 +1,5 @@
-import { initialRecipeStatus, patchStatusEvent, requireRecipeTransition, type RecipeStatusEvent } from "./fsm/recipe-status";
+import { initialRecipeStatus, nextRecipeStatus, patchStatusEvent, requireRecipeTransition, type RecipeStatusEvent } from "./fsm/recipe-status";
+import { safely, shadowRecipe } from "./domain/shadow";
 import type { Env } from "./types";
 
 export const SAVED_RECIPE_STATUSES = ["pending", "enabled", "disabled"] as const;
@@ -239,7 +240,9 @@ export class SavedRecipeService {
 
   private async applyPatch(id: string, patch: SavedRecipePatch) {
     const current = await this.get(id);
-    const nextStatus = patch.statusEvent ? requireRecipeTransition(current.status, patch.statusEvent) : undefined;
+    const statusEvent = patch.statusEvent;
+    if (statusEvent) safely(() => shadowRecipe(statusEvent, this.owner(), current.status, nextRecipeStatus(current.status, statusEvent) ? "accepted" : "rejected"));
+    const nextStatus = statusEvent ? requireRecipeTransition(current.status, statusEvent) : undefined;
     const assignments: string[] = [];
     const values: unknown[] = [];
     if (patch.name !== undefined) { assignments.push("name = ?"); values.push(patch.name); }

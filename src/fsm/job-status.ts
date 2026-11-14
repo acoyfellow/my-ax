@@ -1,3 +1,5 @@
+import { safely, shadowJob } from "../domain/shadow";
+import { shadowReadStatus } from "../domain/shadow-read";
 export type JobStatus = "active" | "paused" | "exhausted";
 
 export type JobStatusEvent = "paused" | "resumed" | "run_claimed" | "edited";
@@ -11,7 +13,7 @@ export function nextJobStatus(current: JobStatus, event: JobStatusEvent, context
 }
 
 export interface JobStatusDb {
-  prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown> } };
+  prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown>; first?<T>(): Promise<T | null> } };
 }
 
 export interface JobRef {
@@ -25,13 +27,19 @@ function changed(result: unknown): boolean {
 }
 
 export async function markJobResumed(db: JobStatusDb, job: JobRef, scheduleId: string, nextRunAt: string): Promise<boolean> {
-  return changed(await db.prepare("UPDATE jobs SET status='active', schedule_id=?, next_run_at=?, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status='paused'")
+  const from = await shadowReadStatus(db, "jobs", job.id, job.ownerEmail);
+  const applied = changed(await db.prepare("UPDATE jobs SET status='active', schedule_id=?, next_run_at=?, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status='paused'")
     .bind(scheduleId, nextRunAt, job.id, job.ownerEmail).run());
+  if (from !== undefined) safely(() => shadowJob("resumed", job.ownerEmail, from, applied ? "accepted" : "rejected"));
+  return applied;
 }
 
 export async function markJobPaused(db: JobStatusDb, job: JobRef): Promise<boolean> {
-  return changed(await db.prepare("UPDATE jobs SET status='paused', schedule_id=NULL, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status='active'")
+  const from = await shadowReadStatus(db, "jobs", job.id, job.ownerEmail);
+  const applied = changed(await db.prepare("UPDATE jobs SET status='paused', schedule_id=NULL, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status='active'")
     .bind(job.id, job.ownerEmail).run());
+  if (from !== undefined) safely(() => shadowJob("paused", job.ownerEmail, from, applied ? "accepted" : "rejected"));
+  return applied;
 }
 
 export interface JobEdit {

@@ -1,3 +1,5 @@
+import { shadowRun, safely } from "../domain/shadow";
+import { shadowReadStatus } from "../domain/shadow-read";
 export type RunStatus = "open" | "running" | "completed" | "failed" | "aborted";
 
 export type RunStatusEvent =
@@ -60,12 +62,15 @@ export function runStatusStatement(event: RunStatusEvent): { sql: string; binds:
 }
 
 export interface RunStatusDb {
-  prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown> } };
+  prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown>; first?<T>(): Promise<T | null> } };
 }
 
 export async function applyRunEvent(db: RunStatusDb, run: { id: string; ownerEmail: string }, event: RunStatusEvent): Promise<boolean> {
+  const from = await shadowReadStatus(db, "runs", run.id, run.ownerEmail);
   const statement = runStatusStatement(event);
   const result = await db.prepare(statement.sql).bind(...statement.binds(run.id, run.ownerEmail)).run();
   const changes = (result as { meta?: { changes?: unknown } } | null)?.meta?.changes;
-  return typeof changes === "number" && changes > 0;
+  const applied = typeof changes === "number" && changes > 0;
+  if (from !== undefined) safely(() => shadowRun(event, run.ownerEmail, from, applied ? "accepted" : "rejected"));
+  return applied;
 }

@@ -12,7 +12,7 @@ function mockContext({ owned = true, status = "open" } = {}) {
           prepare(sql) {
             return {
               bind(...values) {
-                calls.push({ sql, values });
+                if (!sql.startsWith("SELECT status FROM runs")) calls.push({ sql, values });
                 return {
                   first: async () => owned ? { id: "run-1", status } : null,
                   run: async () => ({ success: true }),

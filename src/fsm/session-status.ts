@@ -1,3 +1,5 @@
+import { shadowSession, safely } from "../domain/shadow";
+import { shadowReadStatus } from "../domain/shadow-read";
 export type SessionStatus = "active" | "running" | "error" | "interrupted" | "archived";
 
 export type SessionStatusEvent =
@@ -37,7 +39,7 @@ export function nextSessionStatus(current: SessionStatus, event: SessionStatusEv
 }
 
 export interface SessionStatusDb {
-  prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown> } };
+  prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown>; first?<T>(): Promise<T | null> } };
 }
 
 export interface SessionRef {
@@ -57,9 +59,12 @@ export function sessionStatusStatement(event: SessionStatusEvent): { sql: string
 }
 
 export async function applySessionEvent(db: SessionStatusDb, session: SessionRef, event: SessionStatusEvent): Promise<boolean> {
+  const from = await shadowReadStatus(db, "sessions", session.id, session.ownerEmail);
   const statement = sessionStatusStatement(event);
   const result = await db.prepare(statement.sql).bind(statement.to, session.id, session.ownerEmail, ...statement.from).run();
-  return changedRows(result) > 0;
+  const applied = changedRows(result) > 0;
+  if (from !== undefined) safely(() => shadowSession(event, session.ownerEmail, from, applied ? "accepted" : "rejected"));
+  return applied;
 }
 
 function changedRows(result: unknown): number {
