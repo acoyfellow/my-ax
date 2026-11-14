@@ -697,7 +697,7 @@
               {#if row.pinned === 1}
                 <div class="session-menu__sizes" role="group" aria-label={`Tile size for ${title}`}>
                   {#each PIN_SIZES as size (size)}
-                    <button type="button" role="menuitemradio" aria-checked={pinSizeOf(row.pin_size) === size} data-size-option={size} onclick={(e) => { e.stopPropagation(); closeMenu(); void setPinSize(row, size); }}>{PIN_SIZE_LABEL[size]}</button>
+                    <button type="button" role="menuitemradio" aria-checked={pinSizeOf(row.pin_size) === size} data-size-option={size} aria-label={`${PIN_SIZE_LABEL[size]} tile`} title={`${PIN_SIZE_LABEL[size]} tile`} onclick={(e) => { e.stopPropagation(); closeMenu(); void setPinSize(row, size); }}>{@render pinSizeIcon(size)}</button>
                   {/each}
                 </div>
               {/if}
@@ -822,6 +822,18 @@
 
 <svelte:window onclick={closeMenu} />
 
+{#snippet pinSizeIcon(size: PinSize)}
+  <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+    {#if size === "small"}
+      <rect x="5.75" y="3.75" width="6.5" height="6.5" rx="1.5" />
+    {:else if size === "medium"}
+      <rect x="1.75" y="3.75" width="14.5" height="6.5" rx="1.5" />
+    {:else}
+      <rect x="1.75" y="0.75" width="14.5" height="12.5" rx="1.5" />
+    {/if}
+  </svg>
+{/snippet}
+
 <style>
   .session-group-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .session-group-toggle:hover { color: var(--fg); }
@@ -857,7 +869,7 @@
   :global(.session-tile[data-size="large"]) { grid-column: span 2; height: 112px; padding: 14px; }
   :global(.session-tile[data-size="large"] .session-row__title) { font-size: 16px; font-weight: 600; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   :global(.session-menu__sizes) { display: flex; gap: 2px; padding: 2px; margin-bottom: 4px; border-radius: 7px; background: var(--color-surface-1); }
-  :global(.session-menu__sizes > button) { flex: 1; height: 26px; border-radius: 5px; font-size: 12px; color: var(--fg-mut); }
+  :global(.session-menu__sizes > button) { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; height: 26px; border-radius: 5px; font-size: 12px; color: var(--fg-mut); }
   :global(.session-menu__sizes > button[aria-checked="true"]) { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
   .session-sep { height: 1px; background: var(--line); margin: 2px 8px 2px; }
 
@@ -890,7 +902,7 @@
   :global(.session-row__reorder:focus-visible) { position: static; width: 22px; height: 22px; opacity: 1; border-radius: 5px; box-shadow: 0 0 0 2px var(--brand); }
 
   :global(.session-row[data-menu-open="1"]), :global(.session-tiles > li:has(.session-row[data-menu-open="1"])) { z-index: 30; }
-  :global(.session-menu) { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 172px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28); cursor: default; }
+  :global(.session-menu) { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: max-content; min-width: 172px; max-width: min(260px, calc(100vw - 24px)); padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28); cursor: default; }
   :global(.session-menu > button), :global(.session-menu > a) { display: flex; align-items: center; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--fg); text-decoration: none; text-align: left; }
   :global(.session-menu > button:hover), :global(.session-menu > a:hover) { background: var(--color-surface-1); }
   :global(.session-menu > .danger) { color: var(--bad); }

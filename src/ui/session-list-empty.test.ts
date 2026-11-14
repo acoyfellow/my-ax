@@ -22,3 +22,11 @@ test("the empty branch of the conversation list renders the archive toggle", () 
   assert.match(emptyBranch, /toggleArchivedView/);
   assert.match(emptyBranch, /emptyListView\(showArchived\)/);
 });
+
+test("tile size options are icons with spoken labels, so long words never overlap", async () => {
+  const { readFileSync } = await import("node:fs");
+  const sessions = readFileSync(new URL("./Sessions.svelte", import.meta.url), "utf8");
+  assert.match(sessions, /aria-label=\{`\$\{PIN_SIZE_LABEL\[size\]\} tile`\}.*\{@render pinSizeIcon\(size\)\}<\/button>/);
+  assert.doesNotMatch(sessions, />\{PIN_SIZE_LABEL\[size\]\}<\/button>/);
+  assert.match(sessions, /:global\(\.session-menu\) \{[^}]*width: max-content; min-width: 172px/);
+});
