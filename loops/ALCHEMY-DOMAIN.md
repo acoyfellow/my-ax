@@ -19,7 +19,7 @@ Status: plan only. Nothing is built yet. It needs Jordan's go before step 1.
 | my.ax today | Domain concept |
 |---|---|
 | `SessionStatus` + `nextSessionStatus` | `Session` aggregate. The legal-transition table is its invariant. |
-| session events (`turn_started`, `turn_finished`, `archived`, …) | `Domain.Event`s |
+| session events (`turn_started`, `turn_completed`, `archived`, …) | `Domain.Event`s |
 | `applySessionEvent` callers | `Domain.Command`s: `StartTurn`, `FinishTurn`, `InterruptTurn`, `ArchiveSession`, `RenameSession` |
 | `Job` + `nextJobStatus` | `Job` aggregate: `PauseJob`, `ResumeJob`, `ClaimRun`, `EditJob` |
 | `UserAgent` job alarm | a deadline: a policy schedules `RunJobNow`, then the aggregate decides |
