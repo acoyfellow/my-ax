@@ -21,6 +21,13 @@ for pair in job-status:Job session-status:Session run-status:Run recipe-status:R
   fi
 done
 
+coverage=$(node scripts/domain-coverage.mjs 2>&1)
+if [ $? -eq 0 ]; then
+  say PASS "$coverage"
+else
+  say FAIL "$(printf '%s' "$coverage" | tr '\n' ' ')"; fail=1
+fi
+
 leaks=$(grep -rnE "UPDATE (jobs|sessions|runs|saved_recipes|attention_items) SET[^;]*status" src --include=*.ts \
   | grep -v "^src/domain/" | grep -v "\.test\.ts:" || true)
 if [ -z "$leaks" ]; then
