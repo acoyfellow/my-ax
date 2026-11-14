@@ -39,7 +39,7 @@
         {/each}
       </ul>
     {:else}
-      <p class="mt-2 text-xs text-fg-mut">No model usage in the last {usage.summary.windowDays} days.</p>
+      <p class="mt-2 text-xs text-fg-mut">None in {usage.summary.windowDays} days.</p>
     {/if}
   {/if}
 </section>

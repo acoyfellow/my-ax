@@ -20,20 +20,20 @@
 
   function receiptText(feature: WebFeature): string {
     const receipt = webReceipts[feature];
-    if (!receipt) return "Not used yet in this tab";
+    if (!receipt) return "";
     return `${receipt.text} · ${new Date(receipt.at).toLocaleTimeString()}`;
   }
 
   let persisted = $state<boolean | null>(null);
   let usage = $state("");
 
-  const roleText = { unknown: "Checking…", leader: "This tab leads", mirror: "Another tab leads; this one mirrors", solo: "Only tab (no Web Locks)" } as const;
+  const roleText = { unknown: "Checking…", leader: "This tab is live", mirror: "Mirroring another tab", solo: "Only tab" } as const;
 
   async function refreshEstimate() {
     if (typeof navigator.storage?.estimate !== "function") return;
     const e = await navigator.storage.estimate();
     const mb = (n: number | undefined) => (Math.round(((n ?? 0) / 1048576) * 10) / 10).toFixed(1);
-    usage = `Using ${mb(e.usage)} MB of ${mb(e.quota)} MB`;
+    usage = `${mb(e.usage)} of ${mb(e.quota)} MB`;
   }
 
   async function keepData() {
@@ -59,14 +59,14 @@
           <input type="checkbox" role="switch" checked={webFeatures[feature]} disabled={!supported[feature]} onchange={(event) => setWebFeature(feature, (event.currentTarget as HTMLInputElement).checked)} />
           <span>
             <span class="block text-sm text-fg">{WEB_FEATURES[feature].label}</span>
-            <span class="block text-xs text-fg-mut">{supported[feature] ? WEB_FEATURES[feature].hint : "This browser does not support it"}</span>
-            <span class="block text-xs text-fg-mut/80" data-web-receipt={feature}>{receiptText(feature)}{feature === "wakeLock" && wakeLockState.held ? " · on now" : ""}</span>
+            <span class="block text-xs text-fg-mut">{supported[feature] ? WEB_FEATURES[feature].hint : "Not supported here"}</span>
+            {#if receiptText(feature) || (feature === "wakeLock" && wakeLockState.held)}<span class="block text-xs text-fg-mut/80" data-web-receipt={feature}>{receiptText(feature)}{feature === "wakeLock" && wakeLockState.held ? " · on now" : ""}</span>{/if}
           </span>
         </label>
         {#if feature === "storagePersist" && supported[feature]}
           <div class="text-xs text-fg-mut mt-1">
             <button type="button" class="underline" disabled={!webFeatures.storagePersist} onclick={keepData}>Keep my data</button>
-            {#if persisted !== null}<span class="block">{persisted ? "Kept: the browser will not clear my ax data" : "Not kept: the browser may clear it under disk pressure"}</span>{/if}
+            {#if persisted !== null}<span class="block">{persisted ? "Kept" : "Not kept yet"}</span>{/if}
             {#if usage}<span class="block">{usage}</span>{/if}
           </div>
         {/if}

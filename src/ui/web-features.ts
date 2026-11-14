@@ -1,12 +1,12 @@
 export const WEB_FEATURES = {
-  wakeLock: { label: "Keep screen on", hint: "While a turn runs, or when you turn it on from the top bar.", defaultOn: true },
-  voice: { label: "AX voice commands", hint: "Shows a mic button in the top bar. Only phrases that start with AX do anything; changes need a spoken confirm. Chrome may send the audio to its speech service.", defaultOn: false },
-  storagePersist: { label: "Keep my data", hint: "Asks the browser not to clear my ax data under disk pressure.", defaultOn: true },
-  tabLeader: { label: "Tab leader", hint: "Elects one open tab as leader using Web Locks; other tabs mirror it.", defaultOn: true },
-  virtualKeyboard: { label: "Keyboard-aware input bar", hint: "Lifts the message bar above the on-screen keyboard.", defaultOn: true },
-  scrollProgress: { label: "Scroll progress bar", hint: "Thin bar at the top of the chat showing how far you have scrolled.", defaultOn: true },
-  location: { label: "Share location with the agent", hint: "Lets the agent ask for your rough location (rounded to about 1 km). The browser asks first.", defaultOn: false },
-  paintRing: { label: "Status rings on Desk cards", hint: "Draws a ring on each Desk card status pill with a CSS paint worklet.", defaultOn: true },
+  wakeLock: { label: "Keep screen on", hint: "While the agent works.", defaultOn: true },
+  voice: { label: "AX voice commands", hint: "Say “AX …”. Chrome may use its speech service.", defaultOn: false },
+  storagePersist: { label: "Keep my data", hint: "Ask the browser not to clear it.", defaultOn: true },
+  tabLeader: { label: "One live tab", hint: "Other tabs mirror it.", defaultOn: true },
+  virtualKeyboard: { label: "Lift input bar", hint: "Above the phone keyboard.", defaultOn: true },
+  scrollProgress: { label: "Scroll progress bar", hint: "Thin bar at the top.", defaultOn: true },
+  location: { label: "Share location", hint: "About 1 km. The browser asks first.", defaultOn: false },
+  paintRing: { label: "Desk status rings", hint: "Rings on Desk cards.", defaultOn: true },
 } as const;
 
 export type WebFeature = keyof typeof WEB_FEATURES;
