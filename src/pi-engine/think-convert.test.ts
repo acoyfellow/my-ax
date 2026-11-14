@@ -60,3 +60,13 @@ test("the full D1 transcript converts with tool rows folded into the assistant t
   const assistant = entries[1].model?.[0] as { content: Array<{ type: string }> };
   assert.deepEqual(assistant.content.map((block) => block.type), ["toolCall", "thinking", "text"]);
 });
+
+test("every imported assistant message carries a usage record so pi can count context", () => {
+  const entries = thinkMessagesToPiEntries([
+    { id: "u1", role: "user", parts: [{ type: "text", text: "hi" }] },
+    { id: "a1", role: "assistant", parts: [{ type: "text", text: "hello" }] },
+  ] as never);
+  const assistants = entries.flatMap((entry) => (entry as unknown as { model: Array<{ role: string; usage?: { totalTokens: number } }> }).model).filter((message) => message.role === "assistant");
+  assert.ok(assistants.length > 0);
+  for (const message of assistants) assert.equal(message.usage?.totalTokens, 0);
+});

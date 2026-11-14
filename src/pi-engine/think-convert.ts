@@ -42,10 +42,14 @@ export function thinkMessagesToPiEntries(messages: readonly ThinkMessage[], now 
       }
     }
     if (!content.length) return;
-    entries.push({ kind: "pi.assistant", model: [{ role: "assistant", content, stopReason: results.length ? "toolUse" : "stop", timestamp }] });
+    entries.push({ kind: "pi.assistant", model: [{ role: "assistant", content, api: "imported", provider: "imported", model: "think", usage: emptyUsage(), stopReason: results.length ? "toolUse" : "stop", timestamp }] });
     entries.push(...results);
   });
   return entries;
+}
+
+export function emptyUsage() {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 }
 
 export type TranscriptRow = { ts: string; role: string; tool: string | null; is_error: number; content: string | null; meta_json: string | null };
