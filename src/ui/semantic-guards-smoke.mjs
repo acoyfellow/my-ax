@@ -13,7 +13,7 @@ function assertIncludes(haystack, needle, label) {
   if (!haystack.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
 }
 
-assertIncludes(settings, 'Pick where each run lands: a new thread, this thread, or a specific thread you name.', "recurring job copy names the three destinations");
+assertIncludes(settings, 'Each run goes to a new thread, this thread, or one you pick.', "recurring job copy names the three destinations");
 assertIncludes(settings, '<option value="new_session_per_run">New thread each run</option>', "recurring job creation offers New thread (fresh per-run)");
 assertIncludes(settings, '<option value="same_session">This thread</option>', "recurring job creation offers This thread (standing loop)");
 assertIncludes(settings, '<option value="specific_session">Specific thread…</option>', "recurring job creation offers Specific thread");

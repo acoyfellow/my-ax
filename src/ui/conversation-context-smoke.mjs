@@ -16,7 +16,7 @@ function assertNotIncludes(haystack, needle, label) {
 assertIncludes(chat, 'model: modelState.current }', "chat sends the chosen model with each pi message");
 assertIncludes(sessionsRoute, 'app.post("/api/sessions/:id/model"', "backend has a session model persistence route");
 assertIncludes(sessionsRoute, '(await openPiChat(c.env, identity.email, id)).setModel(choice.provider, choice.id)', "session model route forwards to the pi chat");
-assertIncludes(settings, 'Pick where each run lands: a new thread, this thread, or a specific thread you name.', "recurring jobs state the three destinations in UI");
+assertIncludes(settings, 'Each run goes to a new thread, this thread, or one you pick.', "recurring jobs state the three destinations in UI");
 assertIncludes(settings, '<option value="new_session_per_run">New thread each run</option>', "create form offers New thread");
 assertIncludes(settings, '<option value="same_session">This thread</option>', "create form offers This thread");
 assertIncludes(settings, '<option value="specific_session">Specific thread…</option>', "create form offers Specific thread");

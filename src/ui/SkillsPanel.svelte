@@ -102,7 +102,7 @@
       Show the / and @ menu in the composer
     </label>
   </div>
-  <p class="text-xs text-fg-mut">Type <code>/</code> at the start of a line for commands, reusable tools, skills, MCP tools and laptop tools. Type <code>@</code> to tag a file, a conversation or a skill.</p>
+  <p class="text-xs text-fg-mut"><code>/</code> for commands and tools. <code>@</code> to tag.</p>
 </section>
 
 <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
@@ -113,7 +113,7 @@
       <button type="button" class="text-xs rounded border border-line px-2 py-0.5 hover:bg-surface-2" onclick={() => (draft = emptyDraft())} data-testid="skill-new">New skill</button>
     </div>
   </div>
-  <p class="mb-3 text-xs text-fg-mut">A skill is a set of instructions you call with <code>/name</code>. It applies to that one message and never grants extra tools.</p>
+  <p class="mb-3 text-xs text-fg-mut">Saved instructions. Call with <code>/name</code>.</p>
   {#if error}<p class="mb-2 text-xs text-bad" role="alert">{error}</p>{/if}
   {#if draft}
     <form class="mb-3 space-y-2 rounded-md border border-line p-3" onsubmit={(event) => { event.preventDefault(); void save(); }} data-testid="skill-form">
@@ -130,7 +130,7 @@
   {#if loading}
     <p class="text-xs text-fg-mut">Loading…</p>
   {:else if skills.length === 0}
-    <p class="text-xs text-fg-mut italic">No skills yet. Use <code>/skill-new</code>, or <code>/skill-save</code> on a conversation that went well.</p>
+    <p class="text-xs text-fg-mut italic">None yet. Try <code>/skill-save</code>.</p>
   {:else}
     <ul class="divide-y divide-line/60">
       {#each skills as skill (skill.id)}

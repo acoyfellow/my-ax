@@ -60,51 +60,51 @@
   let computerStatus = $state("");
   let lastActiveElement: HTMLElement | null = null;
   const sections = [
-    { id: "general" as const, label: "General", hint: "Model, app, notifications" },
-    { id: "capabilities" as const, label: "Capabilities", hint: "What the agent can use" },
-    { id: "artifacts" as const, label: "Widgets", hint: "Reusable widgets and dashboards" },
-    { id: "computers" as const, label: "Computers", hint: "Named Ubuntu desktops" },
-    { id: "recipes" as const, label: "Reusable tools", hint: "Reviewed Code Mode shortcuts" },
-    { id: "skills" as const, label: "Skills & commands", hint: "Your / menu and saved instructions" },
-    { id: "jobs" as const, label: "Recurring jobs", hint: "Scheduled work" },
-    { id: "starters" as const, label: "Starters", hint: "New-conversation suggestions" },
-    { id: "connections" as const, label: "Connections", hint: "Runtime and services" },
+    { id: "general" as const, label: "General", hint: "Model, alerts" },
+    { id: "capabilities" as const, label: "Capabilities", hint: "Agent tools" },
+    { id: "artifacts" as const, label: "Widgets", hint: "Saved widgets" },
+    { id: "computers" as const, label: "Computers", hint: "Desktops" },
+    { id: "recipes" as const, label: "Reusable tools", hint: "Saved code" },
+    { id: "skills" as const, label: "Skills & commands", hint: "Your / menu" },
+    { id: "jobs" as const, label: "Recurring jobs", hint: "Schedules" },
+    { id: "starters" as const, label: "Starters", hint: "New chat ideas" },
+    { id: "connections" as const, label: "Connections", hint: "Services" },
   ];
 
   const capabilityGroups = [
     {
       title: "Can work here",
-      summary: "Available in a normal chat.",
+      summary: "Always on.",
       items: [
-        { name: "Workspace", tools: "work_search · work_code", description: "Read files, search, edit, and run bounded commands in your persistent Sandbox workspace." },
-        { name: "Reusable tools", tools: "codemode.search · codemode.run", description: "Run owner-approved Code Mode shortcuts from work_code." },
-        { name: "Recurring work", tools: "manage_jobs", description: "Create and inspect scheduled prompts." },
+        { name: "Workspace", tools: "work_search · work_code", description: "Read, edit, and run code in your workspace." },
+        { name: "Reusable tools", tools: "codemode.search · codemode.run", description: "Run code you approved." },
+        { name: "Recurring work", tools: "manage_jobs", description: "Schedule prompts." },
       ],
     },
     {
       title: "Can look around",
-      summary: "Useful context without local secrets.",
+      summary: "No secrets.",
       items: [
-        { name: "Public browser", tools: "browser_open", description: "Open public pages with a screenshot and replay. No personal cookies." },
-        { name: "Conversation recall", tools: "search_conversations", description: "Search your earlier My AX conversations." },
-        { name: "Interactive output", tools: "create_widget", description: "Attach a sandboxed Svelte widget to the conversation." },
+        { name: "Public browser", tools: "browser_open", description: "Open public pages. No cookies." },
+        { name: "Conversation recall", tools: "search_conversations", description: "Search past chats." },
+        { name: "Interactive output", tools: "create_widget", description: "Add a widget to the chat." },
       ],
     },
     {
       title: "Can ask or delegate",
-      summary: "Human checkpoints and bounded child analysis.",
+      summary: "You decide.",
       items: [
-        { name: "Human decisions", tools: "ask_user", description: "Pause for one multiple-choice decision." },
-        { name: "Owner attention", tools: "notify_owner", description: "Leave an Attention item when background work needs you." },
+        { name: "Human decisions", tools: "ask_user", description: "Ask you to pick." },
+        { name: "Owner attention", tools: "notify_owner", description: "Flag something for you." },
       ],
     },
     {
       title: "When connected",
-      summary: "Only appears after you configure the service.",
+      summary: "After setup.",
       items: [
-        { name: "MCP servers", tools: "server tools · mcp_code_mode", description: "Use tools from servers you add. Credentials stay server-side." },
-        { name: "Workspace container", tools: "machine.* through work_code", description: "Use methods from the connected runtime with that runtime’s account." },
-        { name: "Push notifications", tools: "browser subscription", description: "Send Attention updates to subscribed browsers." },
+        { name: "MCP servers", tools: "server tools · mcp_code_mode", description: "Tools from servers you add." },
+        { name: "Workspace container", tools: "machine.* through work_code", description: "Your connected machine." },
+        { name: "Push notifications", tools: "browser subscription", description: "Alerts on your devices." },
       ],
     },
   ];
@@ -1146,7 +1146,7 @@
         oninput={() => { ownerInstructionsRevision += 1; ownerInstructionsStatus = "Not saved"; }}
         class="w-full resize-y rounded-md bg-bg border border-line text-fg text-sm px-3 py-2.5 focus:outline-none focus:border-brand/60 focus:ring-1 focus:ring-brand/40"
       ></textarea>
-      <p class="mt-2 text-xs text-fg-mut">These instructions apply to existing and new conversations on their next reply. Protected policy, authorization, tool limits, and verification rules cannot be changed here.</p>
+      <p class="mt-2 text-xs text-fg-mut">Applies to every chat from its next reply. Safety rules stay fixed.</p>
       <div class="mt-3 flex gap-2">
         <button type="button" onclick={saveOwnerInstructions} class="rounded-md bg-brand text-white text-sm font-medium px-3 py-2 hover:bg-brand/90">Save instructions</button>
         <button type="button" onclick={resetOwnerInstructions} class="rounded-md border border-line text-sm px-3 py-2 hover:border-brand/60">Reset to default</button>
@@ -1213,8 +1213,8 @@
 
       <div hidden={activeSection !== "capabilities"} class="space-y-4">
         <header>
-          <h3 class="text-sm font-semibold text-fg">What the agent can use</h3>
-          <p class="mt-1 text-xs leading-relaxed text-fg-mut">These are callable tools. They are not raw credentials.</p>
+          <h3 class="text-sm font-semibold text-fg">Agent tools</h3>
+          <p class="mt-1 text-xs leading-relaxed text-fg-mut">Tools, not keys.</p>
         </header>
         <div class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
           {#each capabilityGroups as group}
@@ -1238,24 +1238,24 @@
         <section class="rounded-lg border border-line bg-bg px-3 py-3">
           <h4 class="text-xs font-semibold text-fg">Boundaries</h4>
           <ul class="mt-2 grid gap-1.5 text-[11px] leading-relaxed text-fg-mut sm:grid-cols-2">
-            <li>Workspace files are shared across your conversations.</li>
-            <li>The public browser has no personal cookies.</li>
-            <li>Connected runtimes use their own account authority.</li>
-            <li>Delegated child agents are read-only and model-only.</li>
-            <li>Work Code Mode only calls named callbacks.</li>
+            <li>Files are shared across chats.</li>
+            <li>The browser has no cookies.</li>
+            <li>Machines use their own accounts.</li>
+            <li>Child agents only read.</li>
+            <li>Code calls named tools only.</li>
           </ul>
         </section>
       </div>
 
       <div hidden={activeSection !== "computers"} class="space-y-4">
         <header class="flex items-start justify-between gap-3">
-          <div><h3 class="text-sm font-semibold text-fg">Computers</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Named Ubuntu desktops isolated from the shared Sandbox. Ask My AX to create_computer; the desktop embeds in chat like a widget.</p></div>
+          <div><h3 class="text-sm font-semibold text-fg">Computers</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Private desktops. Ask the agent for one.</p></div>
           <button type="button" onclick={refreshComputers} class="job-action-button shrink-0 hover:border-brand/60" disabled={computersLoading}>Refresh</button>
         </header>
         {#if computersLoading && computers.length === 0}
           <p class="text-xs text-fg-mut">Loading computers…</p>
         {:else if computers.length === 0}
-          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No computers yet</strong><p class="mt-1 text-xs text-fg-mut">Ask My AX to create_computer with an id like desk.</p></section>
+          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No computers yet</strong><p class="mt-1 text-xs text-fg-mut">Ask: “make me a computer”.</p></section>
         {:else}
           <div class="grid gap-3">
             {#each computers as computer (computer.computer_id)}
@@ -1271,13 +1271,13 @@
 
       <div hidden={activeSection !== "artifacts"} class="space-y-4">
         <header class="flex items-start justify-between gap-3">
-          <div><h3 class="text-sm font-semibold text-fg">Widget Library</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Reusable widgets, dashboards, forms, and visualizations generated in your conversations. They remain in this owner-scoped library even if the origin conversation is removed.</p></div>
+          <div><h3 class="text-sm font-semibold text-fg">Widget Library</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Widgets from your chats. They stay if the chat is gone.</p></div>
           <button type="button" onclick={refreshArtifacts} class="job-action-button shrink-0 hover:border-brand/60" disabled={artifactsLoading}>Refresh</button>
         </header>
         {#if artifactsLoading && artifacts.length === 0}
           <p class="text-xs text-fg-mut">Loading widgets…</p>
         {:else if visibleArtifacts.length === 0}
-          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No widgets found</strong><p class="mt-1 text-xs text-fg-mut">Ask My AX to create a dashboard, calculator, form, visualization, or other interactive widget.</p></section>
+          <section class="rounded-lg border border-dashed border-line bg-bg p-5 text-center"><strong class="block text-sm text-fg">No widgets yet</strong><p class="mt-1 text-xs text-fg-mut">Ask for a dashboard or a form.</p></section>
         {:else}
           <div class="grid gap-3 sm:grid-cols-2">
             {#each visibleArtifacts as artifact (artifact.id)}
@@ -1312,22 +1312,22 @@
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
           <span class="block text-xs font-medium text-fg-mut mb-1.5">Reusable tools</span>
           <p class="mb-3 text-xs text-fg-mut">
-            Reusable tools are saved pieces of successful <code>work_code</code> that My AX can use again. Enabled tools can run in future tasks; every run creates a receipt.
+            Saved <code>work_code</code> the agent can rerun. Each run leaves a receipt.
           </p>
           <fieldset class="mb-3 rounded-lg border border-line bg-bg-alt/40 p-3" disabled={recipePreferenceBusy}>
-            <legend class="px-1 text-xs font-semibold text-fg">When My AX suggests a new reusable tool</legend>
+            <legend class="px-1 text-xs font-semibold text-fg">New tools</legend>
             <label class="mt-2 flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-surface-2/60">
               <input type="radio" name="reusable-tool-approval-mode" value="review" checked={recipeApprovalMode === "review"} onchange={() => setRecipeApprovalMode("review")} class="mt-1" />
-              <span><strong class="block text-xs text-fg">Let me review it first</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">New tools stay Pending until you choose <b>Approve &amp; enable</b>.</span></span>
+              <span><strong class="block text-xs text-fg">Review first</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">Pending until you approve.</span></span>
             </label>
             <label class="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-surface-2/60">
               <input type="radio" name="reusable-tool-approval-mode" value="auto" checked={recipeApprovalMode === "auto"} onchange={() => setRecipeApprovalMode("auto")} class="mt-1" />
-              <span><strong class="block text-xs text-fg">Enable new tools automatically</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">Qualifying tools can be reused immediately. Come back here anytime to review, disable, or delete them. Host-bound machine and Terrarium code is never auto-saved.</span></span>
+              <span><strong class="block text-xs text-fg">Auto-enable</strong><span class="mt-0.5 block text-[11px] leading-relaxed text-fg-mut">Usable at once. Machine code still waits.</span></span>
             </label>
           </fieldset>
           <div class="grid gap-2">
             {#if recipes.length === 0}
-              <p class="text-xs text-fg-mut">No reusable tools yet. A deliberately marked successful work_code run appears here as Pending, or you can create one below.</p>
+              <p class="text-xs text-fg-mut">None yet.</p>
             {:else}
               {#each recipes as recipe (recipe.id)}
                 <article id={`reusable-tool-${recipe.id}`} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-xs">
@@ -1344,7 +1344,7 @@
                     {/each}
                   </div>
                   {#if recipe.status === "pending"}
-                    <p class="mt-2 text-fg-mut">Not runnable until you review its source and capabilities, then approve it.</p>
+                    <p class="mt-2 text-fg-mut">Review, then approve.</p>
                   {/if}
                   <div class="mt-3 flex flex-wrap justify-end gap-1.5" aria-label={`Actions for ${recipe.name}`}>
                     <button type="button" onclick={() => runRecipe(recipe)} disabled={recipeBusy[`${recipe.id}:run`] || recipe.status !== "enabled"} aria-busy={recipeBusy[`${recipe.id}:run`]} class="job-action-button min-h-[44px] text-brand hover:border-brand/60 disabled:opacity-40">Run</button>
@@ -1365,7 +1365,7 @@
 
         <section class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
           <span class="block text-xs font-medium text-fg-mut mb-1.5">Starter reusable tools</span>
-          <p class="mb-3 text-xs text-fg-mut">Pick a generic tool, review its code and capabilities, then save your own pending copy. Templates are never enabled automatically.</p>
+          <p class="mb-3 text-xs text-fg-mut">Copy one to start. Copies start pending.</p>
           <div class="grid gap-2 sm:grid-cols-2">
             {#each recipeTemplates as template}
               <button type="button" onclick={() => useRecipeTemplate(template)} class="rounded-lg border border-line bg-bg-alt/40 p-3 text-left hover:border-brand/60">
@@ -1397,7 +1397,7 @@
     <section id="jobs" class="rounded-lg border border-line bg-bg px-3 py-3 sm:px-4">
       <span class="block text-xs font-medium text-fg-mut mb-1.5">Recurring jobs</span>
       <p class="mb-3 text-xs text-fg-mut">
-        Pick where each run lands: a new thread, this thread, or a specific thread you name. Push notifications explain which destination they open.
+        Each run goes to a new thread, this thread, or one you pick.
       </p>
       <div class="grid gap-2">
         {#if jobs.length === 0}
@@ -1461,7 +1461,7 @@
                     <label class="grid gap-1">
                       <span class="text-xs font-medium text-fg-mut">Thread id</span>
                       <input type="text" bind:value={editSpecificId} placeholder="Paste a thread id" aria-describedby={`edit-thread-help-${job.id}`} class="w-full min-h-[40px] rounded-md bg-bg border border-line text-fg text-sm px-3 py-2 font-mono focus:outline-none focus:border-brand/60" />
-                      <span id={`edit-thread-help-${job.id}`} class="text-xs text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
+                      <span id={`edit-thread-help-${job.id}`} class="text-xs text-fg-mut">Runs in this thread.</span>
                     </label>
                   {/if}
                   <div class="flex flex-wrap justify-end gap-1.5">
@@ -1507,7 +1507,7 @@
           {#if jobThreadMode === "specific_session"}
             <label for="job-specific-id" class="mt-1 text-xs font-medium text-fg-mut">Thread id</label>
             <input id="job-specific-id" type="text" bind:value={jobSpecificId} placeholder="Paste a thread id" aria-describedby="job-specific-help" class="w-full min-h-[44px] rounded-md bg-bg border border-line text-fg text-base sm:text-sm px-3 py-2 font-mono focus:outline-none focus:border-brand/60" />
-            <span id="job-specific-help" class="text-xs text-fg-mut">Runs every tick in this exact thread. Must be one of your own threads.</span>
+            <span id="job-specific-help" class="text-xs text-fg-mut">Runs in this thread.</span>
           {/if}
         </div>
         <button type="submit" class="min-h-[44px] rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand/90">Add recurring job</button>
@@ -1521,7 +1521,7 @@
       <div hidden={activeSection !== "starters"} class="space-y-4">
         <section>
           <h3 class="text-sm font-semibold text-fg">Conversation starters</h3>
-          <p class="mt-1 text-xs text-fg-mut">The suggestion cards shown when you start a new conversation. Edit, reorder, add, or remove them — they sync across your devices. Leave the list empty and save to restore the defaults. (The agent can also change these if you ask it to.)</p>
+          <p class="mt-1 text-xs text-fg-mut">Cards on a new chat. Synced. Save empty to reset.</p>
           <ul class="mt-3 grid gap-3">
             {#each starters as starter, i (i)}
               <li class="rounded-lg border border-line bg-bg-alt/40 p-3">

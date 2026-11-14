@@ -19,5 +19,5 @@ test("Settings loads, saves, and resets owner instructions", async () => {
   assert.match(settings, /fetch\("\/api\/instructions"/);
   assert.match(settings, /fetch\("\/api\/instructions\/reset"/);
   assert.match(settings, /maxlength="4000"/);
-  assert.match(settings, /Protected policy, authorization, tool limits, and verification rules cannot be changed here\./);
+  assert.match(settings, /Safety rules stay fixed\./);
 });

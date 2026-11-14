@@ -308,7 +308,7 @@
             </td>
           </tr>
         {:else if userMcps.length === 0}
-          <tr><td colspan={3} class="py-2 text-center text-fg-mut text-[11px] italic">None yet. Click Add to connect one.</td></tr>
+          <tr><td colspan={3} class="py-2 text-center text-fg-mut text-[11px] italic">None yet.</td></tr>
         {:else}
           {#each userMcps as m (m.id)}
             {@const row = connectorRowDisplay(m.id, authStatus[m.id])}
