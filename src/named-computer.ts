@@ -7,6 +7,7 @@ import type { Env } from "./types";
 import { WORKSPACE_HOME } from "./workspace-path";
 import { verifyWorkspaceRestore } from "./workspace-snapshot";
 import * as rpc from "./rpc/contract";
+import { deleteComputerRecord } from "./computer-records";
 
 export const NAMED_COMPUTER_OPEN_TIMEOUT_MS = 5 * 60_000;
 
@@ -98,11 +99,13 @@ export async function ensureComputerDisplay(sandbox: Sandbox) {
   }
 }
 
-export async function listNamedComputers(env: Env, identity: AccessIdentity) {
-  const rows = await env.DB.prepare(
-    "SELECT computer_id, backup_id, updated_at FROM computer_snapshots WHERE owner_email = ? ORDER BY updated_at DESC",
-  ).bind(identity.email.toLowerCase()).all<{ computer_id: string; backup_id: string; updated_at: string }>();
-  return rows.results ?? [];
+export { getComputerRow, listNamedComputers, recordComputer, renameComputer, type ComputerRow } from "./computer-records";
+
+export async function deleteComputer(env: Env, identity: AccessIdentity, rawId: string): Promise<boolean> {
+  const computerId = normalizeComputerId(rawId);
+  return deleteComputerRecord(env.DB, identity.email, computerId, () =>
+    rpc.command("NamedComputer.destroy", () => handle(env, identity, computerId).destroy()),
+  );
 }
 
 export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, rawId: string, name = "auto") {

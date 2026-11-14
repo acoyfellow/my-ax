@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { deleteOwnedArtifact, listOwnedArtifacts, readOwnedSvelteArtifact, renameOwnedArtifact } from "../artifacts";
+import { deleteOwnedArtifact, listOwnedArtifacts, readOwnedSvelteArtifact, renameOwnedArtifact, updateOwnedArtifactSource } from "../artifacts";
 import { ARTIFACT_RUNTIME_JS } from "../artifact-runtime";
 import { ARTIFACT_THEME_CSS } from "../artifact-theme";
 
@@ -24,14 +24,25 @@ export function registerArtifactRoutes(app: Hono<AppEnv>) {
   });
 
   app.patch("/api/artifacts/:id", async (c) => {
-    const body: { title?: string } = await c.req.json<{ title?: string }>().catch(() => ({}));
+    const body: { title?: string; source?: string } = await c.req.json<{ title?: string; source?: string }>().catch(() => ({}));
     try {
+      if (typeof body.source === "string") {
+        const updated = await updateOwnedArtifactSource(c.env, c.get("identity"), c.req.param("id"), body.source);
+        if (!updated) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+        if (typeof body.title !== "string") return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { updated }, next_actions: [] });
+      }
       const renamed = await renameOwnedArtifact(c.env, c.get("identity"), c.req.param("id"), body.title ?? "");
       if (!renamed) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
       return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { renamed: true }, next_actions: [] });
     } catch (error) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 400);
     }
+  });
+
+  app.get("/api/artifacts/:id/source", async (c) => {
+    const manifest = await readOwnedSvelteArtifact(c.env, c.get("identity"), c.req.param("id"));
+    if (!manifest) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { id: manifest.id, title: manifest.title, source: manifest.source }, next_actions: [] });
   });
 
   app.delete("/api/artifacts/:id", async (c) => {

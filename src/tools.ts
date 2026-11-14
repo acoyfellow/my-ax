@@ -14,7 +14,8 @@ import type { RecurringJobThreadMode } from "./jobs";
 import { issueSessionTitle } from "./session-title";
 import { computerPreviewSrc } from "./computer-id";
 import { COMPUTER_EXEC_TOOL, COMPUTER_INPUT_TOOL, COMPUTER_RECORD_TOOL, COMPUTER_SCREENSHOT_TOOL, COMPUTER_WAIT_TOOL } from "./computer-screen-tools";
-import { getNamedComputer, snapshotNamedComputer } from "./named-computer";
+import { MANAGE_TOOLS } from "./manage-tools";
+import { deleteComputer, getComputerRow, getNamedComputer, listNamedComputers, recordComputer, renameComputer, snapshotNamedComputer } from "./named-computer";
 import { limitModelToolOutputWithSpill } from "./tool-output-limit";
 import { widgetToolName, widgetWording } from "./widget-names";
 import { getConversationStarters, setConversationStarters } from "./conversation-starters-program";
@@ -195,12 +196,14 @@ export const CREATE_COMPUTER_TOOL: ToolDef = {
     type: "object",
     properties: {
       id: { type: "string", description: "Computer id: lowercase letters, digits, hyphens" },
+      title: { type: "string", description: "Optional display name" },
     },
     required: ["id"],
   },
   execute: async (args, ctx) => {
     const id = typeof args.id === "string" ? args.id : "";
     const opened = await getNamedComputer(ctx.env, ctx.identity, id);
+    await recordComputer(ctx.env, ctx.identity, opened.computerId, typeof args.title === "string" ? args.title : undefined);
     return JSON.stringify({
       ok: true,
       kind: "named-computer",
@@ -209,6 +212,28 @@ export const CREATE_COMPUTER_TOOL: ToolDef = {
       src: computerPreviewSrc(opened.computerId),
       title: opened.computerId,
     });
+  },
+};
+
+export const MANAGE_COMPUTERS_TOOL: ToolDef = {
+  name: "manage_computers",
+  description: "List, get, rename, or delete the owner's named computers. Use create_computer to make or open one, and snapshot_computer to save its files. Delete destroys the desktop and its saved files; ask the owner first.",
+  parameters: {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["list", "get", "rename", "delete"] },
+      id: { type: "string", description: "Computer id, for get, rename and delete" },
+      title: { type: "string", description: "New display name, for rename" },
+    },
+    required: ["action"],
+  },
+  execute: async (args, ctx) => {
+    const id = typeof args.id === "string" ? args.id : "";
+    if (args.action === "list") return JSON.stringify({ ok: true, computers: await listNamedComputers(ctx.env, ctx.identity) });
+    if (args.action === "get") return JSON.stringify({ ok: true, computer: await getComputerRow(ctx.env, ctx.identity, id) });
+    if (args.action === "rename") return JSON.stringify({ ok: await renameComputer(ctx.env, ctx.identity, id, String(args.title ?? "")) });
+    if (args.action === "delete") return JSON.stringify({ ok: await deleteComputer(ctx.env, ctx.identity, id) });
+    throw new Error("unknown computer action");
   },
 };
 
@@ -284,6 +309,8 @@ export const TOOLS: ToolDef[] = [
   WAIT_CHILD_TOOL,
   CREATE_COMPUTER_TOOL,
   SNAPSHOT_COMPUTER_TOOL,
+  MANAGE_COMPUTERS_TOOL,
+  ...MANAGE_TOOLS,
   COMPUTER_SCREENSHOT_TOOL,
   COMPUTER_WAIT_TOOL,
   COMPUTER_RECORD_TOOL,

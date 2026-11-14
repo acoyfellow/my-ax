@@ -3,7 +3,7 @@
   import { alertState, confirmAllowed, dismissToast, promptAllowed, settleCurrent } from "./alert-store.svelte";
 
   let dialogEl: HTMLDialogElement | null = $state(null);
-  let inputEl: HTMLInputElement | null = $state(null);
+  let inputEl: HTMLInputElement | HTMLTextAreaElement | null = $state(null);
   let typed = $state("");
   let shownId = $state<number | null>(null);
 
@@ -21,7 +21,7 @@
       queueMicrotask(() => {
         if (inputEl) {
           inputEl.focus();
-          inputEl.select();
+          if (inputEl instanceof HTMLInputElement) inputEl.select();
         }
       });
     }
@@ -46,6 +46,7 @@
   use:portal
   bind:this={dialogEl}
   class="ax-alert"
+  data-wide={current?.kind === "prompt" && current.options.multiline ? "true" : undefined}
   data-tone={current?.kind === "confirm" ? current.options.tone ?? "default" : "default"}
   aria-labelledby="ax-alert-title"
   oncancel={(event) => { event.preventDefault(); cancel(); }}
@@ -56,7 +57,11 @@
       <h2 id="ax-alert-title" class="ax-alert__title">{current.options.title}</h2>
       {#if current.options.body}<p class="ax-alert__body">{current.options.body}</p>{/if}
       {#if current.kind === "prompt"}
-        <input bind:this={inputEl} bind:value={typed} class="ax-alert__input" type="text" aria-label={current.options.title} placeholder={current.options.placeholder ?? ""} autocomplete="off" />
+        {#if current.options.multiline}
+          <textarea bind:this={inputEl} bind:value={typed} class="ax-alert__input ax-alert__input--code" aria-label={current.options.title} placeholder={current.options.placeholder ?? ""} spellcheck="false"></textarea>
+        {:else}
+          <input bind:this={inputEl} bind:value={typed} class="ax-alert__input" type="text" aria-label={current.options.title} placeholder={current.options.placeholder ?? ""} autocomplete="off" />
+        {/if}
       {:else if current.options.typeToConfirm}
         <label class="ax-alert__confirm-label">
           <span>Type <code>{current.options.typeToConfirm}</code> to confirm</span>
@@ -87,6 +92,8 @@
   .ax-alert__body { margin: 0; font-size: 13px; line-height: 1.45; color: var(--fg-mut); }
   .ax-alert__confirm-label { display: grid; gap: 6px; font-size: 12px; color: var(--fg-mut); }
   .ax-alert__input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-alt); color: var(--fg); font-size: 16px; }
+  .ax-alert[data-wide] { width: min(760px, calc(100vw - 32px)); }
+  .ax-alert__input--code { min-height: min(60vh, 520px); resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.45; white-space: pre; tab-size: 2; }
   .ax-alert__input:focus { outline: none; border-color: color-mix(in srgb, var(--brand) 60%, transparent); }
   .ax-alert__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
   .ax-alert__button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--fg); background: var(--bg); }

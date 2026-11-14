@@ -66,15 +66,56 @@ async function sha256(input: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function createSvelteArtifact(env: Env, identity: AccessIdentity, sessionId: string, input: { title: string; source: string }) {
-  const title = input.title.trim().slice(0, MAX_TITLE_CHARS);
-  const source = input.source.trim().replace(/\r\n?/g, "\n");
-  if (!title) throw new Error("Widget title is required.");
+function cleanWidgetSource(input: string): string {
+  const source = input.trim().replace(/\r\n?/g, "\n");
   if (!source) throw new Error("Widget source is empty.");
   const sourceBytes = new TextEncoder().encode(source).byteLength;
   if (sourceBytes > MAX_SOURCE_BYTES) throw new Error(`Artifact source exceeds ${MAX_SOURCE_BYTES} bytes.`);
-
   assertSelfContainedSource(source);
+  return source;
+}
+
+function compileWidget(source: string): { clientJs: string; css: string } {
+  try {
+    const compiled = compile(source, { generate: "client", dev: false, name: "MyAxArtifact" });
+    return { clientJs: compiled.js.code, css: compiled.css?.code ?? "" };
+  } catch (error) {
+    throw new Error(`Svelte compile failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function updateOwnedArtifactSource(env: Env, identity: AccessIdentity, id: string, sourceInput: string): Promise<{ artifactId: string; title: string; src: string; sourceHash: string } | null> {
+  const row = await getOwnedArtifactRow(env, identity, id);
+  if (!row || row.kind !== "svelte-widget") return null;
+  const source = cleanWidgetSource(sourceInput);
+  const compiled = compileWidget(source);
+  const sourceHash = await sha256(source);
+  const updatedAt = new Date().toISOString();
+  const manifest: SvelteArtifactManifest = {
+    schema: "my-ax.svelte-artifact.v1",
+    id: row.id,
+    kind: "svelte-widget",
+    title: row.title,
+    source,
+    sourceHash,
+    clientJs: compiled.clientJs,
+    css: compiled.css,
+    svelteVersion: VERSION,
+    createdAt: row.created_at,
+  };
+  await bucket(env).put(row.storage_key, JSON.stringify(manifest), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: { owner: normalizedEmail(identity), sessionId: row.session_id, kind: manifest.kind, sourceHash },
+  });
+  await env.DB.prepare("UPDATE artifacts SET source_hash = ?, updated_at = ? WHERE id = ? AND owner_email = ?")
+    .bind(sourceHash, updatedAt, row.id, normalizedEmail(identity)).run();
+  return { artifactId: row.id, title: row.title, src: `/api/artifacts/${row.id}/preview`, sourceHash };
+}
+
+export async function createSvelteArtifact(env: Env, identity: AccessIdentity, sessionId: string, input: { title: string; source: string }) {
+  const title = input.title.trim().slice(0, MAX_TITLE_CHARS);
+  if (!title) throw new Error("Widget title is required.");
+  const source = cleanWidgetSource(input.source);
 
   const ownerEmail = normalizedEmail(identity);
   const owned = await env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?")
@@ -88,12 +129,7 @@ export async function createSvelteArtifact(env: Env, identity: AccessIdentity, s
     return { kind: "svelte-artifact" as const, artifactId: existing.id, title: existing.title, src: `/api/artifacts/${existing.id}/preview`, sourceHash, reused: true };
   }
 
-  let compiled;
-  try {
-    compiled = compile(source, { generate: "client", dev: false, name: "MyAxArtifact" });
-  } catch (error) {
-    throw new Error(`Svelte compile failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  const compiled = compileWidget(source);
 
   const id = crypto.randomUUID();
   const storageKey = widgetStorageKey(identity, sessionId, id);
@@ -105,8 +141,8 @@ export async function createSvelteArtifact(env: Env, identity: AccessIdentity, s
     title,
     source,
     sourceHash,
-    clientJs: compiled.js.code,
-    css: compiled.css?.code ?? "",
+    clientJs: compiled.clientJs,
+    css: compiled.css,
     svelteVersion: VERSION,
     createdAt,
   };

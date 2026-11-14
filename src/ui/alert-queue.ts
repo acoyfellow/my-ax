@@ -17,6 +17,7 @@ export type PromptOptions = {
   confirmLabel?: string;
   cancelLabel?: string;
   allowEmpty?: boolean;
+  multiline?: boolean;
 };
 
 export type ToastTone = "info" | "success" | "error";

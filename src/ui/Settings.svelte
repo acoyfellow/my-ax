@@ -56,7 +56,8 @@
   let ownerInstructionsRevision = 0;
   let activeSection = $state<"general" | "capabilities" | "artifacts" | "computers" | "recipes" | "skills" | "jobs" | "starters" | "connections">("general");
   let skillsMode = $state<{ mode: "new" | "save" | "list"; sessionId: string | null; nonce: number }>({ mode: "list", sessionId: null, nonce: 0 });
-  let computers = $state<Array<{ computer_id: string; backup_id: string; updated_at: string }>>([]);
+  type ComputerSummary = { computer_id: string; title: string; backup_id: string | null; updated_at: string };
+  let computers = $state<ComputerSummary[]>([]);
   let computersLoading = $state(false);
   let computerStatus = $state("");
   let lastActiveElement: HTMLElement | null = null;
@@ -252,6 +253,49 @@
     const body = await response.json();
     if (!response.ok) { artifactStatus = body?.error?.message || "Rename failed"; return; }
     await refreshArtifacts(); artifactStatus = "Widget renamed.";
+  }
+  async function editArtifactSource(artifact: LibraryArtifact) {
+    const loaded = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id) + "/source", { credentials: "include" }).then((response) => response.json()).catch(() => null);
+    const current = loaded?.result?.source;
+    if (typeof current !== "string") { artifactStatus = loaded?.error?.message || "Could not load the widget source."; return; }
+    const source = await promptDialog({ title: `Edit “${artifact.title}”`, value: current, multiline: true, confirmLabel: "Save" });
+    if (source === null || source === current) return;
+    const response = await fetch("/api/artifacts/" + encodeURIComponent(artifact.id), { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ source }) });
+    const body = await response.json();
+    if (!response.ok) { artifactStatus = body?.error?.message || "Save failed"; return; }
+    await refreshArtifacts(); artifactStatus = "Widget saved.";
+  }
+  async function createComputer() {
+    const id = (await promptDialog({ title: "New computer", body: "Lowercase letters, digits and hyphens.", placeholder: "my-desktop", confirmLabel: "Create" }))?.trim().toLowerCase();
+    if (!id) return;
+    computerStatus = "Creating " + id + "…";
+    const response = await fetch("/api/computers", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) { computerStatus = body?.error?.message || "Create failed"; return; }
+    await refreshComputers(); computerStatus = "Computer created.";
+  }
+  async function renameComputer(computer: ComputerSummary) {
+    const title = (await promptDialog({ title: "Rename computer", value: computer.title || computer.computer_id }))?.trim();
+    if (!title || title === computer.title) return;
+    const response = await fetch("/api/computers/" + encodeURIComponent(computer.computer_id), { method: "PATCH", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ title }) });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) { computerStatus = body?.error?.message || "Rename failed"; return; }
+    await refreshComputers(); computerStatus = "Computer renamed.";
+  }
+  async function snapshotComputer(computer: ComputerSummary) {
+    computerStatus = "Saving " + (computer.title || computer.computer_id) + "…";
+    const response = await fetch("/api/computers/" + encodeURIComponent(computer.computer_id) + "/snapshot", { method: "POST", credentials: "include" });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) { computerStatus = body?.error?.message || "Save failed"; return; }
+    await refreshComputers(); computerStatus = "Files saved.";
+  }
+  async function deleteComputer(computer: ComputerSummary) {
+    const name = computer.title || computer.computer_id;
+    if (!(await confirmDialog({ title: `Delete “${name}”?`, body: "This shuts the desktop down and deletes its saved files.", confirmLabel: "Delete", tone: "danger", typeToConfirm: computer.computer_id }))) return;
+    const response = await fetch("/api/computers/" + encodeURIComponent(computer.computer_id), { method: "DELETE", credentials: "include" });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) { computerStatus = body?.error?.message || "Delete failed"; return; }
+    computers = computers.filter((item) => item.computer_id !== computer.computer_id); computerStatus = "Computer deleted.";
   }
   async function deleteArtifact(artifact: LibraryArtifact) {
     if (!(await confirmDialog({ title: `Delete “${artifact.title}”?`, confirmLabel: "Delete", tone: "danger" }))) return;
@@ -1251,6 +1295,7 @@
       <div hidden={activeSection !== "computers"} class="space-y-4">
         <header class="flex items-start justify-between gap-3">
           <div><h3 class="text-sm font-semibold text-fg">Computers</h3><p class="mt-1 text-xs leading-relaxed text-fg-mut">Private desktops. Ask the agent for one.</p></div>
+          <button type="button" onclick={createComputer} class="job-action-button shrink-0 hover:border-brand/60">New</button>
           <button type="button" onclick={refreshComputers} class="job-action-button shrink-0 hover:border-brand/60" disabled={computersLoading}>Refresh</button>
         </header>
         {#if computersLoading && computers.length === 0}
@@ -1262,7 +1307,10 @@
             {#each computers as computer (computer.computer_id)}
               <section class="overflow-hidden rounded-lg border border-line bg-elev">
                 <iframe title={computer.computer_id} src={"/api/computers/" + computer.computer_id + "/screen/"} class="h-56 w-full border-0 bg-black"></iframe>
-                <div class="p-3"><strong class="block truncate text-sm text-fg">{computer.computer_id}</strong><span class="mt-1 block text-[11px] text-fg-mut">snapshot {computer.backup_id}</span></div>
+                <div class="flex items-center gap-2 p-3"><div class="min-w-0 flex-1"><strong class="block truncate text-sm text-fg">{computer.title || computer.computer_id}</strong><span class="mt-1 block truncate text-[11px] text-fg-mut">{computer.computer_id} · {computer.backup_id ? "files saved" : "not saved yet"}</span></div>
+                  <button type="button" class="job-action-button hover:border-brand/60" onclick={() => snapshotComputer(computer)}>Save files</button>
+                  <button type="button" class="job-action-button hover:border-brand/60" onclick={() => renameComputer(computer)}>Rename</button>
+                  <button type="button" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500" onclick={() => deleteComputer(computer)}>Delete</button></div>
               </section>
             {/each}
           </div>
@@ -1296,6 +1344,7 @@
                   <button type="button" class="job-action-button text-brand hover:border-brand/60" onclick={() => openArtifact(artifact)}>Open</button>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => openArtifactConversation(artifact)}>Conversation</button>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => renameArtifact(artifact)}>Rename</button>
+                  <button type="button" class="job-action-button hover:border-brand/60" onclick={() => editArtifactSource(artifact)}>Edit</button>
                   <button type="button" class="job-action-button text-fg-mut hover:border-red-500/60 hover:text-red-500" onclick={() => deleteArtifact(artifact)}>Delete</button>
                 </div>
               </article>
