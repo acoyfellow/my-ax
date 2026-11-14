@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "./domain/Session/Session.store";
 import type { ToolContext, ToolDef } from "./types";
 import { childTaskMessage, parseSpawnArgs, waitOutcome, waitSeconds } from "./agent-tree";
 
@@ -33,8 +34,7 @@ export const SPAWN_CHILD_TOOL: ToolDef = {
     const parent = await ctx.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(ctx.sessionId, email).first<{ id: string }>();
     if (!parent) return JSON.stringify({ ok: false, error: "this conversation is not owned by the caller" });
     const childId = crypto.randomUUID();
-    await ctx.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, parent_id, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', ?, datetime('now'), datetime('now'))")
-      .bind(childId, request.name, email, ctx.sessionId).run();
+    await sessionWrite(ctx.env.DB as unknown as SessionStoreDb, SESSION_SQL.S05_OPEN, [childId, request.name, email, ctx.sessionId]);
     const { sessionControl } = await import("./session-control");
     await (await sessionControl(ctx.env, ctx.identity, childId)).inject(childTaskMessage(ctx.sessionId, request.task), `child:${childId}:task`);
     return JSON.stringify({ ok: true, childId, name: request.name });

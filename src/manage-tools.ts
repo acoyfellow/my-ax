@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "./domain/Session/Session.store";
 import { Effect } from "effect";
 import { deleteOwnedArtifact, listOwnedArtifacts, renameOwnedArtifact, updateOwnedArtifactSource } from "./artifacts";
 import { resolveBridgeOrigin } from "./bridge-origin";
@@ -165,8 +166,7 @@ export const MANAGE_CONVERSATIONS_TOOL: ToolDef = {
       const id = text(args.id) || ctx.sessionId || "";
       const name = text(args.name).trim().slice(0, 200);
       if (!name) throw new Error("name is required");
-      const result = await ctx.env.DB.prepare("UPDATE sessions SET name = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?")
-        .bind(name, id, email).run();
+      const result = await sessionWrite(ctx.env.DB as unknown as SessionStoreDb, SESSION_SQL.S08_NAME, [name, id, email]);
       return ok({ renamed: (result.meta?.changes ?? 0) > 0, id, name });
     }
     return unknownAction("conversation", args.action);

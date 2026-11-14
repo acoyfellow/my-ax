@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import { assertNotForgedDecision } from "../decision-forgery-guard";
 import { resolveSessionAlias } from "../session-alias";
@@ -344,7 +345,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: R
   if (!content) throw new Error("content is required");
   assertNotForgedDecision(content);
   await (await sessionControl(c.env, c.get("identity"), sessionId)).inject(content, `mcp:${crypto.randomUUID()}`);
-  await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(sessionId, email).run();
+  await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S09_TOUCH, [sessionId, email]);
   return { sessionId, injected: true };
 }
 
@@ -359,7 +360,7 @@ async function sendAndWaitInSession(c: CoordinatorContext, email: string, args: 
 async function sendAndWaitPi(c: CoordinatorContext, email: string, input: { sessionId: string; content: string; timeoutMs: number }) {
   const stub = await openPiChat(c.env, email, input.sessionId);
   const receipt = await stub.submit(input.content, `mcp:${crypto.randomUUID()}`);
-  await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).run();
+  await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S09_TOUCH, [input.sessionId, email]);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), input.timeoutMs); });
   const result = await Promise.race([stub.wait(receipt.operationId), timeout]).finally(() => clearTimeout(timer));

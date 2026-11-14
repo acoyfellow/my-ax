@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import type { Hono } from "hono";
 import { getAgentByName } from "agents-pi";
 import * as rpc from "../rpc/contract";
@@ -53,7 +54,7 @@ export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceI
   });
   const forkId = crypto.randomUUID();
   const name = `Fork · ${sourceName}`.slice(0, 200);
-  await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))").bind(forkId, name, owner).run();
+  await sessionWrite(env.DB as unknown as SessionStoreDb, SESSION_SQL.S01_OPEN, [forkId, name, owner]);
   try {
     const messageCount = await rpc.command("PiChat.seedFromFork", async () => {
       const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, forkId));
@@ -63,7 +64,7 @@ export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceI
     await copyWorkspaceDisk(env, { email: owner } as AccessIdentity, { kind: "chat", chatId: sourceId }, { kind: "chat", chatId: forkId }).catch((error: unknown) => console.error("pi_fork_disk_copy_failed", { err: String(error) }));
     return { sessionId: forkId, name, messageCount };
   } catch (error) {
-    await env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(forkId, owner).run().catch(() => undefined);
+    await sessionWrite(env.DB as unknown as SessionStoreDb, SESSION_SQL.S02_DELETE, [forkId, owner]).catch(() => undefined);
     throw error;
   }
 }
@@ -80,7 +81,7 @@ export async function convertThinkChatToPi(env: AppEnv["Bindings"], identity: Ac
     await target.bind({ email: owner }, sessionId);
     return target.replaceFromImport(entries);
   });
-  await env.DB.prepare("UPDATE sessions SET engine = 'pi' WHERE id = ? AND owner_email = ?").bind(sessionId, owner).run();
+  await sessionWrite(env.DB as unknown as SessionStoreDb, SESSION_SQL.S03_ENGINE, [sessionId, owner]);
   return { sessionId, entries: seeded };
 }
 
@@ -99,7 +100,7 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     const body = await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string }));
     const chatId = crypto.randomUUID();
     const name = (body.name ?? "").trim().slice(0, 120) || "Pi chat";
-    await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))").bind(chatId, name, email).run();
+    await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S01_OPEN, [chatId, name, email]);
     return c.json({ ok: true, result: { chatId, engine: "pi" } });
   });
 
@@ -111,7 +112,7 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     if (!text) return c.json({ ok: false, error: { code: "EMPTY", message: "text is required" } }, 400);
     const receipt = await stub.submit(text, body.operationId);
     const title = text.replace(/\s+/g, " ").slice(0, 80);
-    await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now'), name = CASE WHEN name IN ('New chat', 'Pi chat') THEN ? ELSE name END WHERE id = ?").bind(title, c.req.param("id")).run();
+    await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S04_TOUCH, [title, c.req.param("id")]);
     return c.json({ ok: true, result: receipt });
   });
 

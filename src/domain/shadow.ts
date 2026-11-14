@@ -23,7 +23,7 @@ export type ShadowRecord = {
 
 type Predictor = { predict(state: unknown, command: { readonly _tag: string }, options: { id: string; now: DateTime.Utc }): { _tag: string; state?: unknown } };
 
-const SESSION_COMMAND: Record<string, keyof typeof SessionCommands.ALL> = {
+export const SESSION_COMMAND_FOR_EVENT: Record<string, keyof typeof SessionCommands.ALL> = {
   turn_started: "StartTurn",
   turn_completed: "CompleteTurn",
   turn_failed: "FailTurn",
@@ -78,7 +78,7 @@ function judge(
 }
 
 export function shadowSession(event: string, ownerEmail: string, from: string | null, sql: ShadowVerdict): ShadowRecord | null {
-  const name = SESSION_COMMAND[event];
+  const name = SESSION_COMMAND_FOR_EVENT[event];
   if (!name) return null;
   return judge(Session as unknown as Predictor, "Session", name, new SessionCommands.ALL[name](), ownerEmail, from as SessionStage | null, sql);
 }

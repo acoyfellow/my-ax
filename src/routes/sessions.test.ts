@@ -45,6 +45,9 @@ function makeSessionApp(initialOwner = "owner@example.com") {
           if (sql.includes("WHERE owner_email = ? AND stable_name = ?")) {
             return (sessions.find((session) => session.owner_email === binds[0] && session.stable_name === binds[1]) ?? null) as T | null;
           }
+          if (sql.startsWith("SELECT * FROM sessions WHERE id = ? AND owner_email = ?") && binds[1] === owner) {
+            return { status: "active", name: String(binds[0]), owner_email: owner } as T;
+          }
           return null;
         },
       };

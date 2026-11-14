@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "./domain/Session/Session.store";
 import { jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import { parseJobListQuery, queryJobList, type JobListRow } from "./job-list-query";
 import { Effect } from "effect";
@@ -281,9 +282,7 @@ export const OPEN_ISSUE_SESSION_TOOL: ToolDef = {
     let created = false;
     if (!sessionId) {
       sessionId = crypto.randomUUID();
-      await ctx.env.DB.prepare(
-        "INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))",
-      ).bind(sessionId, name, email).run();
+      await sessionWrite(ctx.env.DB as unknown as SessionStoreDb, SESSION_SQL.S01_OPEN, [sessionId, name, email]);
       created = true;
     }
     const { sessionControl } = await import("./session-control");

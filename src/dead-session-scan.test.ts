@@ -37,6 +37,9 @@ function makeDb(sessions: Session[], entries: Entry[]) {
                 return { results: [] };
               },
               async first() {
+                if (sql.startsWith("SELECT * FROM sessions WHERE id = ? AND owner_email = ?")) {
+                  return sessions.find((s) => s.id === binds[0] && s.owner_email === binds[1]) ?? null;
+                }
                 return null;
               },
               async run() {

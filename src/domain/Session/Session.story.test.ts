@@ -13,6 +13,8 @@ import { SessionAlreadyOpen, SessionNotFound, TransitionRefused } from "./Sessio
 import { StartTurn, TurnStarted } from "./StartTurn.command";
 import { UnarchiveSession, SessionUnarchived } from "./UnarchiveSession.command";
 import * as Commands from "./commands";
+import { DeleteSession, SessionDeleted } from "./DeleteSession.command";
+import { SessionDetailsUpdated, UpdateSessionDetails } from "./UpdateSessionDetails.command";
 
 const story = Story.make(MyAx);
 const s1 = Session.ref("s1");
@@ -24,6 +26,34 @@ const run = async (effect: Effect.Effect<unknown, unknown>): Promise<void> => {
 test("the model with sessions is well defined", () => {
   assert.deepEqual(Domain.verify(MyAx), []);
 });
+
+test("a session can be deleted once, and is gone after", () =>
+  run(
+    story(
+      Story.given(s1, opened, new SessionArchived()),
+      Story.when(s1, new DeleteSession()),
+      Story.then(s1, new SessionDeleted()),
+      Story.state(s1, { _tag: "Unopened" }),
+      Story.when(s1, new DeleteSession()),
+      Story.rejected(new SessionNotFound()),
+    ),
+  ));
+
+test("renaming a session changes its name and keeps its stage", () =>
+  run(
+    story(
+      Story.given(s1, opened, new TurnStarted()),
+      Story.when(s1, new UpdateSessionDetails({ detail: "name", name: "Renamed" })),
+      Story.then(s1, new SessionDetailsUpdated({ detail: "name", name: "Renamed" })),
+      Story.state(s1, { _tag: "Open", name: "Renamed", stage: "Running" }),
+      Story.when(s1, new UpdateSessionDetails({ detail: "pin", name: null })),
+      Story.then(s1, new SessionDetailsUpdated({ detail: "pin", name: null })),
+      Story.state(s1, { _tag: "Open", name: "Renamed", stage: "Running" }),
+    ),
+  ));
+
+test("details of a missing session cannot be changed", () =>
+  run(story(Story.when(s1, new UpdateSessionDetails({ detail: "touch", name: null })), Story.rejected(new SessionNotFound()))));
 
 test("a session opens once", () =>
   run(

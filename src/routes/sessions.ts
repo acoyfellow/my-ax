@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import { deleteSessionJobs, type JobStoreDb } from "../domain/Job/Job.store";
 import * as rpc from "../rpc/contract";
 import { applySessionEvent } from "../fsm/session-status";
@@ -154,11 +155,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
     const name = trimmed.slice(0, 200);
     try {
-      const r = await c.env.DB.prepare(
-        "UPDATE sessions SET name = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      )
-        .bind(name, id, c.get("identity").email)
-        .run();
+      const r = await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S08_NAME, [name, id, c.get("identity").email]);
       if (!r.success || (r.meta?.changes ?? 0) === 0) {
         return c.json(
           {
@@ -220,7 +217,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const body = (await c.req.json<{ size?: unknown }>().catch(() => ({}))) as { size?: unknown };
     const size = parsePinSize(body.size);
     if (!size) return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: "size must be small, medium or large" }, next_actions: [] }, 400);
-    const result = await c.env.DB.prepare("UPDATE sessions SET pin_size = ? WHERE id = ? AND owner_email = ? AND pinned = 1").bind(size, id, c.get("identity").email).run();
+    const result = await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S11_PIN, [size, id, c.get("identity").email]);
     if (!result.meta.changes) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "pinned session not found or not owned" }, next_actions: [] }, 404);
     return c.json<ApiResponse>({ ok: true, command, result: { id, size }, next_actions: [] });
   });
@@ -334,9 +331,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     if (requestedStableName) {
       name = requestedStableName;
       try {
-        const insert = await c.env.DB.prepare(
-          "INSERT INTO sessions (id, name, stable_name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, 'pi', datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
-        ).bind(id, name, requestedStableName, identity.email).run();
+        const insert = await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S12_OPEN, [id, name, requestedStableName, identity.email]);
         created = (insert.meta?.changes ?? 0) === 1;
         if (!created) {
           const existing = await c.env.DB.prepare(
@@ -356,11 +351,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       }
     } else {
       try {
-        await c.env.DB.prepare(
-          "INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', datetime('now'), datetime('now'))",
-        )
-          .bind(id, name, identity.email)
-          .run();
+        await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S01_OPEN, [id, name, identity.email]);
       } catch {
       }
     }
@@ -438,9 +429,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const identity = c.get("identity");
     const command = "GET /api/root";
     try {
-      await c.env.DB.prepare(
-        "INSERT INTO sessions (id, name, stable_name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, 'pi', datetime('now'), datetime('now')) ON CONFLICT(owner_email, stable_name) WHERE stable_name IS NOT NULL DO NOTHING",
-      ).bind(crypto.randomUUID(), "Root", ROOT_STABLE_NAME, identity.email).run();
+      await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S12_OPEN, [crypto.randomUUID(), "Root", ROOT_STABLE_NAME, identity.email]);
       const row = await c.env.DB.prepare("SELECT id, name, status, updated_at FROM sessions WHERE owner_email = ? AND stable_name = ?")
         .bind(identity.email, ROOT_STABLE_NAME).first<{ id: string; name: string; status: string; updated_at: string }>();
       if (!row) throw new Error("root was not found after upsert");
@@ -488,11 +477,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       await deleteSessionJobs(c.env.DB as unknown as JobStoreDb, id, email);
       await deleteSessionArtifacts(c.env, c.get("identity"), id);
       await deleteSessionAudioMessages(c.env, c.get("identity"), id);
-      await c.env.DB.prepare(
-        "DELETE FROM sessions WHERE id = ? AND owner_email = ?",
-      )
-        .bind(id, email)
-        .run();
+      await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S02_DELETE, [id, email]);
     } catch (error) {
       return c.json<ApiResponse>({
         ok: false,
@@ -978,11 +963,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     // Touch updated_at so the sidebar reorders this session to the top,
     // matching the behavior of a real WS user message.
     try {
-      await c.env.DB.prepare(
-        "UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      )
-        .bind(id, identity.email)
-        .run();
+      await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S09_TOUCH, [id, identity.email]);
     } catch {
       /* dev D1 missing — ignore */
     }

@@ -6,6 +6,7 @@
 // server-side, records a receipt event, and injects the decision back into the
 // originating Think session so the agent resumes.
 
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import { applyRunEvent } from "../fsm/run-status";
 import { sessionControl } from "../session-control";
@@ -172,7 +173,7 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
           return;
         }
         await (await sessionControl(c.env, c.get("identity"), bounds.sessionId)).inject(`[decision] In response to "${bounds.question}", I chose: ${choice}`, `decision:${id}`);
-        await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(bounds.sessionId, email).run();
+        await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S09_TOUCH, [bounds.sessionId, email]);
       };
       const recorded = await Effect.runPromise(
         recordDecisionResponse({ id, email, question: bounds.question, choice }).pipe(

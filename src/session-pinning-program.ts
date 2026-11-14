@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { Database, type DatabaseError } from "./effect/database";
+import { SESSION_SQL, sessionWriteEffect } from "./domain/Session/Session.store";
 import {
   MAX_PINNED,
   PinLimitError,
@@ -37,16 +38,10 @@ export function setSessionPinned(
         return yield* Effect.fail(new PinLimitError());
       }
       const rank = rankForNewPin(existing.length ? existing[0]?.pin_rank ?? null : null);
-      yield* database.run(
-        "UPDATE sessions SET pinned = 1, pin_rank = ?, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-        [rank, id, email],
-      );
+      yield* sessionWriteEffect(SESSION_SQL.S14_PIN, [rank, id, email]);
       return { id, pinned: true, pin_rank: rank };
     }
-    yield* database.run(
-      "UPDATE sessions SET pinned = 0, pin_rank = NULL, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      [id, email],
-    );
+    yield* sessionWriteEffect(SESSION_SQL.S15_PIN, [id, email]);
     return { id, pinned: false, pin_rank: null };
   });
 }
@@ -61,10 +56,7 @@ export function reorderPinnedSession(
     const ordered = yield* currentPinned(email);
     if (!ordered.some((row) => row.id === movedId)) return null;
     const rank = computeMoveRank([...ordered], movedId, beforeId);
-    yield* database.run(
-      "UPDATE sessions SET pin_rank = ?, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND pinned = 1",
-      [rank, movedId, email],
-    );
+    yield* sessionWriteEffect(SESSION_SQL.S16_PIN, [rank, movedId, email]);
     return { id: movedId, pinned: true, pin_rank: rank };
   });
 }

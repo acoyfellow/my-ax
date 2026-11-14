@@ -74,7 +74,7 @@ function makeEnv(rows: Row[]) {
       const stmt = {
         bind(...args: unknown[]) { bound = args; return stmt; },
         async first<T = unknown>() {
-          if (/SELECT id FROM sessions WHERE id = \? AND owner_email = \?/.test(q)) {
+          if (/SELECT (id|\*) FROM sessions WHERE id = \? AND owner_email = \?/.test(q)) {
             return (tables.sessions.find((r) => r.id === bound[0] && r.owner_email === bound[1]) ?? null) as T;
           }
           return null as T;

@@ -1,6 +1,8 @@
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
 import { OpenSession, SessionOpened } from "./OpenSession.command";
+import { DeleteSession, SessionDeleted } from "./DeleteSession.command";
+import { SessionDetailsUpdated, UpdateSessionDetails } from "./UpdateSessionDetails.command";
 import { SessionId } from "./Session.id";
 import { SessionAlreadyOpen, SessionNotFound, TransitionRefused } from "./SessionRejections.rejection";
 import { StartTurn, TurnStarted } from "./StartTurn.command";
@@ -56,7 +58,7 @@ export class Session extends Domain.Aggregate("Session", {
   id: SessionId,
   state: SessionState,
   initial: { _tag: "Unopened" },
-  commands: [OpenSession, StartTurn, CompleteTurn, FailTurn, AbortTurn, MarkTurnStuck, ExhaustRecovery, DetectDeadSession, StartPiRun, SettlePiRun, FailPiRun, ArchiveSession, UnarchiveSession],
+  commands: [OpenSession, StartTurn, CompleteTurn, FailTurn, AbortTurn, MarkTurnStuck, ExhaustRecovery, DetectDeadSession, StartPiRun, SettlePiRun, FailPiRun, ArchiveSession, UnarchiveSession, DeleteSession, UpdateSessionDetails],
   decide: {
     OpenSession: (session, cmd) => (session._tag !== "Unopened" ? new SessionAlreadyOpen() : [new SessionOpened({ ownerEmail: cmd.ownerEmail, name: cmd.name })]),
     StartTurn: (session) => transition(session, "StartTurn"),
@@ -71,6 +73,9 @@ export class Session extends Domain.Aggregate("Session", {
     FailPiRun: (session) => transition(session, "FailPiRun"),
     ArchiveSession: (session) => transition(session, "ArchiveSession"),
     UnarchiveSession: (session) => transition(session, "UnarchiveSession"),
+    DeleteSession: (session) => (session._tag === "Unopened" ? new SessionNotFound() : [new SessionDeleted()]),
+    UpdateSessionDetails: (session, cmd) =>
+      session._tag === "Unopened" ? new SessionNotFound() : [new SessionDetailsUpdated({ detail: cmd.detail, name: cmd.name })],
   },
   evolve: {
     SessionOpened: (_, e) => ({ _tag: "Open" as const, ownerEmail: e.ownerEmail, name: e.name, stage: "Active" as const }),
@@ -86,5 +91,7 @@ export class Session extends Domain.Aggregate("Session", {
     PiRunFailed: (s) => moved(s, "Error"),
     SessionArchived: (s) => moved(s, "Archived"),
     SessionUnarchived: (s) => moved(s, "Active"),
+    SessionDeleted: () => ({ _tag: "Unopened" as const }),
+    SessionDetailsUpdated: (s, e) => (s._tag === "Open" && e.name !== null ? { ...s, name: e.name } : s),
   },
 }) {}

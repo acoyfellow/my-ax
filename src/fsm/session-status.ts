@@ -1,5 +1,5 @@
-import { shadowSession, safely } from "../domain/shadow";
-import { shadowReadStatus } from "../domain/shadow-read";
+import { SESSION_COMMAND_FOR_EVENT } from "../domain/shadow";
+import { sessionStatusStatement, transitionSessionRecord } from "../domain/Session/Session.store";
 export type SessionStatus = "active" | "running" | "error" | "interrupted" | "archived";
 
 export type SessionStatusEvent =
@@ -47,27 +47,7 @@ export interface SessionRef {
   ownerEmail: string;
 }
 
-export function sessionStatusStatement(event: SessionStatusEvent): { sql: string; to: SessionStatus; from: readonly SessionStatus[] } {
-  const transition = SESSION_TRANSITIONS[event];
-  const placeholders = transition.from.map(() => "?").join(", ");
-  const updatedAt = transition.touchUpdatedAt ? "datetime('now')" : "updated_at";
-  return {
-    sql: `UPDATE sessions SET status = ?, updated_at = ${updatedAt} WHERE id = ? AND owner_email = ? AND status IN (${placeholders})`,
-    to: transition.to,
-    from: transition.from,
-  };
-}
-
 export async function applySessionEvent(db: SessionStatusDb, session: SessionRef, event: SessionStatusEvent): Promise<boolean> {
-  const from = await shadowReadStatus(db, "sessions", session.id, session.ownerEmail);
-  const statement = sessionStatusStatement(event);
-  const result = await db.prepare(statement.sql).bind(statement.to, session.id, session.ownerEmail, ...statement.from).run();
-  const applied = changedRows(result) > 0;
-  if (from !== undefined) safely(() => shadowSession(event, session.ownerEmail, from, applied ? "accepted" : "rejected"));
-  return applied;
-}
-
-function changedRows(result: unknown): number {
-  const changes = (result as { meta?: { changes?: unknown } } | null)?.meta?.changes;
-  return typeof changes === "number" ? changes : 0;
+  const transition = SESSION_TRANSITIONS[event];
+  return transitionSessionRecord(db, session, event, { command: SESSION_COMMAND_FOR_EVENT[event], ...sessionStatusStatement(transition) });
 }

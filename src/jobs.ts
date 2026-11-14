@@ -1,3 +1,4 @@
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "./domain/Session/Session.store";
 import { claimJobRun, JOB_RAN_LAST_SQL, JOB_RAN_NEXT_SQL, type JobStoreDb, jobWrite } from "./domain/Job/Job.store";
 import type { AccessIdentity } from "./auth";
 // Recurring prompt job helpers.
@@ -37,8 +38,7 @@ export async function resolveRecurringJobTargetSession(env: Env, row: Pick<JobRo
   // a brand-new conversation and running work in the wrong place.
   if (row.thread_mode !== "new_session_per_run") throw new Error(`invalid recurring job thread mode: ${row.thread_mode}`);
   const targetSessionId = crypto.randomUUID();
-  await env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', ?, ?)")
-    .bind(targetSessionId, recurringRunSessionTitle(row, now), row.owner_email, now.toISOString(), now.toISOString()).run();
+  await sessionWrite(env.DB as unknown as SessionStoreDb, SESSION_SQL.S06_OPEN, [targetSessionId, recurringRunSessionTitle(row, now), row.owner_email, now.toISOString(), now.toISOString()]);
   return { targetSessionId, sourceSessionId: row.session_id, threadMode: row.thread_mode, created: true };
 }
 

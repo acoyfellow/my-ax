@@ -10,6 +10,7 @@
 // Not in routes/files.ts because that's user-facing read-only API;
 // this is an operator check that takes ~20s and recycles the sandbox.
 
+import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { dismissAttentionItem, type AttentionStoreDb } from "../domain/Attention/Attention.store";
@@ -25,9 +26,7 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     let attentionId: string | null = null;
     const started = Date.now();
     try {
-      await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine) VALUES (?, ?, 'running', ?, 'pi')")
-        .bind(sessionId, "Recovery receipt proof", identity.email)
-        .run();
+      await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S10_OPEN, [sessionId, "Recovery receipt proof", identity.email]);
       await recordRecoveryExhaustion(c.env, identity, sessionId, {
         terminalMessage,
         incidentId: `proof-${crypto.randomUUID()}`,
@@ -55,7 +54,7 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     } finally {
       if (attentionId) await dismissAttentionItem(c.env.DB as unknown as AttentionStoreDb, identity.email, attentionId).catch(() => undefined);
       await c.env.DB.prepare("DELETE FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(sessionId, identity.email).run().catch(() => undefined);
-      await c.env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, identity.email).run().catch(() => undefined);
+      await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S02_DELETE, [sessionId, identity.email]).catch(() => undefined);
     }
   });
 
