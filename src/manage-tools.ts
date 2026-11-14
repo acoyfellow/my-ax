@@ -104,7 +104,9 @@ export const MANAGE_RECIPES_TOOL: ToolDef = {
 function connectorStore(ctx: ToolContext) {
   const binding = ctx.env.OAUTH_CLIENT;
   if (!binding) throw new Error("connector store is not configured");
-  return makeOAuthClientStore(binding, resolveBridgeOrigin(ctx.env.BRIDGE_BASE_URL) ?? "https://my.ax.cloudflare.dev");
+  const origin = resolveBridgeOrigin(ctx.env.BRIDGE_BASE_URL);
+  if (!origin) throw new Error("BRIDGE_BASE_URL is not set, so connectors can't be managed from chat. Use Settings, Connections.");
+  return makeOAuthClientStore(binding, origin);
 }
 
 export const MANAGE_CONNECTORS_TOOL: ToolDef = {
