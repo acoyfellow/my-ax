@@ -39,7 +39,6 @@ const runtimeBoundaries = new Set([
   "src/work-tools.ts",
   "src/index.tsx",
   "src/agent-stub.ts",
-  "src/agent.ts",
   "src/auth.ts",
   "src/code-mode-runtime.worker.ts",
   "src/computer-workspace.ts",

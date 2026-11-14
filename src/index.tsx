@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import * as rpc from "./rpc/contract";
-import { getAgentByName, routeAgentRequest, routeSubAgentRequest } from "agents";
+import { getAgentByName, routeAgentRequest } from "agents";
 import type { Env, ApiResponse } from "./types";
 import { accessMiddleware } from "./auth";
 import { handleBridgeRequest } from "./bridge";
@@ -67,7 +67,6 @@ import { connectorStatusView, type ConnectorHealth } from "./connector-health";
 import { DocsPage } from "./views/DocsPage";
 import { DocsArticlePage } from "./views/DocsArticlePage";
 import { DOC_PAGE_BY_SLUG } from "./docs-content.generated";
-import { getSessionAgent } from "./agent-stub";
 import { registerSvelteServe } from "./ui/serve";
 import { scanDeadSessions } from "./dead-session";
 
@@ -75,8 +74,6 @@ import { scanDeadSessions } from "./dead-session";
 // Sandbox comes from @cloudflare/sandbox and pairs with the `containers`
 // block + `Sandbox` SQLite class migration in wrangler.jsonc.
 
-export { MyAgent } from "./agent";
-export { ReadOnlyDelegateAgent } from "./delegate-many";
 export { VoiceThinkAgent } from "./voice-think-agent";
 export { UserAgent, DeskHub } from "./user-agent";
 export { WorkspaceHub } from "./workspace-hub";
@@ -455,59 +452,7 @@ app.get("/agents/pi-chat/:id", async (c) => {
 });
 
 app.all("/agents/*", async (c) => {
-  // Preserve the public /agents/my-agent/:sessionId URL while routing the
-  // conversation into a MyAgent facet inside one per-user UserAgent root.
-  // This makes user-scoped state physically co-located without changing the
-  // browser protocol.
-  const match = /^\/agents\/my-agent\/([^/]+)$/.exec(c.req.path);
-  if (match) {
-    const identity = c.get("identity");
-    const sessionId = decodeURIComponent(match[1]);
-    const ownedSession = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, identity.email.toLowerCase()).first<{ id: string }>();
-    if (!ownedSession) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Session not found or not owned" } }, 404);
-    const parent = await rpc.query("UserAgent.resolve", () => getAgentByName(c.env.USER_AGENT, identity.email.toLowerCase()));
-    // Empty facets import the legacy direct-DO transcript before opening the
-    // socket so migration-era D1 rows never render a silent blank session.
-    try {
-      const { facet, empty } = await rpc.command("Session.openForSocket", async () => {
-        const opened = await getSessionAgent(c.env, identity.email, sessionId);
-        await opened.seedIdentity(identity);
-        return { facet: opened, empty: (await opened.getMessages()).length === 0 };
-      });
-      if (empty) {
-        let messages: import("ai").UIMessage[] = [];
-        try {
-          messages = await rpc.query("LegacyMyAgent.getMessages", () => (c.env.LEGACY_MY_AGENT.get(c.env.LEGACY_MY_AGENT.idFromName(sessionId)) as unknown as { getMessages: () => Promise<import("ai").UIMessage[]> }).getMessages());
-        } catch {}
-        // The D1 transcript mirror is the fallback when a legacy direct DO is
-        // unavailable, preserving readable history during migration.
-        if (!messages.length) {
-          const rows = await c.env.DB.prepare(
-            "SELECT id, ts, role, content, meta_json FROM conversation_entries WHERE session_id = ? AND owner_email = ? ORDER BY id ASC",
-          ).bind(sessionId, identity.email.toLowerCase()).all<{ id: number; ts: string; role: string; content: string; meta_json: string | null }>();
-          messages = (rows.results ?? []).map((row) => {
-            // Canonical id: MUST match the client's d1EntryToMessage keying
-            // (meta.uiMessageId || `d1-<id>`), so the D1 REST read and this Think
-            // replay dedup to the same message instead of double-rendering.
-            let uiMessageId: string | undefined;
-            try { uiMessageId = row.meta_json ? (JSON.parse(row.meta_json)?.uiMessageId as string | undefined) : undefined; } catch {}
-            return {
-              id: uiMessageId || `d1-${row.id}`,
-              role: ["user", "assistant", "system"].includes(row.role) ? row.role as "user" | "assistant" | "system" : "system",
-              parts: [{ type: "text", text: row.role === "tool" ? `[tool result]\n${row.content}` : row.content }],
-              createdAt: new Date(row.ts),
-            };
-          });
-        }
-        if (messages.length) await rpc.command("Session.importLegacyMessages", () => facet.importLegacyMessages(messages));
-      }
-    } catch (err) {
-      console.error("legacy_session_import_failed", { sessionId, err: err instanceof Error ? err.message : String(err) });
-    }
-    // Voice mode connects to this SAME route (agent: "my-agent") with the same
-    // session id, so the spoken turn shares this DO's Think transcript.
-    return routeSubAgentRequest(c.req.raw, parent, { fromPath: `/sub/my-agent/${sessionId}` });
-  }
+  if (/^\/agents\/my-agent\/[^/]+$/.test(c.req.path)) return c.json({ ok: false, error: { code: "THINK_RETIRED", message: "The think engine is retired. Reopen this chat to use pi." } }, 410);
 
   // Voice runs on its OWN direct-routed DO (not a facet): the stock
   // @cloudflare/voice call lifecycle does not survive the sub-agent WS bridge.

@@ -28,16 +28,5 @@ export async function sessionControl(env: Env, identity: AccessIdentity, session
       state: async () => ({ sessionStatus: (await chat.isBusy()) ? "running" : "active", requestId: null }),
     };
   }
-  const { getSessionAgent } = await import("./agent-stub");
-  const stub = await rpc.command("Session.open", async () => {
-    const opened = await getSessionAgent(env, identity.email, sessionId);
-    await opened.seedIdentity(identity);
-    return opened;
-  });
-  return {
-    engine,
-    inject: async (content, clientMsgId) => { await stub.injectUserMessage({ content, clientMsgId }); },
-    abort: async () => ({ aborted: (await stub.abortActiveTurn()).aborted }),
-    state: async () => stub.sessionTurnState(),
-  };
+  throw new Error("This conversation uses the retired think engine and can no longer run turns.");
 }

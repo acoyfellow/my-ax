@@ -10,7 +10,6 @@ import { makeOAuthClientStore } from "../oauth-store";
 import { mintBridgeTicket } from "../bridge";
 import { clampEntriesLimit, pageConversationEntries, pageConversationEntriesDesc, parseEntriesCursor, parseEntriesBeforeCursor, type ConversationEntryRow } from "../session-entries";
 import { checkSequenceIntegrity, isSequenceNumber } from "../sequence-integrity";
-import { getSessionAgent } from "../agent-stub";
 import { forkPiChat } from "../pi-engine/routes";
 import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
@@ -292,7 +291,8 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!session) {
         return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
       }
-      const live = await rpc.query("Session.turnState", () => getSessionAgent(c.env, email, id).then((stub) => stub.sessionTurnState())).catch(() => null);
+      const { sessionControl } = await import("../session-control");
+      const live = await rpc.query("Session.turnState", async () => (await sessionControl(c.env, c.get("identity"), id)).state()).catch(() => null);
       const result = buildSessionTurnState({
         sessionId: id,
         sessionStatus: live?.sessionStatus ?? session.status,
@@ -389,21 +389,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
   // Persist the UI-selected model onto the session DO so voice turns (which
   // don't send a request body) use the same model as typed chat.
   app.post("/api/sessions/:id/heal", async (c) => {
-    const id = c.req.param("id");
-    const identity = c.get("identity");
-    try {
-      if (!(await requireOwnedSession(c.env, id, identity.email))) {
-        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
-      }
-      const result = await rpc.command("Session.healStoredHistory", async () => {
-        const stub = await getSessionAgent(c.env, identity.email, id);
-        await stub.seedIdentity(identity);
-        return stub.healStoredHistory();
-      });
-      return c.json<ApiResponse>({ ok: true, command: c.req.path, result, next_actions: [] });
-    } catch (err) {
-      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "HEAL_FAILED", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
-    }
+    return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "THINK_RETIRED", message: "The think engine is retired; pi chats do not need this." }, next_actions: [] }, 410);
   });
 
   app.post("/api/sessions/:id/model", async (c) => {
@@ -416,11 +402,12 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
         return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
       }
       const model = body.model;
-      const result = await rpc.command("Session.setModel", async () => {
-        const stub = await getSessionAgent(c.env, identity.email, id);
-        await stub.seedIdentity(identity);
-        return stub.setSessionModel(model, body.reasoningEffort);
-      });
+      const { resolvePiModelChoice } = await import("../pi-engine/gateway-models");
+      const choice = resolvePiModelChoice(model);
+      if (!choice) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "UNKNOWN_MODEL", message: `unknown model ${model}` }, next_actions: [] }, 400);
+      const { openPiChat } = await import("../pi-engine/routes");
+      await rpc.command("PiChat.setModel", async () => (await openPiChat(c.env, identity.email, id)).setModel(choice.provider, choice.id));
+      const result = { ok: true, model: choice.id };
       return c.json<ApiResponse>({ ok: result.ok, command: c.req.path, result, next_actions: [] }, result.ok ? 200 : 400);
     } catch (err) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "MODEL_SET_FAILED", message: err instanceof Error ? err.message : String(err) }, next_actions: [] }, 500);
@@ -443,29 +430,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
         return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "FORK_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 409);
       }
     }
-    let forkId: string | null = null;
-    try {
-      const history = await rpc.query("Session.forkHistoryAt", async () => {
-        const sourceStub = await getSessionAgent(c.env, identity.email, sourceId);
-        await sourceStub.seedIdentity(identity);
-        return sourceStub.forkHistoryAt(atMessageId);
-      });
-      forkId = crypto.randomUUID();
-      const forkName = `Fork · ${source.name}`.slice(0, 200);
-      await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, created_at, updated_at) VALUES (?, ?, 'active', ?, 'think', datetime('now'), datetime('now'))").bind(forkId, forkName, identity.email).run();
-      const newForkId = forkId;
-      await rpc.command("Session.seedForkHistory", async () => (await getSessionAgent(c.env, identity.email, newForkId)).seedForkHistory(identity, history));
-      const cutoff = await c.env.DB.prepare("SELECT id FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND json_extract(meta_json, '$.uiMessageId') = ? ORDER BY id DESC LIMIT 1").bind(sourceId, identity.email, atMessageId).first<{ id: number }>();
-      if (cutoff) {
-        await c.env.DB.prepare(`INSERT INTO conversation_entries(session_id, owner_email, ts, role, tool, is_error, content, meta_json, sequence_number)
-          SELECT ?, owner_email, ts, role, tool, is_error, content, meta_json, ROW_NUMBER() OVER (ORDER BY id) FROM conversation_entries
-          WHERE session_id = ? AND owner_email = ? AND id <= ? ORDER BY id ASC`).bind(forkId, sourceId, identity.email, cutoff.id).run();
-      }
-      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { sessionId: forkId, sourceSessionId: sourceId, atMessageId, name: forkName, messageCount: history.length }, next_actions: [] }, 201);
-    } catch (error) {
-      if (forkId) await c.env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(forkId, identity.email).run().catch(() => undefined);
-      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "FORK_FAILED", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 409);
-    }
+    return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "THINK_RETIRED", message: "Only pi chats can be forked." }, next_actions: [] }, 410);
   });
 
   app.get("/api/root", async (c) => {
@@ -503,7 +468,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const { openPiChat } = await import("../pi-engine/routes");
     const cleared = await sessionEngineOf(c.env, identity.email, id) === "pi"
       ? await rpc.command("PiChat.clearContext", async () => (await openPiChat(c.env, identity.email, id)).clearContext()).then(() => 0)
-      : (await rpc.command("Session.clearHistory", async () => (await getSessionAgent(c.env, identity.email, id)).clearHistory())).cleared;
+      : 0;
     const result = { cleared };
     await c.env.DB.prepare("DELETE FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(id, identity.email).run().catch(() => undefined);
     return c.json<ApiResponse>({ ok: true, command, result: { id, cleared: result.cleared }, next_actions: [] });
@@ -552,13 +517,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const id = c.req.param("id");
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
     if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
-    try {
-      const times = await rpc.query("Session.messageTimes", async () => (await getSessionAgent(c.env, identity.email, id)).messageTimes());
-      return c.json({ ok: true, result: { times } });
-    } catch (error) {
-      console.error("session_message_times_failed", { id, err: String(error) });
-      return c.json({ ok: false, error: { code: "MESSAGE_TIMES_UNAVAILABLE", message: String(error) } }, 502);
-    }
+    return c.json({ ok: true, result: { times: {} } });
   });
 
   app.get("/api/sessions/:id/transcript", async (c) => {
@@ -566,18 +525,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const id = c.req.param("id");
     const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, identity.email).first();
     if (!owned) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "session not found" } }, 404);
-    let messages: string;
-    try {
-      messages = await rpc.query("Session.transcript", async () => (await getSessionAgent(c.env, identity.email, id)).transcriptJson());
-    } catch (error) {
-      console.error("session_transcript_failed", { id, err: String(error) });
-      return c.json({ ok: false, error: { code: "TRANSCRIPT_UNAVAILABLE", message: String(error) } }, 502);
-    }
-    return new Response(`{"ok":true,"result":{"messages":${messages}}}`, { headers: { "content-type": "application/json" } });
+    return c.json({ ok: true, result: { messages: [] } });
   });
 
-  // GET /api/sessions/:id/entries?after=<conversation_entries.id>&limit=<n>
-  // Stable monotonic D1 ids make this safe for idempotent external polling.
   app.get("/api/sessions/:id/entries", async (c) => {
     const id = c.req.param("id");
     const email = c.get("identity").email;
@@ -992,16 +942,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     }
 
     try {
-      const { sessionControl, sessionEngineOf } = await import("../session-control");
-      const piSession = (await sessionEngineOf(c.env, c.get("identity").email, id)) === "pi";
-      const stub = piSession ? null : await rpc.command("Session.open", async () => {
-        const opened = await getSessionAgent(c.env, c.get("identity").email, id);
-        await opened.seedIdentity(c.get("identity"));
-        return opened;
-      });
+      const { sessionControl } = await import("../session-control");
       try {
-        if (stub) await rpc.command("Session.inject", () => stub.injectUserMessage({ content, clientMsgId: body.clientMsgId, attachments: body.attachments }));
-        else await (await sessionControl(c.env, c.get("identity"), id)).inject(content, body.clientMsgId ?? `inject:${crypto.randomUUID()}`);
+        await (await sessionControl(c.env, c.get("identity"), id)).inject(content, body.clientMsgId ?? `inject:${crypto.randomUUID()}`);
       } catch (err) {
         return c.json(
           {

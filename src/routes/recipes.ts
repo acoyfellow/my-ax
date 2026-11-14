@@ -4,7 +4,6 @@ import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { getSessionAgent } from "../agent-stub";
 import { publicRecipe, SavedRecipeError, SavedRecipeService, validateRecipeRunInput } from "../saved-recipes";
 import { projectSavedRecipe } from "../cm-snippets";
 import { autoTrustMode } from "../auto-trust";
@@ -178,13 +177,8 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       const row = await service(c).get(c.req.param("id"));
       validateRecipeRunInput(input, JSON.parse(row.input_schema_json));
       if (!await requireOwnedSession(c.env, sessionId, c.get("identity").email)) throw new SavedRecipeError("NotFound", "session not found or not owned");
-      const { sessionEngineOf } = await import("../session-control");
-      const runnerId = (await sessionEngineOf(c.env, c.get("identity").email, sessionId)) === "pi" ? `recipes-${sessionId}` : sessionId;
-      const result = await rpc.command("Session.runSavedRecipe", async () => {
-        const agent = await getSessionAgent(c.env, c.get("identity").email, runnerId);
-        await agent.seedIdentity(c.get("identity"));
-        return agent.runSavedRecipe({ recipeId: c.req.param("id"), input });
-      });
+      const { headlessRecipeHost, runSavedRecipe } = await import("../saved-recipe-run");
+      const result = await runSavedRecipe(headlessRecipeHost(c.env, c.get("identity"), sessionId), { recipeId: c.req.param("id"), input });
       return ok(c, command, result, 202);
     } catch (error) {
       return failure(c, command, error);

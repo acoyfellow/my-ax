@@ -12,7 +12,6 @@ import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
-import { getSessionAgent } from "../agent-stub";
 import type { DecisionResponseStore } from "../decision-response";
 import { decisionResponseLiveLayer, recordDecisionResponse } from "../decision-response-program";
 

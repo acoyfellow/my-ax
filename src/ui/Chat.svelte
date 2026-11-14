@@ -669,19 +669,7 @@
     return client;
   }
 
-  function syncVoiceModelForSession(sessionId: string) {
-    // Voice turns don't send a request body, so sync the UI-selected model
-    // onto the session DO. CRITICAL: do NOT await this here — an await before
-    // startCall() breaks the iOS user-gesture chain, leaving the AudioContext
-    // suspended so TTS audio never plays. Fire-and-forget; the server also
-    // self-heals stale models in onTurn as a backstop.
-    void fetch(`/api/sessions/${encodeURIComponent(sessionId)}/model`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelState.current, reasoningEffort: modelState.reasoning }),
-    }).catch(() => {});
-  }
+
 
   function prepareNewVoiceSession() {
     if (voiceSessionPreparation) return;
@@ -728,7 +716,6 @@
     voiceReady = attempt.client.connected;
     localStorage.setItem("my-ax-voice-mode", "1");
     if (voiceTransport) startVoiceOutputMeter(attempt.client, voiceTransport);
-    syncVoiceModelForSession(sessionId!);
     void navigator.mediaDevices?.getUserMedia?.({ audio: true }).then((stream) => {
       for (const track of stream.getTracks()) track.stop();
     }).catch(() => {});
@@ -1341,7 +1328,7 @@
   // ── Bootstrap & WebSocket ──────────────────────────────────────────
   let ws: WebSocket | null = null;
   let piTranscript: PiTranscript | null = null;
-  const isPiSession = (sessionId: string | null) => storedSessionEngine(sessionId) === "pi";
+  const isPiSession = (sessionId: string | null) => Boolean(sessionId);
   async function learnSessionEngine(sessionId: string): Promise<void> {
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/engine`, { credentials: "include" });
@@ -1354,12 +1341,8 @@
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     savingSnapshots = false;
     piOlderCount = 0;
-    if (isPiSession(sessionId)) {
-      piTranscript = new PiTranscript();
-      return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
-    }
-    piTranscript = null;
-    return `${proto}//${location.host}/agents/my-agent/${sessionId}`;
+    piTranscript = new PiTranscript();
+    return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
   }
   let piBusy = $state(false);
   const localQueue = new LocalMessageQueue(() => `queued-${crypto.randomUUID()}`);

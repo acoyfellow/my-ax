@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const FACET_AGENT_SOURCES = ["./agent.ts", "./pi-engine/pi-chat-agent.ts"];
+const FACET_AGENT_SOURCES = ["./pi-engine/pi-chat-agent.ts"];
 
 test("facet agents read schedules with the async listSchedules, which works in routed schedule storage", () => {
   for (const path of FACET_AGENT_SOURCES) {

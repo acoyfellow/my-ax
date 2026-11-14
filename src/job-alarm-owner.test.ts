@@ -8,7 +8,7 @@ const owner = readFileSync(new URL("./user-agent.ts", import.meta.url), "utf8");
 test("recurring job alarms live on the owner's UserAgent, not on a think session", () => {
   assert.match(jobs, /owner\.scheduleJobAlarm\(/);
   assert.match(jobs, /owner\.cancelJobAlarm\(/);
-  const scheduling = jobs.slice(jobs.indexOf("export async function scheduleJob("), jobs.indexOf("export async function moveJobAlarmsToOwner("));
+  const scheduling = jobs.slice(jobs.indexOf("export async function scheduleJob("), jobs.indexOf("export async function cancelJobSchedule(") + 400);
   assert.doesNotMatch(scheduling, /getSessionAgent|scheduleRecurringPrompt/);
 });
 

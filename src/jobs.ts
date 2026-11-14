@@ -218,25 +218,3 @@ export async function cancelJobSchedule(env: Env, row: Pick<JobRow, "owner_email
   const owner = await ownerAgent(env, row.owner_email);
   await owner.cancelJobAlarm(row.schedule_id);
 }
-
-export async function moveJobAlarmsToOwner(env: Env, ownerEmail: string): Promise<{ moved: number; failed: Array<{ id: string; error: string }> }> {
-  const owner = ownerEmail.toLowerCase();
-  const rows = await env.DB.prepare("SELECT * FROM jobs WHERE owner_email = ? AND status = 'active'").bind(owner).all<JobRow>();
-  const { getSessionAgent } = await import("./agent-stub");
-  let moved = 0;
-  const failed: Array<{ id: string; error: string }> = [];
-  for (const row of rows.results ?? []) {
-    try {
-      if (row.schedule_id) {
-        const scheduleId = row.schedule_id;
-        await rpc.command("LegacySession.cancelRecurringPrompt", async () => (await getSessionAgent(env, owner, row.session_id)).cancelRecurringPrompt(scheduleId)).catch(() => undefined);
-      }
-      const scheduleId = await scheduleJob(env, row);
-      await env.DB.prepare("UPDATE jobs SET schedule_id = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(scheduleId, row.id, owner).run();
-      moved += 1;
-    } catch (error) {
-      failed.push({ id: row.id, error: error instanceof Error ? error.message : String(error) });
-    }
-  }
-  return { moved, failed };
-}

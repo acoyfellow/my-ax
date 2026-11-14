@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./types";
-import { getSessionAgent } from "./agent-stub";
+import { openPiChat } from "./pi-engine/routes";
+import { applySessionEvent } from "./fsm/session-status";
 import * as rpc from "./rpc/contract";
 import { notifyOwner } from "./notify";
 import { DEAD_SESSION_ATTENTION_KIND } from "./dead-session-detector";
@@ -16,18 +17,12 @@ export function makeDeadSessionDeps(env: Env): DeadSessionDeps {
       await (await sessionControl(env, { email: ownerEmail, sub: "system:auto-revive" } as Parameters<typeof sessionControl>[1], sessionId)).inject(message, clientMsgId);
     },
     hasLiveTurn: async (ownerEmail, sessionId) => {
-      return await rpc.command("Session.hasLiveTurn", async () => {
-        const stub = await getSessionAgent(env, ownerEmail, sessionId);
-        await stub.seedIdentity({ email: ownerEmail, sub: "system:turn-watchdog" });
-        return await stub.hasLiveTurn();
-      });
+      return await rpc.command("PiChat.isBusy", async () => (await openPiChat(env, ownerEmail, sessionId)).isBusy());
     },
     settleRunningWithoutTurn: async (ownerEmail, sessionId) => {
-      await rpc.command("Session.settleIfNoLiveTurn", async () => {
-        const stub = await getSessionAgent(env, ownerEmail, sessionId);
-        await stub.seedIdentity({ email: ownerEmail, sub: "system:turn-watchdog" });
-        await stub.settleIfNoLiveTurn();
-      });
+      const busy = await rpc.command("PiChat.isBusy", async () => (await openPiChat(env, ownerEmail, sessionId)).isBusy());
+      if (busy) return;
+      await applySessionEvent(env.DB, { id: sessionId, ownerEmail: ownerEmail.toLowerCase() }, "turn_stuck");
     },
     alertOwner: async (ownerEmail, sessionId, dedupeSuffix) => {
       await notifyOwner(env, ownerEmail, {

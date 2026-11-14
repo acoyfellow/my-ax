@@ -24,7 +24,7 @@ import { DEFAULT_OWNER_INSTRUCTIONS, getOwnerInstructions } from "../owner-instr
 import { Effect } from "effect";
 import type { ToolSet } from "ai";
 import { z } from "zod";
-import { DELEGATE_MANY_DESCRIPTION, delegateManyInputSchema } from "../delegate-many";
+import { DELEGATE_MANY_DESCRIPTION, delegateManyInputSchema, runDelegateMany } from "../delegate-many";
 import { buildConversationSearchQuery } from "../conversation-search";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
@@ -287,7 +287,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       sandboxOnly: false,
       broadcast: (message) => this.broadcast(message),
       callPage: (verb, args, opts) => this.callPage(verb, args, opts),
-      runSavedRecipe: async (body) => (await this.helperAgent()).runSavedRecipe(body),
+      runSavedRecipe: async (body) => {
+        const { runSavedRecipe } = await import("../saved-recipe-run");
+        return runSavedRecipe({ env: this.env, identity, sessionId: chatId, context: this.sharedToolContext() }, body);
+      },
     });
   }
 
@@ -295,17 +298,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const { getConnectorAgent } = await import("../agent-stub");
     const { command } = await import("../rpc/contract");
     return command("Connector.open", () => getConnectorAgent(this.env, this.identity()));
-  }
-
-  private async helperAgent() {
-    const identity = this.identity();
-    const { getSessionAgent } = await import("../agent-stub");
-    const { command } = await import("../rpc/contract");
-    return command("Session.recipeHelper", async () => {
-      const helper = await getSessionAgent(this.env, identity.email, `recipes-${this.chatId()}`);
-      await helper.seedIdentity(identity);
-      return helper;
-    });
   }
 
   private connectorRunner(): ConnectorRunner {
@@ -321,7 +313,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       delegate_many: {
         description: DELEGATE_MANY_DESCRIPTION,
         inputSchema: { jsonSchema: z.toJSONSchema(delegateManyInputSchema) },
-        execute: async (input: unknown, options: { toolCallId: string }) => (await this.helperAgent()).runDelegateMany(input, options.toolCallId),
+        execute: async (input: unknown, options: { toolCallId: string; abortSignal?: AbortSignal }) => runDelegateMany({ env: this.env, ownerEmail: this.identity().email, sessionId: this.chatId() }, input, options.toolCallId, options.abortSignal),
       } as unknown as ToolSet[string],
     };
   }
@@ -445,6 +437,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const entries = [...stream.snapshot.entries];
     await stream.stop();
     return entries;
+  }
+
+  async broadcastFrame(frame: string): Promise<void> {
+    this.broadcast(frame);
   }
 
   async isBusy(): Promise<boolean> {

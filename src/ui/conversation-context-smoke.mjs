@@ -13,10 +13,9 @@ function assertNotIncludes(haystack, needle, label) {
   if (haystack.includes(needle)) throw new Error(`${label}: unexpected ${JSON.stringify(needle)}`);
 }
 
-assertIncludes(chat, '/api/sessions/${encodeURIComponent(sessionId)}/model', "chat persists model changes to the active session");
-assertIncludes(chat, 'body: JSON.stringify({ model: modelState.current, reasoningEffort: modelState.reasoning }),', "chat sends model and reasoning effort when persisting session model");
+assertIncludes(chat, 'model: modelState.current }', "chat sends the chosen model with each pi message");
 assertIncludes(sessionsRoute, 'app.post("/api/sessions/:id/model"', "backend has a session model persistence route");
-assertIncludes(sessionsRoute, 'return stub.setSessionModel(model, body.reasoningEffort);', "session model route forwards to the session agent");
+assertIncludes(sessionsRoute, '(await openPiChat(c.env, identity.email, id)).setModel(choice.provider, choice.id)', "session model route forwards to the pi chat");
 assertIncludes(settings, 'Pick where each run lands: a new thread, this thread, or a specific thread you name.', "recurring jobs state the three destinations in UI");
 assertIncludes(settings, '<option value="new_session_per_run">New thread each run</option>', "create form offers New thread");
 assertIncludes(settings, '<option value="same_session">This thread</option>', "create form offers This thread");

@@ -140,9 +140,6 @@
       // Per-user root. Conversation MyAgent Think runtimes run as facets
       // inside this root, keyed by session id.
       { "name": "USER_AGENT", "class_name": "UserAgent" },
-      // Read-only migration bridge: direct pre-facet MyAgent namespace.
-      // Remove after all legacy D1 session rows have been opened/imported.
-      { "name": "LEGACY_MY_AGENT", "class_name": "MyAgent" },
       { "name": "OAUTH_CLIENT", "class_name": "OAuthClientDO" },
       // One outbound-connected local laptop per authenticated user.
       { "name": "MACHINE_HOST", "class_name": "MachineHost" },
@@ -187,7 +184,8 @@
     { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] },
     { "tag": "v14-pi-chat", "new_sqlite_classes": ["PiChatAgent"] },
     { "tag": "v15-workspace-hub", "new_sqlite_classes": ["WorkspaceHub"] },
-    { "tag": "v16-connector-agent", "new_sqlite_classes": ["ConnectorAgent"] }
+    { "tag": "v16-connector-agent", "new_sqlite_classes": ["ConnectorAgent"] },
+    { "tag": "v17-delete-my-agent", "deleted_classes": ["MyAgent"] }
   ],
 
   // D1 — sessions registry. Create with `wrangler d1 create my-ax-db`
@@ -247,7 +245,6 @@
       "durable_objects": {
         "bindings": [
           { "name": "USER_AGENT", "class_name": "UserAgent" },
-          { "name": "LEGACY_MY_AGENT", "class_name": "MyAgent" },
           { "name": "OAUTH_CLIENT", "class_name": "OAuthClientDO" },
           { "name": "MACHINE_HOST", "class_name": "MachineHost" },
           { "name": "COMPUTER", "class_name": "ComputerWorkspace" },
@@ -259,7 +256,8 @@
         { "tag": "v2-machinectl", "new_sqlite_classes": ["MachineHost"] },
         { "tag": "v3-user-agent", "new_sqlite_classes": ["UserAgent"] },
         { "tag": "v9-voice-think-direct", "new_sqlite_classes": ["VoiceThinkAgent"] },
-        { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] }
+        { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
+        { "tag": "v17-delete-my-agent", "deleted_classes": ["MyAgent"] }
       ],
       "kv_namespaces": [
         { "binding": "AUDIT_KV", "id": "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID" }
@@ -321,7 +319,6 @@
       "durable_objects": {
         "bindings": [
           { "name": "USER_AGENT", "class_name": "UserAgent" },
-          { "name": "LEGACY_MY_AGENT", "class_name": "MyAgent" },
           { "name": "OAUTH_CLIENT", "class_name": "OAuthClientDO" },
           { "name": "MACHINE_HOST", "class_name": "MachineHost" },
           { "name": "SANDBOX", "class_name": "Sandbox" },
@@ -348,7 +345,9 @@
         { "tag": "v11-computer-workspace", "new_sqlite_classes": ["ComputerWorkspace"] },
         { "tag": "v13-named-computer", "new_sqlite_classes": ["NamedComputer"] },
         { "tag": "v14-pi-chat", "new_sqlite_classes": ["PiChatAgent"] },
-        { "tag": "v15-workspace-hub", "new_sqlite_classes": ["WorkspaceHub"] }
+        { "tag": "v15-workspace-hub", "new_sqlite_classes": ["WorkspaceHub"] },
+        { "tag": "v16-connector-agent", "new_sqlite_classes": ["ConnectorAgent"] },
+        { "tag": "v17-delete-my-agent", "deleted_classes": ["MyAgent"] }
         // v12-codemode-runtime intentionally held — see top-level note.
       ],
       "kv_namespaces": [

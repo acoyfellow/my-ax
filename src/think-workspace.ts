@@ -1,4 +1,14 @@
-import type { WorkspaceLike } from "./think-workspace-fs";
+
+export interface WorkspaceLike {
+  readFile(path: string): Promise<string | null>;
+  readFileBytes(path: string): Promise<Uint8Array | null>;
+  writeFile(path: string, content: string): Promise<void>;
+  mkdir(path: string, opts?: { recursive?: boolean }): Promise<void>;
+  readDir(dir: string, opts?: { limit?: number; offset?: number }): Promise<FileInfo[]>;
+  glob(pattern: string): Promise<FileInfo[]>;
+  stat(path: string): Promise<FileInfo | null>;
+  rm(path: string, opts?: { recursive?: boolean; force?: boolean }): Promise<void>;
+}
 import type { FileInfo } from "@cloudflare/shell";
 import { collectFile } from "@cloudflare/sandbox";
 import type { Env } from "./types";

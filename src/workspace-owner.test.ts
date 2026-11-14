@@ -180,13 +180,9 @@ test("a finished compaction triggers a save, and a failed one does not", async (
 
 test("workspaces save only at pause, compaction and fork, not after every turn", async () => {
   const pi = await readFile(new URL("./pi-engine/pi-chat-agent.ts", import.meta.url), "utf8");
-  const think = await readFile(new URL("./agent.ts", import.meta.url), "utf8");
   const object = await readFile(new URL("./workspace-object.ts", import.meta.url), "utf8");
-  for (const source of [pi, think]) {
-    assert.doesNotMatch(source, /scheduleTurnSnapshot|scheduleBackupRetry|"turn", \{ scope, respectCooldown|schedule\(0, "snapshotWorkspaceAfterTurn"\)/);
-  }
+  assert.doesNotMatch(pi, /scheduleTurnSnapshot|scheduleBackupRetry|"turn", \{ scope, respectCooldown|schedule\(0, "snapshotWorkspaceAfterTurn"\)/);
   assert.match(pi, /compactionFinished\(/);
-  assert.match(think, /compactThenSave\(/);
   assert.match(object, /saves\.save\("pause"/);
 });
 
@@ -360,10 +356,9 @@ test("a subscriber whose socket fails is closed without blocking the others", as
 });
 
 test("workspace, job and directory changes publish to the coordinator", async () => {
-  const sources = await Promise.all(["pi-engine/pi-chat-agent.ts", "agent.ts", "job-service.ts", "workspace-object.ts", "workspace-directory.ts", "routes/workspaces.ts"].map((file) => readFile(new URL(`./${file}`, import.meta.url), "utf8")));
-  const [pi, think, jobs, object, directory, routes] = sources;
+  const sources = await Promise.all(["pi-engine/pi-chat-agent.ts", "job-service.ts", "workspace-object.ts", "workspace-directory.ts", "routes/workspaces.ts"].map((file) => readFile(new URL(`./${file}`, import.meta.url), "utf8")));
+  const [pi, jobs, object, directory, routes] = sources;
   assert.match(pi, /kind: "workspace.status"/);
-  assert.match(think, /kind: "workspace.status"/);
   assert.match(jobs, /kind: "job.run"/);
   assert.match(object, /kind: "workspace.lost"/);
   assert.match(directory, /kind: "workspace.message"/);

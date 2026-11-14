@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { sandboxOnlyForTurn } from "./recurring-job-run";
 
 const source = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
-const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
+const agent = ["./saved-recipe-run.ts", "./system-prompt.ts", "./tool-context.ts", "./pi-engine/pi-chat-agent.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 
 test("work_code sandboxOnly turns withhold machine and keep factory page verbs", () => {
   assert.match(source, /export const SANDBOX_ONLY_WORK_CAPABILITIES = WORKSPACE_METHODS\.map/);
@@ -19,16 +19,6 @@ test("open_issue_session is a Worker tool for factory fan-out", () => {
   assert.match(tools, /name: "open_issue_session"/);
   assert.match(tools, /issueSessionTitle/);
   assert.match(tools, /if \(sandboxOnly && definition\.name === "cmux_observe"\) continue/);
-});
-
-test("sandboxOnly is decided per turn, never saved to session config", () => {
-  // Regression: a saved sandboxOnly flag outlived the job turn and locked every
-  // later owner turn out of My Machine, page and delegate tools.
-  assert.doesNotMatch(agent, /configure<MyAgentConfig>\(\{[^}]*sandboxOnly/);
-  assert.doesNotMatch(agent, /getConfig<MyAgentConfig>\(\)\?\.sandboxOnly/);
-  assert.match(agent, /const sandboxOnly = agent\.turnIsSandboxOnly\(\);/);
-  assert.match(agent, /sandboxOnly: this\.currentTurnSandboxOnly,/);
-  assert.match(agent, /callPage: \(verb, args, opts\) => this\.callPage/);
 });
 
 test("job turns are sandbox-only; the next owner turn is not", () => {

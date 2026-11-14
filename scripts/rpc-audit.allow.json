@@ -5,11 +5,6 @@
     "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."
   },
   {
-    "file": "src/pi-engine/pi-chat-agent.ts",
-    "match": "const helper = await getSessionAgent(this.env, identity.email, `recipes-${this.chatId()}`);",
-    "reason": "Runs inside command(\"Session.recipeHelper\") from the dynamically imported rpc contract on the line above; the audit pattern only sees the rpc. prefix."
-  },
-  {
     "file": "src/named-computer.ts",
     "match": "const { sandbox, computerId } = await getNamedComputer(env, identity, rawId, { restoreLatest: false });",
     "reason": "getNamedComputer wraps openNamedComputer in rpc.command with NAMED_COMPUTER_OPEN_TIMEOUT_MS, so the open is bounded at the helper."

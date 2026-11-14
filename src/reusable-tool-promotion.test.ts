@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { promoteWorkCodeCandidates, type PromotionDependencies, type RecipeCreateInput, type ReusableToolTrustMode } from "./reusable-tool-promotion";
 import { SavedRecipeError } from "./saved-recipes";
 
-const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
+const agent = ["./saved-recipe-run.ts", "./system-prompt.ts", "./tool-context.ts", "./pi-engine/pi-chat-agent.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
 import { PUBLIC_SYSTEM } from "./system-prompt";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
@@ -144,17 +144,6 @@ test("high-authority non-portable candidates stay inline-only in every mode", as
     assert.deepEqual(h.created, []);
     assert.deepEqual(h.notifications, []);
   }
-});
-
-test("agent delegates promotion to the tested core using the owner preference service", () => {
-  const start = agent.indexOf("private async promoteSuggestedRecipe(");
-  assert.ok(start >= 0, "promoteSuggestedRecipe must exist in agent.ts");
-  const slice = agent.slice(start, start + 3000);
-  assert.match(agent, /import \{ reusableToolApprovalMode \} from "\.\/reusable-tool-preferences-program"/);
-  assert.match(slice, /reusableToolApprovalMode\(identity\.email, fallback\)\.pipe\(Effect\.provide\(databaseLayer\(this\.env\.DB\)\)\)/);
-  assert.match(slice, /promoteWorkCodeCandidates\(/);
-  assert.match(slice, /recipesSavedThisTurn\.push\(\.\.\.receipts\)/);
-  assert.doesNotMatch(slice, /const (?:trustMode|autoEnable) = autoTrustMode\(this\.env\)/);
 });
 
 test("executeWorkCode returns a reusableToolCandidate alongside suggestedRecipe (compat preserved)", () => {

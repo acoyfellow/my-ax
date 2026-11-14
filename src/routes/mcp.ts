@@ -6,7 +6,6 @@ import { markAttentionSeen } from "../fsm/attention-item";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
-import { getSessionAgent } from "../agent-stub";
 import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError } from "../run-receipts";
 import { JobService } from "../job-service";
 import type { JobInput, JobRow } from "../jobs";
@@ -222,12 +221,8 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: R
     if (!recipeId) throw new Error("recipeId is required");
     const input = args.input && typeof args.input === "object" && !Array.isArray(args.input) ? args.input as Record<string, unknown> : {};
     const callerCapabilities = Array.isArray(args.callerCapabilities) ? args.callerCapabilities.filter((capability): capability is string => typeof capability === "string") : undefined;
-    const runnerId = (await sessionEngineOf(c.env, email, sessionId)) === "pi" ? `recipes-${sessionId}` : sessionId;
-    return rpcContract.command("Session.runSavedRecipe", async () => {
-      const stub = await getSessionAgent(c.env, email, runnerId);
-      await stub.seedIdentity(c.get("identity"));
-      return stub.runSavedRecipe({ recipeId, input, callerCapabilities });
-    });
+    const { headlessRecipeHost, runSavedRecipe } = await import("../saved-recipe-run");
+    return runSavedRecipe(headlessRecipeHost(c.env, c.get("identity"), sessionId), { recipeId, input, callerCapabilities });
   }
   if (method === "observe_recent") return { events: await recentObserveEvents(c.env.DB, c.get("identity").email, { kind: typeof args.kind === "string" ? args.kind : undefined, sinceMinutes: args.sinceMinutes, sessionId: typeof args.sessionId === "string" ? args.sessionId : undefined }) };
   if (method === "workspace_snapshots") return { snapshots: await listWorkspaceSnapshots(c.env, c.get("identity"), clamp(args.limit, 20, 100)) };
@@ -337,14 +332,7 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: R
     }
     return { ...(await control.abort()), sessionId };
   }
-  if (method === "heal") {
-    if (await sessionEngineOf(c.env, email, sessionId) === "pi") return { sessionId, healed: false, reason: "new-engine chats keep their own history; nothing to heal" };
-    return rpcContract.command("Session.healStoredHistory", async () => {
-      const stub = await getSessionAgent(c.env, email, sessionId);
-      await stub.seedIdentity(c.get("identity"));
-      return stub.healStoredHistory();
-    });
-  }
+  if (method === "heal") return { sessionId, healed: false, reason: "pi chats keep their own history; nothing to heal" };
   if (method === "entries") {
     const after = Math.max(0, Number(args.after) || 0);
     const limit = clamp(args.limit, 20, 100);
@@ -363,29 +351,8 @@ async function sendAndWaitInSession(c: CoordinatorContext, email: string, args: 
   const input = parseSendAndWaitArgs(args);
   await ownedSession(c, input.sessionId);
   const engine = await c.env.DB.prepare("SELECT engine FROM sessions WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).first<{ engine: string | null }>();
-  if (engine?.engine === "pi") return sendAndWaitPi(c, email, input);
-  const stub = await rpcContract.command("Session.open", async () => {
-    const opened = await getSessionAgent(c.env, email, input.sessionId);
-    await opened.seedIdentity(c.get("identity"));
-    return opened;
-  });
-  return sendAndWait(input, {
-    latestEntryId: async () => {
-      const row = await c.env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(input.sessionId, email).first<{ id: number }>();
-      return Number(row?.id) || 0;
-    },
-    inject: async (content) => {
-      await stub.injectUserMessage({ content, clientMsgId: `mcp:${crypto.randomUUID()}` });
-      await c.env.DB.prepare("UPDATE sessions SET updated_at = datetime('now') WHERE id = ? AND owner_email = ?").bind(input.sessionId, email).run();
-    },
-    isRunning: async () => (await stub.sessionTurnState()).sessionStatus === "running",
-    entriesAfter: async (id) => {
-      const rows = await c.env.DB.prepare("SELECT id, role, content FROM conversation_entries WHERE session_id = ? AND owner_email = ? AND id > ? ORDER BY id ASC LIMIT 200").bind(input.sessionId, email, id).all<{ id: number; role: string; content: string | null }>();
-      return rows.results ?? [];
-    },
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    now: () => Date.now(),
-  });
+  if (engine?.engine !== "pi") throw new Error("This conversation uses the retired think engine and can no longer run turns.");
+  return sendAndWaitPi(c, email, input);
 }
 
 async function sendAndWaitPi(c: CoordinatorContext, email: string, input: { sessionId: string; content: string; timeoutMs: number }) {

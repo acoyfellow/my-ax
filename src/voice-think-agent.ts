@@ -1,8 +1,7 @@
-import { Agent, getAgentByName, getSubAgentByName, type Connection } from "agents";
+import { Agent, type Connection } from "agents";
 import { withVoice, WorkersAIFluxSTT, WorkersAITTS, type Transcriber, type VoiceTurnContext } from "@cloudflare/voice";
 import { EchoGatedTranscriber, SpokenRecord } from "./voice-echo-gate";
 import { speakable } from "./voice-speakable";
-import { MyAgent } from "./agent";
 import * as rpc from "./rpc/contract";
 import { openPiChat } from "./pi-engine/routes";
 import type { Env } from "./types";
@@ -61,13 +60,7 @@ export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, ses
       signal?.removeEventListener("abort", stop);
     }
   }
-  const facet = await rpc.command("MyAgent.voiceFacet", async () => {
-    const parent = await getAgentByName(env.USER_AGENT, identity.email.toLowerCase());
-    const opened = await getSubAgentByName(parent, MyAgent, sessionId);
-    await opened.seedIdentity(identity);
-    return opened;
-  });
-  return await facet.runVoiceTurn(transcript);
+  throw new Error("Voice needs a conversation on the pi engine.");
 }
 
 export class VoiceThinkAgent extends VoiceAgent<Env> {

@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const sources = [
-  "src/agent.ts",
   "src/ui/Chat.svelte",
 ];
 

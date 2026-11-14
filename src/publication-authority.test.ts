@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const agent = ["./agent.ts", "./system-prompt.ts", "./tool-context.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
+const agent = ["./saved-recipe-run.ts", "./system-prompt.ts", "./tool-context.ts", "./pi-engine/pi-chat-agent.ts"].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
 import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 

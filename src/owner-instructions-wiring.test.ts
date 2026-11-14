@@ -4,13 +4,6 @@ import { readFile } from "node:fs/promises";
 
 const source = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("every turn reloads owner instructions and composes them with protected and cached policy", async () => {
-  const agent = await source("./agent.ts");
-  assert.match(agent, /beforeTurn\(ctx:.*system\?: string/);
-  assert.match(agent, /getOwnerInstructions\(this\.env, identity\.email\)/);
-  assert.match(agent, /instructions: composeOwnerSystemPrompt\(PUBLIC_SYSTEM, ctx\.system, ownerInstructions\)/);
-});
-
 test("authenticated preference routes are registered without session fan-out", async () => {
   const [index, routes] = await Promise.all([source("./index.tsx"), source("./routes/instructions.ts")]);
   assert.match(index, /registerInstructionRoutes\(app\)/);
