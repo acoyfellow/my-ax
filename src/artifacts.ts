@@ -1,6 +1,9 @@
 import { compile, VERSION } from "svelte/compiler";
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
+import { createWidgetRecord, deleteUnsavedSessionWidgets, deleteWidgetRecord, setWidgetSourceHash, setWidgetTitle, type WidgetDb } from "./domain/Widget/Widget.store";
+
+const widgetDb = (env: Env) => env.DB as unknown as WidgetDb;
 
 const MAX_SOURCE_BYTES = 128 * 1024;
 const MAX_TITLE_CHARS = 120;
@@ -107,8 +110,7 @@ export async function updateOwnedArtifactSource(env: Env, identity: AccessIdenti
     httpMetadata: { contentType: "application/json; charset=utf-8" },
     customMetadata: { owner: normalizedEmail(identity), sessionId: row.session_id, kind: manifest.kind, sourceHash },
   });
-  await env.DB.prepare("UPDATE artifacts SET source_hash = ?, updated_at = ? WHERE id = ? AND owner_email = ?")
-    .bind(sourceHash, updatedAt, row.id, normalizedEmail(identity)).run();
+  await setWidgetSourceHash(widgetDb(env), normalizedEmail(identity), row.id, sourceHash, updatedAt);
   return { artifactId: row.id, title: row.title, src: `/api/artifacts/${row.id}/preview`, sourceHash };
 }
 
@@ -152,8 +154,7 @@ export async function createSvelteArtifact(env: Env, identity: AccessIdentity, s
     customMetadata: { owner: ownerEmail, sessionId, kind: manifest.kind, sourceHash },
   });
   try {
-    await env.DB.prepare("INSERT INTO artifacts (id, owner_email, session_id, kind, title, storage_key, source_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, ownerEmail, sessionId, manifest.kind, title, storageKey, sourceHash, createdAt).run();
+    await createWidgetRecord(widgetDb(env), { id, owner: ownerEmail, sessionId, kind: manifest.kind, title, storageKey, sourceHash, createdAt });
   } catch (error) {
     await bucket(env).delete(storageKey).catch(() => undefined);
     throw error;
@@ -212,15 +213,13 @@ export async function renameOwnedArtifact(env: Env, identity: AccessIdentity, id
   if (!ARTIFACT_ID_RE.test(id)) return false;
   const title = titleInput.trim().slice(0, MAX_TITLE_CHARS);
   if (!title) throw new Error("Widget title is required.");
-  const result = await env.DB.prepare("UPDATE artifacts SET title = ?, updated_at = ? WHERE id = ? AND owner_email = ?")
-    .bind(title, new Date().toISOString(), id, normalizedEmail(identity)).run();
-  return Number(result.meta.changes ?? 0) > 0;
+  return setWidgetTitle(widgetDb(env), normalizedEmail(identity), id, title, new Date().toISOString());
 }
 
 export async function deleteOwnedArtifact(env: Env, identity: AccessIdentity, id: string): Promise<boolean> {
   const row = await getOwnedArtifactRow(env, identity, id);
   if (!row) return false;
-  await env.DB.prepare("DELETE FROM artifacts WHERE id = ? AND owner_email = ?").bind(id, normalizedEmail(identity)).run();
+  await deleteWidgetRecord(widgetDb(env), normalizedEmail(identity), id);
   await bucket(env).delete(row.storage_key).catch((error) => {
     console.error("artifact_object_delete_failed", { artifactId: id, err: error instanceof Error ? error.message : String(error) });
   });
@@ -244,12 +243,7 @@ export async function readOwnedSvelteArtifact(env: Env, identity: AccessIdentity
 
 export async function deleteSessionArtifacts(env: Env, identity: AccessIdentity, sessionId: string): Promise<{ deleted: number }> {
   const ownerEmail = normalizedEmail(identity);
-  const result = await env.DB.prepare("SELECT storage_key FROM artifacts WHERE session_id = ? AND owner_email = ? AND library_saved = 0")
-    .bind(sessionId, ownerEmail).all<{ storage_key: string }>();
-  const keys = (result.results ?? []).map((row) => row.storage_key);
-  // Delete metadata first so a failed R2 cleanup can leave only unreachable
-  // garbage rather than a now-deleted conversation's artifact still visible.
-  await env.DB.prepare("DELETE FROM artifacts WHERE session_id = ? AND owner_email = ? AND library_saved = 0").bind(sessionId, ownerEmail).run();
+  const keys = await deleteUnsavedSessionWidgets(widgetDb(env), ownerEmail, sessionId);
   if (keys.length) await bucket(env).delete(keys).catch((error) => {
     console.error("artifact_object_cleanup_failed", {
       sessionId,

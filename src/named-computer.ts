@@ -7,7 +7,7 @@ import type { Env } from "./types";
 import { WORKSPACE_HOME } from "./workspace-path";
 import { verifyWorkspaceRestore } from "./workspace-snapshot";
 import * as rpc from "./rpc/contract";
-import { deleteComputerRecord } from "./computer-records";
+import { deleteComputerRecord, saveComputerSnapshot } from "./computer-records";
 
 export const NAMED_COMPUTER_OPEN_TIMEOUT_MS = 5 * 60_000;
 
@@ -119,15 +119,7 @@ export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, 
     compression: { format: "zstd" },
     multipart: true,
   });
-  await env.DB.prepare(
-    `INSERT INTO computer_snapshots(owner_email, computer_id, backup_id, backup_dir, snapshot_version, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 1, datetime('now'), datetime('now'))
-     ON CONFLICT(owner_email, computer_id) DO UPDATE SET
-       backup_id=excluded.backup_id,
-       backup_dir=excluded.backup_dir,
-       snapshot_version=computer_snapshots.snapshot_version + 1,
-       updated_at=datetime('now')`,
-  ).bind(identity.email.toLowerCase(), computerId, backup.id, backup.dir).run();
+  await saveComputerSnapshot(env.DB, identity.email, computerId, backup.id, backup.dir);
   return { computerId, backup };
 }
 

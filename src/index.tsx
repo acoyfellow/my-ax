@@ -25,6 +25,7 @@ import { readThemeCookie } from "./routes/theme";
 import { registerSessionRoutes } from "./routes/sessions";
 import { registerEmailRoutes } from "./routes/email";
 import { emailEnabled, parseRawEmail } from "./email-in";
+import { receiveEmailRecord, type RecordDb } from "./domain/records";
 import { pruneObserveEvents } from "./observe-events";
 import { openPiChat, registerPiEngineRoutes } from "./pi-engine/routes";
 import { resolveOwnedVoiceTarget } from "./voice-session-ownership";
@@ -703,9 +704,7 @@ export default {
     const raw = await new Response(message.raw).text();
     const parsed = parseRawEmail(raw);
     const owner = message.to.toLowerCase();
-    await env.DB.prepare("INSERT INTO emails (id, owner_email, from_addr, to_addr, subject, body, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
-      .bind(crypto.randomUUID(), owner, message.from, message.to, parsed.subject, parsed.body)
-      .run();
+    await receiveEmailRecord(env.DB as unknown as RecordDb, { id: crypto.randomUUID(), owner, from: message.from, to: message.to, subject: parsed.subject, body: parsed.body });
     ctx.waitUntil((async () => {
       const { notifyOwner } = await import("./notify");
       await notifyOwner(env, owner, { kind: "session.update", title: "New email", body: parsed.subject || message.from, href: "/", dedupeKey: `email:${message.to}:${parsed.subject}:${Date.now()}` }).catch(() => undefined);

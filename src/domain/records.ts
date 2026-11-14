@@ -5,6 +5,8 @@ import { BrowserRecording } from "./BrowserRecording/BrowserRecording.aggregate"
 import { CreateBrowserRecording } from "./BrowserRecording/CreateBrowserRecording.command";
 import { UpdateBrowserRecording } from "./BrowserRecording/UpdateBrowserRecording.command";
 import { decide } from "./decide";
+import { CreateEmail } from "./Email/CreateEmail.command";
+import { Email } from "./Email/Email.aggregate";
 import { CreateSnippet } from "./Snippet/CreateSnippet.command";
 import { Snippet } from "./Snippet/Snippet.aggregate";
 import { UpdateSnippet } from "./Snippet/UpdateSnippet.command";
@@ -45,6 +47,13 @@ export async function saveSnippetProjection(db: RecordDb, input: {
     `INSERT INTO cm_snippets (id, owner_email, name, description, code, input_schema_json, connectors_json, saved_at, source_recipe_id, codemode_execution_id, provenance, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'projected', ?, ?)`,
   ).bind(input.id, input.owner, input.name, input.description, input.code, input.inputSchemaJson, input.connectorsJson, input.savedAt, input.sourceRecipeId, input.codemodeExecutionId, input.now, input.now).run();
+}
+
+export async function receiveEmailRecord(db: RecordDb, email: { id: string; owner: string; from: string; to: string; subject: string; body: string }): Promise<void> {
+  decide(Email, email.id, missing, new CreateEmail({ ownerEmail: email.owner, subject: email.subject, readAt: null }));
+  await db.prepare("INSERT INTO emails (id, owner_email, from_addr, to_addr, subject, body, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
+    .bind(email.id, email.owner, email.from, email.to, email.subject, email.body)
+    .run();
 }
 
 export async function createAudioMessageRecord(db: RecordDb, row: {

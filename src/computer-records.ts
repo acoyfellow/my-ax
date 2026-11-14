@@ -1,4 +1,9 @@
 import { normalizeComputerId } from "./computer-id";
+import { computerExists, ensureComputer, recordComputerSnapshot, removeComputer, retitleComputer } from "./domain/Computer/Computer.store";
+
+export async function saveComputerSnapshot(rawDb: unknown, ownerEmail: string, rawId: string, backupId: string, backupDir: string): Promise<void> {
+  await recordComputerSnapshot(rawDb as ComputerDb, { owner: ownerEmail.toLowerCase(), computerId: normalizeComputerId(rawId) }, backupId, backupDir);
+}
 
 export type ComputerRow = { computer_id: string; title: string; backup_id: string | null; created_at: string; updated_at: string };
 
@@ -29,10 +34,7 @@ export async function getComputerRow(env: HasDb, identity: Owner, rawId: string)
 export async function recordComputer(env: HasDb, identity: Owner, rawId: string, title?: string): Promise<ComputerRow> {
   const computerId = normalizeComputerId(rawId);
   const cleanTitle = (title ?? "").trim().slice(0, 80) || computerId;
-  await db(env).prepare(
-    `INSERT INTO computers (owner_email, computer_id, title, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))
-     ON CONFLICT(owner_email, computer_id) DO UPDATE SET updated_at = datetime('now')`,
-  ).bind(ownerOf(identity), computerId, cleanTitle).run();
+  await ensureComputer(db(env), { owner: ownerOf(identity), computerId }, cleanTitle);
   const row = await getComputerRow(env, identity, computerId);
   if (!row) throw new Error("computer record was not saved");
   return row;
@@ -41,23 +43,18 @@ export async function recordComputer(env: HasDb, identity: Owner, rawId: string,
 export async function renameComputer(env: HasDb, identity: Owner, rawId: string, title: string): Promise<boolean> {
   const cleanTitle = title.trim().slice(0, 80);
   if (!cleanTitle) throw new Error("Computer name is required.");
-  const result = await db(env).prepare("UPDATE computers SET title = ?, updated_at = datetime('now') WHERE owner_email = ? AND computer_id = ?")
-    .bind(cleanTitle, ownerOf(identity), normalizeComputerId(rawId)).run();
-  return (result.meta?.changes ?? 0) > 0;
+  return retitleComputer(db(env), { owner: ownerOf(identity), computerId: normalizeComputerId(rawId) }, cleanTitle);
 }
 
 export async function deleteComputerRecord(rawDb: unknown, ownerEmail: string, rawId: string, destroy: () => Promise<unknown>): Promise<boolean> {
   const database = rawDb as ComputerDb;
   const computerId = normalizeComputerId(rawId);
   const owner = ownerEmail.toLowerCase();
-  const existing = await database.prepare("SELECT computer_id FROM computers WHERE owner_email = ? AND computer_id = ?").bind(owner, computerId).first();
-  if (!existing) return false;
+  const key = { owner, computerId };
+  if (!(await computerExists(database, key))) return false;
   await destroy().catch((error: unknown) => {
     console.warn("named_computer.destroy_failed", { computerId, error: error instanceof Error ? error.message : String(error) });
   });
-  await database.batch([
-    database.prepare("DELETE FROM computer_snapshots WHERE owner_email = ? AND computer_id = ?").bind(owner, computerId),
-    database.prepare("DELETE FROM computers WHERE owner_email = ? AND computer_id = ?").bind(owner, computerId),
-  ]);
+  await removeComputer(database, key);
   return true;
 }
