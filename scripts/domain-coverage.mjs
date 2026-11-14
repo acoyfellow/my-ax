@@ -40,11 +40,20 @@ const covered = owned.filter(([, entry]) => entry.aggregate);
 const gaps = owned.filter(([, entry]) => !entry.aggregate).map(([table]) => table);
 const percent = Math.round((covered.length / owned.length) * 100);
 
-const report = { covered: covered.length, owned: owned.length, percent, gaps, unknownTables: unknown };
+const bypass = owned
+  .map(([table]) => [table, [...(writes.get(table) ?? [])].sort()])
+  .filter(([, files]) => files.length > 0);
+const routed = owned.length - bypass.length;
+const routedPercent = Math.round((routed / owned.length) * 100);
+const strict = process.argv.includes("--strict");
+
+const report = { covered: covered.length, owned: owned.length, percent, routed, routedPercent, gaps, unknownTables: unknown, bypass: Object.fromEntries(bypass) };
 if (process.argv.includes("--json")) console.log(JSON.stringify(report));
 else {
-  console.log(`domain coverage: ${covered.length}/${owned.length} stateful tables (${percent}%)`);
+  console.log(`domain coverage: ${covered.length}/${owned.length} stateful tables have an aggregate (${percent}%), ${routed}/${owned.length} write only through src/domain (${routedPercent}%)`);
   if (gaps.length) console.log(`no aggregate: ${gaps.join(", ")}`);
   if (unknown.length) console.log(`written but not in src/domain/coverage.json: ${unknown.join(", ")}`);
+  if (strict) for (const [table, files] of bypass) console.log(`bypass ${table}: ${files.join(", ")}`);
 }
-process.exit(gaps.length === 0 && unknown.length === 0 ? 0 : 1);
+const ok = gaps.length === 0 && unknown.length === 0 && (!strict || bypass.length === 0);
+process.exit(ok ? 0 : 1);

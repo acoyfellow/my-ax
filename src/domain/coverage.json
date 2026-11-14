@@ -1,34 +1,186 @@
 {
   "note": "Every D1 table my.ax writes. aggregate = the Domain aggregate that owns its state changes. kind: lifecycle (has a status or state), record (CRUD with no lifecycle), log (append-only), cache (derived, safe to drop). A lifecycle or record table without an aggregate is a coverage gap.",
   "tables": {
-    "sessions": { "kind": "lifecycle", "aggregate": "Session", "state": ["status", "pinned", "amber", "pin_size"] },
-    "jobs": { "kind": "lifecycle", "aggregate": "Job", "state": ["status", "run_count", "seen_at"] },
-    "runs": { "kind": "lifecycle", "aggregate": "Run", "state": ["status", "dismissed_at"] },
-    "saved_recipes": { "kind": "lifecycle", "aggregate": "Recipe", "state": ["status"] },
-    "attention_items": { "kind": "lifecycle", "aggregate": "Attention", "state": ["seen_at"] },
-    "computers": { "kind": "record", "aggregate": null, "state": ["title"] },
-    "computer_snapshots": { "kind": "record", "aggregate": null, "state": ["backup_id", "snapshot_version"] },
-    "artifacts": { "kind": "record", "aggregate": null, "state": ["title", "source_hash", "library_saved"] },
-    "skills": { "kind": "record", "aggregate": null, "state": ["name", "instructions"] },
-    "emails": { "kind": "lifecycle", "aggregate": null, "state": ["read_at"] },
-    "push_subscriptions": { "kind": "record", "aggregate": null, "state": ["endpoint"] },
-    "owner_preferences": { "kind": "record", "aggregate": null, "state": ["value_json"] },
-    "cm_snippets": { "kind": "record", "aggregate": null, "state": ["body"] },
-    "workspace_snapshots": { "kind": "record", "aggregate": null, "state": ["snapshot_version", "used_at"] },
-    "audio_messages": { "kind": "record", "aggregate": null, "state": [] },
-    "browser_recordings": { "kind": "record", "aggregate": null, "state": [] },
-    "conversation_entries": { "kind": "log", "aggregate": null, "state": [] },
-    "run_events": { "kind": "log", "aggregate": null, "state": [] },
-    "job_events": { "kind": "log", "aggregate": null, "state": [] },
-    "observe_events": { "kind": "log", "aggregate": null, "state": [] },
-    "workspace_snapshot_history": { "kind": "log", "aggregate": null, "state": [] },
-    "command_usage": { "kind": "log", "aggregate": null, "state": [] },
-    "cycle_costs": { "kind": "log", "aggregate": null, "state": [] },
-    "bridge_ticket_uses": { "kind": "log", "aggregate": null, "state": [] },
-    "push_dismissals": { "kind": "log", "aggregate": null, "state": [] },
-    "push_progress_updates": { "kind": "log", "aggregate": null, "state": [] },
-    "error_issue_fingerprints": { "kind": "cache", "aggregate": null, "state": [] },
-    "saved_hammers": { "kind": "retired", "aggregate": null, "state": [], "renamedTo": "saved_recipes" }
+    "sessions": {
+      "kind": "lifecycle",
+      "aggregate": "Session",
+      "state": [
+        "status",
+        "pinned",
+        "amber",
+        "pin_size"
+      ]
+    },
+    "jobs": {
+      "kind": "lifecycle",
+      "aggregate": "Job",
+      "state": [
+        "status",
+        "run_count",
+        "seen_at"
+      ]
+    },
+    "runs": {
+      "kind": "lifecycle",
+      "aggregate": "Run",
+      "state": [
+        "status",
+        "dismissed_at"
+      ]
+    },
+    "saved_recipes": {
+      "kind": "lifecycle",
+      "aggregate": "Recipe",
+      "state": [
+        "status"
+      ]
+    },
+    "attention_items": {
+      "kind": "lifecycle",
+      "aggregate": "Attention",
+      "state": [
+        "seen_at"
+      ]
+    },
+    "computers": {
+      "kind": "record",
+      "aggregate": "Computer",
+      "state": [
+        "title"
+      ]
+    },
+    "computer_snapshots": {
+      "kind": "record",
+      "aggregate": "ComputerSnapshot",
+      "state": [
+        "backup_id",
+        "snapshot_version"
+      ]
+    },
+    "artifacts": {
+      "kind": "record",
+      "aggregate": "Widget",
+      "state": [
+        "title",
+        "source_hash",
+        "library_saved"
+      ]
+    },
+    "skills": {
+      "kind": "record",
+      "aggregate": "Skill",
+      "state": [
+        "name",
+        "instructions"
+      ]
+    },
+    "emails": {
+      "kind": "lifecycle",
+      "aggregate": "Email",
+      "state": [
+        "read_at"
+      ]
+    },
+    "push_subscriptions": {
+      "kind": "record",
+      "aggregate": "PushSubscription",
+      "state": [
+        "endpoint"
+      ]
+    },
+    "owner_preferences": {
+      "kind": "record",
+      "aggregate": "OwnerPreference",
+      "state": [
+        "value_json"
+      ]
+    },
+    "cm_snippets": {
+      "kind": "record",
+      "aggregate": "Snippet",
+      "state": [
+        "body"
+      ]
+    },
+    "workspace_snapshots": {
+      "kind": "record",
+      "aggregate": "WorkspaceSnapshot",
+      "state": [
+        "snapshot_version",
+        "used_at"
+      ]
+    },
+    "audio_messages": {
+      "kind": "record",
+      "aggregate": "AudioMessage",
+      "state": []
+    },
+    "browser_recordings": {
+      "kind": "record",
+      "aggregate": "BrowserRecording",
+      "state": []
+    },
+    "conversation_entries": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "run_events": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "job_events": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "observe_events": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "workspace_snapshot_history": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "command_usage": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "cycle_costs": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "bridge_ticket_uses": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "push_dismissals": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "push_progress_updates": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
+    "error_issue_fingerprints": {
+      "kind": "cache",
+      "aggregate": null,
+      "state": []
+    },
+    "saved_hammers": {
+      "kind": "retired",
+      "aggregate": null,
+      "state": [],
+      "renamedTo": "saved_recipes"
+    }
   },
   "durableObjects": {
     "PiChatAgent": "per-session chat engine; its turn state maps to Session",

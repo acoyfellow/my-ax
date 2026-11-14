@@ -21,7 +21,7 @@ for pair in job-status:Job session-status:Session run-status:Run recipe-status:R
   fi
 done
 
-coverage=$(node scripts/domain-coverage.mjs 2>&1)
+coverage=$(node scripts/domain-coverage.mjs --strict 2>&1)
 if [ $? -eq 0 ]; then
   say PASS "$coverage"
 else
