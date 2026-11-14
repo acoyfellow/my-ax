@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { dragOffset, settlesOpen } from "./top-drawer-drag";
 
 test("pulling down from the root button reveals the drawer, clamped to its height", () => {
@@ -47,4 +48,28 @@ test("the app behind the drawer scales down as the drawer reveals", async () => 
   assert.ok(Math.abs(backgroundScale(1) - 0.94) < 1e-9);
   assert.equal(revealProgress(1200, 800), 1);
   assert.equal(revealProgress(-5, 800), 0);
+});
+
+test("a still tap on the desk button is left to the native click", async () => {
+  const { releaseOutcome } = await import("./top-drawer-drag");
+  assert.equal(releaseOutcome({ direction: "open", travel: 3, cancelled: false, offset: 3, height: 800, velocity: 0 }), "tap");
+});
+
+test("an iOS pointercancel during a tap or pull never leaves the drawer half open", async () => {
+  const { releaseOutcome } = await import("./top-drawer-drag");
+  assert.equal(releaseOutcome({ direction: "open", travel: 0, cancelled: true, offset: 0, height: 800, velocity: 0 }), "close");
+  assert.equal(releaseOutcome({ direction: "open", travel: 400, cancelled: true, offset: 400, height: 800, velocity: 0 }), "close");
+  assert.equal(releaseOutcome({ direction: "close", travel: -2, cancelled: true, offset: 798, height: 800, velocity: 0 }), "open");
+});
+
+test("a real pull still settles by distance and flick", async () => {
+  const { releaseOutcome } = await import("./top-drawer-drag");
+  assert.equal(releaseOutcome({ direction: "open", travel: 700, cancelled: false, offset: 700, height: 800, velocity: 0 }), "open");
+  assert.equal(releaseOutcome({ direction: "open", travel: 60, cancelled: false, offset: 60, height: 800, velocity: 1 }), "open");
+  assert.equal(releaseOutcome({ direction: "open", travel: 60, cancelled: false, offset: 60, height: 800, velocity: 0 }), "close");
+});
+
+test("the desk button opens on the native click, which iOS always delivers", () => {
+  const desk = readFileSync(new URL("./Desk.svelte", import.meta.url), "utf8");
+  assert.match(desk, /onclick=\{openFromClick\}/);
 });

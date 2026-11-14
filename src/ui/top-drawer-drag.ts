@@ -39,3 +39,14 @@ export function revealProgress(offset: number, height: number): number {
 export function backgroundScale(progress: number): number {
   return 1 - (1 - BACKGROUND_SCALE) * progress;
 }
+
+export const TAP_SLOP_PX = 10;
+
+export type DrawerRelease = "tap" | "open" | "close";
+
+export function releaseOutcome(input: { direction: "open" | "close"; travel: number; cancelled: boolean; offset: number; height: number; velocity: number }): DrawerRelease {
+  const isTap = Math.abs(input.travel) <= TAP_SLOP_PX;
+  if (isTap) return input.direction === "open" && !input.cancelled ? "tap" : input.direction === "open" ? "close" : "open";
+  if (input.cancelled) return input.direction === "open" ? "close" : "open";
+  return settlesOpenAfterRelease(input.offset, input.height, input.velocity) ? "open" : "close";
+}

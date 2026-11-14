@@ -1,6 +1,6 @@
 <script lang="ts">
   import { portal } from "./portal";
-  import { backgroundScale, dragOffset, revealProgress, rubberBand, settlesOpenAfterRelease, velocityOf } from "./top-drawer-drag";
+  import { TAP_SLOP_PX, backgroundScale, dragOffset, releaseOutcome, revealProgress, rubberBand, velocityOf } from "./top-drawer-drag";
   import { onMount } from "svelte";
   import { registerStatusRing } from "./paint-ring";
   import NavIconButton from "./NavIconButton.svelte";
@@ -43,16 +43,30 @@
     const samples = [...drag.samples.slice(-8), { y: event.clientY, t: event.timeStamp }];
     drag = { ...drag, offset: dragOffset(drag.startY, event.clientY, drag.height, drag.direction), overshoot, moved: drag.moved || Math.abs(delta) > 6, samples };
   }
+  let dragJustSettled = false;
   function endDrag(event: PointerEvent) {
     if (!drag || drag.pointerId !== event.pointerId) return;
     const finished = drag;
     drag = null;
-    if (!finished.moved) {
-      if (finished.direction === "open") void openPanel();
-      return;
-    }
-    if (settlesOpenAfterRelease(finished.offset, finished.height, velocityOf(finished.samples))) void openPanel();
+    const last = finished.samples[finished.samples.length - 1];
+    const outcome = releaseOutcome({
+      direction: finished.direction,
+      travel: (last?.y ?? finished.startY) - finished.startY,
+      cancelled: event.type === "pointercancel",
+      offset: finished.offset,
+      height: finished.height,
+      velocity: velocityOf(finished.samples),
+    });
+    if (outcome === "tap") return;
+    if (Math.abs((last?.y ?? finished.startY) - finished.startY) <= TAP_SLOP_PX) return;
+    dragJustSettled = true;
+    setTimeout(() => { dragJustSettled = false; }, 0);
+    if (outcome === "open") void openPanel();
     else closePanel();
+  }
+  function openFromClick() {
+    if (dragJustSettled || open) return;
+    void openPanel();
   }
   let board = $state<DeskBoard>({ cards: [], updatedAt: "" });
   let deskApp = $state<DeskApp>({ artifactId: null, state: null, updatedAt: "", updatedBy: null });
@@ -179,7 +193,7 @@
   });
 </script>
 
-<NavIconButton label="Open desk" title="Desk (click or pull down)" class="desk-button" aria-expanded={open} aria-controls="desk-drawer" onpointerdown={(event) => startDrag(event, "open")} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openPanel(); } }}>
+<NavIconButton label="Open desk" title="Desk (click or pull down)" class="desk-button" aria-expanded={open} aria-controls="desk-drawer" onclick={openFromClick} onpointerdown={(event) => startDrag(event, "open")} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag} onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openPanel(); } }}>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /></svg>
 </NavIconButton>
 
