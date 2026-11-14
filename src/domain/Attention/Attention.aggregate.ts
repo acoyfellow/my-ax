@@ -4,6 +4,7 @@ import { RaiseAttention, AttentionRaised } from "./RaiseAttention.command";
 import { AttentionId } from "./Attention.id";
 import { AttentionAlreadyExists, AttentionNotFound, AttentionTransitionRefused } from "./AttentionRejections.rejection";
 import { MarkAttentionSeen, AttentionSeen } from "./MarkAttentionSeen.command";
+import { AttentionDismissed, DismissAttention } from "./DismissAttention.command";
 
 export const ATTENTION_STAGES = ["Unseen", "Seen"] as const;
 export type AttentionStage = (typeof ATTENTION_STAGES)[number];
@@ -34,13 +35,15 @@ export class Attention extends Domain.Aggregate("Attention", {
   id: AttentionId,
   state: AttentionState,
   initial: { _tag: "Missing" },
-  commands: [RaiseAttention, MarkAttentionSeen],
+  commands: [RaiseAttention, MarkAttentionSeen, DismissAttention],
   decide: {
     RaiseAttention: (current, cmd) => (current._tag !== "Missing" ? new AttentionAlreadyExists() : [new AttentionRaised({ ownerEmail: cmd.ownerEmail, stage: cmd.stage })]),
     MarkAttentionSeen: (current) => transition(current, "MarkAttentionSeen"),
+    DismissAttention: (current) => (current._tag === "Missing" ? new AttentionNotFound() : [new AttentionDismissed()]),
   },
   evolve: {
     AttentionRaised: (_, e) => ({ _tag: "Present" as const, ownerEmail: e.ownerEmail, stage: e.stage }),
     AttentionSeen: (current) => moved(current, "Seen"),
+    AttentionDismissed: () => ({ _tag: "Missing" as const }),
   },
 }) {}

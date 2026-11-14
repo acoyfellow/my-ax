@@ -12,6 +12,7 @@
 
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
+import { dismissAttentionItem, type AttentionStoreDb } from "../domain/Attention/Attention.store";
 import { seedUserWorkspaceFile } from "../workspace";
 import type { ApiResponse } from "../types";
 import { recordRecoveryExhaustion } from "../recovery-exhaustion";
@@ -52,7 +53,7 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     } catch (err) {
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "RECOVERY_EXHAUSTION_PROOF_FAILED", message: err instanceof Error ? err.message : String(err) }, result: { durationMs: Date.now() - started }, next_actions: [] }, 500);
     } finally {
-      if (attentionId) await c.env.DB.prepare("DELETE FROM attention_items WHERE id = ? AND owner_email = ?").bind(attentionId, identity.email).run().catch(() => undefined);
+      if (attentionId) await dismissAttentionItem(c.env.DB as unknown as AttentionStoreDb, identity.email, attentionId).catch(() => undefined);
       await c.env.DB.prepare("DELETE FROM conversation_entries WHERE session_id = ? AND owner_email = ?").bind(sessionId, identity.email).run().catch(() => undefined);
       await c.env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, identity.email).run().catch(() => undefined);
     }

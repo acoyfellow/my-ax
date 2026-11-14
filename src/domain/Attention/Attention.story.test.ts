@@ -10,6 +10,7 @@ import { RaiseAttention, AttentionRaised } from "./RaiseAttention.command";
 import { AttentionAlreadyExists, AttentionNotFound, AttentionTransitionRefused } from "./AttentionRejections.rejection";
 import { MarkAttentionSeen, AttentionSeen } from "./MarkAttentionSeen.command";
 import * as Commands from "./commands";
+import { AttentionDismissed, DismissAttention } from "./DismissAttention.command";
 
 const story = Story.make(MyAx);
 const ref = Attention.ref("x1");
@@ -40,6 +41,21 @@ test("a Attention is created once, in the stage asked for", () =>
 
 test("a command on a Attention that does not exist is refused", () =>
   run(story(Story.when(ref, new MarkAttentionSeen()), Story.rejected(new AttentionNotFound()))));
+
+test("an attention item in any stage can be dismissed once, and is gone after", async () => {
+  for (const stage of ["Unseen", "Seen"] as const) {
+    await run(
+      story(
+        Story.given(ref, new AttentionRaised({ ownerEmail: OWNER, stage })),
+        Story.when(ref, new DismissAttention()),
+        Story.then(ref, new AttentionDismissed()),
+        Story.state(ref, { _tag: "Missing" }),
+        Story.when(ref, new DismissAttention()),
+        Story.rejected(new AttentionNotFound()),
+      ),
+    );
+  }
+});
 
 test("every fsm event maps to one command with the same from and to", () => {
   assert.equal(Object.keys(COMMAND_FOR).length, Object.keys(ATTENTION_RULES).length);

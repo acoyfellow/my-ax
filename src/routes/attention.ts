@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { markAttentionSeen } from "../fsm/attention-item";
+import { dismissAllAttention, type AttentionStoreDb } from "../domain/Attention/Attention.store";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 
@@ -256,11 +257,11 @@ export function registerAttentionRoutes(app: Hono<AppEnv>) {
 
   app.delete("/api/attention", async (c) => {
     const email = owner(c);
-    const result = await c.env.DB.prepare("DELETE FROM attention_items WHERE owner_email = ?").bind(email).run();
+    const deleted = await dismissAllAttention(c.env.DB as unknown as AttentionStoreDb, email);
     return c.json<ApiResponse>({
       ok: true,
       command: c.req.path,
-      result: { deleted: Number(result.meta?.changes ?? 0), unread: 0, items: [] },
+      result: { deleted, unread: 0, items: [] },
       next_actions: [],
     });
   });

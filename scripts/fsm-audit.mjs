@@ -10,7 +10,7 @@ export const MACHINES = [
   { name: "runs", owner: "src/fsm/run-status.ts", writer: /UPDATE runs SET status\b/ },
   { name: "jobs", owner: "src/fsm/job-status.ts", writer: /UPDATE jobs SET[^"`]*\bstatus\s*=|^\s*status = CASE WHEN max_runs|status: "(active|paused|exhausted)" as const/ },
   { name: "recipes", owner: "src/fsm/recipe-status.ts", writer: /\bpatch\.status\s*=|body\.status === "enabled" \? "enabled"/ },
-  { name: "attention", owner: "src/fsm/attention-item.ts", writer: /UPDATE attention_items SET (seen_at|dismissed_at)\b/ },
+  { name: "attention", owner: "src/domain/Attention/Attention.store.ts", writer: /UPDATE attention_items SET (seen_at|dismissed_at)\b/ },
   { name: "desk", owner: "src/fsm/desk-card.ts", writer: /status: Object\.hasOwn\(raw, "status"\)/ },
   { name: "workspace-verified", owner: "src/fsm/workspace-verification.ts", writer: /\bverified\s*=\s*(true|false)\b/, files: /^src\/workspace-lifecycle\.ts$/ },
   { name: "machinehost", owner: "src/fsm/machine-connection.ts", writer: /storage\.(put|delete)\([^)]*SOCKET_GENERATION_KEY/ },
@@ -19,10 +19,12 @@ export const MACHINES = [
   { name: "voice", owner: "src/fsm/voice-status.ts", writer: /=\s*"idle"\s*\|\s*"listening"\s*\|\s*"thinking"\s*\|\s*"speaking"/ },
 ];
 
+const STATE_OWNER_DIRS = new Set(["fsm", "domain"]);
+
 export function sourceFiles(dir = SRC) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) return name === "fsm" ? [] : sourceFiles(path);
+    if (statSync(path).isDirectory()) return STATE_OWNER_DIRS.has(name) ? [] : sourceFiles(path);
     if (!/\.(ts|tsx|svelte)$/.test(name) || /\.test\.tsx?$/.test(name) || name.endsWith(".d.ts")) return [];
     return [path];
   });

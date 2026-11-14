@@ -1,6 +1,7 @@
 import { Cause, Data, Effect, Schedule } from "effect";
 import type { Env } from "./types";
 import { removePushSubscription, type PushDb } from "./domain/PushSubscription/PushSubscription.store";
+import { raiseAttentionItem, type AttentionStoreDb } from "./domain/Attention/Attention.store";
 import { externalSourceHosts, parseInternalSourceHosts } from "./internal-source-hosts";
 import { sendPush, type PushSubscription } from "./push";
 
@@ -309,14 +310,10 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   const attentionId = intermediateProgress ? undefined : crypto.randomUUID();
   const notificationTag = taggedProgress ?? attentionId;
   if (attentionId) {
-    await env.DB.prepare(`INSERT INTO attention_items(id, owner_email, session_id, kind, title, body, href, created_at, dedupe_key, notification_tag)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).bind(
-      attentionId, email, notification.sessionId ?? null, notification.kind,
-      cleanText(notification.title, 50) || "my · ax", cleanText(notification.body, 200), destinationHref, dedupeKey, notificationTag,
-    ).run();
-    await env.DB.prepare(`DELETE FROM attention_items WHERE owner_email = ? AND id NOT IN (
-      SELECT id FROM attention_items WHERE owner_email = ? ORDER BY created_at DESC LIMIT 200
-    )`).bind(email, email).run();
+    await raiseAttentionItem(env.DB as unknown as AttentionStoreDb, {
+      id: attentionId, owner: email, sessionId: notification.sessionId ?? null, kind: notification.kind,
+      title: cleanText(notification.title, 50) || "my · ax", body: cleanText(notification.body, 200), href: destinationHref, dedupeKey, notificationTag: notificationTag ?? null,
+    });
   }
   const unreadRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>();
   const { payload, dismissalTags } = buildOwnerPushPayload(notification, {
