@@ -7,6 +7,8 @@ import { JobId } from "./Job.id";
 import { JobAlreadyExists, JobExhausted, JobNotActive, JobNotFound, JobNotPaused } from "./JobRejections.rejection";
 import { JobPaused, PauseJob } from "./PauseJob.command";
 import { JobResumed, ResumeJob } from "./ResumeJob.command";
+import { DeleteJob, JobDeleted } from "./DeleteJob.command";
+import { JobBookkeepingRecorded, RecordJobBookkeeping } from "./RecordJobBookkeeping.command";
 
 const JobFields = {
   ownerEmail: Schema.String,
@@ -41,7 +43,7 @@ export class Job extends Domain.Aggregate("Job", {
   id: JobId,
   state: JobState,
   initial: { _tag: "Unscheduled" },
-  commands: [CreateJob, PauseJob, ResumeJob, ClaimRun, EditJob],
+  commands: [CreateJob, PauseJob, ResumeJob, ClaimRun, EditJob, DeleteJob, RecordJobBookkeeping],
   decide: {
     CreateJob: (job, cmd) => (job._tag !== "Unscheduled" ? new JobAlreadyExists() : [new JobCreated({ ownerEmail: cmd.ownerEmail, name: cmd.name, prompt: cmd.prompt, cadenceSecs: cmd.cadenceSecs, maxRuns: cmd.maxRuns })]),
     PauseJob: (job) => {
@@ -68,12 +70,16 @@ export class Job extends Domain.Aggregate("Job", {
       if (found._tag === "Exhausted" && !exhausted) return new JobExhausted({ runCount: found.runCount });
       return [new JobEdited({ name: cmd.name, prompt: cmd.prompt, cadenceSecs: cmd.cadenceSecs, maxRuns: cmd.maxRuns, exhausted })];
     },
+    DeleteJob: (job) => (job._tag === "Unscheduled" ? new JobNotFound() : [new JobDeleted()]),
+    RecordJobBookkeeping: (job) => (job._tag === "Unscheduled" ? new JobNotFound() : [new JobBookkeepingRecorded()]),
   },
   evolve: {
     JobCreated: (_, e) => ({ _tag: "Active" as const, ownerEmail: e.ownerEmail, name: e.name, prompt: e.prompt, cadenceSecs: e.cadenceSecs, maxRuns: e.maxRuns, runCount: 0 }),
     JobPaused: (s) => (s._tag === "Active" ? { ...s, _tag: "Paused" as const } : s),
     JobResumed: (s) => (s._tag === "Paused" ? { ...s, _tag: "Active" as const } : s),
     RunClaimed: (s, e) => (s._tag === "Active" ? { ...s, _tag: e.exhausted ? ("Exhausted" as const) : ("Active" as const), runCount: e.runCount } : s),
+    JobDeleted: () => ({ _tag: "Unscheduled" as const }),
+    JobBookkeepingRecorded: (s) => s,
     JobEdited: (s, e) => (s._tag === "Unscheduled" ? s : { ...s, _tag: e.exhausted ? ("Exhausted" as const) : s._tag, name: e.name, prompt: e.prompt, cadenceSecs: e.cadenceSecs, maxRuns: e.maxRuns }),
   },
   reply: { ClaimRun: (s) => ({ runCount: s._tag === "Unscheduled" ? 0 : s.runCount, exhausted: s._tag === "Exhausted" }) },

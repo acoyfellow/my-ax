@@ -1,3 +1,4 @@
+import { EDIT_JOB_SQL, type JobStoreDb, jobWrite, PAUSE_JOB_SQL, RESUME_JOB_SQL } from "../domain/Job/Job.store";
 import { safely, shadowJob } from "../domain/shadow";
 import { shadowReadStatus } from "../domain/shadow-read";
 export type JobStatus = "active" | "paused" | "exhausted";
@@ -28,16 +29,14 @@ function changed(result: unknown): boolean {
 
 export async function markJobResumed(db: JobStatusDb, job: JobRef, scheduleId: string, nextRunAt: string): Promise<boolean> {
   const from = await shadowReadStatus(db, "jobs", job.id, job.ownerEmail);
-  const applied = changed(await db.prepare("UPDATE jobs SET status='active', schedule_id=?, next_run_at=?, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status='paused'")
-    .bind(scheduleId, nextRunAt, job.id, job.ownerEmail).run());
+  const applied = changed(await jobWrite(db as JobStoreDb, job.id, job.ownerEmail, { kind: "resume" }, RESUME_JOB_SQL, [scheduleId, nextRunAt, job.id, job.ownerEmail]));
   if (from !== undefined) safely(() => shadowJob("resumed", job.ownerEmail, from, applied ? "accepted" : "rejected"));
   return applied;
 }
 
 export async function markJobPaused(db: JobStatusDb, job: JobRef): Promise<boolean> {
   const from = await shadowReadStatus(db, "jobs", job.id, job.ownerEmail);
-  const applied = changed(await db.prepare("UPDATE jobs SET status='paused', schedule_id=NULL, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status='active'")
-    .bind(job.id, job.ownerEmail).run());
+  const applied = changed(await jobWrite(db as JobStoreDb, job.id, job.ownerEmail, { kind: "pause" }, PAUSE_JOB_SQL, [job.id, job.ownerEmail]));
   if (from !== undefined) safely(() => shadowJob("paused", job.ownerEmail, from, applied ? "accepted" : "rejected"));
   return applied;
 }
@@ -56,20 +55,10 @@ export interface JobEdit {
 
 export async function saveJobEdit(db: JobStatusDb, job: JobRef, from: JobStatus, edit: JobEdit): Promise<boolean> {
   if (from === "exhausted" && edit.status !== "exhausted") throw new Error("an exhausted job cannot be edited back to life");
-  return changed(await db.prepare("UPDATE jobs SET session_id=?, thread_mode=?, name=?, prompt=?, cadence_secs=?, max_runs=?, status=?, next_run_at=?, schedule_id=?, updated_at=datetime('now') WHERE id=? AND owner_email=? AND status=?")
-    .bind(edit.sessionId, edit.threadMode, edit.name, edit.prompt, edit.cadenceSecs, edit.maxRuns, edit.status, edit.nextRunAt, edit.scheduleId, job.id, job.ownerEmail, from).run());
+  return changed(await jobWrite(db as JobStoreDb, job.id, job.ownerEmail, { kind: "edit", name: edit.name, prompt: edit.prompt, cadenceSecs: edit.cadenceSecs, maxRuns: edit.maxRuns }, EDIT_JOB_SQL, [edit.sessionId, edit.threadMode, edit.name, edit.prompt, edit.cadenceSecs, edit.maxRuns, edit.status, edit.nextRunAt, edit.scheduleId, job.id, job.ownerEmail, from]));
 }
 
-export const CLAIM_RUN_SQL = `UPDATE jobs
-    SET run_count = run_count + 1,
-        status = CASE WHEN max_runs IS NOT NULL AND run_count + 1 >= max_runs THEN 'exhausted' ELSE 'active' END,
-        schedule_id = CASE WHEN max_runs IS NOT NULL AND run_count + 1 >= max_runs THEN NULL ELSE schedule_id END,
-        updated_at = datetime('now')
-    WHERE id = ?
-      AND owner_email = ?
-      AND status = 'active'
-      AND (max_runs IS NULL OR run_count < max_runs)
-    RETURNING max_runs, run_count, status`;
+export { CLAIM_RUN_SQL } from "../domain/Job/Job.store";
 
 export function pausedJob<T extends { status: JobStatus; schedule_id: string | null }>(row: T): T {
   return { ...row, status: "paused", schedule_id: null };

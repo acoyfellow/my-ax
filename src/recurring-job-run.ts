@@ -1,3 +1,4 @@
+import { JOB_FINISHED_LAST_SQL, JOB_FINISHED_NEXT_SQL, type JobStoreDb, jobWrite } from "./domain/Job/Job.store";
 import type { Env } from "./types";
 import { notifyOwner } from "./notify";
 import { recurringJobReceipt } from "./recurring-job-receipt";
@@ -52,12 +53,12 @@ export async function completeRecurringJobRun(env: Env, input: CompleteRecurring
   const ownerEmail = input.ownerEmail.toLowerCase();
   const error = input.error ? input.error.slice(0, 500) : null;
   const updateResult = input.nextRunAt
-    ? await env.DB.prepare(
-        "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      ).bind(input.nextRunAt, input.ranAt.toISOString(), error, input.jobId, ownerEmail).run().catch(() => undefined)
-    : await env.DB.prepare(
-        "UPDATE jobs SET last_run_at = ?, last_error = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      ).bind(input.ranAt.toISOString(), error, input.jobId, ownerEmail).run().catch(() => undefined);
+    ? await jobWrite(env.DB as unknown as JobStoreDb, input.jobId, ownerEmail, { kind: "bookkeeping" },
+        JOB_FINISHED_NEXT_SQL,
+        [input.nextRunAt, input.ranAt.toISOString(), error, input.jobId, ownerEmail]).catch(() => undefined)
+    : await jobWrite(env.DB as unknown as JobStoreDb, input.jobId, ownerEmail, { kind: "bookkeeping" },
+        JOB_FINISHED_LAST_SQL,
+        [input.ranAt.toISOString(), error, input.jobId, ownerEmail]).catch(() => undefined);
   // The UPDATE is owner-qualified: if it matched no row the job was deleted,
   // the id is stale, or the owner does not match. In every case the terminal
   // state was NOT persisted, so we must not emit a receipt/notification for it

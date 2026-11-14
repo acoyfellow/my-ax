@@ -12,6 +12,8 @@ import { Job } from "./Job.aggregate";
 import { JobExhausted, JobNotActive, JobNotFound, JobNotPaused } from "./JobRejections.rejection";
 import { JobPaused, PauseJob } from "./PauseJob.command";
 import { JobResumed, ResumeJob } from "./ResumeJob.command";
+import { DeleteJob, JobDeleted } from "./DeleteJob.command";
+import { JobBookkeepingRecorded, RecordJobBookkeeping } from "./RecordJobBookkeeping.command";
 
 const story = Story.make(MyAx);
 const j1 = Job.ref("j1");
@@ -129,6 +131,34 @@ test("the Domain aggregate agrees with the src/fsm job table for every status an
       }
     }
   }
+});
+
+test("a job in any state can be deleted once", async () => {
+  const histories = [[created()], [created(), new JobPaused()], [created(1), new RunClaimed({ runCount: 1, exhausted: true })]];
+  for (const history of histories) {
+    await run(
+      story(
+        Story.given(j1, ...history),
+        Story.when(j1, new DeleteJob()),
+        Story.then(j1, new JobDeleted()),
+        Story.state(j1, { _tag: "Unscheduled" }),
+        Story.when(j1, new DeleteJob()),
+        Story.rejected(new JobNotFound()),
+      ),
+    );
+  }
+});
+
+test("run bookkeeping keeps the job's state and is refused for a missing job", async () => {
+  await run(
+    story(
+      Story.given(j1, created(), new JobPaused()),
+      Story.when(j1, new RecordJobBookkeeping()),
+      Story.then(j1, new JobBookkeepingRecorded()),
+      Story.state(j1, { _tag: "Paused", runCount: 0 }),
+    ),
+  );
+  await run(story(Story.when(j1, new RecordJobBookkeeping()), Story.rejected(new JobNotFound())));
 });
 
 function eventFor(command: string, runCount: number, exhausted: boolean) {

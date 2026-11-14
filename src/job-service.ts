@@ -2,6 +2,7 @@
 // Called by: HTTP jobs routes, canonical Think tools, and owner MCP coordinator.
 // Does not own: authentication, native Agent alarm implementation, or presentation.
 
+import { createJobRecord, DELETE_JOB_COMPACT_SQL, DELETE_JOB_SQL, INSERT_JOB_SQL, type JobStoreDb, jobWrite, SET_JOB_ERROR_SQL, SET_JOB_SCHEDULE_COMPACT_SQL, SET_JOB_SCHEDULE_SQL } from "./domain/Job/Job.store";
 import { markJobPaused, markJobResumed, saveJobEdit } from "./fsm/job-status";
 import type { Env } from "./types";
 import { publishWorkspaceChange } from "./workspace-hub-client";
@@ -55,17 +56,18 @@ export class JobService {
     if ((count?.count ?? 0) >= MAX_ACTIVE_JOBS_PER_OWNER) throw new JobServiceError("QuotaExceeded", `Maximum active jobs is ${MAX_ACTIVE_JOBS_PER_OWNER}`);
     const id = crypto.randomUUID();
     const next = computeNextRun(this.now(), parsed.cadenceSecs);
-    await this.env.DB.prepare("INSERT INTO jobs (id, owner_email, session_id, thread_mode, name, prompt, cadence_secs, max_runs, run_count, status, next_run_at, idempotency_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, datetime('now'), datetime('now'))")
-      .bind(id, this.owner, parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, parsed.maxRuns, next, idempotencyKey ?? null).run();
+    await createJobRecord(this.env.DB as unknown as JobStoreDb, { id, ownerEmail: this.owner, name: parsed.name, prompt: parsed.prompt, cadenceSecs: parsed.cadenceSecs, maxRuns: parsed.maxRuns },
+      INSERT_JOB_SQL,
+      [id, this.owner, parsed.sessionId, parsed.threadMode, parsed.name, parsed.prompt, parsed.cadenceSecs, parsed.maxRuns, next, idempotencyKey ?? null]);
     let scheduleId: string | null = null;
     try {
       scheduleId = await this.runtime.schedule(this.env, { id, owner_email: this.owner, session_id: parsed.sessionId, thread_mode: parsed.threadMode, prompt: parsed.prompt, cadence_secs: parsed.cadenceSecs });
-      await this.env.DB.prepare("UPDATE jobs SET schedule_id = ? WHERE id = ? AND owner_email = ?").bind(scheduleId, id, this.owner).run();
+      await jobWrite(this.env.DB as unknown as JobStoreDb, id, this.owner, { kind: "bookkeeping" }, SET_JOB_SCHEDULE_SQL, [scheduleId, id, this.owner]);
       await this.evidence(id, "create", true, { scheduleId });
       return this.owned(id);
     } catch (error) {
       if (scheduleId) await this.runtime.cancel(this.env, { owner_email: this.owner, session_id: parsed.sessionId, schedule_id: scheduleId }).catch(() => undefined);
-      await this.env.DB.prepare("DELETE FROM jobs WHERE id = ? AND owner_email = ?").bind(id, this.owner).run().catch(() => undefined);
+      await jobWrite(this.env.DB as unknown as JobStoreDb, id, this.owner, { kind: "delete" }, DELETE_JOB_SQL, [id, this.owner]).catch(() => undefined);
       throw error;
     }
   }
@@ -100,7 +102,7 @@ export class JobService {
         // retaining the known-live replacement is safer than restoring a dead id.
         await this.runtime.cancel(this.env, old).catch(() => undefined);
         const message = "old alarm may still be orphaned";
-        await this.env.DB.prepare("UPDATE jobs SET last_error=? WHERE id=? AND owner_email=?").bind(message, id, this.owner).run();
+        await jobWrite(this.env.DB as unknown as JobStoreDb, id, this.owner, { kind: "bookkeeping" }, SET_JOB_ERROR_SQL, [message, id, this.owner]);
         await this.evidence(id, "update", true, { replacement, orphanedOldScheduleId: old.schedule_id, oldCancelError: String(error) });
         return this.owned(id);
       }
@@ -131,7 +133,7 @@ export class JobService {
         const current = await this.owned(id).catch(() => null);
         if (current && current.status === "active") {
           const replacement = await this.runtime.schedule(this.env, row).catch(() => null);
-          if (replacement) await this.env.DB.prepare("UPDATE jobs SET schedule_id=? WHERE id=? AND owner_email=?").bind(replacement, id, this.owner).run().catch(() => undefined);
+          if (replacement) await jobWrite(this.env.DB as unknown as JobStoreDb, id, this.owner, { kind: "bookkeeping" }, SET_JOB_SCHEDULE_COMPACT_SQL, [replacement, id, this.owner]).catch(() => undefined);
         }
         throw error;
       }
@@ -183,11 +185,11 @@ export class JobService {
     await this.runtime.cancel(this.env, row);
     try {
       await this.evidence(id, "delete", true, { snapshot: { name: row.name, sessionId: row.session_id, threadMode: row.thread_mode } });
-      await this.env.DB.prepare("DELETE FROM jobs WHERE id=? AND owner_email=?").bind(id, this.owner).run();
+      await jobWrite(this.env.DB as unknown as JobStoreDb, id, this.owner, { kind: "delete" }, DELETE_JOB_COMPACT_SQL, [id, this.owner]);
     } catch (error) {
       if (row.status === "active") {
         const replacement = await this.runtime.schedule(this.env, row).catch(() => null);
-        if (replacement) await this.env.DB.prepare("UPDATE jobs SET schedule_id=? WHERE id=? AND owner_email=?").bind(replacement, id, this.owner).run().catch(() => undefined);
+        if (replacement) await jobWrite(this.env.DB as unknown as JobStoreDb, id, this.owner, { kind: "bookkeeping" }, SET_JOB_SCHEDULE_COMPACT_SQL, [replacement, id, this.owner]).catch(() => undefined);
       }
       throw error;
     }

@@ -20,6 +20,7 @@ function jobStore(job: PersistedJob) {
           bind(..._values: unknown[]) {
             return {
               async first<T>() {
+                if (sql.startsWith("SELECT * FROM jobs")) return { ...job, name: "n", prompt: "p", cadence_secs: 60 } as T;
                 if (!sql.includes("UPDATE jobs")) return null;
                 if (job.status !== "active" || (job.max_runs !== null && job.run_count >= job.max_runs)) return null;
                 job.run_count += 1;
@@ -45,8 +46,9 @@ describe("bounded recurring jobs", () => {
     expect(await claimRecurringJobRun(store.env, "job-1", "OWNER@example.com")).toEqual({ max_runs: 1, run_count: 1, status: "exhausted" });
     expect(await claimRecurringJobRun(store.env, "job-1", "owner@example.com")).toBeNull();
     expect(store.job).toEqual({ max_runs: 1, run_count: 1, status: "exhausted", schedule_id: null });
-    expect(store.queries[0]).toContain("run_count < max_runs");
-    expect(store.queries[0]).toContain("schedule_id = CASE");
+    const claim = store.queries.find((sql) => sql.includes("UPDATE jobs")) ?? "";
+    expect(claim).toContain("run_count < max_runs");
+    expect(claim).toContain("schedule_id = CASE");
   });
 
   it("runs a capped job exactly N times without an N plus one dispatch", async () => {

@@ -24,6 +24,7 @@ function envMock(opts: { jobUpdateChanges?: number } = {}) {
               },
               async first() {
                 if (sql.includes("SELECT name FROM jobs")) return { name: "Fallback job" };
+                if (sql.startsWith("SELECT * FROM jobs")) return { status: "active", name: "Fallback job", prompt: "p", cadence_secs: 60, max_runs: null, run_count: 1 };
                 if (sql.includes("COUNT(*) AS count")) return { count: inserted.length };
                 return null;
               },

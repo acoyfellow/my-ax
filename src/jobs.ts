@@ -1,3 +1,4 @@
+import { claimJobRun, JOB_RAN_LAST_SQL, JOB_RAN_NEXT_SQL, type JobStoreDb, jobWrite } from "./domain/Job/Job.store";
 import type { AccessIdentity } from "./auth";
 // Recurring prompt job helpers.
 //
@@ -5,7 +6,6 @@ import type { AccessIdentity } from "./auth";
 // DO. D1 is a thin owner/session UI index (name, prompt, cadence, schedule_id,
 // run receipts). Manual Run now reuses the same `/inject-user-message` path.
 
-import { CLAIM_RUN_SQL } from "./fsm/job-status";
 import type { Env } from "./types";
 import * as rpc from "./rpc/contract";
 import { completeRecurringJobRun } from "./recurring-job-run";
@@ -92,9 +92,7 @@ export function remainingRecurringJobRuns(row: Pick<JobRow, "max_runs" | "run_co
 }
 
 export async function claimRecurringJobRun(env: Env, jobId: string, ownerEmail: string): Promise<Pick<JobRow, "max_runs" | "run_count" | "status"> | null> {
-  return env.DB.prepare(CLAIM_RUN_SQL)
-    .bind(jobId, ownerEmail.toLowerCase())
-    .first<Pick<JobRow, "max_runs" | "run_count" | "status">>();
+  return claimJobRun(env.DB as unknown as JobStoreDb, jobId, ownerEmail.toLowerCase());
 }
 
 /** Validate + normalize JobInput. Returns a tagged error if invalid. */
@@ -165,13 +163,13 @@ export async function runJobNow(env: Env, row: JobRow, now: Date = new Date()): 
   const nextRunAt = claim.status === "active" ? computeNextRun(now, row.cadence_secs) : null;
   if (ok) {
     if (nextRunAt) {
-      await env.DB.prepare(
-        "UPDATE jobs SET next_run_at = ?, last_run_at = ?, last_error = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      ).bind(nextRunAt, now.toISOString(), row.id, row.owner_email.toLowerCase()).run().catch(() => undefined);
+      await jobWrite(env.DB as unknown as JobStoreDb, row.id, row.owner_email.toLowerCase(), { kind: "bookkeeping" },
+        JOB_RAN_NEXT_SQL,
+        [nextRunAt, now.toISOString(), row.id, row.owner_email.toLowerCase()]).catch(() => undefined);
     } else {
-      await env.DB.prepare(
-        "UPDATE jobs SET last_run_at = ?, last_error = NULL, updated_at = datetime('now') WHERE id = ? AND owner_email = ?",
-      ).bind(now.toISOString(), row.id, row.owner_email.toLowerCase()).run().catch(() => undefined);
+      await jobWrite(env.DB as unknown as JobStoreDb, row.id, row.owner_email.toLowerCase(), { kind: "bookkeeping" },
+        JOB_RAN_LAST_SQL,
+        [now.toISOString(), row.id, row.owner_email.toLowerCase()]).catch(() => undefined);
     }
   } else {
     await completeRecurringJobRun(env, {

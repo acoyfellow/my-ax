@@ -1,3 +1,4 @@
+import { deleteSessionJobs, type JobStoreDb } from "../domain/Job/Job.store";
 import * as rpc from "../rpc/contract";
 import { applySessionEvent } from "../fsm/session-status";
 import { containsDecisionMarker } from "../decision-forgery-guard";
@@ -484,7 +485,7 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       // deleted session can keep executing recurring prompts from its facet.
       const jobs = await c.env.DB.prepare("SELECT owner_email, session_id, schedule_id FROM jobs WHERE session_id = ? AND owner_email = ?").bind(id, email).all<JobRow>();
       for (const job of jobs.results ?? []) await cancelJobSchedule(c.env, job);
-      await c.env.DB.prepare("DELETE FROM jobs WHERE session_id = ? AND owner_email = ?").bind(id, email).run();
+      await deleteSessionJobs(c.env.DB as unknown as JobStoreDb, id, email);
       await deleteSessionArtifacts(c.env, c.get("identity"), id);
       await deleteSessionAudioMessages(c.env, c.get("identity"), id);
       await c.env.DB.prepare(
