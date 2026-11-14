@@ -28,11 +28,10 @@ Current limit: there is no declared SLO or dashboard yet. Structured console eve
 
 The default posture is to fan work out, not to block on one long step.
 
-- `delegate_many` fans out to independent read-only analysis children.
+- `spawn_child` starts independent child chats with their own tools. They run at the same time and report back to the parent. See `src/agent-tree-tools.ts`.
+- Graded coding fleets run outside My AX, in gleam-agents.
 
-Parallel first: `delegate_many` runs independent children at the same time. Sequential work is the exception, used only when a task needs an earlier result. A shared Workers AI per-minute cap (error 3021) is backpressure: the scheduler halves its window, backs off, and retries. It marks a child "deferred" only when retries or the batch deadline run out. See `src/delegate-serial.ts`.
-
-So the theory is parallel-first, and the practice is parallel where the shared inference limit allows it. When the limit changes, the practice widens. The rule stays the same: prefer independent, resumable work over one blocking chain.
+Sequential work is the exception, used only when a task needs an earlier result. The rule stays the same: prefer independent, resumable work over one blocking chain.
 
 ## 4. Recipes are the reuse layer
 
@@ -56,7 +55,7 @@ On top of those primitives, My AX also uses tools built in this same workspace:
 | Dependency | What it is | Where My AX uses it |
 |---|---|---|
 | `@cloudflare/codemode` | One async program drives many tools in a namespace | `src/work-tools.ts`, `src/cm-snippets.ts` |
-| `@cloudflare/think` | Durable conversation and turn engine | `src/agent.ts` |
+| `@earendil-works/pi-durable` | Durable conversation and turn engine | `src/pi-engine/pi-chat-agent.ts` |
 | `@cloudflare/voice` | Voice turns into the canonical conversation | `src/voice-think-agent.ts` |
 | `@cloudflare/sandbox` | The `/home/user` container workspace | `src/workspace.ts` |
 | Pantry | Capability-scoped recipe store | `src/pantry-sync.ts` |

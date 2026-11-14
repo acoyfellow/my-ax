@@ -16,21 +16,21 @@ Status:
 | Check-in | ✅ | `GET /api/check-in` and MCP `my_ax_check_in` summarize unread Attention, running jobs, active run receipts, recent completions, and suggested steers. They add no storage. The shell keeps the raw API steer in `data-check-in-raw-href` and renders owner pages at `/attention`, `/runs`, and `/jobs` that preserve the active filter. | `src/check-in.ts`, `src/ui/CheckIn.svelte`, `npm run test:check-in`, `npm run test:check-in-shell`, `npm run test:owner-routes` |
 | Attention inbox | ✅ | D1 stores owner-scoped items with unread state, an href, and an optional source session. Push delivery is best effort. The row remains if push fails. `src/routes/attention.ts` owns both the raw `/api/attention` receipt and the rendered `/attention` owner view. The rendered view carries stable markers: `data-attention-source-href` for the source link and `data-attention-api-receipt-href` for the raw receipt. A same-origin `data-attention-seen-form` marks the current filtered view seen and returns to the owner page. | `src/routes/attention.ts`, `src/notify.ts`, `npm run test:attention-route`, `npm run test:owner-routes` |
 | Cross-device Attention dismissal | 🧪 | Marking a rendered filtered Attention view seen queues notification tags for piggybacking on the next real push; the service worker closes only matching visible notifications and recomputes its badge. A standalone silent dismissal push is not done because iOS requires a visible notification per push. | `src/routes/attention.ts`, `src/notify.ts`, `public/sw.js`, `npm run test:sw-dismissal-sweep` |
-| Completion receipts | ✅ | Normal turns can push completion while the owner is away. Recurring scheduled/manual job runs share terminalization and emit an actionable Attention receipt. Delegated child batches now leave an owner-visible Attention receipt when the batch terminalizes. | `src/agent.ts`, `src/recurring-job-run.ts`, `src/delegate-receipt.ts` |
+| Completion receipts | ✅ | Normal turns can push completion while the owner is away. Recurring scheduled/manual job runs share terminalization and emit an actionable Attention receipt. | `src/pi-engine/pi-chat-agent.ts`, `src/recurring-job-run.ts` |
 | Run receipts | 🧪 | An owner-scoped ledger of explicitly appended events. Saved-recipe runs append start and terminal events. It does not automatically capture every tool call or deploy. The rendered `/runs` owner views preserve valid status filters and show exact status summaries, and link back to the authoritative API receipt. The rendered view exposes `data-runs-api-receipt-href` plus per-run receipt, and raw event receipt markers (`data-run-receipt-href`, `data-run-events-receipt-href`), and offers safe next actions back to Check-in or the raw API receipt. | `src/run-receipts.ts`, `src/routes/runs.tsx`, `src/routes/recipes.ts`, `npm run test:run-receipts`, `npm run test:owner-routes` |
 
 ## Conversation and Client
 
 | Capability | Status | Current shape | Evidence |
 |---|---:|---|---|
-| Durable conversations | ✅ | A `MyAgent` Think facet owns each conversation. User messages persist before model execution; provider/runtime failure can still end a turn. | `src/agent.ts`, `npm run prove:resume` |
-| Stream recovery | ✅ | Think recovery plus a parked-stream watchdog covers the observed stalled path. It is not a provider availability guarantee. | `src/agent.ts`, `npm run prove:resume` |
+| Durable conversations | ✅ | A `PiChatAgent` owns each conversation. User messages persist before model execution; provider/runtime failure can still end a turn. | `src/pi-engine/pi-chat-agent.ts` |
+| Stream recovery | ✅ | The pi harness resumes turns after eviction, and a turn watchdog ends a stuck turn. It is not a provider availability guarantee. | `src/pi-engine/pi-chat-agent.ts` |
 | Conversation switching | ✅ | The Svelte client reconnects to the selected facet without document reload. | `src/ui/Chat.svelte` |
 | Pinned conversations | ✅ | Owner can pin, unpin, and drag-reorder conversations; server-authoritative fractional ranking, capped at 20 pins per owner (a new pin past the cap fails closed with a 409). | `src/session-pinning.ts`, `npm run test:session-pinning` |
 | Editable conversation starters | ✅ | The four new-conversation cards are owner-editable from Settings and via the agent through one shared per-owner store, seeded with defaults. | `src/conversation-starters.ts` |
 | Notification deep links | ✅ | Attention/PWA launches deliver same-origin targets; session targets switch the active facet. | `npm run test:deep-links` |
-| Transcript feed/export/search | ✅ | D1 projects conversation rows for feed, export, and FTS search. Live Think state remains authoritative. | `src/routes/sessions.ts`, `src/conversation-log.ts` |
-| Voice in active conversation | ✅ | Voice routes text turns into the canonical Think facet. Browser microphone activation remains explicit browser/user policy. | `src/voice-think-agent.ts`, `npm run prove:browser` |
+| Transcript feed/export/search | ✅ | D1 projects conversation rows for feed, export, and FTS search. Live pi state remains authoritative. | `src/routes/sessions.ts`, `src/conversation-log.ts` |
+| Voice in active conversation | ✅ | Voice routes text turns into the conversation's pi chat. Browser microphone activation remains explicit browser/user policy. | `src/voice-think-agent.ts`, `npm run prove:browser` |
 | Installable PWA | ✅ | Manifest, service worker, offline shell, badges, and deep links exist. Offline mode does not run model turns. | `public/sw.js`, `src/ui/` |
 
 ## Work and Tools
@@ -56,11 +56,11 @@ Status:
 
 | Capability | Status | Current shape | Evidence |
 |---|---:|---|---|
-| Recurring prompts | ✅ | Native per-session schedules run saved prompts. HTTP routes, Think tools, Code Mode, and MCP share one owner-scoped job service. D1 stores job state and durable history. The rendered `/jobs` owner views preserve valid status filters and show exact active/paused summaries, and link back to the authoritative API receipt. The rendered view exposes `data-jobs-api-receipt-href` markers plus per-job history receipt links (`data-job-history-receipt-href`), and offers safe next actions back to Check-in or the raw API receipt. | `src/jobs.ts`, `src/job-service.ts`, `src/routes/jobs.ts`, `npm run test:jobs-route`, `npm run test:owner-routes` |
+| Recurring prompts | ✅ | Owner-level alarms on `UserAgent` run saved prompts. HTTP routes, agent tools, Code Mode, and MCP share one owner-scoped job service. D1 stores job state and durable history. The rendered `/jobs` owner views preserve valid status filters and show exact active/paused summaries, and link back to the authoritative API receipt. The rendered view exposes `data-jobs-api-receipt-href` markers plus per-job history receipt links (`data-job-history-receipt-href`), and offers safe next actions back to Check-in or the raw API receipt. | `src/jobs.ts`, `src/job-service.ts`, `src/routes/jobs.ts`, `npm run test:jobs-route`, `npm run test:owner-routes` |
 | Running-job push banner | 🧪 | A caller can send rate-limited intermediate progress updates under one tag without creating Attention, then send one terminal tagged update that creates the Attention row and renotifies. This is unit-tested payload and storage behavior, not device evidence. | `src/notify.ts`, `migrations/0027_push_notification_state.sql`, `npm run test:push-progress-tag` |
 | Job drift repair | ⚠️ | Creation/update paths compensate known partial failures, but there is no automatic D1-vs-native-schedule reconciliation loop. | `src/jobs.ts`, `src/job-service.ts` |
 | Model catalog | ✅ | The deployment chooses models from `src/models.ts`; gateway-backed availability remains deployment-specific. | `src/models.ts`, `src/llm.ts` |
-| Vision attachments | ✅ | Owner-scoped R2 bytes attach only for models marked vision-capable; other models receive an omission notice. | `src/agent.ts`, `src/uploads.ts` |
+| Vision attachments | ✅ | Owner-scoped R2 bytes attach only for models marked vision-capable; other models receive an omission notice. | `src/pi-engine/pi-chat-agent.ts`, `src/uploads.ts` |
 | OAuth encryption | ✅ | `OAuthClientDO` encrypts tokens under `MASTER_KEY` and refreshes before expiry. Replacing the key makes existing grants unreadable. | `src/oauth-store.ts` |
 | Workspace backups | ✅ | R2 stores Sandbox backups; D1 stores the latest successful pointer. R2 S3 credentials are required in addition to the binding. | `src/workspace.ts`, `docs/deploy.md` |
 
@@ -75,7 +75,7 @@ Status:
 | URL policy | ✅ | Shared public-URL policy rejects literal private/loopback/link-local/reserved destinations and credentials; Browser validates request and final URL. | `src/public-url.ts`, `npm run test:public-url` |
 | Recording and bridge ownership | ✅ | Browser recordings and bridge tickets are owner/session scoped and fail closed when ownership cannot be proven. | `src/routes/browser.ts`, `src/bridge.ts` |
 | Workspace restore safety | ✅ | Restore failure is degraded/retryable; no ready marker or empty snapshot can overwrite the last pointer. Versioned pointers prevent stale backup ordering. | `src/workspace.ts`, migrations `0008` |
-| Observability | ⚠️ | Structured console events, health checks, status fields, run receipts, and proof scripts exist. There is no declared SLO, dashboard, or automatic reconciliation service. | `/api/health`, `src/agent.ts`, `src/jobs.ts` |
+| Observability | ⚠️ | Structured console events, health checks, status fields, run receipts, and proof scripts exist. There is no declared SLO, dashboard, or automatic reconciliation service. | `/api/health`, `src/pi-engine/pi-chat-agent.ts`, `src/jobs.ts` |
 
 ## Not Implemented On Purpose
 

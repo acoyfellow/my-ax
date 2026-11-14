@@ -2,7 +2,7 @@
 
 ## 1. Forward the User's OAuth Grant
 
-My AX stores each connector's OAuth token in a Durable Object keyed by the verified Access identity. When Think calls a connected MCP method, the Worker resolves that user's token, refreshes it when needed, and forwards the call. The model receives the tool result, not the bearer.
+My AX stores each connector's OAuth token in a Durable Object keyed by the verified Access identity. When a chat calls a connected MCP method, the Worker resolves that user's token, refreshes it when needed, and forwards the call. The model receives the tool result, not the bearer.
 
 ```text
 Access identity
@@ -23,7 +23,7 @@ src/bridge.ts
 
 ## 2. Borrow MCP Tools at Runtime
 
-Connected MCP servers contribute their catalog to the Think session through `Agent.mcp`. My AX does not reimplement each upstream API, but it still owns connector discovery, destination validation, OAuth storage and refresh, forwarding timeouts, and failure handling.
+Connected MCP servers contribute their catalog to each chat through the owner's `ConnectorAgent` (`Agent.mcp`). My AX does not reimplement each upstream API, but it still owns connector discovery, destination validation, OAuth storage and refresh, forwarding timeouts, and failure handling.
 
 An operator can expose an exact read/query subset to `mcp_code_mode`. New or unlisted methods remain native-only until the policy changes.
 
@@ -73,9 +73,9 @@ A container failure can lose writes made after the last successful snapshot. Roo
 
 ## 5. Separate Live Conversation State From Its Projection
 
-Think owns the active conversation, tool loop, recovery, and compaction. D1 stores an owner-scoped session index plus a projection of new turns for search, incremental feeds, and export.
+The pi harness owns the active conversation, tool loop, recovery, and compaction. D1 stores an owner-scoped session index plus a projection of new turns for search, incremental feeds, and export.
 
-The projection is useful for human history and external synchronization. It does not replace Think's live inference state.
+The projection is useful for human history and external synchronization. It does not replace pi's live inference state.
 
 External automation uses owner-authenticated endpoints:
 
@@ -89,7 +89,7 @@ GET  /api/sessions/:id/export?format=json|markdown
 
 Installed PWAs may subscribe to Web Push. `notify_owner` writes an Attention item before attempting delivery, so the durable inbox remains available when a push is delayed or rejected.
 
-Push requires VAPID configuration and browser support. Delivery is best-effort. Durable jobs and Think submissions, rather than the browser or push service, own scheduled execution.
+Push requires VAPID configuration and browser support. Delivery is best-effort. Durable jobs and pi turns, rather than the browser or push service, own scheduled execution.
 
 Notification and Attention links carry the target session. Warm PWA launches send that target to the mounted chat, which switches its active session instead of reloading cached state.
 

@@ -9,15 +9,17 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/check-in.ts` + `src/routes/check-in.ts` | Owner check-in read model over Attention, jobs, and run receipts. |
 | `src/artifacts.ts` + `src/routes/artifacts.ts` | One-off Svelte artifact compile/storage path plus owner-scoped preview/index routes. |
 | `src/auth.ts` | Verifies the Cloudflare Access JWT (when configured); attaches `identity` to the request context. |
-| `src/agent.ts` | Active `MyAgent extends Think` Durable Object — native chat, tools, unified durable submissions via `runTurn`, D1 mirror hooks, invisible Session-backed memory. |
-| `src/delegate-many.ts` | Static `delegate_many`. The canonical parent runs at most two run-scoped, read-only `ReadOnlyDelegateAgent` Think facets through the official `runAgentTool`, one after the other (serially, not concurrently) because they share one Workers AI per-minute inference cap. Children cannot delegate. Retained agent-tool events and runs are the evidence. The parent owns the synthesis. Later delegations opportunistically clear older terminal child runs. |
-| `src/think-workspace.ts` | Adapts Think workspace tools to the real Sandbox `/home/user` workspace. |
+| `src/pi-engine/pi-chat-agent.ts` | `PiChatAgent` Durable Object, one per conversation. It runs the pi durable harness: chat, tools, turn recovery, compaction, and the D1 conversation index. |
+| `src/agent-tree.ts` + `src/agent-tree-tools.ts` | `spawn_child` and `wait_child`. A parent chat starts a full pi child chat with tools, and the child reports back when it is done. |
+| `src/connector-agent.ts` | `ConnectorAgent`, one per owner. It holds the native MCP connections that pi chats and the MCP explorer call. |
+| `src/saved-recipe-run.ts` | Runs a saved recipe in-process with the caller's tool context and appends its run receipt. |
+| `src/think-workspace.ts` | Adapts file reads and writes to the real Sandbox `/home/user` workspace. |
 | `src/notify.ts` + `src/push.ts` | Owner-scoped Web Push transport and agent-notification delivery. |
 | `src/browser-tools.ts` | Cloudflare Browser Run `browser_open` tool and inline replay-receipt payload. |
 | `src/routes/browser.ts` | Replay page and server-side Browser Run recording retrieval for rrweb playback. |
 | `src/routes/mcp.ts` | Direct MCP coordinator: bounded Code Mode orchestration for owner chat sessions, owner-scoped one-off push delivery through `notify_owner`, and one explicit Run Receipt connected-laptop observation tool. |
 | `src/saved-recipes.ts` + `src/routes/recipes.ts` | Owner-approved saved `work_code` recipes. They run only against an owned session, reuse the normal Work Code Mode bridge, and append start/terminal Run Receipt events. |
-| `src/llm.ts` + `src/models.ts` | Model/provider routing helpers and the operator-controlled catalog used by Think agents. |
+| `src/llm.ts` + `src/models.ts` | Model/provider routing helpers and the operator-controlled catalog. |
 | `src/tools.ts` | Product-native tool allowlist plus host handlers used by Work Code Mode. |
 | `src/work-tools.ts` | Unified `work_search` + `work_code` dispatcher over My AX Workspace, My Machine, the live-UI Page connector, and a codemode namespace, with location-tagged call receipts. |
 | `src/ui/page-registry.ts` + `src/ui/artifact-tools.ts` | Live-UI Page connector verbs (`page.*`, resolved over the chat WebSocket) plus the artifact self-registration registry that lets a created artifact propose scoped tools the agent then invokes. |
@@ -29,7 +31,7 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/workspace.ts` | Workspace restore/snapshot orchestration around Sandbox backups. |
 | `src/computer-workspace.ts` | Legacy owner-scoped Durable Object storage class. The binding and class export remain only to preserve stored data until an explicit migration removes them. It is not exposed to the model or product API. |
 | `src/views/` | Server-rendered JSX shells: `Layout`, `BetaPage` (the single-root app served at `/` and `/beta`), `CapabilitiesPage`. They render the `<head>` + Svelte 5 mount points that hydrate on load. The legacy multi-mount `ChatPage` is retired. |
-| `src/ui/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. `delegate_many` results group into at most two compact child snapshots, each with status, summary, attempts, and bounded details. Agents 0.17.0 supports detached child runs and official progress frames. This custom Svelte socket does not yet expose the EventTarget that `useAgentToolEvents` needs. The UI therefore labels and renders retained raw tool output instead of claiming live progress. Reconnect and transcript replay reuse that output. Cancellation and child drill-in are absent because the current parent route exposes no safe official action surface. |
+| `src/ui/` | Svelte client: app shell, chat runtime, sessions, settings, connectors, Attention, and allowlisted result widgets. Old `delegate_many` results in a transcript still render as compact child snapshots. |
 | `migrations/` | D1 schema migrations. |
 
 The chat surface has no hand-written `.js` files. Everything in `public/static/` is fonts, generated CSS, and brand assets.
@@ -42,8 +44,9 @@ Browser
   |  HTTPS (Cloudflare Access JWT enforced at the edge, when configured)
   v
 <your-host> (Worker `my-ax`)
-  |-> USER_AGENT / UserAgent DO  -- one durable root per user
-  |     `-> MyAgent facets       -- per-session Think chat, recovery, submissions, memory
+  |-> USER_AGENT / UserAgent DO  -- one durable root per user: job alarms, desk fan-out
+  |-> CONNECTOR_AGENT / ConnectorAgent DO -- one per user: native MCP connections
+  |-> PI_CHAT / PiChatAgent DO   -- one per conversation: pi harness chat, recovery, compaction
   |            |
   |            |-> OAuthClientDO  -- per-user encrypted OAuth bearers used to register native Agent.mcp tools
   |            |-> Sandbox DO     -- per-user persistent My AX Workspace
@@ -53,7 +56,7 @@ Browser
   |            |      |- workspace.* -> My AX Workspace
   |            |      |- machine.*   -> outbound Machinectl relay
   |            |      `- page.*      -> live browser UI (over the chat WS)
-  |            |-> D1 `my-ax-db` -- session registry, Think-turn mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
+  |            |-> D1 `my-ax-db` -- session registry, conversation mirror, snapshots, FTS memory, push subs, Attention, jobs, artifact index, run receipts
   |            |-> R2 uploads     -- owner-scoped image attachments + screenshot/Svelte artifact objects
   |            |-> Browser Run    -- public-page browser sessions + native rrweb recording receipts
   |            `-> Models         -- curated operator-controlled models
@@ -69,13 +72,15 @@ Wrangler bindings (see `wrangler.jsonc`):
 | Binding | Type | Purpose |
 |---|---|---|
 | `AI` | Workers AI | Reasoning model calls (optionally routed through AI Gateway for observability) |
-| `USER_AGENT` | Durable Object (`UserAgent`) | One durable root per user; owns conversation `MyAgent` facets |
+| `USER_AGENT` | Durable Object (`UserAgent`) | One durable root per user. It owns recurring job alarms and fans desk frames out to the owner's chats. |
+| `PI_CHAT` | Durable Object (`PiChatAgent`) | One pi conversation per instance |
+| `CONNECTOR_AGENT` | Durable Object (`ConnectorAgent`) | One per user. It holds native MCP connections. |
 | `OAUTH_CLIENT` | Durable Object (`OAuthClientDO`) | One instance per user — encrypted bearer vault feeding native `Agent.mcp` registrations |
 | `MACHINE_HOST` | Durable Object (`MachineHost`) | One outbound-connected physical laptop relay per user |
 | `SANDBOX` | Durable Object (`Sandbox` from @cloudflare/sandbox) | One container per user; canonical shell/process/preview workspace |
 | `COMPUTER` | Durable Object (`ComputerWorkspace`) | Legacy binding retained to prevent orphaning owner data before an explicit storage migration. It has no model or product API surface. |
 | `BACKUP_BUCKET` | R2 | Sandbox workspace backup archives |
-| `DB` | D1 | Session registry, Think-turn mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
+| `DB` | D1 | Session registry, conversation mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
 | `AUDIT_KV` | KV | 90-day audit receipts written by `bridge.ts` |
 | `BROWSER` | Browser Run binding | Hosted public-page browser sessions and native recording sessions for `browser_open` |
 | `LOADER` | Worker Loader | Unified Work Code Mode plus optional deploy-approved MCP Code Mode. |
@@ -93,7 +98,7 @@ chat WebSocket and only work while a chat tab is connected.
 
 **R2 backup bucket** holds Sandbox backup archives for `/home/user`. The runtime workspace remains container-local for fast scans and tool I/O; `src/workspace.ts` persists the latest backup id in D1 and restores it into a fresh Sandbox. A requested recycle must publish a snapshot before it destroys the current container. The legacy `ComputerWorkspace` Durable Object binding and class export remain only to prevent data loss until an explicit storage migration is complete. No model tool or product API can reach that legacy storage.
 
-**Think storage in `MyAgent`** is the source of truth for active native chat messages, stream recovery, durable/programmatic turns, and the per-user `memory` context block (long-lived facts/decisions/preferences the model writes via Session's auto-wired `set_context` tool). Owner/API injection and native recurring alarms both submit durable turns through Think's unified `runTurn({ mode: "submit" })` path. **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, Attention, recurring jobs and job evidence, saved recipes, an indexed mirror of new Think turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
+**pi harness storage in `PiChatAgent`** is the source of truth for active chat messages, turn recovery, and compaction. Owner/API injection and recurring job alarms both submit turns to the pi chat. **D1** stores the owner-facing sessions registry, latest workspace snapshot pointer per user, push subscriptions, Attention, recurring jobs and job evidence, saved recipes, an indexed mirror of new turns used by `search_conversations`, `/entries`, and `/export`, the artifact index, and explicitly posted Run Receipt events. **R2 uploads** stores owner-scoped upload bytes plus persisted screenshot/Svelte artifact objects.
 
 **KV `AUDIT_KV`** stores `bridge.ts` call receipts for 90 days. Each stored record includes caller, target, method, and timestamp; Work Code Mode calls use their own response envelope.
 
@@ -125,28 +130,28 @@ Production uses the verified Access JWT email as the owner key. Local developmen
 
 ## Owner HTTP Surfaces
 
-Beyond the WebSocket (`/agents/my-agent/:id`) and the CRUD on `/api/sessions`, these owner-authenticated surfaces are worth calling out because they are the stable automation and check-in paths:
+Beyond the WebSocket (`/agents/pi-chat/:id`) and the CRUD on `/api/sessions`, these owner-authenticated surfaces are worth calling out because they are the stable automation and check-in paths:
 
 - **`GET /api/check-in`** — owner loop front door. Derives needs-owner, running, completed, and suggested steer groups from Attention, jobs, and run receipts without storing a new projection. Its ordered `buckets` are the stable owner-return read model: each bucket carries an exact total, capped samples/sample ids, and an optional `steer` so agents and the shell do not infer semantics from display labels or href strings. Raw API steers stay machine-readable while the shell maps them to rendered owner destinations such as `/attention`, `/runs`, and `/jobs`; rendered bucket links preserve the raw receipt href in `data-check-in-raw-href` for proof and debugging.
 - **Attention owner return** — `src/routes/attention.ts` owns both the authoritative raw `GET /api/attention` receipt and the rendered `GET /attention` owner page. Both paths parse the same `kind`/`sessionId` filters and share `buildAttentionListFilter(...)`, so the owner-friendly destination and the machine-readable receipt stay aligned while Access middleware remains registered in `src/index.tsx`. Rendered Attention also exposes a same-origin `data-attention-seen-form` through `POST /attention/seen`: the form marks only the current filtered view seen, uses a same-origin `Origin` guard, and redirects through `formatRenderedAttentionReturnHref(...)` back to the matching rendered owner page.
 - **Rendered owner receipt links** — rendered owner pages that mirror raw API list receipts preserve active filters when linking back to the authoritative `/api/...` receipt. `/attention` preserves `kind`/`sessionId`, `/runs` preserves `status`, and `/jobs` preserves `status`, so owners can move between friendly pages and machine-readable receipts without losing the exact view context. The rendered pages also expose stable proof/debug metadata for those links: `/attention` uses `data-attention-api-receipt-href` for raw Attention receipts and `data-attention-source-href` for normalized source links, `/runs` uses `data-runs-api-receipt-href`, `data-run-receipt-href`, and `data-run-events-receipt-href`, and `/jobs` uses `data-jobs-api-receipt-href` and `data-job-history-receipt-href`. Invalid rendered filters are not propagated into raw receipt links: unsupported `/attention?sessionId=...`, `/runs?status=...`, and `/jobs?status=...` pages keep owner-return controls visible while linking to the unfiltered `/api/attention`, `/api/runs`, or `/api/jobs` receipt.
-- **`POST /api/sessions/:id/inject`** — inbound steering. Validates ownership against `sessions.owner_email`, forwards to `MyAgent`, and enqueues a durable Think submission. Connected PWAs repaint the injected user turn and assistant response live.
+- **`POST /api/sessions/:id/inject`** — inbound steering. Validates ownership against `sessions.owner_email`, and submits the message to the pi chat. Connected PWAs repaint the injected user turn and assistant response live.
 - **`GET /api/sessions/:id/entries?after=<cursor>&limit=<n>`** — incremental outbound sync. Reads `conversation_entries` from D1 by monotonic entry id, returns chronological rows strictly after the cursor, and is safe to poll idempotently.
 - **`GET /api/sessions/:id/export?format=json|markdown`** — durable full transcript download. Reads `conversation_entries` from D1 directly (no Sandbox spin-up), enforces ownership in SQL, and returns a `Content-Disposition: attachment` response.
 
 ## Memory Boundary
 
-my-ax uses Think `Session`'s built-in `memory` context block. `MyAgent.configureSession` declares one writable block (`maxTokens: 2000`), a cached system prompt, and Hermes-style compaction at 100k estimated tokens. The model writes durable facts/decisions/preferences via Session's auto-wired `set_context` tool; each conversation runs as a `MyAgent` facet inside the user's one `UserAgent` root DO. There is no memory UI — the only product surface is talking to the agent.
+Each pi chat keeps a small writable chat memory in its own Durable Object storage, and the pi harness compacts long conversations. Each conversation runs as its own `PiChatAgent`. There is no memory UI. The only product surface is talking to the agent.
 
 ## Browser and MCP Surfaces
 
 - **Trusted inline widget registry** — `src/ui/tool-result-widgets.ts` classifies tool output into an explicit allowlisted Svelte renderer. It never accepts arbitrary component names, HTML, or iframe URLs from model-adjacent output. Unknown payloads fall back to inert raw text. For Svelte artifacts it accepts only same-origin `/api/artifacts/:uuid/preview` URLs and mounts them in an `allow-scripts` sandboxed iframe.
-- **`create_svelte_artifact`** — a native Think tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
-- **`browser_open`** — a native Think tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
+- **`create_svelte_artifact`** — a native tool for one-off, self-contained Svelte 5 UI requested by the user. The worker compiles source with `svelte/compiler`, stores an owner/session-scoped manifest in R2 with indexed D1 metadata, and returns the allowlisted inline-preview payload. The preview document is routed through the owner-scoped app endpoint, then executes in an `allow-scripts` sandboxed iframe without same-origin/cookie authority and with a locked-down CSP.
+- **`browser_open`** — a native tool backed by Cloudflare Browser Run. It currently targets public/browser-visible URLs, returns rendered title/text-preview metadata, and persists a native recording session. The trusted inline tool card auto-mounts an embedded iframe pointing at an allowlisted same-origin `/browser/replay/:id?embed=1` route.
 - **`work_search` / `work_code`** — the model-facing work surface. One catalog and one bounded program span the canonical persistent Sandbox, the connected physical machine, the live-UI Page connector, and a codemode namespace. Child calls carry location, method, status, and duration metadata.
 - **Recurring jobs** — `JobService` is the sole business boundary for list/create/update/pause/resume/run/delete/history. Every adapter supplies the verified owner; all reads and mutations scope SQL by that owner. Active updates create the replacement native schedule before persistence, cancel it if persistence fails, and retire the old schedule only after the new row is durable. `job_events` retains mutation/run evidence and idempotency keys bound repeated create/run requests.
 - **`POST /api/mcp`** — a minimal MCP JSON-RPC coordinator for owner-scoped chat-session and recurring-job orchestration, immediate one-off `notify_owner` Web Push delivery, and explicit Run Receipt observations; it is not a generic arbitrary-tool gateway.
 
 ## Durable Object History
 
-Wrangler Durable Object migrations are append-only deployment history. Active bindings include the owner root, conversation facet, OAuth store, machine host, Sandbox, and direct-routed Voice agent. A temporary `LEGACY_MY_AGENT` binding remains solely for lazy migration of pre-facet sessions; access to it is gated by an owner-scoped D1 session row and it should be removed after a measured migration cutoff.
+Wrangler Durable Object migrations are append-only deployment history. Active bindings include the owner root, pi chats, the connector agent, the OAuth store, the machine host, Sandbox, and the direct-routed voice agent. The think engine (`MyAgent`) was removed by migration `v17-delete-my-agent`. Its chats were exported, and their D1 transcripts remain.
