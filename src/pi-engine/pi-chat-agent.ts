@@ -82,6 +82,10 @@ function hasGatewayModels(env: Env): boolean {
   return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
 }
 
+function logHarnessReport(error: unknown, info: unknown): void {
+  console.error("pi_harness_report", { info, err: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });
+}
+
 export class PiChatAgent extends Agent<Env, PiChatState> {
   static options = { sendIdentityOnConnect: false };
   initialState: PiChatState = {};
@@ -101,7 +105,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
       this.registry.install(connectorToolsExtension(() => this.connectorRunner()));
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
-      return Harness.open(storage, { models, registry: this.registry, onWake }, context);
+      return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport }, context);
     },
     defaults: hasGatewayModels(this.env)
       ? { model: { provider: PI_GATEWAY_PROVIDER_ID, id: PI_ENGINE_GATEWAY_DEFAULT_MODEL }, thinkingLevel: "medium" }
