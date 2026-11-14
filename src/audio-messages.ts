@@ -1,6 +1,7 @@
 import type { AccessIdentity } from "./auth";
 import type { Env } from "./types";
 import { gatewayConfig } from "./llm";
+import { createAudioMessageRecord, deleteAudioMessageRecord, deleteSessionAudioRecords, type RecordDb } from "./domain/records";
 
 // Audio Messages: short agent-generated TTS clips delivered into a
 // conversation and rendered inline like Svelte artifacts. MVP scope keeps
@@ -120,9 +121,7 @@ export async function createAudioMessage(
     customMetadata: { owner: ownerEmail, sessionId, kind: "audio-message", expiresAt },
   });
   try {
-    await env.DB.prepare(`INSERT INTO audio_messages (id, owner_email, session_id, storage_key, text, voice, mime, bytes, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, ownerEmail, sessionId, storageKey, text, voice, mime, bytes.length, createdAt, expiresAt).run();
+    await createAudioMessageRecord(env.DB as unknown as RecordDb, { id, owner: ownerEmail, sessionId, storageKey, text, voice, mime, bytes: bytes.length, createdAt, expiresAt });
   } catch (error) {
     await bucket(env).delete(storageKey).catch(() => undefined);
     throw error;
@@ -149,7 +148,7 @@ export async function getAudioMessageObject(env: Env, identity: AccessIdentity, 
   if (Date.parse(row.expires_at) <= Date.now()) {
     // Expired: best-effort physical cleanup, then treat as gone.
     await bucket(env).delete(row.storage_key).catch(() => undefined);
-    await env.DB.prepare("DELETE FROM audio_messages WHERE id = ? AND owner_email = ?").bind(id, normalizedEmail(identity)).run().catch(() => undefined);
+    await deleteAudioMessageRecord(env.DB as unknown as RecordDb, normalizedEmail(identity), id, row.storage_key).catch(() => undefined);
     return null;
   }
   return bucket(env).get(row.storage_key);
@@ -157,10 +156,7 @@ export async function getAudioMessageObject(env: Env, identity: AccessIdentity, 
 
 export async function deleteSessionAudioMessages(env: Env, identity: AccessIdentity, sessionId: string): Promise<{ deleted: number }> {
   const ownerEmail = normalizedEmail(identity);
-  const result = await env.DB.prepare("SELECT storage_key FROM audio_messages WHERE session_id = ? AND owner_email = ?")
-    .bind(sessionId, ownerEmail).all<{ storage_key: string }>();
-  const keys = (result.results ?? []).map((row) => row.storage_key);
-  await env.DB.prepare("DELETE FROM audio_messages WHERE session_id = ? AND owner_email = ?").bind(sessionId, ownerEmail).run();
+  const keys = await deleteSessionAudioRecords(env.DB as unknown as RecordDb, ownerEmail, sessionId);
   if (keys.length) await bucket(env).delete(keys).catch((error) => {
     console.error("audio_message_cleanup_failed", { sessionId, ownerEmail, count: keys.length, err: error instanceof Error ? error.message : String(error) });
   });

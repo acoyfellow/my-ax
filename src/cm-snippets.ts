@@ -24,6 +24,7 @@
 // native one without guessing.
 
 import type { Env } from "./types";
+import { saveSnippetProjection, type RecordDb } from "./domain/records";
 import { hasRetiredRecipeCapability, type SavedRecipe } from "./saved-recipes";
 import type { Snippet } from "@cloudflare/codemode";
 
@@ -127,11 +128,24 @@ export async function projectSavedRecipe(env: Env, recipe: SavedRecipe): Promise
   } catch { /* empty */ }
   const connectors = connectorsFromCapabilities(capabilities);
   const inputSchema = recipe.input_schema_json;
+  const id = existing?.id ?? crypto.randomUUID();
+  const savedAt = Date.parse(recipe.created_at) || Date.now();
+  const codemodeExecutionId = syntheticExecutionId(recipe.id);
+  await saveSnippetProjection(env.DB as unknown as RecordDb, {
+    existingId: existing?.id ?? null,
+    id,
+    owner,
+    name: recipe.name,
+    description: recipe.description,
+    code: recipe.code,
+    inputSchemaJson: inputSchema,
+    connectorsJson: JSON.stringify(connectors),
+    sourceRecipeId: recipe.id,
+    savedAt,
+    codemodeExecutionId,
+    now,
+  });
   if (existing) {
-    await env.DB.prepare(
-      `UPDATE cm_snippets SET description = ?, code = ?, input_schema_json = ?, connectors_json = ?, source_recipe_id = ?, updated_at = ?
-       WHERE id = ?`,
-    ).bind(recipe.description, recipe.code, inputSchema, JSON.stringify(connectors), recipe.id, now, existing.id).run();
     return {
       ...existing,
       description: recipe.description,
@@ -142,13 +156,6 @@ export async function projectSavedRecipe(env: Env, recipe: SavedRecipe): Promise
       updated_at: now,
     };
   }
-  const id = crypto.randomUUID();
-  const savedAt = Date.parse(recipe.created_at) || Date.now();
-  const codemodeExecutionId = syntheticExecutionId(recipe.id);
-  await env.DB.prepare(
-    `INSERT INTO cm_snippets (id, owner_email, name, description, code, input_schema_json, connectors_json, saved_at, source_recipe_id, codemode_execution_id, provenance, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'projected', ?, ?)`,
-  ).bind(id, owner, recipe.name, recipe.description, recipe.code, inputSchema, JSON.stringify(connectors), savedAt, recipe.id, codemodeExecutionId, now, now).run();
   return {
     id,
     owner_email: owner,

@@ -1,4 +1,5 @@
 import { slugTrigger } from "./registry";
+import { createSkillRecord, deleteSkillRecord, updateSkillRecord, type SkillDb, type SkillWrite } from "../domain/Skill/Skill.store";
 
 export type SkillRow = {
   id: string;
@@ -95,6 +96,10 @@ type D1Like = {
   prepare(query: string): { bind(...values: unknown[]): { all<T>(): Promise<{ results?: T[] }>; first<T>(): Promise<T | null>; run(): Promise<unknown> } };
 };
 
+function skillWrite(draft: SkillDraft): SkillWrite {
+  return { name: draft.name, description: draft.description, instructions: draft.instructions, allowedToolsJson: JSON.stringify(draft.allowedTools ?? []) };
+}
+
 export class SkillService {
   constructor(private db: D1Like, private ownerEmail: string, private now: () => Date = () => new Date(), private newId: () => string = () => crypto.randomUUID()) {}
 
@@ -123,9 +128,7 @@ export class SkillService {
     if (await this.byName(draft.name)) throw new SkillError("Conflict", `You already have a skill called ${draft.name}`);
     const id = this.newId();
     const at = this.now().toISOString();
-    await this.db.prepare("INSERT INTO skills (id, owner_email, name, description, instructions, allowed_tools_json, source_session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, this.owner(), draft.name, draft.description, draft.instructions, JSON.stringify(draft.allowedTools ?? []), draft.sourceSessionId ?? null, at, at)
-      .run();
+    await createSkillRecord(this.db as SkillDb, this.owner(), id, at, skillWrite(draft), draft.sourceSessionId ?? null);
     return this.get(id);
   }
 
@@ -134,15 +137,13 @@ export class SkillService {
     const draft = validateSkillDraft({ ...current, ...input });
     const clash = await this.byName(draft.name);
     if (clash && clash.id !== id) throw new SkillError("Conflict", `You already have a skill called ${draft.name}`);
-    await this.db.prepare("UPDATE skills SET name = ?, description = ?, instructions = ?, allowed_tools_json = ?, updated_at = ? WHERE id = ? AND owner_email = ?")
-      .bind(draft.name, draft.description, draft.instructions, JSON.stringify(draft.allowedTools ?? []), this.now().toISOString(), id, this.owner())
-      .run();
+    await updateSkillRecord(this.db as SkillDb, this.owner(), id, this.now().toISOString(), skillWrite(draft));
     return this.get(id);
   }
 
   async remove(id: string): Promise<void> {
     await this.get(id);
-    await this.db.prepare("DELETE FROM skills WHERE id = ? AND owner_email = ?").bind(id, this.owner()).run();
+    await deleteSkillRecord(this.db as SkillDb, this.owner(), id);
   }
 }
 

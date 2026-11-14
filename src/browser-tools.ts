@@ -1,6 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 import { jsonSchema, tool, type ToolSet } from "ai";
 import type { Env } from "./types";
+import { saveBrowserRecording, type RecordDb } from "./domain/records";
 import type { AccessIdentity } from "./auth";
 import { storeInlineRasterArtifact } from "./uploads";
 import { safePublicHttpUrl } from "./public-url";
@@ -71,8 +72,7 @@ export function createMyAxBrowserTools(env: Env, identity?: () => AccessIdentity
           const ownerSession = ownerSessionId?.();
           if (owner && ownerSession) {
             try {
-              await env.DB.prepare("INSERT OR REPLACE INTO browser_recordings(id, owner_email, session_id, created_at) VALUES (?, ?, ?, datetime('now'))")
-                .bind(sessionId, owner.email.toLowerCase(), ownerSession).run();
+              await saveBrowserRecording(env.DB as unknown as RecordDb, sessionId, owner.email.toLowerCase(), ownerSession);
               replayUrl = `/browser/replay/${encodeURIComponent(sessionId)}`;
             } catch {
               replayUrl = undefined;

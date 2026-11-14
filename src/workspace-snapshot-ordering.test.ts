@@ -24,6 +24,9 @@ function fakeDb(initialVersion?: number) {
       if (sql.includes("workspace_snapshot_history")) {
         return { bind() { return { async run() {} }; } };
       }
+      if (sql.startsWith("SELECT snapshot_version FROM workspace_snapshots")) {
+        return { bind() { return { async first() { return row ? { snapshot_version: row.version } : null; } }; } };
+      }
       assert.match(sql, /snapshot_version=workspace_snapshots\.snapshot_version \+ 1/);
       assert.doesNotMatch(sql, /Date\.now|random|WHERE workspace_snapshots\.snapshot_version/);
       return {
