@@ -33,7 +33,16 @@ no_local_fakes() {
   done
 }
 
-step check npm run check
+check_at_head() {
+  head=$(git rev-parse HEAD)
+  if [ -z "$(git status --porcelain -- src scripts migrations package.json)" ] && [ "$(cat "$LOG/check.sha" 2>/dev/null)" = "$head" ]; then
+    echo "npm run check already green at $head"
+    return 0
+  fi
+  npm run check && echo "$head" > "$LOG/check.sha"
+}
+
+step check check_at_head
 step item1-files has_files src/domain/refusals.ts migrations/0042_domain_refusals.sql
 step item1-test "$TSX" --test src/domain/refusals.test.ts
 step item2-file has_files verify/prod-write-probe.mjs
