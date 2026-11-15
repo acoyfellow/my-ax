@@ -10,6 +10,8 @@ import { SaveRecipe, RecipeSaved } from "./SaveRecipe.command";
 import { RecipeAlreadyExists, RecipeNotFound, RecipeTransitionRefused } from "./RecipeRejections.rejection";
 import { ApproveRecipe, RecipeApproved } from "./ApproveRecipe.command";
 import * as Commands from "./commands";
+import { DeleteRecipe, RecipeDeleted } from "./DeleteRecipe.command";
+import { EditRecipe, RecipeEdited } from "./EditRecipe.command";
 
 const story = Story.make(MyAx);
 const ref = Recipe.ref("x1");
@@ -41,6 +43,24 @@ test("a Recipe is created once, in the stage asked for", () =>
       Story.rejected(new RecipeAlreadyExists()),
     ),
   ));
+
+test("editing a Recipe keeps its stage, and a deleted Recipe is gone", () =>
+  run(
+    story(
+      Story.given(ref, new RecipeSaved({ ownerEmail: OWNER, stage: "Enabled" })),
+      Story.when(ref, new EditRecipe()),
+      Story.then(ref, new RecipeEdited()),
+      Story.state(ref, { _tag: "Present", stage: "Enabled" }),
+      Story.when(ref, new DeleteRecipe()),
+      Story.then(ref, new RecipeDeleted()),
+      Story.state(ref, { _tag: "Missing" }),
+      Story.when(ref, new EditRecipe()),
+      Story.rejected(new RecipeNotFound()),
+    ),
+  ));
+
+test("a missing Recipe cannot be deleted", () =>
+  run(story(Story.when(ref, new DeleteRecipe()), Story.rejected(new RecipeNotFound()))));
 
 test("a command on a Recipe that does not exist is refused", () =>
   run(story(Story.when(ref, new ApproveRecipe()), Story.rejected(new RecipeNotFound()))));

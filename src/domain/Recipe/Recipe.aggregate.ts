@@ -8,6 +8,8 @@ import { RejectRecipe, RecipeRejected } from "./RejectRecipe.command";
 import { EnableRecipe, RecipeEnabled } from "./EnableRecipe.command";
 import { DisableRecipe, RecipeDisabled } from "./DisableRecipe.command";
 import { ReturnRecipeToReview, RecipeReturnedToReview } from "./ReturnRecipeToReview.command";
+import { EditRecipe, RecipeEdited } from "./EditRecipe.command";
+import { DeleteRecipe, RecipeDeleted } from "./DeleteRecipe.command";
 
 export const RECIPE_STAGES = ["Pending", "Enabled", "Disabled"] as const;
 export type RecipeStage = (typeof RECIPE_STAGES)[number];
@@ -42,7 +44,7 @@ export class Recipe extends Domain.Aggregate("Recipe", {
   id: RecipeId,
   state: RecipeState,
   initial: { _tag: "Missing" },
-  commands: [SaveRecipe, ApproveRecipe, RejectRecipe, EnableRecipe, DisableRecipe, ReturnRecipeToReview],
+  commands: [SaveRecipe, ApproveRecipe, RejectRecipe, EnableRecipe, DisableRecipe, ReturnRecipeToReview, EditRecipe, DeleteRecipe],
   decide: {
     SaveRecipe: (current, cmd) => (current._tag !== "Missing" ? new RecipeAlreadyExists() : [new RecipeSaved({ ownerEmail: cmd.ownerEmail, stage: cmd.stage })]),
     ApproveRecipe: (current) => transition(current, "ApproveRecipe"),
@@ -50,6 +52,8 @@ export class Recipe extends Domain.Aggregate("Recipe", {
     EnableRecipe: (current) => transition(current, "EnableRecipe"),
     DisableRecipe: (current) => transition(current, "DisableRecipe"),
     ReturnRecipeToReview: (current) => transition(current, "ReturnRecipeToReview"),
+    EditRecipe: (current) => (current._tag === "Missing" ? new RecipeNotFound() : [new RecipeEdited()]),
+    DeleteRecipe: (current) => (current._tag === "Missing" ? new RecipeNotFound() : [new RecipeDeleted()]),
   },
   evolve: {
     RecipeSaved: (_, e) => ({ _tag: "Present" as const, ownerEmail: e.ownerEmail, stage: e.stage }),
@@ -58,5 +62,7 @@ export class Recipe extends Domain.Aggregate("Recipe", {
     RecipeEnabled: (current) => moved(current, "Enabled"),
     RecipeDisabled: (current) => moved(current, "Disabled"),
     RecipeReturnedToReview: (current) => moved(current, "Pending"),
+    RecipeEdited: (current) => current,
+    RecipeDeleted: () => ({ _tag: "Missing" as const }),
   },
 }) {}

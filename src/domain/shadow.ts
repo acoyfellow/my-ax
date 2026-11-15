@@ -50,7 +50,7 @@ export const RUN_COMMAND: Record<string, keyof typeof RunCommands.ALL> = {
   owner_aborted: "AbortRun",
 };
 
-const RECIPE_COMMAND: Record<string, keyof typeof RecipeCommands.ALL> = {
+export const RECIPE_COMMAND_FOR_EVENT: Record<string, keyof typeof RecipeCommands.ALL> = {
   approved: "ApproveRecipe",
   rejected: "RejectRecipe",
   enabled: "EnableRecipe",
@@ -90,7 +90,7 @@ export function shadowRun(event: string, ownerEmail: string, from: string | null
 }
 
 export function shadowRecipe(event: string, ownerEmail: string, from: string | null, sql: ShadowVerdict): ShadowRecord | null {
-  const name = RECIPE_COMMAND[event];
+  const name = RECIPE_COMMAND_FOR_EVENT[event];
   if (!name) return null;
   return judge(Recipe as unknown as Predictor, "Recipe", name, new RecipeCommands.ALL[name](), ownerEmail, from as RecipeStage | null, sql);
 }

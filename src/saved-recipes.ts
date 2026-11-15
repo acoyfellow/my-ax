@@ -1,5 +1,6 @@
 import { initialRecipeStatus, nextRecipeStatus, patchStatusEvent, requireRecipeTransition, type RecipeStatusEvent } from "./fsm/recipe-status";
 import { safely, shadowRecipe } from "./domain/shadow";
+import { deleteRecipeRecord, saveRecipeRecord, updateRecipeRecord, type RecipeFieldChange } from "./domain/Recipe/Recipe.store";
 import type { Env } from "./types";
 
 export const SAVED_RECIPE_STATUSES = ["pending", "enabled", "disabled"] as const;
@@ -221,8 +222,7 @@ export class SavedRecipeService {
       updated_at: new Date().toISOString(),
     };
     try {
-      await this.env.DB.prepare(`INSERT INTO saved_recipes (id, owner_email, name, description, input_schema_json, code, capabilities_json, source_run_id, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(row.id, row.owner_email, row.name, row.description, row.input_schema_json, row.code, row.capabilities_json, row.source_run_id, row.status, row.created_at, row.updated_at).run();
+      await saveRecipeRecord(this.env.DB, row);
     } catch (error) {
       if (String(error).includes("UNIQUE")) throw new SavedRecipeError("Conflict", "saved recipe name already exists");
       throw error;
@@ -243,18 +243,16 @@ export class SavedRecipeService {
     const statusEvent = patch.statusEvent;
     if (statusEvent) safely(() => shadowRecipe(statusEvent, this.owner(), current.status, nextRecipeStatus(current.status, statusEvent) ? "accepted" : "rejected"));
     const nextStatus = statusEvent ? requireRecipeTransition(current.status, statusEvent) : undefined;
-    const assignments: string[] = [];
-    const values: unknown[] = [];
-    if (patch.name !== undefined) { assignments.push("name = ?"); values.push(patch.name); }
-    if (patch.description !== undefined) { assignments.push("description = ?"); values.push(patch.description); }
-    if (patch.inputSchema !== undefined) { assignments.push("input_schema_json = ?"); values.push(JSON.stringify(patch.inputSchema)); }
-    if (patch.code !== undefined) { assignments.push("code = ?"); values.push(patch.code); }
-    if (patch.capabilities !== undefined) { assignments.push("capabilities_json = ?"); values.push(JSON.stringify(patch.capabilities)); }
-    if (nextStatus !== undefined) { assignments.push("status = ?"); values.push(nextStatus); }
-    if (patch.sourceRunId !== undefined) { assignments.push("source_run_id = ?"); values.push(patch.sourceRunId); }
-    assignments.push("updated_at = ?"); values.push(new Date().toISOString());
+    const changes: RecipeFieldChange[] = [];
+    if (patch.name !== undefined) changes.push({ column: "name", value: patch.name });
+    if (patch.description !== undefined) changes.push({ column: "description", value: patch.description });
+    if (patch.inputSchema !== undefined) changes.push({ column: "input_schema_json", value: JSON.stringify(patch.inputSchema) });
+    if (patch.code !== undefined) changes.push({ column: "code", value: patch.code });
+    if (patch.capabilities !== undefined) changes.push({ column: "capabilities_json", value: JSON.stringify(patch.capabilities) });
+    if (nextStatus !== undefined) changes.push({ column: "status", value: nextStatus });
+    if (patch.sourceRunId !== undefined) changes.push({ column: "source_run_id", value: patch.sourceRunId });
     try {
-      const result = await this.env.DB.prepare(`UPDATE saved_recipes SET ${assignments.join(", ")} WHERE id = ? AND owner_email = ? AND status = ?`).bind(...values, id, this.owner(), current.status).run();
+      const result = await updateRecipeRecord(this.env.DB, { id, owner_email: this.owner(), status: current.status }, statusEvent, changes, new Date().toISOString());
       if ((result.meta?.changes ?? 0) === 0) throw new SavedRecipeError("Conflict", "saved recipe changed during the update");
     } catch (error) {
       if (String(error).includes("UNIQUE")) throw new SavedRecipeError("Conflict", "saved recipe name already exists");
@@ -264,7 +262,8 @@ export class SavedRecipeService {
   }
 
   async delete(id: string) {
-    const result = await this.env.DB.prepare("DELETE FROM saved_recipes WHERE id = ? AND owner_email = ?").bind(id, this.owner()).run();
+    const current = await this.get(id).catch(() => null);
+    const result = await deleteRecipeRecord(this.env.DB, current, id, this.owner());
     if ((result.meta?.changes ?? 0) === 0) throw new SavedRecipeError("NotFound", "saved recipe not found");
     return { deleted: true, id };
   }
