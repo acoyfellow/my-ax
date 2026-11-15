@@ -255,8 +255,22 @@
   overflow: hidden;
   font-size: 13px;
 }
-.step-row[data-step="thinking"] { background: color-mix(in srgb, var(--bg-alt) 94%, var(--brand) 6%); }
 .step-row + .step-row, .msg-tools > .step-row + .step-row { margin-top: 0; }
+.step-group {
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  overflow: hidden;
+  min-width: 0;
+}
+.step-group .msg-tools { margin: 0; gap: 0; }
+.step-group .step-row { border: 0; border-radius: 0; background: transparent; }
+.step-group .step-row + .step-row,
+.step-group .step-row + .msg-tools > .step-row:first-child,
+.step-group .msg-tools + .step-row,
+.step-group .msg-tools + .msg-tools > .step-row:first-child { border-top: 1px solid var(--line); }
+.step-group .step-row[open] { background: var(--bg); }
 .step-row__summary {
   display: flex;
   align-items: center;
@@ -1062,6 +1076,7 @@ html {
 
   .msg-tools { margin: 6px 0; display: flex; flex-direction: column; gap: 6px; }
   .msg-body + .step-row, .step-row + .msg-body, .msg-tools + .msg-body, .msg-body + .msg-tools, .step-row + .msg-tools, .msg-tools + .step-row, .msg-head + .step-row { margin-top: 6px; }
+  .msg-head + .step-group, .msg-body + .step-group, .step-group + .msg-body { margin-top: 6px; }
   .tool-call__result {
     background: var(--color-surface-3);
     padding: 8px 10px; font-family: 'JetBrains Mono Variable', monospace;

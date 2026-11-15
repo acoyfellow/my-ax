@@ -292,6 +292,23 @@
     }
   }
 
+  type StepRun = { kind: "steps"; blocks: RenderBlock[]; start: number };
+  type RenderRun = { kind: "text"; block: RenderBlock } | StepRun;
+
+  function groupStepRuns(blocks: RenderBlock[]): RenderRun[] {
+    const runs: RenderRun[] = [];
+    blocks.forEach((block, index) => {
+      if (block.kind === "text") {
+        runs.push({ kind: "text", block });
+        return;
+      }
+      const last = runs[runs.length - 1];
+      if (last && last.kind === "steps") last.blocks.push(block);
+      else runs.push({ kind: "steps", blocks: [block], start: index });
+    });
+    return runs;
+  }
+
   function groupParts(parts: Part[]): RenderBlock[] {
     const blocks: RenderBlock[] = [];
     for (const part of parts) {
@@ -3333,15 +3350,19 @@
                 {#if m.parts.length === 0 && !m.streaming}
                   <div class="msg-body" data-empty="1"></div>
                 {:else}
-                  {#each groupParts(m.parts) as block, blockIdx (blockIdx)}
-                    {#if block.kind === "text"}
-                      <div class="msg-body">{@render textBlock(block)}</div>
-                    {:else if block.kind === "thinking"}
+                  {#each groupStepRuns(groupParts(m.parts)) as run, runIdx (runIdx)}
+                    {#if run.kind === "text"}
+                      <div class="msg-body">{@render textBlock(run.block)}</div>
+                    {:else}
+                    <div class="step-group" data-steps={run.blocks.length}>
+                    {#each run.blocks as block, offset (run.start + offset)}
+                    {@const blockIdx = run.start + offset}
+                    {#if block.kind === "thinking"}
                       <details class="step-row" data-step="thinking" data-state="ok" data-thinking-step={blockIdx} ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
                         {@render stepRow("thinking", "ok", "Thinking", thinkingSummary(block.text), "")}
                         <div class="step-row__body"><pre class="step-row__text">{block.text}</pre></div>
                       </details>
-                    {:else}
+                    {:else if block.kind === "tools"}
                       <div class="msg-tools" data-count={block.tools.length}>
                         {#each block.tools as tool (tool.id)}
                           {@const resolved = resolveToolResultWidget(tool.result, tool.name)}
@@ -3370,6 +3391,9 @@
                           </details>
                         {/each}
                       </div>
+                    {/if}
+                    {/each}
+                    </div>
                     {/if}
                   {/each}
                 {/if}
@@ -3636,7 +3660,7 @@
   <summary class="step-row__summary">
     <span class="step-row__status" data-status={state} role="img" aria-label={step === "thinking" ? "Thinking" : TOOL_ROW_STATUS_LABEL[state]} title={step === "thinking" ? "Thinking" : TOOL_ROW_STATUS_LABEL[state]}>
       {#if step === "thinking"}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
       {:else if state === "running"}
         <svg class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
       {:else if state === "error"}

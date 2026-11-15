@@ -62,3 +62,13 @@ test("a running turn shows one live status line, not dots plus two timers", () =
   assert.match(chat, /showsTurnDuration\(m, mIdx\)/);
   assert.match(chat, /return !\(turnIsLive && index > lastUserIndex\)/);
 });
+
+test("consecutive thinking and tool steps render inside one connected step group", () => {
+  const chat = readFileSync(new URL("./Chat.svelte", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../styles/app.css", import.meta.url), "utf8");
+  assert.match(chat, /groupStepRuns\(groupParts\(m\.parts\)\)/);
+  assert.match(chat, /<div class="step-group" data-steps=\{run\.blocks\.length\}>/);
+  assert.match(css, /\.step-group \{[^}]*border: 1px solid var\(--line\);[^}]*border-radius: 8px;[^}]*background: var\(--bg-alt\);/);
+  assert.match(css, /\.step-group \.step-row \{ border: 0; border-radius: 0; background: transparent; \}/);
+  assert.doesNotMatch(css, /\.step-row\[data-step="thinking"\] \{ background/);
+});

@@ -43,6 +43,25 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     ]);
     return c.json<ApiResponse>({ ok: true, command, result: { decisionId: decision.id, href: decision.href }, next_actions: [] }, 201);
   });
+  app.post("/api/system/dev-seed-steps", async (c) => {
+    const command = "POST /api/system/dev-seed-steps";
+    if (c.env.ENVIRONMENT !== "dev") return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "dev only" }, next_actions: [] }, 404);
+    const email = c.get("identity").email.toLowerCase();
+    const { sessionId } = await c.req.json<{ sessionId?: string }>().catch(() => ({} as { sessionId?: string }));
+    if (!sessionId) return c.json<ApiResponse>({ ok: false, command, error: { code: "BadRequest", message: "sessionId required" }, next_actions: [] }, 400);
+    const now = Date.now();
+    const commands = ["tail -n 40 ~/.pi/agent/logs/pi.log", "ps aux | grep cloudflared", "sleep 5; cloudflared access token -app=https://example.test", "sleep 5; cloudflared access login https://example.test"];
+    const assistant = commands.flatMap((command, index) => [
+      { type: "toolCall", id: `seed-${index}`, name: "exec", arguments: { command } },
+      { type: "thinking", thinking: `Step ${index + 1}: the login has not gone through yet, so check again.` },
+    ]);
+    await seedPiChatEntries(c.env, email, sessionId, [
+      { kind: "pi.user", model: [{ role: "user", content: "Log in to Cloudflare Access for me.", timestamp: now - 9000 }] },
+      { kind: "pi.assistant", model: [{ role: "assistant", content: [...assistant, { type: "text", text: "The login hasn't gone through. Cloudflare hasn't told it you approved it yet." }], api: "imported", provider: "imported", model: "probe", usage: emptyUsage(), stopReason: "stop", timestamp: now - 5000 }] },
+      ...commands.map((_, index) => ({ kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: `seed-${index}`, toolName: "exec", content: [{ type: "text", text: `ok ${index + 1}` }], isError: false, timestamp: now - 4000 + index }] })),
+    ]);
+    return c.json<ApiResponse>({ ok: true, command, result: { sessionId }, next_actions: [] }, 201);
+  });
   app.get("/api/domain/refusals", async (c) => {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("day") ?? "") ? String(c.req.query("day")) : new Date().toISOString().slice(0, 10);
     await flushRefusals(c.env.DB);
