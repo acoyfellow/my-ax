@@ -215,7 +215,7 @@
     { "name": "my-ax-rig-pipeline", "binding": "RIG_PIPELINE", "class_name": "RigPipeline" }
   ],
 
-  "analytics_engine": [{ "binding": "USAGE", "dataset": "my_ax_usage" }],
+  "analytics_engine_datasets": [{ "binding": "USAGE", "dataset": "my_ax_usage" }],
 
   // Local dev — bypasses Access when ENVIRONMENT=dev AND ISS+AUD empty AND DEV_USER_EMAIL set
   "env": {
