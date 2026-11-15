@@ -50,6 +50,11 @@ export interface OwnerNotification {
   decision?: { id: string; options: string[] };
   progressTag?: string;
   progressTerminal?: boolean;
+  jobAction?: { jobId: string };
+}
+
+export function decisionNotificationTag(decisionId: string): string {
+  return `decision:${decisionId}`;
 }
 
 export interface NotificationFailureDetail {
@@ -113,6 +118,8 @@ export interface PushPayload extends Record<string, unknown> {
   progressTerminal?: boolean;
   dismissTags?: string[];
   sessionId?: string;
+  tag?: string;
+  job?: { id: string };
 }
 
 export function attentionDeepLink(attentionId: string): string {
@@ -150,6 +157,13 @@ function decisionPushData(notification: OwnerNotification): { id: string; option
   return { id: decision.id, options };
 }
 
+const JOB_ID_RE = /^[0-9a-f-]{36}$/i;
+
+function jobPushData(notification: OwnerNotification): { id: string } | undefined {
+  const jobId = notification.jobAction?.jobId;
+  return typeof jobId === "string" && JOB_ID_RE.test(jobId) ? { id: jobId } : undefined;
+}
+
 function normalizeDismissalTags(tags: string[] | undefined): string[] {
   if (!Array.isArray(tags)) return [];
   return [...new Set(tags.filter((tag) => typeof tag === "string" && tag.length > 0 && tag.length <= 256))].slice(0, 50);
@@ -176,8 +190,18 @@ export function buildOwnerPushPayload(
   if (decision) {
     const candidate: PushPayload = {
       ...payload,
+      tag: decisionNotificationTag(decision.id),
       actions: decision.options.map((option, index) => ({ action: `decision:${index}`, title: cleanText(option, 48) })),
       decision,
+    };
+    if (payloadFits(candidate)) payload = candidate;
+  }
+  const job = jobPushData(notification);
+  if (job) {
+    const candidate: PushPayload = {
+      ...payload,
+      actions: [{ action: "job:run", title: "Retry now" }, { action: "job:pause", title: "Pause job" }],
+      job,
     };
     if (payloadFits(candidate)) payload = candidate;
   }
@@ -281,6 +305,19 @@ async function ensureNotificationSession(env: Env, email: string, stableName: st
 }
 
 /** Deliver a same-owner agent notification to every subscribed installed app. */
+export type ClosePushPayload = { type: "close"; dismissTags: string[]; unread: number };
+
+export async function closeOwnerNotifications(env: Env, ownerEmail: string, tags: string[]): Promise<{ sent: number }> {
+  const email = ownerEmail.toLowerCase();
+  const dismissTags = normalizeDismissalTags(tags);
+  if (!dismissTags.length) return { sent: 0 };
+  const unreadRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM attention_items WHERE owner_email = ? AND seen_at IS NULL").bind(email).first<{ count: number }>();
+  const payload: ClosePushPayload = { type: "close", dismissTags, unread: Number(unreadRow?.count ?? 0) };
+  const rows = (await env.DB.prepare("SELECT subscription_json FROM push_subscriptions WHERE owner_email = ?").bind(email).all<{ subscription_json: string }>()).results ?? [];
+  const results = await Promise.allSettled(rows.map((row) => sendPush(env, JSON.parse(row.subscription_json) as PushSubscription, payload, 300)));
+  return { sent: results.filter((result) => result.status === "fulfilled" && result.value.ok).length };
+}
+
 export async function notifyOwner(env: Env, ownerEmail: string, notification: OwnerNotification): Promise<NotificationReceipt> {
   const email = ownerEmail.toLowerCase();
   if (!notification.sessionId && notification.stableName) {
@@ -309,7 +346,8 @@ export async function notifyOwner(env: Env, ownerEmail: string, notification: Ow
   const receipt: NotificationReceipt = { delivered: 0, expired: 0, failed: 0, devices: rows.length };
   const destinationHref = safeHref(notification, env.BRIDGE_BASE_URL, externalSourceHosts(parseInternalSourceHosts(env.INTERNAL_SOURCE_HOSTS_JSON)));
   const attentionId = intermediateProgress ? undefined : crypto.randomUUID();
-  const notificationTag = taggedProgress ?? attentionId;
+  const decisionTag = decisionPushData(notification) ? decisionNotificationTag(notification.decision!.id) : undefined;
+  const notificationTag = taggedProgress ?? decisionTag ?? attentionId;
   if (attentionId) {
     await raiseAttentionItem(env.DB as unknown as AttentionStoreDb, {
       id: attentionId, owner: email, sessionId: notification.sessionId ?? null, kind: notification.kind,

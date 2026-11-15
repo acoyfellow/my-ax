@@ -43,5 +43,6 @@ export function recurringJobReceipt(input: RecurringJobReceiptInput): OwnerNotif
       : `${progress ? `${progress} ` : ""}Completed successfully in ${destination}. Next action: open it to review the result.`,
     href,
     dedupeKey: `recurring-job:${input.jobId}:${targetSessionId}:${ranAt}`,
+    ...(error ? { jobAction: { jobId: input.jobId } } : {}),
   };
 }

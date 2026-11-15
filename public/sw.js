@@ -61,6 +61,11 @@ self.addEventListener("push", (event) => {
   try { payload = event.data?.json() ?? {}; } catch { payload = {}; }
   event.waitUntil((async () => {
     const dismissed = await closeDismissedNotifications(payload.dismissTags);
+    if (payload.type === "close") {
+      await updateBadgeFromNotifications(Number(payload.unread || 0));
+      for (const client of await clients.matchAll({ type: "window", includeUncontrolled: true })) client.postMessage({ type: "my-ax:attention" });
+      return;
+    }
     await self.registration.showNotification(payload.title || "my · ax", {
       body: payload.body || "You have a new my · ax notification.",
       data: {
@@ -68,9 +73,10 @@ self.addEventListener("push", (event) => {
         attentionHref: "/?action=attention",
         destinationHref: payload.destinationHref || "/",
         decision: payload.decision,
+        job: payload.job,
         unread: Number(payload.unread || 0),
       },
-      tag: payload.progressTag || payload.attentionId || undefined,
+      tag: payload.progressTag || payload.tag || payload.attentionId || undefined,
       renotify: payload.progressTag ? payload.progressTerminal === true : !!payload.attentionId,
       requireInteraction: payload.kind === "deploy.gate" || payload.kind === "job.needs_input",
       icon: "/static/brand/icon-192.png",
@@ -99,6 +105,40 @@ function decisionPageHref(data) {
   const id = data?.decision?.id;
   if (typeof id === "string" && id.length > 0) return `/api/decisions/${encodeURIComponent(id)}`;
   return data?.href || "/?action=attention";
+}
+
+function isJobAction(action) {
+  return action === "job:run" || action === "job:pause";
+}
+
+async function submitJobAction(notification, action) {
+  const data = notification.data;
+  const id = data?.job?.id;
+  const href = data?.href || "/?action=attention";
+  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return navigateNotification(href);
+  const verb = action === "job:run" ? "run" : "pause";
+  try {
+    const response = await fetch(`/api/jobs/${encodeURIComponent(id)}/${verb}`, { method: "POST", credentials: "include" });
+    notification.close();
+    if (response.ok) {
+      await self.registration.showNotification(verb === "run" ? "Job retry started" : "Job paused", {
+        body: verb === "run" ? "The job is running again. You will get a notification when it finishes." : "The job will not run again until you resume it.",
+        data: { href, attentionHref: href, destinationHref: href },
+        tag: `job-action:${id}`,
+        icon: "/static/brand/icon-192.png",
+        badge: "/static/brand/icon-maskable-192.png",
+      });
+      return;
+    }
+  } catch {}
+  await self.registration.showNotification("Job action not recorded", {
+    body: "Open the conversation to sign in and try again.",
+    data: { href, attentionHref: href, destinationHref: href },
+    tag: `job-action:${id}`,
+    icon: "/static/brand/icon-192.png",
+    badge: "/static/brand/icon-maskable-192.png",
+    actions: [{ action: "open", title: "Open conversation" }],
+  });
 }
 
 async function showDecisionFailure(data, status) {
@@ -175,6 +215,10 @@ async function navigateNotification(href) {
 self.addEventListener("notificationclick", (event) => {
   if (isDecisionAction(event.action)) {
     event.waitUntil(submitDecision(event.notification, event.action));
+    return;
+  }
+  if (isJobAction(event.action)) {
+    event.waitUntil(submitJobAction(event.notification, event.action));
     return;
   }
   event.notification.close();

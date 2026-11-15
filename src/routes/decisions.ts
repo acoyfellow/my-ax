@@ -9,6 +9,8 @@
 import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import { applyRunEvent } from "../fsm/run-status";
+import { closeOwnerNotifications, decisionNotificationTag } from "../notify";
+import { markAttentionItemsSeen, type AttentionStoreDb } from "../domain/Attention/Attention.store";
 import { sessionControl } from "../session-control";
 import { Effect } from "effect";
 import type { Hono } from "hono";
@@ -131,6 +133,17 @@ export function decisionPage(id: string, question: string, options: string[], an
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>My AX decision</title><style>:root{color-scheme:dark}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;background:#0b1118;color:#f7f9fb;font-family:Inter,system-ui,sans-serif}main{position:relative;width:100%;max-width:32rem}h1{font-size:1.25rem;line-height:1.35;padding-right:2rem}#opts{display:grid;gap:.6rem;margin-top:1.25rem}.choice{display:flex;align-items:flex-start;gap:.7rem;padding:.85rem 1rem;border:1px solid rgba(181,198,211,.18);border-radius:.7rem;background:#111a24;cursor:pointer}.choice:has(input:checked){border-color:#f6821f;background:rgba(246,130,31,.08)}.choice input{margin-top:.18rem;accent-color:#f6821f}.choice span{line-height:1.35}#submit{width:100%;margin-top:1rem;padding:.85rem 1rem;border:0;border-radius:.7rem;background:#f6821f;color:#1b0900;font:700 1rem/1.2 inherit;cursor:pointer}#submit:disabled{opacity:.4;cursor:default}.done strong,#status strong{color:#f6821f}p{color:#9baaba;margin-top:1rem}.close{position:absolute;top:-.25rem;right:0;width:2rem;height:2rem;display:grid;place-items:center;border:1px solid rgba(181,198,211,.18);border-radius:.5rem;color:#9baaba;text-decoration:none;font-size:1.2rem;line-height:1}.close:hover{color:#f7f9fb;border-color:#f6821f}.return{display:inline-block;margin-top:1.25rem;color:#f6821f;text-decoration:none;font-weight:600}.return:hover{text-decoration:underline}</style></head><body><main>${body}${script}</main></body></html>`;
 }
 
+export async function settleDecisionNotifications(env: AppEnv["Bindings"], email: string, decisionId: string): Promise<void> {
+  const tag = decisionNotificationTag(decisionId);
+  try {
+    const unseen = await env.DB.prepare("SELECT id FROM attention_items WHERE owner_email = ? AND notification_tag = ? AND seen_at IS NULL").bind(email, tag).all<{ id: string }>();
+    await markAttentionItemsSeen(env.DB as unknown as AttentionStoreDb, email, { ids: (unseen.results ?? []).map((row) => row.id) });
+    await closeOwnerNotifications(env, email, [tag]);
+  } catch (error) {
+    console.warn("decision_notification_close_failed", { decisionId, err: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 export function registerDecisionRoutes(app: Hono<AppEnv>) {
   // Conversation UI uses this to offer a durable way back to an unanswered
   // widget after the user follows "View conversation" or dismisses the push.
@@ -230,6 +243,12 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     } catch (error) {
       console.error("decision_inject_failed", { id, err: error instanceof Error ? error.message : String(error) });
       return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "DECISION_RESUME_FAILED", message: "The decision could not reach the conversation. Try again." }, next_actions: [] }, 503);
+    }
+    const settling = settleDecisionNotifications(c.env, email, id);
+    try {
+      c.executionCtx.waitUntil(settling);
+    } catch {
+      await settling;
     }
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { id, choice, resumed: true }, next_actions: [] });
   });
