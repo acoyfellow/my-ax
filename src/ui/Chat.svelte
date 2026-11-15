@@ -41,6 +41,8 @@
   import { shouldResumeVoiceCall } from "./voice-continue";
   import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
+  import { browserDecisionFocusEnv, focusDecision } from "./decision-focus";
+  import { decisionIdFromLocation } from "./decision-widget";
   import Terminal from "./Terminal.svelte";
   import ImageLightbox from "./ImageLightbox.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
@@ -2839,6 +2841,13 @@
 
   // ── Lifecycle ─────────────────────────────────────────────────────
   onMount(() => {
+    const launchDecisionId = decisionIdFromLocation(location.href);
+    if (launchDecisionId) {
+      const url = new URL(location.href);
+      url.searchParams.delete("decision");
+      history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+      void focusDecision(launchDecisionId, browserDecisionFocusEnv());
+    }
     const removeLocationBridge = typeof window === "undefined" ? () => {} : installLocationBridge(window, { enabled: () => webFeatures.location, pushSystem, receipt: (text) => recordWebReceipt("location", text) });
     ensureMarkedHljs().then(async () => {
       // Re-render completed text once lazy syntax highlighting is ready so
@@ -2911,6 +2920,7 @@
       if (intent.kind === "session") {
         history.replaceState(null, "", location.pathname + location.hash);
         switchToSession(intent.sessionId);
+        if (intent.decisionId) void focusDecision(intent.decisionId, browserDecisionFocusEnv());
         return;
       }
       if (intent.kind === "attention") {

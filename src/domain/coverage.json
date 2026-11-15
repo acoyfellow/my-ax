@@ -130,6 +130,11 @@
       "aggregate": null,
       "state": []
     },
+    "domain_refusals": {
+      "kind": "log",
+      "aggregate": null,
+      "state": []
+    },
     "job_events": {
       "kind": "log",
       "aggregate": null,

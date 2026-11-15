@@ -53,6 +53,11 @@ const DONE_KINDS = new Set(["job.complete", "delegate.complete"]);
 // /runs/r1?tab=log and /runs/r1#output are receipts too and must get a View
 // action, not fall through to a plain "Update".
 const RUN_RECEIPT_RE = /^\/runs\/[^/?#]+(?:[?#].*)?$/;
+const DECISION_THREAD_RE = /^\/\?session=[^&#]+&decision=run-decision-[0-9a-f-]{36}$/i;
+
+export function isDecisionHref(href: unknown): href is string {
+  return typeof href === "string" && (href.startsWith("/api/decisions/") || DECISION_THREAD_RE.test(href));
+}
 
 function toEpoch(iso: string | null | undefined): number {
   if (!iso) return 0;
@@ -109,7 +114,7 @@ export function attentionToNotification(item: AttentionItem): Notification {
     body: (item.body ?? "").trim(),
     href,
     widgetHref,
-    decisionHref: typeof item.href === "string" && item.href.startsWith("/api/decisions/") ? item.href : null,
+    decisionHref: isDecisionHref(item.href) ? item.href : null,
     ts: toEpoch(item.created_at),
     unread: !item.seen_at,
   };

@@ -3,11 +3,12 @@ export type MyAxDeepLink = {
   sessionId: string | null;
   action: string | null;
   attentionId: string | null;
+  decisionId?: string | null;
 };
 
 export type MyAxDeepLinkIntent =
   | { kind: "preserve" }
-  | { kind: "session"; sessionId: string }
+  | { kind: "session"; sessionId: string; decisionId: string | null }
   | { kind: "attention"; attentionId: string | null }
   | { kind: "settings" }
   | { kind: "desk" }
@@ -30,6 +31,7 @@ export function parseMyAxDeepLink(rawHref: string, currentHref: string): MyAxDee
       sessionId: target.searchParams.get("session"),
       action: target.searchParams.get("action"),
       attentionId: target.searchParams.get("attentionId"),
+      decisionId: target.searchParams.get("decision"),
     };
   } catch {
     return null;
@@ -37,7 +39,7 @@ export function parseMyAxDeepLink(rawHref: string, currentHref: string): MyAxDee
 }
 
 export function myAxDeepLinkIntent(target: MyAxDeepLink): MyAxDeepLinkIntent {
-  if (target.sessionId) return { kind: "session", sessionId: target.sessionId };
+  if (target.sessionId) return { kind: "session", sessionId: target.sessionId, decisionId: target.decisionId ?? null };
   if (target.action === "attention") return { kind: "attention", attentionId: target.attentionId };
   if (target.action === "settings") return { kind: "settings" };
   if (target.action === "desk") return { kind: "desk" };

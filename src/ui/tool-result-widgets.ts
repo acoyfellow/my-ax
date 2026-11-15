@@ -5,6 +5,7 @@
 // explicit allowlisted projection with bounded fields and safe fallbacks.
 
 import { parseCodeDiffReceipt, type CodeDiffReceipt } from "../code-diff";
+import { decisionReceipt, type DecisionReceipt } from "./decision-widget";
 
 const INLINE_IMAGE_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,\s*([A-Za-z0-9+/=\r\n\t ]+)\s*$/;
 // A physical-laptop screenshot can be a full Retina PNG. Keep the allowlist
@@ -60,6 +61,7 @@ export type ToolResultWidget =
   | { kind: "named-computer"; src: string; title: string; computerId: string }
   | { kind: "audio-message"; src: string; title: string; audioId: string; voice: string }
   | CodeDiffReceipt
+  | DecisionReceipt
   | {
       kind: "reusable-tool-candidate";
       /** Nonempty, model-adjacent identity used to collapse duplicate cards within one conversation. */
@@ -388,6 +390,9 @@ function rawText(value: unknown): string {
 /** Resolve a tool output to exactly one allowlisted renderer. Add future
  * widgets here deliberately; unknown payloads remain inert raw text. */
 export function resolveToolResultWidget(value: unknown, toolName = "tool"): ToolResultWidget {
+  const decision = decisionReceipt(value, toolName);
+  if (decision) return decision;
+
   const codeDiff = codeDiffWidget(value, toolName);
   if (codeDiff) return codeDiff;
 

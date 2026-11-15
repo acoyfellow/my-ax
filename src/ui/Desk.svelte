@@ -145,6 +145,13 @@
     }
   }
 
+  function openDecision(event: MouseEvent, href: string | null) {
+    if (!href) return;
+    event.preventDefault();
+    closePanel();
+    window.dispatchEvent(new CustomEvent("my-ax:navigate", { detail: { href } }));
+  }
+
   function closePanel() {
     open = false;
     const url = new URL(location.href);
@@ -231,7 +238,7 @@
               {#if card.body}<p class="notif-detail-body">{card.body}</p>{/if}
               <div class="flex gap-2 mt-2">
                 {#if card.href}<a class="notif-detail-source" href={card.href} target="_blank" rel="noopener noreferrer">Open source</a>{/if}
-                {#if card.decisionHref}<a class="notif-detail-source" href={card.decisionHref}>Decide</a>{/if}
+                {#if card.decisionHref}<a class="notif-detail-source" href={card.decisionHref} onclick={(event) => openDecision(event, card.decisionHref)}>Decide</a>{/if}
               </div>
             </div>
             <button type="button" class="desk-remove" aria-label={`Remove ${card.title}`} onclick={() => void removeCard(card.id)}>Remove</button>

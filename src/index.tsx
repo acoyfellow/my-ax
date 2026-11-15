@@ -37,6 +37,7 @@ import { registerBrowserRoutes } from "./routes/browser";
 import { registerAttentionRoutes } from "./routes/attention";
 import { registerCheckInRoutes } from "./routes/check-in";
 import { registerSystemRoutes } from "./routes/system";
+import { flushRefusals } from "./domain/refusals";
 import { registerModelRoutes } from "./routes/models";
 import { registerConnectorRoutes } from "./routes/connectors";
 import { registerMcpsCrudRoutes } from "./routes/mcps";
@@ -131,6 +132,15 @@ app.use("*", async (c, next) => {
     }, 500);
   }
   await next();
+});
+
+app.use("*", async (c, next) => {
+  await next();
+  try {
+    c.executionCtx.waitUntil(flushRefusals(c.env.DB).catch((error) => console.error("domain_refusals_flush_failed", { err: String(error) })));
+  } catch {
+    return;
+  }
 });
 
 app.use("*", requestOriginGuard(bridgeOrigins));

@@ -117,7 +117,7 @@ test("opening a retired decision link redirects to its replacement", async () =>
   const second = await createDecision(env, OWNER, "s1", "Which flight?", ["B6 789", "AA 12"]);
   const response = await request(`/api/decisions/${first.id}`);
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get("location"), `/api/decisions/${second.id}`);
+  assert.equal(response.headers.get("location"), `/?session=s1&decision=${second.id}`);
   const pending = await request("/api/decisions/pending?sessionId=s1");
   assert.equal(((await pending.json()) as { result: { decision: { id: string } } }).result.decision.id, second.id);
 });

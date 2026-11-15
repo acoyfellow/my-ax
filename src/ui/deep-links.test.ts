@@ -11,7 +11,14 @@ test("parses an owner-session deep link without falling back to the current sess
     sessionId: "target-123",
     action: null,
     attentionId: null,
+    decisionId: null,
   });
+});
+
+test("a decision link opens its thread and names the decision to scroll to", () => {
+  const target = parseMyAxDeepLink("/?session=s1&decision=run-decision-1", current);
+  assert.ok(target);
+  assert.deepEqual(myAxDeepLinkIntent(target), { kind: "session", sessionId: "s1", decisionId: "run-decision-1" });
 });
 
 test("preserves attention actions and ordinary same-origin paths", () => {
@@ -32,7 +39,7 @@ test("deep-link intents distinguish session, attention, receipt, and ordinary na
   const ordinary = parseMyAxDeepLink("/decisions/abc", current);
   const desk = parseMyAxDeepLink("/?action=desk", current);
   assert.ok(session && attention && receipt && ordinary && desk);
-  assert.deepEqual(myAxDeepLinkIntent(session), { kind: "session", sessionId: "target" });
+  assert.deepEqual(myAxDeepLinkIntent(session), { kind: "session", sessionId: "target", decisionId: null });
   assert.deepEqual(myAxDeepLinkIntent(attention), { kind: "attention", attentionId: "note-123" });
   assert.deepEqual(myAxDeepLinkIntent(receipt), { kind: "run-receipt", runId: "run-123" });
   assert.deepEqual(myAxDeepLinkIntent(ordinary), { kind: "navigate", href: "/decisions/abc" });

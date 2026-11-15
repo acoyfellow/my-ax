@@ -12,6 +12,7 @@
 
 import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import type { Hono } from "hono";
+import { dailyRefusals, flushRefusals } from "../domain/refusals";
 import type { AppEnv } from "../app-env";
 import { dismissAttentionItem, type AttentionStoreDb } from "../domain/Attention/Attention.store";
 import { seedUserWorkspaceFile } from "../workspace";
@@ -19,6 +20,13 @@ import type { ApiResponse } from "../types";
 import { recordRecoveryExhaustion } from "../recovery-exhaustion";
 
 export function registerSystemRoutes(app: Hono<AppEnv>) {
+  app.get("/api/domain/refusals", async (c) => {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("day") ?? "") ? String(c.req.query("day")) : new Date().toISOString().slice(0, 10);
+    await flushRefusals(c.env.DB);
+    const counts = await dailyRefusals(c.env.DB, day);
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    return c.json<ApiResponse>({ ok: true, command: "GET /api/domain/refusals", result: { day, total, counts }, next_actions: [] });
+  });
   app.post("/api/system/recovery-exhaustion-probe", async (c) => {
     const identity = c.get("identity");
     const sessionId = `recovery-proof-${crypto.randomUUID()}`;

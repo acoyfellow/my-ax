@@ -1,5 +1,6 @@
 <script lang="ts">
   import CodeDiffWidget from "./CodeDiffWidget.svelte";
+  import DecisionWidget from "./DecisionWidget.svelte";
   import DelegationGroup from "./DelegationGroup.svelte";
   import { resolveToolResultWidget } from "./tool-result-widgets";
 
@@ -83,7 +84,9 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if widget.kind === "code-diff"}
+{#if widget.kind === "decision"}
+  <DecisionWidget decisionId={widget.decisionId} options={widget.options} />
+{:else if widget.kind === "code-diff"}
   <CodeDiffWidget diff={widget} />
 {:else if widget.kind === "delegation-group"}
   <DelegationGroup group={widget} />

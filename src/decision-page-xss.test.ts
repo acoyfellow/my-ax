@@ -70,7 +70,7 @@ test("served decision page is safe for hostile options", async () => {
   app.use("*", async (c, next) => { (c as never as { set: (k: string, v: unknown) => void }).set("identity", { email: "o@x" }); await next(); });
   registerDecisionRoutes(app as never);
   const d = await createDecision(env, "o@x", "s", "Pick", ["</script><script>alert(1)</script>", "b"]);
-  const response = await app.request(`/api/decisions/${d.id}`, {}, env);
+  const response = await app.request(`/api/decisions/${d.id}?page=1`, {}, env);
   const html = await response.text();
   assert.equal(html.includes("</script><script>alert(1)</script>"), false, "option breaks out of script");
   assert.equal(/script-src[^;]*'unsafe-inline'/.test(response.headers.get("content-security-policy") ?? ""), false, "CSP allows inline script");

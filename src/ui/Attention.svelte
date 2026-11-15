@@ -296,7 +296,7 @@
             <h3 class="notif-detail-title">{selected.title}</h3>
             {#if selected.body}<p class="notif-detail-body">{selected.body}</p>{/if}
             {#if selected.decisionHref}
-              <a class="notif-detail-source" href={selected.decisionHref}>Decide</a>
+              <a class="notif-detail-source" href={selected.decisionHref} onclick={(event) => follow(event, selected.decisionHref)}>Decide</a>
             {:else if sourceLabel(selected.href)}
               <button type="button" class="notif-detail-source" onclick={(event) => follow(event, selected.href)}>{sourceLabel(selected.href)}</button>
             {/if}

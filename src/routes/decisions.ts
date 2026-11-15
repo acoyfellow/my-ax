@@ -33,6 +33,37 @@ export async function resumeRigWorkflow(env: Pick<AppEnv["Bindings"], "RIG_PIPEL
 
 type DecisionDb = Pick<AppEnv["Bindings"], "DB">;
 
+export function decisionThreadHref(sessionId: string, decisionId: string): string {
+  return `/?session=${encodeURIComponent(sessionId)}&decision=${encodeURIComponent(decisionId)}`;
+}
+
+export type DecisionState = {
+  id: string;
+  sessionId: string;
+  question: string;
+  options: string[];
+  state: "open" | "answered" | "replaced";
+  choice: string | null;
+  answeredAt: string | null;
+  replacedBy: string | null;
+};
+
+async function readDecisionState(env: DecisionDb, id: string, email: string): Promise<DecisionState | null> {
+  const row = await env.DB.prepare("SELECT bounds_json, status FROM runs WHERE id = ? AND owner_email = ?").bind(id, email).first<{ bounds_json: string; status: string }>();
+  const bounds = row ? parseBounds(row.bounds_json) : null;
+  if (!row || !bounds) return null;
+  const base = { id, sessionId: bounds.sessionId, question: bounds.question, options: bounds.options, choice: null, answeredAt: null, replacedBy: null };
+  if (row.status === "open") return { ...base, state: "open" };
+  if (row.status === "aborted") {
+    const event = await env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.superseded' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
+    const replacedBy = event ? (JSON.parse(event.data_json) as { replacedBy?: string }).replacedBy ?? null : null;
+    return { ...base, state: "replaced", replacedBy: replacedBy && ID_RE.test(replacedBy) ? replacedBy : null };
+  }
+  const event = await env.DB.prepare("SELECT ts, data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.answered' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ ts: string; data_json: string }>();
+  const choice = event ? (JSON.parse(event.data_json) as { choice?: string }).choice ?? null : null;
+  return { ...base, state: "answered", choice, answeredAt: event?.ts ?? null };
+}
+
 export function sameDecision(bounds: Pick<DecisionBounds, "question" | "options">, question: string, options: readonly string[]): boolean {
   return bounds.question === question && bounds.options.length === options.length && bounds.options.every((option, index) => option === options[index]);
 }
@@ -51,13 +82,13 @@ export async function createDecision(env: DecisionDb, ownerEmail: string, sessio
     .bind(ownerEmail, sessionId, question.slice(0, 200)).all<{ id: string; bounds_json: string }>();
   const candidates = (open.results ?? []).map((row) => ({ id: row.id, bounds: parseBounds(row.bounds_json) }));
   const identical = candidates.find((candidate) => candidate.bounds && sameDecision(candidate.bounds, question, options));
-  if (identical) return { id: identical.id, href: `/api/decisions/${identical.id}`, reused: true };
+  if (identical) return { id: identical.id, href: decisionThreadHref(sessionId, identical.id), reused: true };
   const id = `run-decision-${crypto.randomUUID()}`;
   const bounds: DecisionBounds = { surface: "decision", question, options, sessionId };
   await startRunRecord(env.DB as unknown as RunStoreDb, { id, ownerEmail, sessionId, status: "open", title: "Decision requested", taskSummary: question.slice(0, 200), boundsJson: JSON.stringify(bounds), createdAt: null });
   const superseded = candidates.filter((candidate) => candidate.bounds?.question === question).map((candidate) => candidate.id);
   for (const staleId of superseded) await supersedeDecision(env, ownerEmail, staleId, id);
-  return { id, href: `/api/decisions/${id}`, ...(superseded.length ? { superseded } : {}) };
+  return { id, href: decisionThreadHref(sessionId, id), ...(superseded.length ? { superseded } : {}) };
 }
 
 async function supersedeDecision(env: DecisionDb, ownerEmail: string, staleId: string, replacementId: string): Promise<void> {
@@ -109,13 +140,26 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     const email = c.get("identity").email.toLowerCase();
     const row = await c.env.DB.prepare("SELECT id, task_summary, created_at FROM runs WHERE owner_email = ? AND session_id = ? AND status = 'open' AND json_extract(bounds_json, '$.surface') = 'decision' ORDER BY created_at DESC LIMIT 1")
       .bind(email, sessionId).first<{ id: string; task_summary: string; created_at: string }>();
-    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { decision: row ? { id: row.id, question: row.task_summary, href: `/api/decisions/${row.id}`, createdAt: row.created_at } : null }, next_actions: [] });
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { decision: row ? { id: row.id, question: row.task_summary, href: decisionThreadHref(sessionId, row.id), createdAt: row.created_at } : null }, next_actions: [] });
+  });
+
+  app.get("/api/decisions/:id/state", async (c) => {
+    const id = c.req.param("id");
+    if (!ID_RE.test(id)) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ID", message: "invalid decision id" }, next_actions: [] }, 400);
+    const decision = await readDecisionState(c.env, id, c.get("identity").email.toLowerCase());
+    if (!decision) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "decision not found" }, next_actions: [] }, 404);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: decision, next_actions: [] });
   });
 
   app.get("/api/decisions/:id", async (c) => {
     const id = c.req.param("id");
     if (!ID_RE.test(id)) return c.text("not found", 404);
     const email = c.get("identity").email.toLowerCase();
+    if (c.req.query("page") !== "1") {
+      const decision = await readDecisionState(c.env, id, email);
+      if (!decision) return c.text("not found", 404);
+      return c.redirect(decisionThreadHref(decision.sessionId, decision.replacedBy ?? id), 302);
+    }
     const row = await c.env.DB.prepare("SELECT bounds_json, status FROM runs WHERE id = ? AND owner_email = ?").bind(id, email).first<{ bounds_json: string; status: string }>();
     if (!row) return c.text("not found", 404);
     const bounds = JSON.parse(row.bounds_json) as DecisionBounds;
