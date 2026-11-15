@@ -98,10 +98,10 @@
   import { tabSessionBinding, type SessionBinding } from "./session-binding";
   import { composerRoute, shouldSendToRoot } from "./composer-route.svelte";
   import { wantsWakeLock } from "./wake-lock";
-  import SessionSignalDot from "./SessionSignal.svelte";
   import { recordWebReceipt, wakeLockState, webFeatures } from "./web-platform.svelte";
   import { installLocationBridge } from "./location-request";
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
+  import { TOOL_ROW_STATUS_LABEL, formatToolResult, toolArgFields, toolArgSummary, toolRowState, unescapeIfEscaped, type ToolRowState } from "./tool-row";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
   import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
@@ -290,6 +290,23 @@
     } finally {
       loadingOlderEntries = false;
     }
+  }
+
+  type StepRun = { kind: "steps"; blocks: RenderBlock[]; start: number };
+  type RenderRun = { kind: "text"; block: RenderBlock } | StepRun;
+
+  function groupStepRuns(blocks: RenderBlock[]): RenderRun[] {
+    const runs: RenderRun[] = [];
+    blocks.forEach((block, index) => {
+      if (block.kind === "text") {
+        runs.push({ kind: "text", block });
+        return;
+      }
+      const last = runs[runs.length - 1];
+      if (last && last.kind === "steps") last.blocks.push(block);
+      else runs.push({ kind: "steps", blocks: [block], start: index });
+    });
+    return runs;
   }
 
   function groupParts(parts: Part[]): RenderBlock[] {
@@ -980,8 +997,20 @@
     return { text, rendered: renderUserMarkdown(text) };
   }
 
+  function unescapeCodeBlocks(html: string): string {
+    if (!html.includes("\\n") || typeof document === "undefined") return html;
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    wrapper.querySelectorAll("pre > code").forEach((codeEl) => {
+      const text = codeEl.textContent ?? "";
+      const fixed = unescapeIfEscaped(text.replace(/\n$/, ""));
+      if (fixed !== text.replace(/\n$/, "")) codeEl.textContent = fixed;
+    });
+    return wrapper.innerHTML;
+  }
   function renderMarkdown(md: string): string {
     let html = sanitizeRenderedMarkdown(marked.parse(md ?? "") as string);
+    html = unescapeCodeBlocks(html);
     // post-process <pre><code> for hljs + copy button. We need to do this
     // on the rendered HTML, since we're returning a string for {@html}.
     if (hljs) {
@@ -1058,8 +1087,8 @@
     return message.parts.map((part) => {
       if (part.kind === "text") return part.text;
       if (part.kind === "thinking") return "";
-      const args = briefArgs(part.tool.arguments);
-      const status = part.tool.state === "pending" ? "running" : part.tool.state;
+      const args = toolArgSummary(part.tool.name, part.tool.arguments);
+      const status = TOOL_ROW_STATUS_LABEL[toolRowState(part.tool.state)].toLowerCase();
       return `
 
 [tool:${part.tool.name}${args ? ` ${args}` : ""} · ${status}]
@@ -1158,13 +1187,14 @@
     const s = totalSec % 60;
     return m + "m" + String(s).padStart(2, "0") + "s";
   }
-  function briefArgs(args: any) {
-    try {
-      const s = JSON.stringify(args);
-      return s.length > 80 ? s.slice(0, 80) + "…" : s;
-    } catch {
-      return "";
-    }
+  function thinkingSummary(text: string): string {
+    const first = text.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+    return first.length > 72 ? `${first.slice(0, 71).trimEnd()}…` : first;
+  }
+  const lastUserIndex = $derived(messages.findLastIndex((message) => message.role === "user"));
+  function showsTurnDuration(message: MessageView, index: number): boolean {
+    if (message.role !== "assistant" || typeof message.durationMs !== "number") return false;
+    return !(turnIsLive && index > lastUserIndex);
   }
   function historicalToolName(content: string) {
     return content.split("\n", 1)[0].replace(/^\[functions\.[^\]]+\]:\s*/, "").trim() || "tool result";
@@ -2814,21 +2844,23 @@
   });
 
   const taskRunning = $derived(sendStatus === "thinking" || sendStatus === "running");
+  const turnIsLive = $derived(taskRunning || piBusy || sessionTurnLocksComposer(remoteTurn));
   const taskElapsedText = $derived(taskStartedAt === null ? "" : formatTurnDuration(taskNow - taskStartedAt));
   const IDLE_TITLE = "My Agent Experience";
+  const liveTurnStartedAt = $derived(lastUserIndex >= 0 ? messages[lastUserIndex]?.timestamp ?? null : null);
   $effect(() => {
-    if (!taskRunning) {
+    if (!turnIsLive) {
       taskStartedAt = null;
       if (binding.followsTab) document.title = IDLE_TITLE;
       return;
     }
-    if (taskStartedAt === null) taskStartedAt = Date.now();
+    if (taskStartedAt === null) taskStartedAt = Math.min(Date.now(), liveTurnStartedAt ?? Date.now());
     taskNow = Date.now();
     const ticker = setInterval(() => { taskNow = Date.now(); }, 1000);
     return () => clearInterval(ticker);
   });
   $effect(() => {
-    if (binding.followsTab && taskRunning && taskElapsedText) document.title = `Working · task ${taskElapsedText} · my ax`;
+    if (binding.followsTab && turnIsLive && taskElapsedText) document.title = `Working · task ${taskElapsedText} · my ax`;
   });
 
   // A detected deployment waits for durable turn/voice work to become idle.
@@ -3247,7 +3279,7 @@
             </button>
           </div>
         {/if}
-        {#each messages as m (m.id)}
+        {#each messages as m, mIdx (m.id)}
           <article
             class={`msg msg-${m.role} min-w-0 overflow-x-hidden` + (m.role === "tool" ? " msg-tool-compact" : "")}
             data-id={m.id}
@@ -3291,9 +3323,9 @@
                 {/if}
               </header>
               {#if m.role === "assistant" && m.reasoning && !m.parts.some((part) => part.kind === "thinking")}
-                <details class="msg-reasoning" ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
-                  <summary>Thinking</summary>
-                  <pre class="msg-reasoning__body">{m.reasoning}</pre>
+                <details class="step-row" data-step="thinking" data-state="ok" ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
+                  {@render stepRow("thinking", "ok", "Thinking", thinkingSummary(m.reasoning), "")}
+                  <div class="step-row__body"><pre class="step-row__text">{m.reasoning}</pre></div>
                 </details>
               {/if}
               <!-- Body: user messages render their content directly;
@@ -3318,18 +3350,20 @@
                 {#if m.parts.length === 0 && !m.streaming}
                   <div class="msg-body" data-empty="1"></div>
                 {:else}
-                  {#each groupParts(m.parts) as block, blockIdx (blockIdx)}
-                    {#if block.kind === "text"}
-                      <div class="msg-body">{@render textBlock(block)}</div>
-                    {:else if block.kind === "thinking"}
-                      <details class="msg-reasoning" data-thinking-step={blockIdx} ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
-                        <summary>Thinking</summary>
-                        <pre class="msg-reasoning__body">{block.text}</pre>
-                      </details>
+                  {#each groupStepRuns(groupParts(m.parts)) as run, runIdx (runIdx)}
+                    {#if run.kind === "text"}
+                      <div class="msg-body">{@render textBlock(run.block)}</div>
                     {:else}
-                      <!-- Consecutive tool calls share one container; each is a
-                           row with internal separators (see .msg-tools--group). -->
-                      <div class="msg-tools msg-tools--group" data-count={block.tools.length}>
+                    <div class="step-group" data-steps={run.blocks.length}>
+                    {#each run.blocks as block, offset (run.start + offset)}
+                    {@const blockIdx = run.start + offset}
+                    {#if block.kind === "thinking"}
+                      <details class="step-row" data-step="thinking" data-state="ok" data-thinking-step={blockIdx} ontoggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void loadFullMessageEntries(m.id); }}>
+                        {@render stepRow("thinking", "ok", "Thinking", thinkingSummary(block.text), "")}
+                        <div class="step-row__body"><pre class="step-row__text">{block.text}</pre></div>
+                      </details>
+                    {:else if block.kind === "tools"}
+                      <div class="msg-tools" data-count={block.tools.length}>
                         {#each block.tools as tool (tool.id)}
                           {@const resolved = resolveToolResultWidget(tool.result, tool.name)}
                           <!--
@@ -3341,27 +3375,25 @@
                           -->
                           {@const isSuppressedCandidate = resolved.kind === "reusable-tool-candidate" && !visibleReusableCandidateIds.has(tool.id)}
                           {@const effectiveKind = isSuppressedCandidate ? "raw-text" : resolved.kind}
-                          <details class="tool-call" data-tool-id={tool.id} data-state={tool.state} data-tool-widget={effectiveKind} data-suppressed-candidate={isSuppressedCandidate ? "1" : "0"} open={!isSuppressedCandidate && toolIsOpen(tool, effectiveKind)} ontoggle={(e) => setToolOpen(tool.id, (e.currentTarget as HTMLDetailsElement).open)}>
-                            <summary class="tool-call__summary">
-                              <span class="tool-call__pip" aria-hidden="true"></span>
-                              <span class="tool-call__name">{tool.name}</span>
-                              <span class="tool-call__args">{briefArgs(tool.arguments)}</span>
-                              <span class="tool-call__elapsed" aria-label="elapsed">{tool.elapsedText}</span>
-                              <span class="tool-call__status">
-                                {tool.state === "pending" ? "…running" : tool.state === "error" ? "error" : "ok"}
-                              </span>
-                            </summary>
-                            {#if effectiveKind !== "decision"}<pre class="tool-call__argsfull">{JSON.stringify(tool.arguments, null, 2)}</pre>{/if}
-                            {#if tool.state === "pending"}
-                              <pre class="tool-call__result">(awaiting result…)</pre>
-                            {:else if isSuppressedCandidate}
-                              <pre class="tool-call__result" data-tool-widget="raw-text">{typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result, null, 2)}</pre>
-                            {:else}
-                              <ToolResultWidget result={tool.result} toolName={tool.name} />
-                            {/if}
+                          <details class="step-row tool-call" data-step="tool" data-tool-id={tool.id} data-state={tool.state} data-tool-widget={effectiveKind} data-suppressed-candidate={isSuppressedCandidate ? "1" : "0"} open={!isSuppressedCandidate && toolIsOpen(tool, effectiveKind)} ontoggle={(e) => setToolOpen(tool.id, (e.currentTarget as HTMLDetailsElement).open)}>
+                            {@render stepRow("tool", toolRowState(tool.state), tool.name, toolArgSummary(tool.name, tool.arguments), tool.elapsedText)}
+                            <div class="step-row__body">
+                              {#if effectiveKind !== "decision"}{@render toolArgs(tool.arguments)}{/if}
+                              <div class="step-row__section-label">Result</div>
+                              {#if tool.state === "pending"}
+                                <pre class="tool-call__result step-row__waiting">Waiting for the result…</pre>
+                              {:else if isSuppressedCandidate}
+                                <pre class="tool-call__result" data-tool-widget="raw-text">{formatToolResult(tool.result)}</pre>
+                              {:else}
+                                <ToolResultWidget result={tool.result} toolName={tool.name} />
+                              {/if}
+                            </div>
                           </details>
                         {/each}
                       </div>
+                    {/if}
+                    {/each}
+                    </div>
                     {/if}
                   {/each}
                 {/if}
@@ -3373,16 +3405,12 @@
                    the same trusted registry as native assistant tool parts. -->
               {@const toolName = historicalToolName(m.content)}
               {@const resultWidget = resolveToolResultWidget(m.content, toolName)}
-              <details class="tool-call tool-call--replay" data-state="done" data-tool-widget={resultWidget.kind} open={resultWidget.kind !== "raw-text"}>
-                <summary class="tool-call__summary">
-                  <span class="tool-call__pip" aria-hidden="true"></span>
-                  <span class="tool-call__name">{toolName}</span>
-                  <span class="tool-call__status" aria-label="from history" title="from history">↻</span>
-                </summary>
-                <ToolResultWidget result={m.content} {toolName} />
+              <details class="step-row tool-call tool-call--replay" data-step="tool" data-state="done" data-tool-widget={resultWidget.kind} open={resultWidget.kind !== "raw-text"}>
+                {@render stepRow("tool", "ok", toolName, "from history", "")}
+                <div class="step-row__body"><ToolResultWidget result={m.content} {toolName} /></div>
               </details>
             {/if}
-            {#if m.role === "assistant" && typeof m.durationMs === "number"}
+            {#if showsTurnDuration(m, mIdx)}
               <div class="msg-duration" title="Time from your message to the end of this turn">Ran for {formatTurnDuration(m.durationMs)}</div>
             {/if}
           </article>
@@ -3400,22 +3428,11 @@
           </article>
         {/each}
 
-        <!-- Agent-thinking indicator -->
-        {#if thinkingVisible}
-          <div
-            class="msg flex items-center gap-1.5 py-2"
-            data-show="1"
-            aria-live="polite"
-            aria-label="Agent is thinking"
-            role="status"
-          >
-            <span class="agent-thinking__dot" aria-hidden="true"></span>
-            <span class="agent-thinking__dot" aria-hidden="true"></span>
-            <span class="agent-thinking__dot" aria-hidden="true"></span>
+        {#if (turnIsLive && taskElapsedText) || thinkingVisible}
+          <div class="msg msg-duration msg-duration--running" data-task-timer role="status" aria-label={taskElapsedText ? `Running for ${taskElapsedText}` : "Agent is thinking"} aria-live="off">
+            <span class="agent-thinking" aria-hidden="true"><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span></span>
+            {#if taskElapsedText}<span>Running for {taskElapsedText}</span>{/if}
           </div>
-        {/if}
-        {#if taskRunning && taskElapsedText}
-          <div class="msg msg-duration msg-duration--running" data-task-timer aria-live="off">Running for {taskElapsedText}<SessionSignalDot signal="running" /></div>
         {/if}
         {#if terminalOpen}
           <Terminal onClose={() => (terminalOpen = false)} />
@@ -3638,6 +3655,39 @@
 </div>
 
 <ImageLightbox />
+
+{#snippet stepRow(step: "thinking" | "tool", state: ToolRowState, label: string, summary: string, elapsed: string)}
+  <summary class="step-row__summary">
+    <span class="step-row__status" data-status={state} role="img" aria-label={step === "thinking" ? "Thinking" : TOOL_ROW_STATUS_LABEL[state]} title={step === "thinking" ? "Thinking" : TOOL_ROW_STATUS_LABEL[state]}>
+      {#if step === "thinking"}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
+      {:else if state === "running"}
+        <svg class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
+      {:else if state === "error"}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      {:else}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      {/if}
+    </span>
+    <span class="step-row__name tool-call__name">{label}</span>
+    <span class="step-row__summary-text">{summary}</span>
+    <span class="step-row__elapsed" aria-label="elapsed">{elapsed}</span>
+    <svg class="step-row__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+  </summary>
+{/snippet}
+
+{#snippet toolArgs(args: unknown)}
+  {@const fields = toolArgFields(args)}
+  {#if fields.length}
+    <div class="step-row__section-label">Input</div>
+    <dl class="step-row__args">
+      {#each fields as field (field.key)}
+        <dt>{field.key}</dt>
+        <dd class:step-row__arg-block={field.block}>{field.value}</dd>
+      {/each}
+    </dl>
+  {/if}
+{/snippet}
 
 {#snippet textBlock(block: { text: string; rendered?: string })}
   {#if block.rendered}

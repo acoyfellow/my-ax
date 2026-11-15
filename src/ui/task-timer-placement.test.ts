@@ -15,5 +15,5 @@ test("the running task timer sits in the chat thread, not above the composer", (
 });
 
 test("the running timer reads like the finished turn's duration line", () => {
-  assert.match(source, /class="msg msg-duration msg-duration--running" data-task-timer[^>]*>Running for \{taskElapsedText\}/);
+  assert.match(source, /class="msg msg-duration msg-duration--running" data-task-timer[^>]*>[\s\S]*?Running for \{taskElapsedText\}/);
 });
