@@ -2960,6 +2960,9 @@
       declineServiceWorkerNavigation(event, event.data.href);
     };
     const onStartersRefresh = () => { void loadStarters(); };
+    const onDecisionAnswered = (event: Event) => {
+      if (pendingDecision && (event as CustomEvent<{ decisionId?: string }>).detail?.decisionId === pendingDecision.id) pendingDecision = null;
+    };
     // Artifact -> chat bridge. An interactive Svelte artifact runs in a
     // sandbox="allow-scripts" iframe (no same-origin), so its only channel back
     // is window.parent.postMessage. It can send:
@@ -3083,6 +3086,7 @@
       window.addEventListener("my-ax:toast", onPageToast as EventListener);
       window.addEventListener("my-ax:terminal-open", onTerminalOpen);
       window.addEventListener("my-ax:starters-refresh", onStartersRefresh);
+      window.addEventListener("my-ax:decision-answered", onDecisionAnswered);
       navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
     }
     window.addEventListener("message", onArtifactMessage);
@@ -3090,6 +3094,7 @@
       removeLocationBridge();
       window.removeEventListener("my-ax:deploy-update", onDeployUpdate);
       window.removeEventListener("my-ax:starters-refresh", onStartersRefresh);
+      window.removeEventListener("my-ax:decision-answered", onDecisionAnswered);
       document.removeEventListener("keydown", onGlobalKeydown);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("my-ax:switch-session", onSwitch as EventListener);
@@ -3178,9 +3183,9 @@
   {/if}
 
   {#if pendingDecision}
-    <a href={pendingDecision.href} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
+    <a href={pendingDecision.href} onclick={(event) => { if (!pendingDecision) return; event.preventDefault(); void focusDecision(pendingDecision.id, browserDecisionFocusEnv()); }} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
       <span class="min-w-0"><strong class="text-brand">Needs your input</strong><span class="ml-2 text-fg-mut">{pendingDecision.question}</span></span>
-      <span class="flex-none text-brand font-semibold">Open decision →</span>
+      <span class="flex-none text-brand font-semibold">Go to decision ↓</span>
     </a>
   {/if}
 
@@ -3346,7 +3351,7 @@
                                 {tool.state === "pending" ? "…running" : tool.state === "error" ? "error" : "ok"}
                               </span>
                             </summary>
-                            <pre class="tool-call__argsfull">{JSON.stringify(tool.arguments, null, 2)}</pre>
+                            {#if effectiveKind !== "decision"}<pre class="tool-call__argsfull">{JSON.stringify(tool.arguments, null, 2)}</pre>{/if}
                             {#if tool.state === "pending"}
                               <pre class="tool-call__result">(awaiting result…)</pre>
                             {:else if isSuppressedCandidate}

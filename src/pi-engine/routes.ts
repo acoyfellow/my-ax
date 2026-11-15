@@ -5,7 +5,7 @@ import * as rpc from "../rpc/contract";
 import type { AppEnv } from "../app-env";
 import type { PiChatAgent } from "./pi-chat-agent";
 import { PI_ENGINE_MODEL_CHOICES } from "./gateway-models";
-import { parseForkPoint } from "./fork";
+import { parseForkPoint, type ForkEntry } from "./fork";
 import { dropLeadingNonUserRows, IMPORTED_CONTEXT_ROW_LIMIT, transcriptRowsToPiEntries, type TranscriptRow } from "./think-convert";
 import { copyWorkspaceDisk, listWorkspaceSnapshots, workspaceDiskState } from "../workspace";
 import type { AccessIdentity } from "../auth";
@@ -41,6 +41,15 @@ async function ownedPiChat(c: { env: AppEnv["Bindings"]; get: (key: "identity") 
   if (!owned) return null;
   await owned.stub.bind({ email: owned.email }, chatId);
   return owned.stub;
+}
+
+export async function seedPiChatEntries(env: AppEnv["Bindings"], email: string, chatId: string, entries: readonly ForkEntry[]): Promise<number> {
+  const owner = email.toLowerCase();
+  return rpc.command("PiChat.seedFromFork", async () => {
+    const target = await getAgentByName((env as unknown as PiEnv).PI_CHAT, piChatObjectName(owner, chatId));
+    await target.bind({ email: owner }, chatId);
+    return target.seedFromFork(entries);
+  });
 }
 
 export async function forkPiChat(env: AppEnv["Bindings"], email: string, sourceId: string, sourceName: string, atMessageId: string): Promise<{ sessionId: string; name: string; messageCount: number }> {

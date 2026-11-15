@@ -30,6 +30,7 @@
       });
       const body = await response.json().catch(() => null);
       view = viewAfterAnswer({ phase: "open", question, options }, choice, response.status, body?.error?.message ?? null);
+      if (view.phase === "answered") window.dispatchEvent(new CustomEvent("my-ax:decision-answered", { detail: { decisionId } }));
       if (response.status === 409) await load();
     } catch {
       view = viewAfterAnswer({ phase: "open", question, options }, choice, 0, null);

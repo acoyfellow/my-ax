@@ -13,6 +13,9 @@
 import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import type { Hono } from "hono";
 import { dailyRefusals, flushRefusals } from "../domain/refusals";
+import { createDecision } from "./decisions";
+import { seedPiChatEntries } from "../pi-engine/routes";
+import { emptyUsage } from "../pi-engine/think-convert";
 import type { AppEnv } from "../app-env";
 import { dismissAttentionItem, type AttentionStoreDb } from "../domain/Attention/Attention.store";
 import { seedUserWorkspaceFile } from "../workspace";
@@ -20,6 +23,26 @@ import type { ApiResponse } from "../types";
 import { recordRecoveryExhaustion } from "../recovery-exhaustion";
 
 export function registerSystemRoutes(app: Hono<AppEnv>) {
+  app.post("/api/system/decision-probe", async (c) => {
+    const command = "POST /api/system/decision-probe";
+    const email = c.get("identity").email.toLowerCase();
+    const body = await c.req.json<{ sessionId?: string; question?: string; options?: string[] }>().catch(() => ({} as { sessionId?: string; question?: string; options?: string[] }));
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+    const owned = sessionId ? await c.env.DB.prepare("SELECT name FROM sessions WHERE id = ? AND owner_email = ?").bind(sessionId, email).first<{ name: string }>() : null;
+    if (!owned?.name?.startsWith("decision-inline-")) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "probe sessions must be named decision-inline-*" }, next_actions: [] }, 404);
+    const question = (body.question ?? "").slice(0, 200) || "Probe decision?";
+    const options = Array.isArray(body.options) ? body.options.map(String).slice(0, 4) : ["Yes", "No"];
+    const decision = await createDecision(c.env, email, sessionId, question, options);
+    const result = JSON.stringify({ ok: true, awaiting: true, decisionId: decision.id, href: decision.href, options });
+    const now = Date.now();
+    const toolCallId = `probe-${decision.id}`;
+    await seedPiChatEntries(c.env, email, sessionId, [
+      { kind: "pi.user", model: [{ role: "user", content: "Decision probe: ask me to choose.", timestamp: now - 2000 }] },
+      { kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "toolCall", id: toolCallId, name: "ask_user", arguments: { question, options } }], api: "imported", provider: "imported", model: "probe", usage: emptyUsage(), stopReason: "toolUse", timestamp: now - 1000 }] },
+      { kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId, toolName: "ask_user", content: [{ type: "text", text: result }], isError: false, timestamp: now }] },
+    ]);
+    return c.json<ApiResponse>({ ok: true, command, result: { decisionId: decision.id, href: decision.href }, next_actions: [] }, 201);
+  });
   app.get("/api/domain/refusals", async (c) => {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("day") ?? "") ? String(c.req.query("day")) : new Date().toISOString().slice(0, 10);
     await flushRefusals(c.env.DB);
