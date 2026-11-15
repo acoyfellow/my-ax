@@ -37,6 +37,7 @@ else
 fi
 
 PREVIEW_URL=${PREVIEW_URL:-}
+if [ -z "$PREVIEW_URL" ] && [ -f .git/alchemy-preview-url ]; then PREVIEW_URL=$(tr -d '[:space:]' < .git/alchemy-preview-url); fi
 preview_version=""
 if [ -f alchemy.run.ts ] && [ -n "$PREVIEW_URL" ]; then
   preview_token=$(cloudflared access token -app="$PREVIEW_URL" 2>.git/alchemy-gate-token.err || true)
