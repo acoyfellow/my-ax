@@ -12,6 +12,7 @@
   let open = $state(false);
   type DeskDrag = { pointerId: number; startY: number; direction: "open" | "close"; height: number; offset: number; overshoot: number; moved: boolean; samples: Array<{ y: number; t: number }> };
   let drag = $state<DeskDrag | null>(null);
+  const scrimBlocksInput = (isOpen: boolean, current: DeskDrag | null) => isOpen || current?.moved === true;
   const viewportHeight = () => window.innerHeight || 800;
   const offsetNow = $derived(drag ? drag.offset : open ? viewportHeight() : 0);
   const progress = $derived(revealProgress(offsetNow, drag?.height ?? viewportHeight()));
@@ -204,9 +205,9 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /></svg>
 </NavIconButton>
 
-<svelte:window onkeydown={(event) => { if (open && event.key === "Escape") closePanel(); }} />
+<svelte:window onkeydown={(event) => { if (open && event.key === "Escape") closePanel(); }} onpointerup={endDrag} onpointercancel={endDrag} />
 
-<button use:portal type="button" class="desk-scrim" aria-label="Close desk" tabindex="-1" onclick={closePanel} data-open={open || drag ? "1" : "0"}></button>
+<button use:portal type="button" class="desk-scrim" aria-label="Close desk" tabindex="-1" onclick={closePanel} data-open={scrimBlocksInput(open, drag) ? "1" : "0"}></button>
 <section use:portal id="desk-drawer" class="desk-drawer" data-desk-panel="" data-open={open ? "1" : "0"} data-dragging={drag ? "1" : "0"} aria-label="Desk" aria-hidden={!open && !drag} inert={!open}
   style:transform={drag ? `translateY(calc(-100% + ${drag.offset + drag.overshoot}px))` : undefined}>
   <button type="button" class="desk-drawer__close" onclick={closePanel} aria-label="Close desk" title="Close (Esc)">

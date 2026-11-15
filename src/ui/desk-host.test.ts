@@ -44,3 +44,12 @@ test("every legacy desk card has an owner-controlled removal action", () => {
   assert.match(desk, /class="desk-remove"/);
   assert.match(desk, /removeCard\(card\.id\)/);
 });
+
+test("a tap that never moves cannot leave a full-screen scrim blocking the app", () => {
+  assert.match(desk, /const scrimBlocksInput = \(isOpen: boolean, current: DeskDrag \| null\) => isOpen \|\| current\?\.moved === true;/);
+  assert.match(desk, /class="desk-scrim"[^>]*data-open=\{scrimBlocksInput\(open, drag\) \? "1" : "0"\}/);
+});
+
+test("a pointerup or pointercancel anywhere ends a desk drag, so a lost pointer capture cannot strand it", () => {
+  assert.match(desk, /<svelte:window .*onpointerup=\{endDrag\} onpointercancel=\{endDrag\}/);
+});
