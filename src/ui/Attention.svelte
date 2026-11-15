@@ -338,12 +338,12 @@
 </div>
 
 <style>
-  .notif-rail { position: fixed; z-index: 40; top: var(--appbar-height, 52px); right: 0; bottom: 0; width: min(360px, 100vw); display: flex; flex-direction: column; background: var(--bg-alt); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+  .notif-rail { position: fixed; z-index: 50; top: 0; padding-top: env(safe-area-inset-top, 0px); right: 0; bottom: 0; width: min(360px, 100vw); display: flex; flex-direction: column; background: var(--bg-alt); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
   .notif-rail[data-open="1"] { transform: translateX(0); }
-  .notif-scrim { position: fixed; inset: 0; z-index: 39; border: 0; padding: 0; background: rgb(0 0 0 / 0.32); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 220ms ease; }
+  .notif-scrim { position: fixed; inset: 0; z-index: 49; border: 0; padding: 0; background: rgb(0 0 0 / 0.32); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity 220ms ease; }
   .notif-scrim[data-open="1"] { opacity: 1; pointer-events: auto; }
   .notif-rail__bar { flex: none; display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); }
-  .notif-rail__body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+  .notif-rail__body { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 8px; }
   @media (prefers-reduced-motion: reduce) { .notif-rail, .notif-scrim { transition: none; } }
   .notif-clear-all {
     border: 1px solid var(--line);
@@ -398,8 +398,12 @@
     min-height: 280px;
     flex-direction: column;
     align-items: flex-start;
+    min-width: 0;
+    max-width: 100%;
     padding: 22px;
+    overflow-wrap: anywhere;
   }
+  .notif-detail-title, .notif-detail-body { max-width: 100%; }
   .notif-detail-time { font-size: 11px; color: var(--fg-mut); }
   .notif-detail-title {
     margin-top: 18px;

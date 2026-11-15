@@ -17,7 +17,7 @@ export const DEFAULT_STARTERS: ConversationStarter[] = [
   { title: "Inspect my workspace", hint: "Uses the persistent My AX Workspace.", prompt: "What's in /home/user? Pick anything interesting and tell me about it." },
   { title: "Add an MCP server", hint: "Settings → Connectors → Add MCP server (BYO OAuth).", prompt: "How do I add a new MCP server here? Walk me through Settings → Connectors." },
   { title: "Quick research question", hint: "Plain reasoning, no tool calls.", prompt: "Explain the difference between Cloudflare Sandbox SDK and Containers in 5 bullets." },
-  { title: "Script + run end-to-end", hint: "Exercises workspace.write + workspace.exec through Work Code Mode.", prompt: "Write a small Python script to /home/user/hello.py that prints the date, then run it." },
+  { title: "Script + run end-to-end", hint: "Writes a script, then runs it.", prompt: "Write a small Python script to /home/user/hello.py that prints the date, then run it." },
 ];
 
 function cleanStr(value: unknown, max: number): string {

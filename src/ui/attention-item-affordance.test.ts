@@ -42,6 +42,7 @@ test("empty/unknown item is quiet info", () => {
 test("the open notifications rail dims and blurs the app behind it, and a tap there closes it", () => {
   const source = readFileSync(new URL("./Attention.svelte", import.meta.url), "utf8");
   assert.match(source, /class="notif-scrim" data-open=\{open \? "1" : "0"\}[^\n]*onclick=\{closePanel\}/);
-  assert.match(source, /\.notif-scrim \{[^}]*z-index: 39;[^}]*backdrop-filter: blur/);
+  assert.match(source, /\.notif-scrim \{[^}]*z-index: 49;[^}]*backdrop-filter: blur/);
+  assert.match(source, /\.notif-rail \{[^}]*z-index: 50;[^}]*top: 0;/);
   assert.match(source, /\.notif-scrim\[data-open="1"\] \{ opacity: 1; pointer-events: auto; \}/);
 });
