@@ -14,6 +14,7 @@
   import ActivitySignal from "./ActivitySignal.svelte";
   import AppPopOut from "./AppPopOut.svelte";
   import VoiceListen from "./VoiceListen.svelte";
+  import Miniplayer from "./Miniplayer.svelte";
 
   interface Props {
     identityEmail?: string | null;
@@ -107,3 +108,7 @@
 </header>
 
 <RunReceiptModal />
+
+{#if typeof localStorage !== "undefined" && localStorage.getItem("my-ax-miniplayer") === "1"}
+  <Miniplayer />
+{/if}
