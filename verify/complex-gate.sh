@@ -1,7 +1,7 @@
 #!/bin/sh
 set -u
-ROOT=/Users/jcoeyman/cloudflare/my-ax
-LOOP_REPO=/Users/jcoeyman/.pi/agent/git/github.com/acoyfellow/terraloop-mode
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+LOOP_REPO=${TERRALOOP_REPO:-$HOME/.pi/agent/git/github.com/acoyfellow/terraloop-mode}
 TARGET=${COMPLEX_TARGET:-prod}
 LOG=$ROOT/.git/complex-gate
 mkdir -p "$LOG"

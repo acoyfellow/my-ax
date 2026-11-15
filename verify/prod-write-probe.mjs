@@ -1,8 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { resolveTarget } from "./targets.mjs";
 
-const TARGETS = { local: "http://127.0.0.1:8799", preview: "https://pr-alchemy.my.ax.cloudflare.dev", prod: "https://my.ax.cloudflare.dev" };
-const requested = process.env.PROBE_URL ?? process.argv[2] ?? "";
-const base = (TARGETS[requested] ?? requested).replace(/\/$/, "");
+const base = resolveTarget(process.env.PROBE_URL ?? process.argv[2] ?? "");
 if (!base) {
   console.error("usage: PROBE_URL=https://host node verify/prod-write-probe.mjs");
   process.exit(2);

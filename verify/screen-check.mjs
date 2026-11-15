@@ -1,17 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
+import { browserPaths, resolveTarget } from "./targets.mjs";
 
-const TARGETS = { local: "http://127.0.0.1:8799", preview: "https://pr-alchemy.my.ax.cloudflare.dev", prod: "https://my.ax.cloudflare.dev" };
-const requested = process.env.SCREEN_URL ?? process.argv[2] ?? "";
-const base = (TARGETS[requested] ?? requested).replace(/\/$/, "");
+const base = resolveTarget(process.env.SCREEN_URL ?? process.argv[2] ?? "");
 if (!base) {
   console.error("usage: node verify/screen-check.mjs local|preview|prod");
   process.exit(2);
 }
 
-const PLAYWRIGHT = process.env.PLAYWRIGHT_CORE ?? "/Users/jcoeyman/cloudflare/my-ax/.git/pw/node_modules/playwright-core/index.mjs";
-const CHROME = process.env.CHROME_PATH ?? "/Users/jcoeyman/Library/Caches/ms-playwright/chromium-1254/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const OUT = process.env.SCREEN_OUT ?? "/Users/jcoeyman/cloudflare/my-ax/.git/screens";
+const { playwright: PLAYWRIGHT, chrome: CHROME, out: OUT } = browserPaths();
 const WIDTHS = [390, 768, 1280];
 
 if (!existsSync(PLAYWRIGHT) || !existsSync(CHROME)) {
