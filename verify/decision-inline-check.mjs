@@ -70,7 +70,7 @@ try {
         await page.screenshot({ path: `${OUT}/decision-answered-${width}.png` });
       }
       if (width === 1280 && appeared) {
-        check("reopening shows the frozen answer", await page.locator(`[data-decision-id="${decisionId}"][data-decision-phase="answered"]`).count() === 1);
+        check("reopening shows the frozen answer", await page.locator(`[data-decision-id="${decisionId}"][data-decision-phase="answered"]`).waitFor({ timeout: 10_000 }).then(() => true, () => false));
         check("frozen widget has no answer buttons", await widget.getByRole("button").count() === 0);
       }
       await context.close();
