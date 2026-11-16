@@ -186,6 +186,14 @@
       "aggregate": null,
       "state": [],
       "renamedTo": "saved_recipes"
+    },
+    "computer_leases": {
+      "kind": "lifecycle",
+      "aggregate": "ComputerLease",
+      "state": [
+        "holder",
+        "expires_at"
+      ]
     }
   },
   "durableObjects": {
