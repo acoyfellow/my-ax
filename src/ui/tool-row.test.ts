@@ -72,3 +72,9 @@ test("consecutive thinking and tool steps render inside one connected step group
   assert.match(css, /\.step-group \.step-row \{ border: 0; border-radius: 0; background: transparent; \}/);
   assert.doesNotMatch(css, /\.step-row\[data-step="thinking"\] \{ background/);
 });
+
+test("rows inside a step group never get the 6px between-block margin, so thinking and tool rows are evenly spaced", () => {
+  const css = readFileSync(new URL("../styles/app.css", import.meta.url), "utf8");
+  assert.match(css, /\.step-group > \.step-row\.step-row, \.step-group > \.msg-tools\.msg-tools, \.step-group \.msg-tools > \.step-row\.step-row \{ margin-top: 0; margin-bottom: 0; \}/);
+  assert.match(css, /\.msg-tools \+ \.step-row[^{]*\{ margin-top: 6px; \}/, "the outside-group spacing rule still exists, so the override must stay more specific");
+});

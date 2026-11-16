@@ -2741,6 +2741,18 @@
     e.stopPropagation();
     void confirmDialog({ title: "Stop the agent?", confirmLabel: "Stop", tone: "danger" }).then((stop) => { if (stop) cancelAgent(); });
   }
+  async function stopTurnOnServer() {
+    const sessionId = currentSessionId();
+    if (!sessionId || sessionId === "unknown") return;
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/stop`, { method: "POST", credentials: "include" }).catch(() => undefined);
+  }
+  function confirmStopTurn() {
+    void confirmDialog({ title: "Stop the agent?", confirmLabel: "Stop", tone: "danger" }).then((stop) => {
+      if (!stop) return;
+      cancelAgent();
+      void stopTurnOnServer();
+    });
+  }
   function cancelAgent() {
     if (wsState.status === "idle" || wsState.status === "done") return;
     if (piTranscript && ws && (ws as any).readyState === WebSocket.OPEN) {
@@ -3456,6 +3468,7 @@
           <div class="msg msg-duration msg-duration--running" data-task-timer role="status" aria-label={taskElapsedText ? `Running for ${taskElapsedText}` : "Agent is thinking"} aria-live="off">
             <span class="agent-thinking" aria-hidden="true"><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span></span>
             {#if taskElapsedText}<span>Running for {taskElapsedText}</span>{/if}
+            {#if turnIsLive}<button type="button" class="msg-duration__stop" data-stop-turn onclick={confirmStopTurn}>Stop</button>{/if}
           </div>
         {/if}
         {#if terminalOpen}

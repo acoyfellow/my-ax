@@ -62,12 +62,16 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     const commands = ["tail -n 40 ~/.pi/agent/logs/pi.log", "ps aux | grep cloudflared", "sleep 5; cloudflared access token -app=https://example.test", "sleep 5; cloudflared access login https://example.test"];
     const assistant = commands.flatMap((command, index) => [
       { type: "toolCall", id: `seed-${index}`, name: "exec", arguments: { command } },
+      { type: "toolCall", id: `seed-read-${index}`, name: "read_file", arguments: { path: `/home/user/notes/${index}.txt` } },
       { type: "thinking", thinking: `Step ${index + 1}: the login has not gone through yet, so check again.` },
     ]);
     await seedPiChatEntries(c.env, email, sessionId, [
       { kind: "pi.user", model: [{ role: "user", content: "Log in to Cloudflare Access for me.", timestamp: now - 9000 }] },
       { kind: "pi.assistant", model: [{ role: "assistant", content: [...assistant, { type: "text", text: "The login hasn't gone through. Cloudflare hasn't told it you approved it yet." }], api: "imported", provider: "imported", model: "probe", usage: emptyUsage(), stopReason: "stop", timestamp: now - 5000 }] },
-      ...commands.map((_, index) => ({ kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: `seed-${index}`, toolName: "exec", content: [{ type: "text", text: `ok ${index + 1}` }], isError: false, timestamp: now - 4000 + index }] })),
+      ...commands.flatMap((_, index) => [
+        { kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: `seed-${index}`, toolName: "exec", content: [{ type: "text", text: `ok ${index + 1}` }], isError: false, timestamp: now - 4000 + index }] },
+        { kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: `seed-read-${index}`, toolName: "read_file", content: [{ type: "text", text: "notes" }], isError: false, timestamp: now - 3900 + index }] },
+      ]),
     ]);
     return c.json<ApiResponse>({ ok: true, command, result: { sessionId }, next_actions: [] }, 201);
   });

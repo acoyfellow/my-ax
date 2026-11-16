@@ -265,6 +265,9 @@
   min-width: 0;
 }
 .step-group .msg-tools { margin: 0; gap: 0; }
+.msg-duration__stop { margin-left: 8px; padding: 1px 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--color-bad, #c33) 35%, transparent); color: var(--color-bad, #c33); font-size: 11px; line-height: 18px; background: transparent; cursor: pointer; }
+.msg-duration__stop:hover { background: color-mix(in srgb, var(--color-bad, #c33) 12%, transparent); }
+.step-group > .step-row.step-row, .step-group > .msg-tools.msg-tools, .step-group .msg-tools > .step-row.step-row { margin-top: 0; margin-bottom: 0; }
 .step-group .step-row { border: 0; border-radius: 0; background: transparent; }
 .step-group .step-row + .step-row,
 .step-group .step-row + .msg-tools > .step-row:first-child,
