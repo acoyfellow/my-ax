@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { CONVO_STYLES, CONVO_STYLE_SPECS, DEFAULT_CONVO_STYLE, convoStyleOf, type ConvoStyle } from "../convo-style";
+  import { CONVO_STYLE_SPECS, DEFAULT_CONVO_STYLE, PICKER_STYLES, convoStyleOf, type ConvoStyle } from "../convo-style";
 
   let { getSessionId }: { getSessionId: () => string } = $props();
 
@@ -92,8 +92,8 @@
       aria-label="Reply style"
       data-convo-style-menu="1"
     >
-      <div class="px-3 pt-2.5 pb-1.5 text-xs text-fg-mut">Reply style for this chat</div>
-      {#each CONVO_STYLES as id (id)}
+      <div class="px-3 pt-2.5 pb-1.5 text-xs text-fg-mut">While it works, in this chat</div>
+      {#each PICKER_STYLES as id (id)}
         {@const spec = CONVO_STYLE_SPECS[id]}
         <button
           type="button"
@@ -111,7 +111,7 @@
           <span class="flex-none rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-bg-alt text-fg-mut" data-convo-style-while={spec.midTurn} title={spec.midTurnHint}>{spec.whileWorking}</span>
         </button>
       {/each}
-      <div class="border-t border-line px-3 py-2 text-[11px] text-fg-mut">The tag shows what happens to a message you send while it's working.</div>
+      <div class="border-t border-line px-3 py-2 text-[11px] text-fg-mut">Tandem is a test. A fast assistant answers you while the agent keeps working.</div>
       {#if error}<div class="px-3 pb-2.5 text-xs text-red-500" role="alert">{error}</div>{/if}
     </div>
   {/if}
