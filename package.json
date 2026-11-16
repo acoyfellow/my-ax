@@ -166,7 +166,7 @@
     "test:workspace-owner": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/workspace-owner.test.ts src/workspace-exec.test.ts",
     "test:rig-pipeline": "node --import ./scripts/cloudflare-test-loader.mjs --import tsx --test src/rig-pipeline.test.ts src/rig-pipeline-routes.test.ts",
     "test:web-platform": "tsx --test src/connector-agent.test.ts src/job-alarm-owner.test.ts src/voice-echo-gate.test.ts src/session-pin-size.test.ts src/ui/appbar-contents.test.ts src/pi-engine/think-convert.test.ts src/ui/web/voice-grammar.test.ts src/ui/web/voice-gate.test.ts src/ui/web/small-apis.test.ts src/ui/wake-lock.test.ts src/ui/web-features.test.ts src/voice-command.test.ts src/routes/voice.test.ts src/ui/web/voice-dispatch.test.ts src/ui/tab-leader-wire.test.ts src/ui/keyboard-scroll-wire.test.ts src/ui/location-wire.test.ts src/session-alias.test.ts src/ui/paint-ring.test.ts src/computer-control.test.ts src/computer-coordinator.test.ts",
-    "test:convo-style": "tsx --test src/convo-style.test.ts src/convo-ask.test.ts src/ui/convo-style-placement.test.ts"
+    "test:convo-style": "tsx --test src/sessions-search.test.ts src/convo-style.test.ts src/convo-ask.test.ts src/ui/convo-style-placement.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.94",

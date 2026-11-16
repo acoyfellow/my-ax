@@ -1,3 +1,4 @@
+import { buildConversationSearchQuery } from "../conversation-search";
 import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import { dismissRunRecord, dismissRunRecords, startRunRecord, type RunStoreDb } from "../domain/Run/Run.store";
 import { assertNotForgedDecision } from "../decision-forgery-guard";
@@ -28,7 +29,7 @@ import { recentObserveEvents } from "../observe-events";
 import { summarizeCoordinatorJob, wrapCoordinatorCode } from "../coordinator-code";
 import { runComputerMethod, isComputerMethod } from "../computer-coordinator";
 
-const METHODS = ["list_sessions", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment", "computer_create", "computer_exec", "computer_input", "computer_screenshot", "computer_wait"] as const;
+const METHODS = ["list_sessions", "sessions_search", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment", "computer_create", "computer_exec", "computer_input", "computer_screenshot", "computer_wait"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -289,6 +290,24 @@ async function coordinatorCall(c: CoordinatorContext, method: Method, rawArgs: R
       createdAt: manifest.createdAt,
     };
   }
+  if (method === "sessions_search") {
+    const query = typeof args.query === "string" ? args.query : "";
+    const limit = clamp(args.limit, 20, 100);
+    const offset = typeof args.cursor === "string" && /^\d+$/.test(args.cursor) ? Number(args.cursor) : 0;
+    const built = buildConversationSearchQuery(query, email, {
+      limit: limit + 1,
+      offset,
+      sessionId: typeof args.sessionId === "string" ? args.sessionId : undefined,
+      sort: args.sort === "recent" ? "recent" : "relevance",
+      since: typeof args.since === "string" ? args.since : undefined,
+      until: typeof args.until === "string" ? args.until : undefined,
+    });
+    if (!built) return { query, results: [], sessions: [], nextCursor: null };
+    const rows = ((await c.env.DB.prepare(built.sql).bind(...built.params).all()).results ?? []) as Array<{ entryId: number; sessionId: string; sessionName: string | null; ts: string; role: string; snippet: string }>;
+    const results = rows.slice(0, limit);
+    const sessions = [...new Map(results.map((row) => [row.sessionId, { sessionId: row.sessionId, name: row.sessionName }])).values()];
+    return { query, results, sessions, nextCursor: rows.length > limit ? String(offset + limit) : null };
+  }
   if (method === "list_sessions") {
     const limit = clamp(args.limit, 20, 100);
     const cursor = typeof args.cursor === "string" && args.cursor.trim() ? args.cursor.trim() : "";
@@ -419,6 +438,7 @@ async function observeConnectedSession(c: CoordinatorContext, args: Record<strin
 
 const CODE_METHODS: Record<string, Method> = {
   listSessions: "list_sessions",
+  sessionsSearch: "sessions_search",
   getSession: "get_session",
   entries: "entries",
   inject: "inject",
@@ -474,6 +494,7 @@ function coordinatorCodeFns(c: CoordinatorContext) {
 
 const CODE_TYPES = `declare const codemode: {
   listSessions(args?: { limit?: number }): Promise<unknown>;
+  sessionsSearch(args: { query: string; limit?: number; cursor?: string; sessionId?: string; sort?: "relevance" | "recent"; since?: string; until?: string }): Promise<{ query: string; results: Array<{ entryId: number; sessionId: string; sessionName: string | null; ts: string; role: string; snippet: string }>; sessions: Array<{ sessionId: string; name: string | null }>; nextCursor: string | null }>;
   getSession(args: { sessionId: string }): Promise<unknown>;
   entries(args: { sessionId: string; after?: number; limit?: number }): Promise<unknown>;
   inject(args: { sessionId: string; content: string }): Promise<unknown>;

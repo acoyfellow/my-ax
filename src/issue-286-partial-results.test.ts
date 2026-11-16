@@ -50,8 +50,8 @@ test("search_conversations supports recent sort and date range", () => {
   const built = buildConversationSearchQuery("deploy bug", "Owner@Example.com", { sort: "recent", since: "2025-01-01", until: "2025-02-01T00:00:00Z", limit: 5 });
   assert.ok(built);
   assert.match(built.sql, /e\.ts >= \? AND e\.ts <= \?/);
-  assert.match(built.sql, /ORDER BY e\.ts DESC LIMIT \?$/);
-  assert.deepEqual(built.params, ['"deploy" "bug"', "owner@example.com", "2025-01-01T00:00:00.000Z", "2025-02-01T00:00:00.000Z", 5]);
+  assert.match(built.sql, /ORDER BY e\.ts DESC, e\.id LIMIT \? OFFSET \?$/);
+  assert.deepEqual(built.params, ['"deploy" "bug"', "owner@example.com", "2025-01-01T00:00:00.000Z", "2025-02-01T00:00:00.000Z", 5, 0]);
 });
 
 test("search_conversations defaults to relevance and ignores invalid dates", () => {
