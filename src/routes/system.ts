@@ -14,6 +14,7 @@ import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Sessio
 import type { Hono } from "hono";
 import { dailyRefusals, flushRefusals } from "../domain/refusals";
 import { createDecision } from "./decisions";
+import { createSvelteArtifact } from "../artifacts";
 import { seedPiChatEntries } from "../pi-engine/routes";
 import { emptyUsage } from "../pi-engine/think-convert";
 import type { AppEnv } from "../app-env";
@@ -42,6 +43,14 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
       { kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId, toolName: "ask_user", content: [{ type: "text", text: result }], isError: false, timestamp: now }] },
     ]);
     return c.json<ApiResponse>({ ok: true, command, result: { decisionId: decision.id, href: decision.href }, next_actions: [] }, 201);
+  });
+  app.post("/api/system/dev-widget", async (c) => {
+    const command = "POST /api/system/dev-widget";
+    if (c.env.ENVIRONMENT !== "dev") return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "dev only" }, next_actions: [] }, 404);
+    const body = await c.req.json<{ sessionId?: string; title?: string; source?: string }>().catch(() => ({} as { sessionId?: string; title?: string; source?: string }));
+    if (!body.sessionId || !body.source) return c.json<ApiResponse>({ ok: false, command, error: { code: "BadRequest", message: "sessionId and source required" }, next_actions: [] }, 400);
+    const result = await createSvelteArtifact(c.env, c.get("identity"), body.sessionId, { title: body.title ?? "dev widget", source: body.source });
+    return c.json<ApiResponse>({ ok: true, command, result, next_actions: [] }, 201);
   });
   app.post("/api/system/dev-seed-steps", async (c) => {
     const command = "POST /api/system/dev-seed-steps";
