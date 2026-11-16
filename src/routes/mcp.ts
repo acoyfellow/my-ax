@@ -28,8 +28,9 @@ import { sessionControl, sessionEngineOf } from "../session-control";
 import { recentObserveEvents } from "../observe-events";
 import { summarizeCoordinatorJob, wrapCoordinatorCode } from "../coordinator-code";
 import { runComputerMethod, isComputerMethod } from "../computer-coordinator";
+import { ComputerLeaseHeldError } from "../domain/ComputerLease/ComputerLease.store";
 
-const METHODS = ["list_sessions", "sessions_search", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment", "computer_create", "computer_exec", "computer_input", "computer_screenshot", "computer_wait"] as const;
+const METHODS = ["list_sessions", "sessions_search", "get_session", "entries", "inject", "send_and_wait", "session_state", "abort", "heal", "attention_list", "attention_acknowledge", "recipes_list", "recipes_delete", "recipes_run", "jobs_list", "jobs_create", "jobs_update", "jobs_pause", "jobs_resume", "jobs_run", "jobs_delete", "jobs_history", "workspace_list", "workspace_read", "workspace_write", "workspace_snapshots", "workspace_restore", "observe_turn", "observe_recent", "artifact_list", "artifact_get", "desk_get", "desk_upsert", "desk_remove", "desk_clear", "deployment", "computer_create", "computer_exec", "computer_lease", "computer_release", "computer_lease_status", "computer_input", "computer_screenshot", "computer_wait"] as const;
 type Method = typeof METHODS[number];
 const MCP_NOTIFICATION_KINDS = ["session.update", "job.complete", "job.needs_input", "watch.fired", "deploy.gate", "recipe.approval"] as const;
 type McpNotificationKind = typeof MCP_NOTIFICATION_KINDS[number];
@@ -474,6 +475,9 @@ const CODE_METHODS: Record<string, Method> = {
   deskClear: "desk_clear",
   deployment: "deployment",
   computerCreate: "computer_create",
+  computerLease: "computer_lease",
+  computerRelease: "computer_release",
+  computerLeaseStatus: "computer_lease_status",
   computerExec: "computer_exec",
   computerInput: "computer_input",
   computerScreenshot: "computer_screenshot",
@@ -527,8 +531,11 @@ const CODE_TYPES = `declare const codemode: {
   deskRemove(args: { id: string }): Promise<unknown>;
   deskClear(): Promise<unknown>;
   deployment(): Promise<unknown>;
-  computerCreate(args: { id: string }): Promise<{ computerId: string; home: string }>;
-  computerExec(args: { id: string; command: string; cwd?: string; timeout?: number }): Promise<{ exitCode: number; stdout: string; stderr: string }>;
+  computerCreate(args: { id: string; holder?: string; leaseSeconds?: number }): Promise<{ computerId: string; home: string }>;
+  computerLease(args: { id: string; holder: string; seconds?: number }): Promise<{ computerId: string; holder: string | null; expiresAt: string | null; held: boolean }>;
+  computerRelease(args: { id: string; holder: string }): Promise<{ computerId: string; released: boolean }>;
+  computerLeaseStatus(args: { id: string }): Promise<{ computerId: string; holder: string | null; expiresAt: string | null; held: boolean }>;
+  computerExec(args: { id: string; command: string; cwd?: string; timeout?: number; holder?: string }): Promise<{ exitCode: number; stdout: string; stderr: string }>;
   computerInput(args: { id: string; action: "click" | "move" | "type" | "key" | "scroll"; x?: number; y?: number; button?: "left" | "right" | "middle"; double?: boolean; text?: string; keys?: string; dy?: number }): Promise<{ ok: true }>;
   computerScreenshot(args: { id: string }): Promise<{ url: string; seq?: number }>;
   computerWait(args: { id: string; idle?: number; change?: boolean; region?: string; since?: number; timeout?: number }): Promise<unknown>;
@@ -605,7 +612,8 @@ export function registerMcpRoutes(app: Hono<AppEnv>) {
       }
       throw new Error("unknown tool");
     } catch (err) {
-      return c.json(rpc(req.id, { ...text({ error: err instanceof Error ? err.message : String(err) }), isError: true }));
+      const lease = err instanceof ComputerLeaseHeldError ? { code: "ComputerLeaseHeld", lease: err.lease } : {};
+      return c.json(rpc(req.id, { ...text({ error: err instanceof Error ? err.message : String(err), ...lease }), isError: true }));
     }
   });
 }
