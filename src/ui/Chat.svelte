@@ -1,5 +1,8 @@
 <script lang="ts">
   import { confirmDialog, promptDialog } from "./alert-store.svelte";
+  import ConvoStylePicker from "./ConvoStylePicker.svelte";
+  import { CONVO_STYLE_SPECS, type ConvoStyle } from "../convo-style";
+  import { midTurnAction } from "../convo-ask";
   import { postSessionWithRetry, sessionCreateErrorMessage } from "./session-create";
   // Canonical conversation UI and browser runtime: transport recovery,
   // transcript rendering, composer, attachments, voice, and tool results.
@@ -1400,6 +1403,43 @@
   const localQueue = new LocalMessageQueue(() => `queued-${crypto.randomUUID()}`);
   let queuedMessages = $state<readonly QueuedMessage[]>([]);
   let flushingQueue = false;
+  let convoStyle = $state<ConvoStyle>("standard");
+  type MidTurnNote = { id: string; text: string; kind: "steer" | "ask"; status: "sending" | "sent" | "answered" | "failed"; answer?: string; grounded?: boolean };
+  let midTurnNotes = $state<MidTurnNote[]>([]);
+  function updateMidTurnNote(id: string, patch: Partial<MidTurnNote>) {
+    midTurnNotes = midTurnNotes.map((note) => (note.id === id ? { ...note, ...patch } : note));
+  }
+  function dismissMidTurnNote(id: string) {
+    midTurnNotes = midTurnNotes.filter((note) => note.id !== id);
+  }
+  // A message sent while the agent works follows the conversation's style:
+  // queue it (Standard), steer it into the running turn, answer a question at
+  // once from live state, or stop the reply and restart with the change.
+  function sendMidTurn() {
+    const text = composerText;
+    if (!text.trim()) return;
+    const action = midTurnAction(CONVO_STYLE_SPECS[convoStyle].midTurn, text);
+    if (action === "queue" || !ws || wsState.conn !== "live" || !piTranscript) {
+      queueComposerText();
+      return;
+    }
+    composerText = "";
+    void tick().then(autoGrow);
+    if (action === "interrupt") {
+      localQueue.add(text);
+      syncQueuedMessages();
+      ws.send(JSON.stringify({ type: "pi_abort" }));
+      return;
+    }
+    const id = `note-${crypto.randomUUID()}`;
+    midTurnNotes = [...midTurnNotes, { id, text, kind: action === "ask" ? "ask" : "steer", status: "sending" }];
+    ws.send(JSON.stringify({ type: action === "ask" ? "pi_ask" : "pi_steer", noteId: id, text }));
+  }
+  $effect(() => {
+    if (!piBusy && midTurnNotes.some((note) => note.kind === "steer" && note.status !== "sending")) {
+      midTurnNotes = midTurnNotes.filter((note) => note.kind !== "steer" || note.status === "sending");
+    }
+  });
   function syncQueuedMessages() {
     queuedMessages = localQueue.messages;
   }
@@ -1519,6 +1559,14 @@
     }
     if (frame.type === "pi_error") {
       pushError(String(frame.message ?? "Message failed"));
+      return true;
+    }
+    if (frame.type === "pi_steer_receipt") {
+      updateMidTurnNote(String(frame.noteId ?? ""), { status: frame.accepted === false ? "failed" : "sent" });
+      return true;
+    }
+    if (frame.type === "pi_ask_answer") {
+      updateMidTurnNote(String(frame.noteId ?? ""), { status: "answered", answer: String(frame.answer ?? ""), grounded: frame.grounded === true });
       return true;
     }
     if (frame.type === "pi_aborted") return true;
@@ -1678,6 +1726,7 @@
     streamingMsgId = null;
     responseRecoveryPending = false;
     dispatchTurn({ type: "session-switch" });
+    midTurnNotes = [];
     messages = [];
     thinkMessages = [];
     if (binding.followsTab) toastBus.pending = [];
@@ -2443,7 +2492,7 @@
     if (decision !== "send") return;
     e.preventDefault();
     if (agentIsBusy()) {
-      queueComposerText();
+      sendMidTurn();
       return;
     }
     formEl?.requestSubmit();
@@ -2618,7 +2667,7 @@
       return;
     }
     if (agentIsBusy() && ws) {
-      if (composerText.trim()) queueComposerText();
+      if (composerText.trim()) sendMidTurn();
       return;
     }
     if (uploadingCount > 0) {
@@ -3496,6 +3545,29 @@
 
       <!-- Composer -->
       <div bind:this={composerEl} class="flex-none border-t border-line bg-bg-alt" class:hidden={composerHidden} data-composer-target={binding.followsTab ? composerRoute.target : "embedded"}>
+        {#if midTurnNotes.length > 0 || (agentIsBusy() && convoStyle !== "standard")}
+          <div class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 flex flex-col gap-1" aria-label="Mid-task messages" aria-live="polite">
+            {#each midTurnNotes as note (note.id)}
+              <div class="flex items-start gap-2 rounded-md border border-line bg-bg-alt px-2.5 py-1.5 text-sm" data-mid-turn-note={note.kind} data-mid-turn-status={note.status}>
+                <span class="flex-none text-[11px] uppercase tracking-wide text-fg-mut pt-0.5">{note.kind === "ask" ? "Asked" : note.status === "failed" ? "Not sent" : note.status === "sending" ? "Sending" : "Sent"}</span>
+                <span class="flex-1 min-w-0 break-words">
+                  <span class="block whitespace-pre-wrap text-fg">{note.text}</span>
+                  {#if note.kind === "ask"}
+                    <span class="block text-fg-mut">{note.status === "answered" ? note.answer : "Answering while it works…"}</span>
+                  {:else if note.status === "sent"}
+                    <span class="block text-[11px] text-fg-mut">It reaches the agent after its current step.</span>
+                  {:else if note.status === "failed"}
+                    <span class="block text-[11px] text-red-500">It could not be delivered. Send it again when the agent finishes.</span>
+                  {/if}
+                </span>
+                <button type="button" class="flex-none text-fg-mut hover:text-fg" aria-label="Dismiss" onclick={() => dismissMidTurnNote(note.id)}>×</button>
+              </div>
+            {/each}
+            {#if agentIsBusy() && convoStyle !== "standard"}
+              <div class="text-[11px] text-fg-mut" data-mid-turn-hint={convoStyle}>{CONVO_STYLE_SPECS[convoStyle].label}: {CONVO_STYLE_SPECS[convoStyle].midTurnHint}</div>
+            {/if}
+          </div>
+        {/if}
         {#if queuedMessages.length > 0}
           <div class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 flex flex-col gap-1" aria-label="Queued messages">
             {#each queuedMessages as queued (queued.id)}
@@ -3505,7 +3577,7 @@
                 <button type="button" class="flex-none text-fg-mut hover:text-fg" aria-label="Remove queued message" onclick={() => removeQueued(queued.id)}>×</button>
               </div>
             {/each}
-            <div class="text-[11px] text-fg-mut">Sends as one message when the agent finishes. ↑ to edit.</div>
+            <div class="text-[11px] text-fg-mut">{convoStyle === "draft" ? "Stopping the current reply. Sends as soon as it stops." : "Sends as one message when the agent finishes."} ↑ to edit.</div>
           </div>
         {/if}
         <form
@@ -3612,6 +3684,7 @@
             class="hidden"
             onchange={onImageInputChange}
           />
+          <ConvoStylePicker getSessionId={currentSessionId} onStyle={(next) => (convoStyle = next)} />
           {#if cameraOn}
             <!-- Camera active: the button becomes a direct "capture frame" action. -->
             <button

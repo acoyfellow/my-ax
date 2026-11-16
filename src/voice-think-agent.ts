@@ -15,7 +15,9 @@ import {
   type VoiceThinkConfig,
 } from "./voice-think-config";
 import { checkVoicePrompt } from "./voice-check-prompt";
-import { StillWorkingTimer, WORK_ACK, VOICE_ACK_THRESHOLD_MS } from "./voice-narration";
+import { StillWorkingTimer } from "./voice-narration";
+import { CONVO_STYLE_SPECS, readConvoStyle } from "./convo-style";
+import { midTurnAction } from "./convo-ask";
 
 // If the turn resolves within this window, stay terse (just the reply). Only
 // past it do we speak the up-front ack and periodic "still working" check-ins,
@@ -23,7 +25,6 @@ import { StillWorkingTimer, WORK_ACK, VOICE_ACK_THRESHOLD_MS } from "./voice-nar
 // How often we poll for the reply while emitting check-ins.
 const VOICE_CHECKIN_POLL_MS = 1000;
 // Idle gap between spoken "still working" check-ins during a long turn.
-const VOICE_CHECKIN_IDLE_MS = 20000;
 
 
 const VoiceAgent = withVoice(Agent);
@@ -50,6 +51,16 @@ async function sessionEngine(env: Env, ownerEmail: string, sessionId: string): P
 export async function runEngineVoiceTurn(env: Env, identity: AccessIdentity, sessionId: string, transcript: string, signal?: AbortSignal): Promise<string> {
   if (await sessionEngine(env, identity.email, sessionId) === "pi") {
     const chat = await openPiChat(env, identity.email, sessionId);
+    const midTurn = CONVO_STYLE_SPECS[await readConvoStyle(env.DB as unknown as Parameters<typeof readConvoStyle>[0], sessionId, identity.email)].midTurn;
+    if (midTurn !== "queue" && await chat.busy()) {
+      const action = midTurnAction(midTurn, transcript);
+      if (action === "ask") return (await chat.ask(transcript)).answer;
+      if (action === "steer") {
+        const steered = await chat.steer(transcript);
+        return steered.accepted ? "Got it. I'll fold that in after this step." : "I couldn't pass that on. Say it again when I'm done.";
+      }
+      if (action === "interrupt") await chat.abortAll();
+    }
     const receipt = await chat.submit(transcript);
     const stop = () => { void chat.abortAll().catch(() => undefined); };
     signal?.addEventListener("abort", stop, { once: true });
@@ -141,6 +152,7 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
         return;
       }
 
+      const voiceStyle = CONVO_STYLE_SPECS[await readConvoStyle(env.DB as unknown as Parameters<typeof readConvoStyle>[0], cfg.sessionId, cfg.identity.email)].voice;
       let outcome: { reply: string } | { error: string } | null = null;
       const runReply = (async () => {
         try {
@@ -153,14 +165,14 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
       })();
 
       // Fast path: if the turn resolves quickly, stay terse.
-      await settledWithin(runReply, VOICE_ACK_THRESHOLD_MS);
+      await settledWithin(runReply, voiceStyle.ackMs);
       if (!outcome) {
         // Slow turn: acknowledge, then emit bounded "still working" check-ins
         // until the reply lands.
         const now = Date.now();
-        const checkins = new StillWorkingTimer(VOICE_CHECKIN_IDLE_MS, now);
+        const checkins = new StillWorkingTimer(voiceStyle.checkinMs, now);
         checkins.markSpoken(now);
-        yield WORK_ACK;
+        yield voiceStyle.ack;
         while (!outcome && !signal.aborted) {
           await settledWithin(runReply, VOICE_CHECKIN_POLL_MS);
           if (outcome) break;
