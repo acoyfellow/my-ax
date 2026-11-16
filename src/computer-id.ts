@@ -10,6 +10,15 @@ export function computerSandboxName(ownerEmail: string, computerId: string): str
   return `${ownerEmail.toLowerCase()}::computer::${normalizeComputerId(computerId)}`;
 }
 
+export function parseComputerSandboxName(name: string | null | undefined): { ownerEmail: string; computerId: string } | null {
+  if (!name) return null;
+  const at = name.lastIndexOf("::computer::");
+  if (at <= 0) return null;
+  const ownerEmail = name.slice(0, at);
+  const computerId = name.slice(at + "::computer::".length);
+  return ID_RE.test(computerId) && ownerEmail.includes("@") ? { ownerEmail, computerId } : null;
+}
+
 export function shouldRestoreComputerSnapshot(restoreLatest: boolean | undefined, readyExitCode: number | null): boolean {
   if (restoreLatest === false) return false;
   return readyExitCode !== 0;
