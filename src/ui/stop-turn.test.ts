@@ -21,3 +21,14 @@ test("abort releases a task the restart limit parked, then aborts it, and the st
   assert.match(abort, /session\(\)\.retry\(\);\s*await this\.harness\.abort\(\);/);
   assert.match(agent, /pi_turn_stuck_ended[^\n]*\n\s*await this\.abortAll\(\);/);
 });
+
+test("Go to decision hides its banner when clicked, and an X hides it too, until a new decision arrives", () => {
+  assert.match(chat, /\{#if pendingDecision && dismissedDecisionId !== pendingDecision\.id\}/);
+  assert.match(chat, /data-decision-banner-close onclick=\{\(\) => \{ if \(pendingDecision\) dismissedDecisionId = pendingDecision\.id; \}\}/);
+  assert.match(chat, /event\.preventDefault\(\); dismissedDecisionId = pendingDecision\.id; void focusDecision/);
+});
+
+test("an ask_user row starts open, even while it waits for the answer", () => {
+  const body = chat.slice(chat.indexOf("function toolIsOpen"), chat.indexOf("function setToolOpen"));
+  assert.match(body, /if \(tool\.id in toolOpen\) return toolOpen\[tool\.id\];\s*if \(tool\.name === "ask_user" \|\| widgetKind === "decision"\) return true;/);
+});

@@ -266,6 +266,8 @@
 }
 .step-group .msg-tools { margin: 0; gap: 0; }
 .msg-duration__stop { margin-left: 8px; padding: 1px 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--color-bad, #c33) 35%, transparent); color: var(--color-bad, #c33); font-size: 11px; line-height: 18px; background: transparent; cursor: pointer; }
+.decision-banner__close { position: absolute; top: 50%; right: 22px; transform: translateY(-50%); margin-top: 4px; width: 24px; height: 24px; border-radius: 6px; color: var(--color-fg-mut, #888); font-size: 16px; line-height: 24px; text-align: center; background: transparent; z-index: 1; cursor: pointer; }
+.decision-banner__close:hover { background: var(--color-surface-2, rgba(0,0,0,.06)); color: var(--color-fg, inherit); }
 .msg-duration__stop:hover { background: color-mix(in srgb, var(--color-bad, #c33) 12%, transparent); }
 .step-group > .step-row.step-row, .step-group > .msg-tools.msg-tools, .step-group .msg-tools > .step-row.step-row { margin-top: 0; margin-bottom: 0; }
 .step-group .step-row { border: 0; border-radius: 0; background: transparent; }

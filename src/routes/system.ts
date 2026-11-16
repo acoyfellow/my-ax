@@ -75,6 +75,23 @@ export function registerSystemRoutes(app: Hono<AppEnv>) {
     ]);
     return c.json<ApiResponse>({ ok: true, command, result: { sessionId }, next_actions: [] }, 201);
   });
+  app.post("/api/system/dev-seed-decision", async (c) => {
+    const command = "POST /api/system/dev-seed-decision";
+    if (c.env.ENVIRONMENT !== "dev") return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "dev only" }, next_actions: [] }, 404);
+    const email = c.get("identity").email.toLowerCase();
+    const { sessionId } = await c.req.json<{ sessionId?: string }>().catch(() => ({} as { sessionId?: string }));
+    if (!sessionId) return c.json<ApiResponse>({ ok: false, command, error: { code: "BadRequest", message: "sessionId required" }, next_actions: [] }, 400);
+    const question = "Ship the fix now?";
+    const options = ["Yes", "No"];
+    const decision = await createDecision(c.env, email, sessionId, question, options);
+    const now = Date.now();
+    await seedPiChatEntries(c.env, email, sessionId, [
+      { kind: "pi.user", model: [{ role: "user", content: "Ask me before shipping.", timestamp: now - 5000 }] },
+      { kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "toolCall", id: "seed-ask", name: "ask_user", arguments: { question, options } }], api: "seed", provider: "seed", model: "seed", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "toolUse", timestamp: now - 4000 }] },
+      { kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: "seed-ask", toolName: "ask_user", content: [{ type: "text", text: JSON.stringify({ ok: true, decisionId: decision.id, options, href: decision.href }) }], isError: false, timestamp: now - 3000 }] },
+    ]);
+    return c.json<ApiResponse>({ ok: true, command, result: { sessionId, decisionId: decision.id }, next_actions: [] }, 201);
+  });
   app.get("/api/domain/refusals", async (c) => {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("day") ?? "") ? String(c.req.query("day")) : new Date().toISOString().slice(0, 10);
     await flushRefusals(c.env.DB);
