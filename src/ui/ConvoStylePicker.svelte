@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { CONVO_STYLES, CONVO_STYLE_SPECS, DEFAULT_CONVO_STYLE, convoStyleOf, type ConvoStyle } from "../convo-style";
 
-  let { getSessionId, onStyle }: { getSessionId: () => string; onStyle?: (style: ConvoStyle) => void } = $props();
+  let { getSessionId }: { getSessionId: () => string } = $props();
 
   let open = $state(false);
   let style = $state<ConvoStyle>(DEFAULT_CONVO_STYLE);
@@ -12,19 +12,25 @@
 
   const validId = (id: string) => Boolean(id) && id !== "unknown" && id !== "new";
 
+  function announce(next: ConvoStyle) {
+    window.dispatchEvent(new CustomEvent("my-ax:convo-style", { detail: { sessionId: getSessionId(), style: next } }));
+  }
+
   async function load(force = false) {
     const id = getSessionId();
-    if (!validId(id)) { style = DEFAULT_CONVO_STYLE; loadedFor = ""; return; }
+    if (!validId(id)) { style = DEFAULT_CONVO_STYLE; loadedFor = ""; announce(style); return; }
     if (!force && id === loadedFor) return;
     loadedFor = id;
     const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/convo-style`, { credentials: "include" }).catch(() => null);
     const body = response?.ok ? await response.json().catch(() => null) : null;
-    if (getSessionId() === id) style = convoStyleOf(body?.result?.style);
+    if (getSessionId() !== id) return;
+    style = convoStyleOf(body?.result?.style);
+    announce(style);
   }
 
   async function choose(next: ConvoStyle) {
     const id = getSessionId();
-    if (!validId(id)) { error = "Send a message first, then pick a style."; return; }
+    if (!validId(id)) { error = "Send a message first."; return; }
     const previous = style;
     style = next;
     saving = true;
@@ -36,7 +42,8 @@
       body: JSON.stringify({ style: next }),
     }).catch(() => null);
     saving = false;
-    if (!response?.ok) { style = previous; error = "Could not save the style. Try again."; return; }
+    if (!response?.ok) { style = previous; error = "Could not save. Try again."; return; }
+    announce(next);
     open = false;
   }
 
@@ -59,26 +66,33 @@
   });
 
   const current = $derived(CONVO_STYLE_SPECS[style]);
-  $effect(() => {
-    onStyle?.(style);
-  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
 <div class="relative flex-none" data-convo-style-picker="1">
+  <button
+    type="button"
+    onclick={toggle}
+    class="flex items-center gap-1 rounded-full border px-2.5 h-7 text-xs whitespace-nowrap max-w-[6.5rem] sm:max-w-none {style === DEFAULT_CONVO_STYLE ? 'border-line text-fg-mut hover:text-fg' : 'border-brand/40 bg-brand/10 text-brand'}"
+    data-convo-style-button={style}
+    aria-haspopup="menu"
+    aria-expanded={open}
+    aria-label={`Reply style: ${current.label}`}
+    title="Reply style"
+  >
+    <span class="truncate">{current.label}</span>
+    <svg class="flex-none" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+  </button>
   {#if open}
-    <button type="button" class="fixed inset-0 z-10 cursor-default" aria-label="Close conversation style" onclick={() => (open = false)}></button>
+    <button type="button" class="fixed inset-0 z-40 cursor-default" aria-label="Close reply style" onclick={() => (open = false)}></button>
     <div
-      class="absolute bottom-full right-0 z-20 mb-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-lg ring ring-line bg-bg shadow-lg"
+      class="fixed left-3 right-3 top-[calc(env(safe-area-inset-top)+56px)] z-50 overflow-hidden rounded-lg ring ring-line bg-bg shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[22rem]"
       role="menu"
-      aria-label="Conversation style"
+      aria-label="Reply style"
       data-convo-style-menu="1"
     >
-      <div class="px-3 pt-3 pb-2">
-        <div class="text-sm font-semibold text-fg">Convo style</div>
-        <div class="text-xs text-fg-mut">How the agent talks to you here. Applies to text and voice.</div>
-      </div>
+      <div class="px-3 pt-2.5 pb-1.5 text-xs text-fg-mut">Reply style for this chat</div>
       {#each CONVO_STYLES as id (id)}
         {@const spec = CONVO_STYLE_SPECS[id]}
         <button
@@ -88,34 +102,17 @@
           disabled={saving}
           data-convo-style-option={id}
           onclick={() => choose(id)}
-          class="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-bg-alt disabled:opacity-60"
+          class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-alt disabled:opacity-60 {style === id ? 'bg-brand/5' : ''}"
         >
-          <span class="mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border {style === id ? 'border-brand bg-brand' : 'border-line'}" aria-hidden="true">
-            {#if style === id}<span class="h-1.5 w-1.5 rounded-full bg-white"></span>{/if}
-          </span>
-          <span class="min-w-0">
+          <span class="min-w-0 flex-1">
             <span class="block text-sm text-fg {style === id ? 'font-semibold' : ''}">{spec.label}</span>
             <span class="block text-xs text-fg-mut">{spec.summary}</span>
           </span>
+          <span class="flex-none rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-bg-alt text-fg-mut" data-convo-style-while={spec.midTurn} title={spec.midTurnHint}>{spec.whileWorking}</span>
         </button>
       {/each}
-      {#if error}<div class="px-3 pb-3 text-xs text-red-500" role="alert">{error}</div>{/if}
+      <div class="border-t border-line px-3 py-2 text-[11px] text-fg-mut">The tag shows what happens to a message you send while it's working.</div>
+      {#if error}<div class="px-3 pb-2.5 text-xs text-red-500" role="alert">{error}</div>{/if}
     </div>
   {/if}
-  <button
-    type="button"
-    onclick={toggle}
-    class="relative flex items-center justify-center rounded-lg w-11 h-11 border border-line bg-bg text-fg hover:border-brand/60 data-[open='1']:border-brand/60 data-[open='1']:text-brand"
-    data-open={open ? "1" : "0"}
-    data-convo-style-button={style}
-    aria-haspopup="menu"
-    aria-expanded={open}
-    aria-label={`Convo style: ${current.label}`}
-    title={`Convo style: ${current.label}`}
-  >
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><line x1="8" y1="9" x2="16" y2="9" /><line x1="8" y1="13" x2="12" y2="13" />
-    </svg>
-    {#if style !== DEFAULT_CONVO_STYLE}<span class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-brand" aria-hidden="true"></span>{/if}
-  </button>
 </div>

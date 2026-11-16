@@ -1,6 +1,5 @@
 <script lang="ts">
   import { confirmDialog, promptDialog } from "./alert-store.svelte";
-  import ConvoStylePicker from "./ConvoStylePicker.svelte";
   import { CONVO_STYLE_SPECS, type ConvoStyle } from "../convo-style";
   import { midTurnAction } from "../convo-ask";
   import { postSessionWithRetry, sessionCreateErrorMessage } from "./session-create";
@@ -1404,6 +1403,14 @@
   let queuedMessages = $state<readonly QueuedMessage[]>([]);
   let flushingQueue = false;
   let convoStyle = $state<ConvoStyle>("standard");
+  $effect(() => {
+    const onConvoStyle = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string; style?: ConvoStyle }>).detail;
+      if (detail?.style && (!detail.sessionId || detail.sessionId === currentSessionId())) convoStyle = detail.style;
+    };
+    window.addEventListener("my-ax:convo-style", onConvoStyle);
+    return () => window.removeEventListener("my-ax:convo-style", onConvoStyle);
+  });
   type MidTurnNote = { id: string; text: string; kind: "steer" | "ask"; status: "sending" | "sent" | "answered" | "failed"; answer?: string; grounded?: boolean };
   let midTurnNotes = $state<MidTurnNote[]>([]);
   function updateMidTurnNote(id: string, patch: Partial<MidTurnNote>) {
@@ -3549,13 +3556,11 @@
           <div class="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 flex flex-col gap-1" aria-label="Mid-task messages" aria-live="polite">
             {#each midTurnNotes as note (note.id)}
               <div class="flex items-start gap-2 rounded-md border border-line bg-bg-alt px-2.5 py-1.5 text-sm" data-mid-turn-note={note.kind} data-mid-turn-status={note.status}>
-                <span class="flex-none text-[11px] uppercase tracking-wide text-fg-mut pt-0.5">{note.kind === "ask" ? "Asked" : note.status === "failed" ? "Not sent" : note.status === "sending" ? "Sending" : "Sent"}</span>
+                <span class="flex-none text-[11px] uppercase tracking-wide text-fg-mut pt-0.5">{note.kind === "ask" ? (note.status === "answered" ? "Answered" : "Asking") : note.status === "failed" ? "Not sent" : note.status === "sending" ? "Sending" : "Joins next step"}</span>
                 <span class="flex-1 min-w-0 break-words">
                   <span class="block whitespace-pre-wrap text-fg">{note.text}</span>
                   {#if note.kind === "ask"}
-                    <span class="block text-fg-mut">{note.status === "answered" ? note.answer : "Answering while it works…"}</span>
-                  {:else if note.status === "sent"}
-                    <span class="block text-[11px] text-fg-mut">It reaches the agent after its current step.</span>
+                    <span class="block text-fg-mut">{note.status === "answered" ? note.answer : "…"}</span>
                   {:else if note.status === "failed"}
                     <span class="block text-[11px] text-red-500">It could not be delivered. Send it again when the agent finishes.</span>
                   {/if}
@@ -3563,8 +3568,8 @@
                 <button type="button" class="flex-none text-fg-mut hover:text-fg" aria-label="Dismiss" onclick={() => dismissMidTurnNote(note.id)}>×</button>
               </div>
             {/each}
-            {#if agentIsBusy() && convoStyle !== "standard"}
-              <div class="text-[11px] text-fg-mut" data-mid-turn-hint={convoStyle}>{CONVO_STYLE_SPECS[convoStyle].label}: {CONVO_STYLE_SPECS[convoStyle].midTurnHint}</div>
+            {#if agentIsBusy() && convoStyle !== "standard" && midTurnNotes.length === 0}
+              <div class="text-[11px] text-fg-mut" data-mid-turn-hint={convoStyle}>{CONVO_STYLE_SPECS[convoStyle].midTurnHint}</div>
             {/if}
           </div>
         {/if}
@@ -3577,7 +3582,7 @@
                 <button type="button" class="flex-none text-fg-mut hover:text-fg" aria-label="Remove queued message" onclick={() => removeQueued(queued.id)}>×</button>
               </div>
             {/each}
-            <div class="text-[11px] text-fg-mut">{convoStyle === "draft" ? "Stopping the current reply. Sends as soon as it stops." : "Sends as one message when the agent finishes."} ↑ to edit.</div>
+            <div class="text-[11px] text-fg-mut">{convoStyle === "draft" ? "Stopping. Sends when it stops." : "Sends when it finishes."} ↑ to edit.</div>
           </div>
         {/if}
         <form
@@ -3684,7 +3689,6 @@
             class="hidden"
             onchange={onImageInputChange}
           />
-          <ConvoStylePicker getSessionId={currentSessionId} onStyle={(next) => (convoStyle = next)} />
           {#if cameraOn}
             <!-- Camera active: the button becomes a direct "capture frame" action. -->
             <button
