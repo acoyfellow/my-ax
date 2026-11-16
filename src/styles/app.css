@@ -903,6 +903,27 @@ html {
 /* ─── Chat transcript + tool-call markup ──────────────────────────────
  * Moved out of an inline <style> in views/ChatPage.tsx so the CSS lives in
  * the compiled stylesheet (deduped: .agent-thinking__dot already defined above). */
+.session-missing {
+  max-width: 28rem;
+  margin: 15vh auto 0;
+  padding: 0 16px;
+  text-align: center;
+}
+.session-missing__title { font-size: 17px; font-weight: 600; color: var(--fg); }
+.session-missing__body { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--fg-mut); overflow-wrap: anywhere; }
+.session-missing__body code { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace; font-size: 12px; }
+.session-missing__action {
+  margin-top: 16px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--fg);
+  font-size: 14px;
+  cursor: pointer;
+}
+.session-missing__action:hover { background: var(--color-surface-3); }
 .prompt-card {
     text-align: left;
     background: var(--bg-alt);

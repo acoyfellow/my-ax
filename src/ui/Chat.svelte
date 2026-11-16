@@ -1362,13 +1362,30 @@
   let ws: WebSocket | null = null;
   let piTranscript: PiTranscript | null = null;
   const isPiSession = (sessionId: string | null) => Boolean(sessionId);
-  async function learnSessionEngine(sessionId: string): Promise<void> {
+  type SessionLookup = "known" | "missing" | "unknown";
+  async function learnSessionEngine(sessionId: string): Promise<SessionLookup> {
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/engine`, { credentials: "include" });
+      if (response.status === 404) return "missing";
       const body = await response.json().catch(() => null);
       const engine = body?.result?.engine;
       if (engine === "pi" || engine === "think") rememberSessionEngine(sessionId, engine);
-    } catch {}
+      return response.ok ? "known" : "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+  let missingSessionId = $state<string | null>(null);
+  function showMissingSession(sessionId: string) {
+    missingSessionId = sessionId;
+    writeTabSession(null);
+    setActiveSession(null);
+    sessionGeneration.activate(null);
+    bootstrapPending = false;
+    sessionResumeVisible = false;
+    resumingExistingSession = false;
+    onboardingHidden = true;
+    setConn("live");
   }
   function chatSocketUrl(sessionId: string) {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -1631,7 +1648,7 @@
     if (!knowsSessionEngine(sessionId)) {
       const view = await early;
       if (view) rememberSessionEngine(sessionId, "pi");
-      else await learnSessionEngine(sessionId);
+      else if ((await learnSessionEngine(sessionId)) === "missing") return showMissingSession(sessionId);
     }
     ws = makeReconnectingSocket(chatSocketUrl(sessionId));
     if (showSavedSnapshot(sessionId)) { bootstrapPending = false; sessionResumeVisible = false; }
@@ -1645,7 +1662,7 @@
   function switchToSession(id: string) {
     if (!id || id === readTabSession()) return;
     if (knowsSessionEngine(id)) switchToSessionKnownEngine(id);
-    else void learnSessionEngine(id).then(() => switchToSessionKnownEngine(id));
+    else void learnSessionEngine(id).then((lookup) => (lookup === "missing" ? showMissingSession(id) : switchToSessionKnownEngine(id)));
   }
 
   function switchToSessionKnownEngine(id: string) {
@@ -3259,6 +3276,13 @@
           <div data-scroll-progress aria-hidden="true"></div>
         {/if}
         <!-- Onboarding -->
+        {#if missingSessionId && messages.length === 0}
+          <div class="session-missing" role="alert" data-session-missing>
+            <h2 class="session-missing__title">Conversation not found</h2>
+            <p class="session-missing__body">There is no conversation <code>{missingSessionId.slice(0, 40)}</code> on your account. It may have been deleted, or the link is wrong.</p>
+            <button type="button" class="session-missing__action" onclick={() => { missingSessionId = null; onboardingHidden = false; }}>Start a new conversation</button>
+          </div>
+        {/if}
         {#if !bootstrapPending && !onboardingHidden && messages.length === 0}
           <div class="max-w-3xl mx-auto mt-6 sm:mt-12 px-1 sm:px-6 text-center">
             <div class="grid sm:grid-cols-2 gap-2 text-left">
