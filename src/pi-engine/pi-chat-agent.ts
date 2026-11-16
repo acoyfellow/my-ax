@@ -502,6 +502,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   async abortAll(): Promise<void> {
     await this.harness.abort();
+    if ((await this.harness.pending()).some((operation) => operation.status === "parked")) {
+      console.error("pi_abort_parked_retry", { chatId: this.state.chatId });
+      await this.harness.session().retry();
+      await this.harness.abort();
+    }
     this.progressSample = undefined;
     this.broadcast(JSON.stringify({ type: "pi_aborted" }));
   }
@@ -535,7 +540,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       return;
     }
     console.error("pi_turn_stuck_ended", { chatId: this.state.chatId, tools: view.tools.length });
-    await this.harness.abort();
+    await this.abortAll();
     this.broadcast(JSON.stringify({ type: "pi_error", message: STUCK_TURN_NOTE }));
   }
 

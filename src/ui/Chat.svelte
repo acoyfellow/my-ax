@@ -194,6 +194,7 @@
   const toolOpen = $state<Record<string, boolean>>({});
   function toolIsOpen(tool: ToolCallView, widgetKind: string): boolean {
     if (tool.id in toolOpen) return toolOpen[tool.id];
+    if (tool.name === "ask_user" || widgetKind === "decision") return true;
     return tool.state !== "pending" && widgetKind !== "raw-text";
   }
   function setToolOpen(id: string, open: boolean) {
@@ -391,6 +392,7 @@
   let unreadWhileAway = $state(0);
   let scrollFollower: ScrollFollower | null = null;
   let pendingDecision = $state<{ id: string; question: string; href: string } | null>(null);
+  let dismissedDecisionId = $state<string | null>(null);
   let terminalOpen = $state(false);
 
   let logEl = $state<HTMLElement | undefined>(undefined);
@@ -2741,6 +2743,18 @@
     e.stopPropagation();
     void confirmDialog({ title: "Stop the agent?", confirmLabel: "Stop", tone: "danger" }).then((stop) => { if (stop) cancelAgent(); });
   }
+  async function stopTurnOnServer() {
+    const sessionId = currentSessionId();
+    if (!sessionId || sessionId === "unknown") return;
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/stop`, { method: "POST", credentials: "include" }).catch(() => undefined);
+  }
+  function confirmStopTurn() {
+    void confirmDialog({ title: "Stop the agent?", confirmLabel: "Stop", tone: "danger" }).then((stop) => {
+      if (!stop) return;
+      cancelAgent();
+      void stopTurnOnServer();
+    });
+  }
   function cancelAgent() {
     if (wsState.status === "idle" || wsState.status === "done") return;
     if (piTranscript && ws && (ws as any).readyState === WebSocket.OPEN) {
@@ -3231,11 +3245,14 @@
     </div>
   {/if}
 
-  {#if pendingDecision}
-    <a href={pendingDecision.href} onclick={(event) => { if (!pendingDecision) return; event.preventDefault(); void focusDecision(pendingDecision.id, browserDecisionFocusEnv()); }} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
+  {#if pendingDecision && dismissedDecisionId !== pendingDecision.id}
+    <div class="decision-banner relative" data-decision-banner>
+    <button type="button" class="decision-banner__close" aria-label="Hide" data-decision-banner-close onclick={() => { if (pendingDecision) dismissedDecisionId = pendingDecision.id; }}>×</button>
+    <a href={pendingDecision.href} onclick={(event) => { if (!pendingDecision) return; event.preventDefault(); dismissedDecisionId = pendingDecision.id; void focusDecision(pendingDecision.id, browserDecisionFocusEnv()); }} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
       <span class="min-w-0"><strong class="text-brand">Needs your input</strong><span class="ml-2 text-fg-mut">{pendingDecision.question}</span></span>
-      <span class="flex-none text-brand font-semibold">Go to decision ↓</span>
+      <span class="flex-none text-brand font-semibold pr-6">Go to decision ↓</span>
     </a>
+    </div>
   {/if}
 
   <div class="flex-1 min-h-0 flex">
@@ -3456,6 +3473,7 @@
           <div class="msg msg-duration msg-duration--running" data-task-timer role="status" aria-label={taskElapsedText ? `Running for ${taskElapsedText}` : "Agent is thinking"} aria-live="off">
             <span class="agent-thinking" aria-hidden="true"><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span></span>
             {#if taskElapsedText}<span>Running for {taskElapsedText}</span>{/if}
+            {#if turnIsLive}<button type="button" class="msg-duration__stop" data-stop-turn onclick={confirmStopTurn}>Stop</button>{/if}
           </div>
         {/if}
         {#if terminalOpen}
