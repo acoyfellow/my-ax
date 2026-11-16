@@ -108,17 +108,21 @@ export async function deleteComputer(env: Env, identity: AccessIdentity, rawId: 
   );
 }
 
-export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, rawId: string, name = "auto") {
-  const { sandbox, computerId } = await getNamedComputer(env, identity, rawId, { restoreLatest: false });
-  const backup = await sandbox.createBackup({
+export function computerBackupOptions(computerId: string, name: string) {
+  return {
     dir: WORKSPACE_HOME,
     name: `computer-${computerId}-${name}-${Date.now()}`,
     ttl: SNAPSHOT_TTL_SECONDS,
     gitignore: false,
     excludes: [".cache", "*.log"],
-    compression: { format: "zstd" },
+    compression: { format: "zstd" as const },
     multipart: true,
-  });
+  };
+}
+
+export async function snapshotNamedComputer(env: Env, identity: AccessIdentity, rawId: string, name = "auto") {
+  const { sandbox, computerId } = await getNamedComputer(env, identity, rawId, { restoreLatest: false });
+  const backup = await sandbox.createBackup(computerBackupOptions(computerId, name));
   await saveComputerSnapshot(env.DB, identity.email, computerId, backup.id, backup.dir);
   return { computerId, backup };
 }

@@ -14,7 +14,7 @@ test("NamedComputer is a second container class, not the owner Sandbox", () => {
   assert.match(wrangler, /"class_name": "NamedComputer"/);
   assert.match(wrangler, /Dockerfile.computer/);
   assert.match(wrangler, /"name": "NAMED_COMPUTER"/);
-  assert.match(index, /export \{ Sandbox as NamedComputer \}/);
+  assert.match(index, /export \{ NamedComputer \} from "\.\/named-computer-object"/);
   assert.doesNotMatch(named, /idFromName\(key\(identity\)\)/);
   assert.match(named, /computerSandboxName/);
 });

@@ -82,7 +82,7 @@ export { WorkspaceHub } from "./workspace-hub";
 export { OAuthClientDO } from "./oauth-store";
 export { MachineHost } from "./machinectl-host";
 export { WorkspaceObject as Sandbox } from "./workspace-object";
-export { Sandbox as NamedComputer } from "@cloudflare/sandbox";
+export { NamedComputer } from "./named-computer-object";
 export { ComputerWorkspace } from "./computer-workspace";
 export { PiChatAgent } from "./pi-engine/pi-chat-agent";
 export { ConnectorAgent } from "./connector-agent";
