@@ -4,9 +4,17 @@ import type { DeskBoard } from "./desk-board";
 import type { DeskApp } from "./desk-app";
 import type { Env } from "./types";
 
+export const MACHINES_CHANGED_FRAME = "machines.changed";
+
 export type JobAlarmPayload = { jobId: string; ownerEmail: string };
 
 export class UserAgent extends Agent<Env> {
+  shouldSendProtocolMessages(): boolean {
+    return false;
+  }
+
+  onMessage(): void {}
+
   async scheduleJobAlarm(payload: JobAlarmPayload & { cadenceSecs: number }): Promise<{ id: string }> {
     const schedule = await this.scheduleEvery(payload.cadenceSecs, "runJobAlarm", { jobId: payload.jobId, ownerEmail: payload.ownerEmail });
     return { id: schedule.id };
@@ -22,6 +30,10 @@ export class UserAgent extends Agent<Env> {
     if (!row) return;
     const result = await runJobNow(this.env, row);
     if (!result.ok && result.error !== "job is not active or has exhausted its run limit") throw new Error(result.error ?? "recurring job failed");
+  }
+
+  async announceMachinesChanged(): Promise<void> {
+    this.broadcast(JSON.stringify({ type: MACHINES_CHANGED_FRAME }));
   }
 
   async broadcastDeskBoard(sessionIds: string[], board: DeskBoard): Promise<void> {

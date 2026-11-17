@@ -3,6 +3,7 @@ import type { AppEnv } from "../app-env";
 import { admitMachine, approveMachine, forgetMachine, listMachines, logOutAllMachines, logOutMachine, normalizeMachineName, renameMachine } from "../machine-pairing";
 import { invokeMachineTool, machineHostStub, readMachineStatus } from "../rpc/machine-host-client";
 import { DEFAULT_MACHINE_NAME, machineSlot } from "../machine-target";
+import { announceMachinesChanged } from "../machines-live";
 
 export const MACHINE_STATE_HEADER = "X-Machine-State";
 
@@ -23,6 +24,7 @@ export async function connectMachine(c: Context<AppEnv>): Promise<Response> {
   if (!name) return c.json({ ok: false, error: { code: "BAD_NAME", message: "Machine name must be 1-63 lowercase letters, digits or dashes." } }, 400);
   const email = ownerEmail(c);
   const admission = await admitMachine(c.env.DB, email, name);
+  if (admission.state === "pending") c.executionCtx.waitUntil(announceMachinesChanged(c.env, email));
   if (!admission.admitted) {
     const message = admission.state === "pending"
       ? `Machine ${name} is waiting for approval. Approve it in my-ax under Settings > Connections.`
@@ -67,6 +69,7 @@ export function registerMachineOwnerRoutes(app: Hono<AppEnv>) {
   app.post("/api/machines/:name/approve", async (c) => {
     const name = normalizeMachineName(c.req.param("name"));
     if (!name || !(await approveMachine(c.env.DB, ownerEmail(c), name))) return unknownMachine(c);
+    c.executionCtx.waitUntil(announceMachinesChanged(c.env, ownerEmail(c)));
     return c.json({ ok: true, approved: name });
   });
 

@@ -9,6 +9,8 @@ import { isCurrentGeneration, laptopAnnounced, laptopConnected, laptopDisconnect
 import { callOpId } from "./rpc/op-id";
 import { DurableObject } from "cloudflare:workers";
 import { laptopBusyResult } from "./machinectl-output";
+import { announceMachinesChanged } from "./machines-live";
+import type { UserAgent } from "./user-agent";
 
 interface PublishedTool {
   name: string;
@@ -23,7 +25,7 @@ type LaptopFrame =
   | { type: "ping" }
   | { type: "pong" };
 
-type HostEnv = { AUDIT_KV?: KVNamespace };
+type HostEnv = { AUDIT_KV?: KVNamespace; USER_AGENT?: DurableObjectNamespace<UserAgent> };
 type SocketAttachment = { connectedAt: number; generation: string };
 type PendingCall = {
   resolve: (result: ToolResult) => void;
@@ -214,6 +216,7 @@ export class MachineHost extends DurableObject<HostEnv> {
       if (!await laptopAnnounced(this.ctx.storage, attachment?.generation, frame.machineName, frame.tools)) return;
       this.cachedMachineName = frame.machineName;
       this.cachedTools = frame.tools;
+      this.ctx.waitUntil(this.announce());
       return;
     }
     if (frame.type === "ping") {
@@ -233,11 +236,13 @@ export class MachineHost extends DurableObject<HostEnv> {
 
   private async clearActiveSocket(ws: WebSocket, error: string): Promise<void> {
     const attachment = ws.deserializeAttachment() as SocketAttachment | null;
+    const owner = await this.machineUser();
     if (await laptopDisconnected(this.ctx.storage, attachment?.generation)) {
       this.cachedTools = undefined;
       this.cachedMachineName = undefined;
       this.cachedMachineUser = undefined;
       this.rejectPending(error);
+      this.ctx.waitUntil(announceMachinesChanged(this.env, owner));
     }
   }
 
@@ -247,6 +252,10 @@ export class MachineHost extends DurableObject<HostEnv> {
 
   async webSocketError(ws: WebSocket): Promise<void> {
     await this.clearActiveSocket(ws, "Laptop WebSocket failed while executing the tool call.");
+  }
+
+  private async announce(): Promise<void> {
+    await announceMachinesChanged(this.env, await this.machineUser());
   }
 
   private rejectPending(error: string) {
