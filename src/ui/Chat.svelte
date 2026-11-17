@@ -1468,7 +1468,7 @@
       role: message.role,
       content: message.content,
       parts: message.parts.map((part) => part.kind === "text"
-        ? { kind: "text" as const, text: part.text, rendered: message.streaming ? undefined : renderMarkdown(part.text) }
+        ? { kind: "text" as const, text: part.text, rendered: renderMarkdown(part.text) }
         : part.kind === "thinking"
         ? { kind: "thinking" as const, text: part.text }
         : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: piToolStart(part.tool.id), elapsedText: piToolElapsed(part.tool.id, part.tool.state), result: part.tool.result, isError: part.tool.isError } }),

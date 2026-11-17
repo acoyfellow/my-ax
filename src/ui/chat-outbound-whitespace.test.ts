@@ -15,3 +15,8 @@ test("outbound messages retain intentional leading whitespace", () => {
   assert.ok(chat.includes("if (!hasMention && !slash) return { text: raw, files: [] };"), "plain messages pass through expansion untouched");
   assert.ok(!chat.includes("const text = composerText.trim();"));
 });
+
+test("streaming agent text renders as markdown so its spacing does not jump when the reply finishes", () => {
+  assert.doesNotMatch(chat, /rendered: message\.streaming \? undefined/);
+  assert.match(chat, /\{ kind: "text" as const, text: part\.text, rendered: renderMarkdown\(part\.text\) \}/);
+});
