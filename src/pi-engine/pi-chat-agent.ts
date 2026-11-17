@@ -383,7 +383,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async importTransfer(entries: readonly TransferEntry[]): Promise<number> {
-    if ((await this.harness.messages()).length > 0) throw new Error("import target already has messages");
+    const existing = transferEntries(await this.harness.messages(), {}).length;
+    if (existing === entries.length) return existing;
+    if (existing > 0) throw new Error("import target already has different messages");
     const conversation = await this.harness.conversation("1");
     const times: number[] = [];
     await conversation.commit(async (tx) => {
