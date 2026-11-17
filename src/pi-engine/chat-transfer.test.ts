@@ -32,4 +32,7 @@ test("the import route is owner scoped, refuses existing ids and cleans up on fa
   assert.match(routes, /app\.get\("\/api\/pi\/chats\/:id\/export"[\s\S]{0,400}owner_email = \?/);
   assert.match(routes, /app\.post\("\/api\/pi\/chats\/import"[\s\S]{0,900}code: "EXISTS"/);
   assert.match(routes, /importTransfer\(transfer\.entries\)[\s\S]{0,300}DELETE FROM sessions WHERE id = \? AND owner_email = \?/);
+  assert.match(routes, /importTransfer\(transfer\.entries\);\n      \}, IMPORT_TIMEOUT_MS\)/);
+  const agent = readFileSync(new URL("./pi-chat-agent.ts", import.meta.url), "utf8");
+  assert.match(agent, /if \(existing === entries\.length\) return existing;/);
 });

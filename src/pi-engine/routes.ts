@@ -11,6 +11,8 @@ import { dropLeadingNonUserRows, IMPORTED_CONTEXT_ROW_LIMIT, transcriptRowsToPiE
 import { copyWorkspaceDisk, listWorkspaceSnapshots, workspaceDiskState } from "../workspace";
 import type { AccessIdentity } from "../auth";
 
+const IMPORT_TIMEOUT_MS = 300_000;
+
 export const PI_CHAT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{7,62}$/;
 
 export function piChatObjectName(ownerEmail: string, chatId: string): string {
@@ -197,7 +199,7 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
         const target = await getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, transfer.id));
         await target.bind({ email }, transfer.id);
         return target.importTransfer(transfer.entries);
-      });
+      }, IMPORT_TIMEOUT_MS);
       return c.json({ ok: true, result: { chatId: transfer.id, entries: imported } });
     } catch (error) {
       await c.env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(transfer.id, email).run().catch(() => undefined);
