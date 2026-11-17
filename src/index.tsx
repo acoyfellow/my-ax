@@ -53,6 +53,7 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computers";
 import { registerDecisionRoutes } from "./routes/decisions";
 import { onlineMachines } from "./machine-target";
+import { getUserAgent } from "./agent-stub";
 import { registerRigRoutes } from "./routes/rig";
 import { registerDeskRoutes } from "./routes/desk";
 import { registerVoiceRoutes } from "./routes/voice";
@@ -454,6 +455,11 @@ app.all("/bridge/:connectorId/*", async (c) => {
 });
 
 // ─── Catch-all: agents SDK WS routing ──────────────────────────────────────
+app.get("/agents/live", async (c) => {
+  if (c.req.header("upgrade")?.toLowerCase() !== "websocket") return c.json({ ok: false, error: { code: "UPGRADE_REQUIRED", message: "websocket required" } }, 426);
+  return (await getUserAgent(c.env, c.get("identity").email)).fetch(c.req.raw);
+});
+
 app.get("/agents/pi-chat/:id", async (c) => {
   const identity = c.get("identity");
   const chatId = c.req.param("id");

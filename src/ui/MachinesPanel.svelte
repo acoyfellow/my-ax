@@ -1,6 +1,7 @@
 <script lang="ts">
   import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import { addMachineCommand, machineStatusLine, type PairedMachine } from "./machines-panel";
+  import { MACHINES_CHANGED, onOwnerEvent } from "./owner-live";
 
   let { active }: { active: boolean } = $props();
 
@@ -77,8 +78,7 @@
   $effect(() => {
     if (!active) return;
     void refresh();
-    const timer = setInterval(() => void refresh(), adding ? 3_000 : 15_000);
-    return () => clearInterval(timer);
+    return onOwnerEvent(MACHINES_CHANGED, () => void refresh());
   });
 </script>
 
