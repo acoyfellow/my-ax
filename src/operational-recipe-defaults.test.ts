@@ -6,8 +6,8 @@ const agent = ["./saved-recipe-run.ts", "./system-prompt.ts", "./tool-context.ts
 import { WORK_CODE_DESCRIPTION } from "./work-tools-catalog";
 const workTools = readFileSync(new URL("./work-tools.ts", import.meta.url), "utf8");
 
-test("system prompt treats reusable tools as an operational Pantry and searches by default for recurring work", () => {
-  assert.match(agent, /owner's operational Pantry/);
+test("system prompt treats reusable tools as the owner's saved playbook and searches by default for recurring work", () => {
+  assert.match(agent, /owner's saved playbook/);
   assert.match(agent, /multi-step, recurring, stateful, or easy-to-half-complete work, search codemode before inventing an ad-hoc procedure/);
   assert.match(agent, /run it by default when it safely satisfies the request/);
   assert.match(agent, /Do not force a weak match/);

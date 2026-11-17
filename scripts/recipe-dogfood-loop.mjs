@@ -65,7 +65,6 @@ const artifact = {
     genuinePromotion,
     genuineReuse,
     promotionOptInOwnerApproved: true,
-    pantryPublishAttempted: false,
     secretsPrinted: false,
   },
   writeup: [

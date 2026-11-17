@@ -20,7 +20,7 @@
 //     CodemodeRuntime execution id when a future native run promotes it).
 //
 // The synthetic id format is `cm_synth_<recipeId>` so any caller — receipts,
-// pantry-sync, cost accounting — can identify a projected snippet vs. a
+// cost accounting — can identify a projected snippet vs. a
 // native one without guessing.
 
 import type { Env } from "./types";
@@ -102,7 +102,7 @@ export function rowToSnippet(row: SnippetRow): PublicSnippet {
       ? // Reconstruct best-effort capabilities from connector names so callers
         // that previously read `capabilities` keep getting non-empty arrays.
         // The authoritative capability list still lives on the saved_recipes
-        // row; pantry-sync uses that one when present.
+        // row.
         connectors.map((c) => `${c}.*`)
       : [],
   };

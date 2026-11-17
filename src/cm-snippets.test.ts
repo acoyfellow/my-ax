@@ -22,9 +22,7 @@ import {
 import type { Env } from "./types";
 
 // In-memory D1 mock that supports the SELECT/INSERT/UPDATE patterns used by
-// cm-snippets and saved-recipes. Built with the same shape as the existing
-// pantry-sync test mock so behavior parity is straightforward to reason
-// about.
+// cm-snippets and saved-recipes.
 type Row = Record<string, unknown>;
 
 function makeEnv(): { env: Env; tables: { saved_recipes: SavedRecipe[]; cm_snippets: Row[] } } {

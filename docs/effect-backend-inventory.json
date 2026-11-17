@@ -2,18 +2,18 @@
   "version": 1,
   "generatedBy": "scripts/effect-backend-inventory.mjs",
   "summary": {
-    "total": 482,
+    "total": 963,
     "classifications": {
-      "static-evidence": 191,
-      "runtime-adapter": 101,
-      "effect-program": 25,
-      "plain-typescript": 98,
-      "frontend-generated": 67
+      "static-evidence": 353,
+      "runtime-adapter": 107,
+      "effect-program": 94,
+      "plain-typescript": 296,
+      "frontend-generated": 113
     },
     "statuses": {
-      "accepted": 457,
-      "migrated": 24,
-      "pending": 1
+      "accepted": 869,
+      "migrated": 26,
+      "pending": 68
     }
   },
   "entries": [
@@ -246,10 +246,28 @@
       "reason": "no managed side effects detected"
     },
     {
+      "path": "scripts/domain-coverage.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "scripts/effect-backend-inventory.mjs",
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "scripts/fsm-audit.mjs",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "scripts/fsm-audit.test.mjs",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "scripts/loop-disagree.mjs",
@@ -342,6 +360,24 @@
       "reason": "CLI or operational execution boundary"
     },
     {
+      "path": "scripts/rpc-audit.allow.json",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "documentation, configuration, or receipt"
+    },
+    {
+      "path": "scripts/rpc-audit.mjs",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "scripts/rpc-audit.test.mjs",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "scripts/scan-public-text.mjs",
       "classification": "plain-typescript",
       "status": "accepted",
@@ -364,6 +400,18 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "CLI or operational execution boundary"
+    },
+    {
+      "path": "scripts/test-inventory.mjs",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "CLI or operational execution boundary"
+    },
+    {
+      "path": "scripts/test-inventory.test.mjs",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "scripts/test-public-url.mjs",
@@ -432,10 +480,34 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
-      "path": "src/agent.ts",
-      "classification": "runtime-adapter",
+      "path": "src/agent-tree-tools.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/agent-tree.test.ts",
+      "classification": "static-evidence",
       "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/agent-tree.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/amber.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/amber.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/app-env.ts",
@@ -648,6 +720,18 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/cmux-delivery-verification.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/cmux-delivery-verification.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/cmux-observer.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -696,6 +780,36 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/commands/commands.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/commands/expand.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/commands/mention-sources.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/commands/registry.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/commands/skills.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/compaction-summary.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -706,6 +820,30 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/computer-control.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/computer-control.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/computer-coordinator.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/computer-coordinator.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/computer-filesystem.ts",
@@ -732,6 +870,18 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/computer-records.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/computer-records.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/computer-retained-write-budget.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -742,6 +892,18 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/computer-screen-tools.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/computer-screen-tools.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/computer-work-budget.test.ts",
@@ -768,6 +930,42 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/connector-agent.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/connector-agent.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/connector-explore.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/connector-health-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/connector-health.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/connector-health.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/connectors.ts",
       "classification": "plain-typescript",
       "status": "accepted",
@@ -780,10 +978,22 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/conversation-log-durability.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/conversation-log.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/conversation-search.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/conversation-starters-program.ts",
@@ -799,6 +1009,18 @@
     },
     {
       "path": "src/conversation-starters.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/coordinator-code.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/coordinator-code.ts",
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "no managed side effects detected"
@@ -852,6 +1074,36 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/decision-close-push.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/decision-forgery-guard.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/decision-forgery-guard.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/decision-inline.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/decision-page-xss.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/decision-response-program.ts",
       "classification": "effect-program",
       "status": "migrated",
@@ -870,40 +1122,10 @@
       "reason": "no managed side effects detected"
     },
     {
-      "path": "src/delegate-many.test.ts",
+      "path": "src/decision-reuse.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
-    },
-    {
-      "path": "src/delegate-many.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "src/delegate-receipt.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "src/delegate-receipt.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
-    },
-    {
-      "path": "src/delegate-serial.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
-      "path": "src/delegate-serial.ts",
-      "classification": "plain-typescript",
-      "status": "accepted",
-      "reason": "reviewed pure or build-time module"
     },
     {
       "path": "src/deploy-version.test.ts",
@@ -934,6 +1156,18 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/desk-board-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/desk-board-store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/desk-board.test.ts",
@@ -990,6 +1224,1176 @@
       "reason": "Effect workflow"
     },
     {
+      "path": "src/disk-sandbox.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Attention/Attention.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Attention/Attention.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Attention/Attention.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Attention/Attention.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Attention/AttentionRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Attention/DismissAttention.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Attention/MarkAttentionSeen.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Attention/RaiseAttention.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Attention/commands.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/AudioMessage.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/AudioMessage.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/AudioMessage.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/AudioMessage.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/AudioMessage/AudioMessageRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/CreateAudioMessage.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/DeleteAudioMessage.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/AudioMessage/UpdateAudioMessage.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/BrowserRecording.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/BrowserRecording.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/BrowserRecording.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/BrowserRecording.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/BrowserRecording/BrowserRecordingRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/CreateBrowserRecording.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/DeleteBrowserRecording.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/BrowserRecording/UpdateBrowserRecording.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/Computer.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/Computer.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/Computer.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/Computer.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Computer/Computer.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Computer/ComputerRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/CreateComputer.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/DeleteComputer.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Computer/UpdateComputer.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerLease/AcquireComputerLease.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerLease/ComputerLease.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerLease/ComputerLease.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerLease/ComputerLease.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/ComputerLease/ComputerLease.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/ComputerLease/ComputerLeaseRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerLease/ReleaseComputerLease.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/ComputerSnapshot.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/ComputerSnapshot.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/ComputerSnapshot.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/ComputerSnapshot.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/ComputerSnapshotRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/CreateComputerSnapshot.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/DeleteComputerSnapshot.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/ComputerSnapshot/UpdateComputerSnapshot.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/CreateEmail.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/DeleteEmail.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/Email.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/Email.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/Email.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/Email.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Email/EmailRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Email/UpdateEmail.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/ClaimRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/CreateJob.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/DeleteJob.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/EditJob.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/Job.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/Job.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/Job.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Job/Job.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Job/JobRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/PauseJob.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/RecordJobBookkeeping.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Job/ResumeJob.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/MyAx.model.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/CreateOwnerPreference.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/DeleteOwnerPreference.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/OwnerPreference.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/OwnerPreference.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/OwnerPreference.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/OwnerPreference.store.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
+      "path": "src/domain/OwnerPreference/OwnerPreference.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/OwnerPreference/OwnerPreferenceRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/OwnerPreference/UpdateOwnerPreference.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/CreatePushSubscription.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/DeletePushSubscription.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/PushSubscription.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/PushSubscription.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/PushSubscription.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/PushSubscription.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/PushSubscription/PushSubscription.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/PushSubscription/PushSubscriptionRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/PushSubscription/UpdatePushSubscription.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/ApproveRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/DeleteRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/DisableRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/EditRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/EnableRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/Recipe.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/Recipe.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/Recipe.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Recipe/Recipe.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Recipe/RecipeRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/RejectRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/ReturnRecipeToReview.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/SaveRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Recipe/commands.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/AbortRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/AnswerDecision.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/CompleteRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/DismissRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/FailRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/FailRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/RecordReceipt.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/ReopenDecision.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/Run.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/Run.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/Run.store.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
+      "path": "src/domain/Run/Run.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Run/RunRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/StartRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/SucceedRecipe.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/SupersedeDecision.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Run/commands.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/AbortTurn.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/ArchiveSession.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/CompleteTurn.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/DeleteSession.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/DetectDeadSession.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/ExhaustRecovery.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/FailPiRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/FailTurn.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/MarkTurnStuck.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/OpenSession.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/Session.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/Session.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/Session.store.ts",
+      "classification": "effect-program",
+      "status": "migrated",
+      "reason": "Effect workflow"
+    },
+    {
+      "path": "src/domain/Session/Session.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Session/SessionRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/SettlePiRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/StartPiRun.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/StartTurn.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/UnarchiveSession.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/UpdateSessionDetails.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Session/commands.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/CreateSkill.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/DeleteSkill.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/Skill.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/Skill.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/Skill.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/Skill.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Skill/Skill.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Skill/SkillRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Skill/UpdateSkill.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/CreateSnippet.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/DeleteSnippet.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/Snippet.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/Snippet.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/Snippet.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/Snippet.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Snippet/SnippetRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Snippet/UpdateSnippet.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/CreateWidget.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/DeleteWidget.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/UpdateWidget.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/Widget.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/Widget.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/Widget.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/Widget/Widget.store.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/Widget/Widget.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/Widget/WidgetRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/CreateWorkspaceSnapshot.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/DeleteWorkspaceSnapshot.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/UpdateWorkspaceSnapshot.command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/WorkspaceSnapshot.aggregate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/WorkspaceSnapshot.fields.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/WorkspaceSnapshot.id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/WorkspaceSnapshot.story.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/WorkspaceSnapshot/WorkspaceSnapshotRejections.rejection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/attention-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/coverage.json",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "documentation, configuration, or receipt"
+    },
+    {
+      "path": "src/domain/decide.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/job-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/prefs-push.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/recipe-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/records.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/records.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/refusals.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/refusals.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/run-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/session-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/shadow-read.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/shadow.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/shadow.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/domain/stores.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/test-db.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/domain/test-db.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/domain/write.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/dropped-files.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/effect/database.ts",
       "classification": "effect-program",
       "status": "migrated",
@@ -1000,6 +2404,18 @@
       "classification": "effect-program",
       "status": "migrated",
       "reason": "Effect workflow"
+    },
+    {
+      "path": "src/email-in.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/email-in.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/error-issue.test.ts",
@@ -1056,6 +2472,144 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/fsm/attention-item.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/attention-item.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/fsm/chat-message.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/chat-message.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/fsm/desk-card.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/desk-card.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/fsm/job-status.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/job-status.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/fsm/machine-connection.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/machine-connection.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/fsm/recipe-status.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/recipe-status.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/fsm/run-status.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/run-status.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/fsm/session-status.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/session-status.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/fsm/socket-connection.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/socket-connection.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/fsm/sqlite-d1.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/fsm/voice-status.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/voice-status.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/fsm/workspace-verification.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/fsm/workspace-verification.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/gateway-retry-fetch.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1074,6 +2628,12 @@
       "reason": "Effect workflow"
     },
     {
+      "path": "src/gateway-workers-ai-route.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/grant-crypto.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1086,19 +2646,55 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/html-embed.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/index.tsx",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
-      "path": "src/inject-onstart.test.ts",
+      "path": "src/internal-source-hosts.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/issue-286-partial-results.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
     },
     {
-      "path": "src/internal-source-hosts.ts",
+      "path": "src/issue-context.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/issue-context.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/job-alarm-owner.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/job-list-query.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/job-list-query.ts",
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "no managed side effects detected"
@@ -1152,6 +2748,18 @@
       "reason": "no managed side effects detected"
     },
     {
+      "path": "src/machine-pairing.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/machine-pairing.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/machinectl-host.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1168,6 +2776,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/manage-tools.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "Effect workflow"
     },
     {
       "path": "src/mcp-code-mode-policy.test.ts",
@@ -1218,6 +2832,54 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/message-times.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/message-times.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/miniplayer-actions.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/miniplayer-actions.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/miniplayer-pill.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/miniplayer-pill.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/miniplayer-pip.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/miniplayer-pip.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/model-auth.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1260,6 +2922,30 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/morning-pick.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/morning-pick.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/named-computer-idle.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/named-computer-object.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/named-computer-restore.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1296,10 +2982,40 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/oauth-store-names.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/oauth-store.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/observe-events.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/observe-events.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/observe.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/observe.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/operational-recipe-defaults.test.ts",
@@ -1344,34 +3060,160 @@
       "reason": "test or fixture"
     },
     {
-      "path": "src/pantry-client.test.ts",
+      "path": "src/pi-engine/connector-tools.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/conversation-index.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
     },
     {
-      "path": "src/pantry-client.ts",
-      "classification": "runtime-adapter",
+      "path": "src/pi-engine/conversation-index.ts",
+      "classification": "plain-typescript",
       "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
+      "reason": "no managed side effects detected"
     },
     {
-      "path": "src/pantry-program.ts",
+      "path": "src/pi-engine/fork.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/fork.ts",
       "classification": "effect-program",
-      "status": "migrated",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/pi-engine/gateway-models.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/gateway-models.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/last-turn-failed.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/last-turn-failed.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/legacy-tools.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/machine-tools.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/machine-tools.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/memory-tools.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/owner-instructions-tools.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/pi-chat-agent.ts",
+      "classification": "effect-program",
+      "status": "pending",
       "reason": "Effect workflow"
     },
     {
-      "path": "src/pantry-sync.test.ts",
+      "path": "src/pi-engine/pi-engine.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
     },
     {
-      "path": "src/pantry-sync.ts",
-      "classification": "runtime-adapter",
+      "path": "src/pi-engine/pi-harness-wake.test.ts",
+      "classification": "static-evidence",
       "status": "accepted",
-      "reason": "Cloudflare or HTTP runtime edge"
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/radar-connector.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/radar-connector.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/pi-engine/routes.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/pi-engine/sibling-tools.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/slim-entries.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/slim-entries.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/think-convert.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/pi-engine/think-convert.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/pi-engine/workspace-tools.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/preview-isolation.test.ts",
@@ -1482,6 +3324,18 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/request-origin-guard.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/request-origin-guard.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/reusable-tool-approval-route.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1530,6 +3384,54 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/reusable-tool-promotion.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rig-pipeline-routes.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rig-pipeline-workflow.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rig-pipeline.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rig-pipeline.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/root-session.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/root-session.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/routes/artifacts.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/routes/artifacts.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1572,6 +3474,12 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/routes/commands.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
       "path": "src/routes/computers.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1596,6 +3504,12 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/routes/cost-summary.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/routes/decisions.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1609,6 +3523,12 @@
     },
     {
       "path": "src/routes/desk.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/routes/email.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
@@ -1644,6 +3564,18 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/routes/machines.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/routes/mcp-explore.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
       "path": "src/routes/mcp.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1662,6 +3594,12 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/routes/morning-pick.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
       "path": "src/routes/push.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1669,6 +3607,12 @@
     },
     {
       "path": "src/routes/recipes.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/routes/rig.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
@@ -1728,6 +3672,108 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/routes/voice.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/routes/voice.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/routes/workspaces.ts",
+      "classification": "runtime-adapter",
+      "status": "accepted",
+      "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/rpc/README.md",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "documentation, configuration, or receipt"
+    },
+    {
+      "path": "src/rpc/bounded-stub.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rpc/bounded-stub.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rpc/contract.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rpc/contract.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rpc/deadline-signal.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rpc/deadline-signal.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rpc/machine-host-client.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rpc/machine-host-client.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rpc/op-id.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rpc/op-id.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/rpc/retry.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/rpc/rpc.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/rpc/timeout.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/run-receipts-program.ts",
       "classification": "effect-program",
       "status": "migrated",
@@ -1744,6 +3790,12 @@
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
+    },
+    {
+      "path": "src/saved-recipe-run.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/saved-recipes-gating.test.ts",
@@ -1764,6 +3816,24 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/schedule-api.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/send-and-wait.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/send-and-wait.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/sequence-integrity.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1774,6 +3844,24 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/session-alias.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/session-alias.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/session-control.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/session-entries.test.ts",
@@ -1810,6 +3898,18 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/session-pin-size.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/session-pin-size.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/session-pinning-program.ts",
@@ -1854,6 +3954,12 @@
       "reason": "no managed side effects detected"
     },
     {
+      "path": "src/sessions-search.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/show-diff.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1896,6 +4002,18 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/sw-push-actions.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/system-prompt.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/terminal-protocol.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1908,6 +4026,18 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/test-expect.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/think-workspace-read.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/think-workspace.ts",
       "classification": "runtime-adapter",
       "status": "accepted",
@@ -1918,6 +4048,12 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/tool-context.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     },
     {
       "path": "src/tool-id-sanitize.test.ts",
@@ -1944,6 +4080,12 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/tool-output-spill.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/tools.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1956,6 +4098,36 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/transient-client-errors.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/transient-client-errors.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/turn-continuation.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/turn-continuation.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/turn-snapshot-detach.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/turn-visible-receipt.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -1966,6 +4138,18 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/turn-watchdog.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/turn-watchdog.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/types.ts",
@@ -1992,7 +4176,49 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/activity-signal.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/activity-signal.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/alert-queue.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/alert-queue.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/alert-store.svelte.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/appbar-contents.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/ui/appbar-controls-smoke.mjs",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/appbar-corner-smoke.mjs",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2118,12 +4344,6 @@
       "reason": "test or fixture"
     },
     {
-      "path": "src/ui/chat-user-whitespace.test.ts",
-      "classification": "static-evidence",
-      "status": "accepted",
-      "reason": "test or fixture"
-    },
-    {
       "path": "src/ui/check-in-display-href.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2160,6 +4380,12 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/command-runner.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/composer-keys.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2167,6 +4393,30 @@
     },
     {
       "path": "src/ui/composer-keys.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/composer-route.svelte.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/composer-route.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/composer-route.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/connector-row.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2185,6 +4435,24 @@
     },
     {
       "path": "src/ui/d1-transcript.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/decision-focus.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/decision-widget.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/decision-widget.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2226,6 +4494,12 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/history-beneath-live-turn-smoke.mjs",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/image-lightbox-smoke.mjs",
       "classification": "frontend-generated",
       "status": "accepted",
@@ -2250,10 +4524,46 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/keyboard-inset.svelte.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/keyboard-scroll-wire.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/local-queue.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/local-queue.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/local-smoke.mjs",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/location-request.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/location-wire.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/ui/named-computer-widget.test.ts",
@@ -2310,6 +4620,48 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/paint-ring.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/paint-ring.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/pending-send.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/pending-send.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/pi-transcript.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/pi-transcript.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/pi-turn-error.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/ui/pierre-diffs-bundle-smoke.mjs",
       "classification": "frontend-generated",
       "status": "accepted",
@@ -2340,6 +4692,12 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/portal.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/reconnecting-socket.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2352,7 +4710,49 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/root-pip.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/root-pip.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/run-receipt-modal-smoke.mjs",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/running-timer-spinner-smoke.mjs",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/safe-markdown.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/safe-markdown.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/scroll-follow.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/scroll-follow.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2370,6 +4770,30 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/session-binding.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/session-binding.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/session-create.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/session-create.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/session-generation.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2377,6 +4801,18 @@
     },
     {
       "path": "src/ui/session-generation.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/session-groups.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/session-groups.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2400,7 +4836,79 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/session-list-empty.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/session-list-empty.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/session-missing.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/session-signal.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/session-signal.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/session-tiles-width.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/ui/settings-snippets-smoke.mjs",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/side-panel-layout.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/side-panel-layout.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/slash-menu-layout.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/slash-menu-state.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/snapshot-store.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/snapshot-store.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2410,6 +4918,12 @@
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/stop-turn.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/ui/store.svelte.ts",
@@ -2442,6 +4956,30 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/ui/tab-leader-wire.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/tab-leader.svelte.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/tab-session.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/tab-session.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/tapped-voice-transport.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2454,6 +4992,12 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/task-timer-placement.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/ui/terminal-socket.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2461,6 +5005,18 @@
     },
     {
       "path": "src/ui/terminal-socket.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/token-usage.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/token-usage.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2478,6 +5034,36 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/tool-row.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/tool-row.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/top-drawer-drag.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/top-drawer-drag.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/transcript-merge-durability.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/ui/transcript-merge.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2490,6 +5076,18 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/turn-duration.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/turn-duration.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/turn-stall.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2497,6 +5095,18 @@
     },
     {
       "path": "src/ui/turn-stall.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/user-message-markdown.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/user-message-markdown.ts",
       "classification": "frontend-generated",
       "status": "accepted",
       "reason": "frontend or generated"
@@ -2592,6 +5202,96 @@
       "reason": "frontend or generated"
     },
     {
+      "path": "src/ui/wake-lock.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/wake-lock.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web-features.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/web-features.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web-platform.svelte.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web/keyboard-inset.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web/location.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web/small-apis.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/web/tab-leader.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web/voice-dispatch.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/web/voice-dispatch.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web/voice-gate.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/web/voice-gate.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
+      "path": "src/ui/web/voice-grammar.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/ui/web/voice-grammar.ts",
+      "classification": "frontend-generated",
+      "status": "accepted",
+      "reason": "frontend or generated"
+    },
+    {
       "path": "src/ui/webcam-frame.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2632,6 +5332,24 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/usage-meter.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/usage-meter.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/user-agent-broadcast.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/user-agent.ts",
@@ -2706,6 +5424,18 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/voice-command.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/voice-command.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/voice-docs-tool.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2716,6 +5446,24 @@
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/voice-echo-gate.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/voice-echo-gate.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/voice-engine-turn.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
     },
     {
       "path": "src/voice-facet-lifecycle.test.ts",
@@ -2748,6 +5496,12 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/voice-speakable.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
       "path": "src/voice-think-agent.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2766,6 +5520,18 @@
       "reason": "reviewed pure or build-time module"
     },
     {
+      "path": "src/web-search-binding.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/web-search-failure.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/web-search-program.ts",
       "classification": "effect-program",
       "status": "migrated",
@@ -2782,6 +5548,18 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/widget-names.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/widget-names.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/work-code-call-collector.test.ts",
@@ -2808,6 +5586,12 @@
       "reason": "test or fixture"
     },
     {
+      "path": "src/work-tools-catalog.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/work-tools-recipes.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
@@ -2820,10 +5604,64 @@
       "reason": "Cloudflare or HTTP runtime edge"
     },
     {
+      "path": "src/workspace-boot.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/workspace-directory.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
       "path": "src/workspace-durability.test.ts",
       "classification": "static-evidence",
       "status": "accepted",
       "reason": "test or fixture"
+    },
+    {
+      "path": "src/workspace-exec.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/workspace-exec.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/workspace-hub-client.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/workspace-hub.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/workspace-init.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/workspace-init.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
+    },
+    {
+      "path": "src/workspace-lifecycle.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/workspace-mcp-program.ts",
@@ -2844,10 +5682,40 @@
       "reason": "no managed side effects detected"
     },
     {
+      "path": "src/workspace-object.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
+    },
+    {
+      "path": "src/workspace-owner.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/workspace-path-resolve.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
       "path": "src/workspace-path.ts",
       "classification": "plain-typescript",
       "status": "accepted",
       "reason": "reviewed pure or build-time module"
+    },
+    {
+      "path": "src/workspace-policy.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/workspace-policy.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/workspace-read.ts",
@@ -2866,6 +5734,12 @@
       "classification": "effect-program",
       "status": "migrated",
       "reason": "Effect workflow"
+    },
+    {
+      "path": "src/workspace-save-policy.ts",
+      "classification": "plain-typescript",
+      "status": "accepted",
+      "reason": "no managed side effects detected"
     },
     {
       "path": "src/workspace-snapshot-classification.test.ts",
@@ -2908,6 +5782,18 @@
       "classification": "runtime-adapter",
       "status": "accepted",
       "reason": "Cloudflare or HTTP runtime edge"
+    },
+    {
+      "path": "src/zdr-request.test.ts",
+      "classification": "static-evidence",
+      "status": "accepted",
+      "reason": "test or fixture"
+    },
+    {
+      "path": "src/zdr-request.ts",
+      "classification": "effect-program",
+      "status": "pending",
+      "reason": "external, concurrent, timed, or fallible workflow"
     }
   ]
 }
