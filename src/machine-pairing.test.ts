@@ -3,112 +3,111 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { sqliteD1 } from "./fsm/sqlite-d1";
 import {
-  createPairCode,
+  admitMachine,
+  approveMachine,
+  forgetMachine,
   listMachines,
-  machineForCredential,
+  logOutAllMachines,
+  logOutMachine,
   machineHostKey,
   normalizeMachineName,
   renameMachine,
-  PAIR_CODE_TTL_MS,
-  redeemPairCode,
-  revokeMachine,
 } from "./machine-pairing";
 
-const schema = ["0045_machines.sql", "0046_machine_titles.sql"].map((file) => readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8")).join("\n");
+const schema = ["0045_machines.sql", "0046_machine_titles.sql", "0047_machine_access.sql"]
+  .map((file) => readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8"))
+  .join("\n");
 const owner = "Owner@Example.com";
 const freshDb = () => sqliteD1(schema) as unknown as D1Database;
 
-test("a pairing code pairs one machine once and yields a working credential", async () => {
+test("a machine that signs in for the first time waits for approval and is not admitted", async () => {
   const db = freshDb();
-  const { code } = await createPairCode(db, owner, 1_000);
-  const paired = await redeemPairCode(db, code, "Mac-A", 2_000);
-  assert.equal(paired.ok, true);
-  if (!paired.ok) return;
-  assert.equal(paired.name, "mac-a");
-  assert.deepEqual(await machineForCredential(db, paired.credential), { ownerEmail: "owner@example.com", name: "mac-a" });
-  const reused = await redeemPairCode(db, code, "mac-b", 3_000);
-  assert.deepEqual(reused.ok ? null : reused.code, "BAD_CODE");
+  assert.deepEqual(await admitMachine(db, owner, "air", 1), { admitted: false, state: "pending" });
+  assert.deepEqual((await listMachines(db, owner)).map((machine) => [machine.name, machine.state]), [["air", "pending"]]);
 });
 
-test("a code typed in lowercase without the dash still pairs", async () => {
+test("an approved machine is admitted, and two machines can be approved side by side", async () => {
   const db = freshDb();
-  const { code } = await createPairCode(db, owner, 0);
-  const paired = await redeemPairCode(db, code.replace("-", "").toLowerCase(), "mac-a", 1);
-  assert.equal(paired.ok, true);
+  await admitMachine(db, owner, "air", 1);
+  await admitMachine(db, owner, "studio", 2);
+  assert.equal(await approveMachine(db, owner, "air", 3), true);
+  assert.equal(await approveMachine(db, owner, "studio", 4), true);
+  assert.deepEqual(await admitMachine(db, owner, "air", 5), { admitted: true, state: "approved" });
+  assert.deepEqual(await admitMachine(db, owner, "studio", 6), { admitted: true, state: "approved" });
 });
 
-test("an expired code is refused", async () => {
+test("a logged-out machine is refused until it is allowed again", async () => {
   const db = freshDb();
-  const { code } = await createPairCode(db, owner, 0);
-  const late = await redeemPairCode(db, code, "mac-a", PAIR_CODE_TTL_MS + 1);
-  assert.equal(late.ok ? null : late.code, "BAD_CODE");
+  await admitMachine(db, owner, "air", 1);
+  await approveMachine(db, owner, "air", 2);
+  assert.equal(await logOutMachine(db, owner, "air", 3), true);
+  assert.deepEqual(await admitMachine(db, owner, "air", 4), { admitted: false, state: "logged_out" });
+  assert.equal(await approveMachine(db, owner, "air", 5), true);
+  assert.deepEqual(await admitMachine(db, owner, "air", 6), { admitted: true, state: "approved" });
 });
 
-test("two machines pair under one owner and are listed", async () => {
+test("log out all shuts every machine out and names them", async () => {
   const db = freshDb();
-  for (const name of ["mac-a", "mac-b"]) {
-    const { code } = await createPairCode(db, owner, 0);
-    assert.equal((await redeemPairCode(db, code, name, 1)).ok, true);
-  }
-  assert.deepEqual((await listMachines(db, owner)).map((machine) => machine.name), ["mac-a", "mac-b"]);
+  for (const name of ["air", "studio"]) { await admitMachine(db, owner, name, 1); await approveMachine(db, owner, name, 2); }
+  assert.deepEqual((await logOutAllMachines(db, owner, 3)).sort(), ["air", "studio"]);
+  assert.deepEqual((await listMachines(db, owner)).map((machine) => machine.state), ["logged_out", "logged_out"]);
 });
 
-test("a live name cannot be taken by a second pairing", async () => {
+test("the list shows machines waiting for approval first and logged-out machines last", async () => {
   const db = freshDb();
-  const first = await createPairCode(db, owner, 0);
-  await redeemPairCode(db, first.code, "mac-a", 1);
-  const second = await createPairCode(db, owner, 2);
-  const clash = await redeemPairCode(db, second.code, "mac-a", 3);
-  assert.equal(clash.ok ? null : clash.code, "NAME_TAKEN");
+  for (const [name, at] of [["gone", 1], ["live", 2], ["new", 3]] as const) await admitMachine(db, owner, name, at);
+  await approveMachine(db, owner, "live", 4);
+  await approveMachine(db, owner, "gone", 4);
+  await logOutMachine(db, owner, "gone", 5);
+  assert.deepEqual((await listMachines(db, owner)).map((machine) => machine.name), ["new", "live", "gone"]);
 });
 
-test("revoking kills the credential and frees the name for a new pairing", async () => {
+test("a stolen login under a new name is only pending, never approved", async () => {
   const db = freshDb();
-  const first = await createPairCode(db, owner, 0);
-  const paired = await redeemPairCode(db, first.code, "mac-b", 1);
-  assert.ok(paired.ok);
-  if (!paired.ok) return;
-  assert.equal(await revokeMachine(db, owner, "mac-b", 2), true);
-  assert.equal(await machineForCredential(db, paired.credential), null);
+  await admitMachine(db, owner, "air", 1);
+  await approveMachine(db, owner, "air", 2);
+  await logOutMachine(db, owner, "air", 3);
+  assert.deepEqual(await admitMachine(db, owner, "air-2", 4), { admitted: false, state: "pending" });
+});
+
+test("machines belong to one owner, and another owner cannot approve or log them out", async () => {
+  const db = freshDb();
+  await admitMachine(db, owner, "air", 1);
+  assert.equal(await approveMachine(db, "other@example.com", "air", 2), false);
+  assert.equal(await logOutMachine(db, "other@example.com", "air", 2), false);
+  assert.deepEqual(await listMachines(db, "other@example.com"), []);
+});
+
+test("only a logged-out machine can be removed from the list", async () => {
+  const db = freshDb();
+  await admitMachine(db, owner, "air", 1);
+  await approveMachine(db, owner, "air", 2);
+  assert.equal(await forgetMachine(db, owner, "air"), false);
+  await logOutMachine(db, owner, "air", 3);
+  assert.equal(await forgetMachine(db, owner, "air"), true);
   assert.deepEqual(await listMachines(db, owner), []);
-  const again = await createPairCode(db, owner, 3);
-  const repaired = await redeemPairCode(db, again.code, "mac-b", 4);
-  assert.equal(repaired.ok, true);
-  if (repaired.ok) assert.notEqual(repaired.credential, paired.credential);
 });
 
-test("bad names and foreign credentials are refused", async () => {
+test("rename trims and caps the title and keeps the stable name", async () => {
   const db = freshDb();
-  assert.equal(normalizeMachineName("has space"), null);
-  assert.equal(normalizeMachineName("-lead"), null);
-  assert.equal(await machineForCredential(db, "not-a-credential"), null);
-  assert.equal(await machineForCredential(db, "mxm_0000"), null);
-});
-
-test("each machine gets its own relay key under the owner", () => {
-  assert.notEqual(machineHostKey(owner, "mac-a"), machineHostKey(owner, "mac-b"));
-  assert.equal(machineHostKey(owner, "mac-a"), "owner@example.com#mac-a");
-});
-
-test("a paired machine can be renamed, the title is trimmed and capped, and its name stays the same", async () => {
-  const db = freshDb();
-  const { code } = await createPairCode(db, owner, 0);
-  await redeemPairCode(db, code, "mac-a", 1);
-  assert.equal((await listMachines(db, owner))[0].title, "mac-a");
-  assert.equal(await renameMachine(db, owner, "mac-a", "  Jordan's   Air  "), "Jordan's Air");
-  const [machine] = await listMachines(db, owner);
-  assert.deepEqual([machine.name, machine.title], ["mac-a", "Jordan's Air"]);
-  assert.equal((await renameMachine(db, owner, "mac-a", "x".repeat(200)))?.length, 80);
-});
-
-test("rename refuses a blank title, an unknown or revoked machine, and another owner's machine", async () => {
-  const db = freshDb();
-  const { code } = await createPairCode(db, owner, 0);
-  await redeemPairCode(db, code, "mac-a", 1);
-  assert.equal(await renameMachine(db, owner, "mac-a", "   "), null);
-  assert.equal(await renameMachine(db, owner, "mac-a", 42), null);
+  await admitMachine(db, owner, "air", 1);
+  assert.equal(await renameMachine(db, owner, "air", "  Jordan's   Air  "), "Jordan's Air");
+  assert.equal((await renameMachine(db, owner, "air", "x".repeat(200)))?.length, 80);
+  assert.equal(await renameMachine(db, owner, "air", "   "), null);
   assert.equal(await renameMachine(db, owner, "nope", "x"), null);
-  assert.equal(await renameMachine(db, "other@example.com", "mac-a", "x"), null);
-  await revokeMachine(db, owner, "mac-a", 2);
-  assert.equal(await renameMachine(db, owner, "mac-a", "x"), null);
+  assert.equal((await listMachines(db, owner))[0].name, "air");
+});
+
+test("machine names are lowercase slugs and each machine has its own host key", () => {
+  assert.equal(normalizeMachineName(" Air "), "air");
+  assert.equal(normalizeMachineName("bad name"), null);
+  assert.equal(normalizeMachineName("-x"), null);
+  assert.equal(machineHostKey("A@B.com", "air"), "a@b.com#air");
+});
+
+test("the unauthenticated pairing routes are gone from the worker", () => {
+  const routes = readFileSync(new URL("./routes/machines.ts", import.meta.url), "utf8");
+  const index = readFileSync(new URL("./index.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(routes + index, /["'`]\/machines\/(pair|connect)["'`]/);
+  assert.doesNotMatch(routes + index, /registerMachinePublicRoutes|MACHINE_PUBLIC_PATHS|pair-codes/);
 });
