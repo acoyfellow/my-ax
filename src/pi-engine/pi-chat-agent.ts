@@ -13,9 +13,6 @@ import { indexRowsFor, type ConversationMemory } from "./conversation-index";
 import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
 import { sharedToolsExtension } from "./legacy-tools";
 import { ownerInstructionsExtension } from "./owner-instructions-tools";
-import { convoStyleExtension } from "./convo-style-tools";
-import { convoStyleSection, readConvoStyle } from "../convo-style";
-import { ASK_MODEL, askMessages, cleanAnswer, fallbackAnswer, summarizeLiveState } from "../convo-ask";
 import { connectorToolsExtension, type ConnectorRunner } from "./connector-tools";
 import { withRadar } from "./radar-connector";
 import { createToolContext } from "../tool-context";
@@ -104,7 +101,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
-      this.registry.install(convoStyleExtension(() => this.convoStyleText()));
       this.registry.install(connectorToolsExtension(() => this.connectorRunner()));
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
       return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport }, context);
@@ -202,20 +198,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }
     if (frame.type === "pi_abort") {
       await this.abortAll();
-      return;
-    }
-    if (frame.type === "pi_steer") {
-      try {
-        const receipt = await this.steer(String(frame.text ?? ""));
-        connection.send(JSON.stringify({ type: "pi_steer_receipt", noteId: frame.noteId, operationId: receipt.operationId, accepted: receipt.accepted }));
-      } catch (error) {
-        connection.send(JSON.stringify({ type: "pi_steer_receipt", noteId: frame.noteId, accepted: false, message: error instanceof Error ? error.message : String(error) }));
-      }
-      return;
-    }
-    if (frame.type === "pi_ask") {
-      const result = await this.ask(String(frame.text ?? "")).catch(() => ({ answer: "I could not check right now.", grounded: false }));
-      connection.send(JSON.stringify({ type: "pi_ask_answer", noteId: frame.noteId, answer: result.answer, grounded: result.grounded }));
       return;
     }
     if (frame.type === "pi_submit") {
@@ -331,15 +313,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return {
       ...createMyAxBrowserTools(this.env, () => this.identity(), () => this.chatId()),
     };
-  }
-
-  private async convoStyleText(): Promise<string> {
-    try {
-      const style = await readConvoStyle(this.env.DB as unknown as Parameters<typeof readConvoStyle>[0], this.chatId(), this.identity().email);
-      return convoStyleSection(style) ?? "";
-    } catch {
-      return "";
-    }
   }
 
   private async ownerInstructions(): Promise<string> {
@@ -521,29 +494,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       retry: snapshot.generation?.retry ?? null,
       entryTimes: this.entryTimes(),
     };
-  }
-
-  async steer(text: string): Promise<PiChatSubmitResult> {
-    const content = text.trim();
-    if (!content) return { operationId: "", accepted: false };
-    await this.ensureEventStream();
-    const receipt = await this.harness.submit(content, { whenBusy: "steer" });
-    await this.publishCurrentRunStatus();
-    return { operationId: receipt.operationId, accepted: receipt.accepted };
-  }
-
-  async ask(question: string): Promise<{ answer: string; grounded: boolean }> {
-    const view = await this.live();
-    const state = summarizeLiveState(view);
-    try {
-      const ai = this.env.AI as unknown as { run(model: string, input: unknown): Promise<{ response?: unknown }> };
-      const output = await ai.run(ASK_MODEL, { messages: askMessages(state, question), max_tokens: 160 });
-      const answer = cleanAnswer(output?.response);
-      if (answer) return { answer, grounded: true };
-    } catch (error) {
-      console.error("pi_ask_failed", { err: error instanceof Error ? error.message : String(error) });
-    }
-    return { answer: fallbackAnswer(view), grounded: false };
   }
 
   async busy(): Promise<boolean> {

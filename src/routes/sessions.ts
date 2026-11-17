@@ -17,7 +17,6 @@ import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { parsePinSize } from "../session-pin-size";
-import { CONVO_STYLES, parseConvoStyle, readConvoStyle } from "../convo-style";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { databaseLayer } from "../effect/database";
 import { PinLimitError } from "../session-pinning";
@@ -221,26 +220,6 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     const result = await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S11_PIN, [size, id, c.get("identity").email]);
     if (!result.meta.changes) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "pinned session not found or not owned" }, next_actions: [] }, 404);
     return c.json<ApiResponse>({ ok: true, command, result: { id, size }, next_actions: [] });
-  });
-
-  app.get("/api/sessions/:id/convo-style", async (c) => {
-    const id = c.req.param("id");
-    const command = `GET /api/sessions/${id}/convo-style`;
-    const owned = await c.env.DB.prepare("SELECT id FROM sessions WHERE id = ? AND owner_email = ?").bind(id, c.get("identity").email.toLowerCase()).first();
-    if (!owned) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
-    const style = await readConvoStyle(c.env.DB as unknown as Parameters<typeof readConvoStyle>[0], id, c.get("identity").email);
-    return c.json<ApiResponse>({ ok: true, command, result: { id, style }, next_actions: [] });
-  });
-
-  app.post("/api/sessions/:id/convo-style", async (c) => {
-    const id = c.req.param("id");
-    const command = `POST /api/sessions/${id}/convo-style`;
-    const body = (await c.req.json<{ style?: unknown }>().catch(() => ({}))) as { style?: unknown };
-    const style = parseConvoStyle(body.style);
-    if (!style) return c.json<ApiResponse>({ ok: false, command, error: { code: "InvalidInput", message: `style must be one of ${CONVO_STYLES.join(", ")}` }, next_actions: [] }, 400);
-    const result = await sessionWrite(c.env.DB as unknown as SessionStoreDb, SESSION_SQL.S17_STYLE, [style, id, c.get("identity").email.toLowerCase()]);
-    if (!result.meta.changes) return c.json<ApiResponse>({ ok: false, command, error: { code: "NotFound", message: "session not found or not owned" }, next_actions: [] }, 404);
-    return c.json<ApiResponse>({ ok: true, command, result: { id, style }, next_actions: [] });
   });
 
   app.post("/api/sessions/:id/archive", async (c) => {
