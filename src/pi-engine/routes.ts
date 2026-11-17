@@ -1,5 +1,6 @@
 import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "../domain/Session/Session.store";
 import type { Hono } from "hono";
+import { readTransfer, TRANSFER_MAX_BYTES, type ChatTransfer, type TransferEntry } from "./chat-transfer";
 import { getAgentByName } from "agents-pi";
 import * as rpc from "../rpc/contract";
 import type { AppEnv } from "../app-env";
@@ -169,6 +170,39 @@ export function registerPiEngineRoutes(app: Hono<AppEnv>) {
     const limit = Number(c.req.query("limit") ?? 80);
     const page: unknown = JSON.parse(JSON.stringify(await stub.entriesPage(Number.isFinite(before) ? before : Number.MAX_SAFE_INTEGER, Number.isFinite(limit) ? limit : 80)));
     return c.json({ ok: true, result: page } as Record<string, unknown>);
+  });
+
+  app.get("/api/pi/chats/:id/export", async (c) => {
+    const chatId = c.req.param("id");
+    const email = c.get("identity").email.toLowerCase();
+    const row = await c.env.DB.prepare("SELECT name, created_at, updated_at, pinned FROM sessions WHERE id = ? AND owner_email = ? AND engine = 'pi'").bind(chatId, email).first<{ name: string | null; created_at: string | null; updated_at: string | null; pinned: number | null }>();
+    const stub = row ? await ownedPiChat(c, chatId).catch(() => null) : null;
+    if (!row || !stub) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "chat not found" } }, 404);
+    const entries: TransferEntry[] = JSON.parse(JSON.stringify(await rpc.query("PiChat.exportEntries", () => stub.exportEntries())));
+    const transfer: ChatTransfer = { version: 1, id: chatId, name: row.name ?? "Chat", createdAt: row.created_at, updatedAt: row.updated_at, pinned: row.pinned === 1, entries };
+    return c.json({ ok: true, result: transfer } as Record<string, unknown>);
+  });
+
+  app.post("/api/pi/chats/import", async (c) => {
+    if (Number(c.req.header("content-length") ?? 0) > TRANSFER_MAX_BYTES) return c.json({ ok: false, error: { code: "TOO_LARGE", message: "chat export is too large" } }, 413);
+    const transfer = readTransfer(await c.req.json().catch(() => null));
+    if (!transfer || !PI_CHAT_ID_PATTERN.test(transfer.id)) return c.json({ ok: false, error: { code: "BAD_EXPORT", message: "not a chat export" } }, 400);
+    const email = c.get("identity").email.toLowerCase();
+    const existing = await c.env.DB.prepare("SELECT owner_email FROM sessions WHERE id = ?").bind(transfer.id).first<{ owner_email: string }>();
+    if (existing) return c.json({ ok: false, error: { code: "EXISTS", message: "a chat with this id already exists" } }, 409);
+    await c.env.DB.prepare("INSERT INTO sessions (id, name, status, owner_email, engine, pinned, created_at, updated_at) VALUES (?, ?, 'active', ?, 'pi', ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))")
+      .bind(transfer.id, transfer.name, email, transfer.pinned ? 1 : 0, transfer.createdAt, transfer.updatedAt).run();
+    try {
+      const imported = await rpc.command("PiChat.importTransfer", async () => {
+        const target = await getAgentByName((c.env as unknown as PiEnv).PI_CHAT, piChatObjectName(email, transfer.id));
+        await target.bind({ email }, transfer.id);
+        return target.importTransfer(transfer.entries);
+      });
+      return c.json({ ok: true, result: { chatId: transfer.id, entries: imported } });
+    } catch (error) {
+      await c.env.DB.prepare("DELETE FROM sessions WHERE id = ? AND owner_email = ?").bind(transfer.id, email).run().catch(() => undefined);
+      return c.json({ ok: false, error: { code: "IMPORT_FAILED", message: error instanceof Error ? error.message : String(error) } }, 500);
+    }
   });
 
   app.get("/api/pi/chats/:id/entries/:entryId", async (c) => {
