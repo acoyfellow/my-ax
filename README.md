@@ -128,7 +128,6 @@ Optional providers:
 
 - **My Machine** runs [`machinectl`](https://github.com/acoyfellow/machinectl). This gives terminal-equivalent access as the companion's OS user. Use a dedicated account with least privilege.
 - **Web Push** needs VAPID keys and browser notification permission.
-- **Pantry bridge** needs `PANTRY_TOKEN` to push enabled reusable tools to a pantry. Other agents can then reuse them. You can also set `PANTRY_URL`; the default is `https://pantry.coey.dev`. The bridge is additive and enabled-only. It fails soft. It does nothing without the token.
 
 ## Who Owns What
 

@@ -40,10 +40,6 @@ A recipe is a procedure the agent learned once and can run again. Recipes are ho
 - The agent proposes a reusable tool only for successful code that carries an explicit marker. Review-first is the default. The owner approves and enables it, or turns on automatic enablement. See `src/work-tools.ts` and `src/saved-recipes.ts`.
 - Reuse runs the exact saved code. It does not regenerate it. This is the mechanism behind principle 2.
 
-Pantry is the store that lets a recipe leave My AX. Pantry is a capability-scoped recipe store on Workers and D1. It stores scripts and hands them back. It never runs them. `src/pantry-sync.ts` pushes My AX's enabled recipes, projected to the codemode snippet shape, to a live pantry (`pantry.coey.dev` by default). A recipe authored in My AX then becomes reusable from an external agent session through the pantry tool.
-
-The sync is additive, env-gated, and fail-soft. With no token it is a clear no-op. A network error is logged and skipped. It never throws into a My AX flow. See the design rules at the top of `src/pantry-sync.ts`.
-
 The bet: a durable, portable, capability-scoped recipe layer is a large part of how agent work compounds instead of resetting each session.
 
 ## 5. Dogfood the platform, and dogfood our own tools
@@ -58,7 +54,6 @@ On top of those primitives, My AX also uses tools built in this same workspace:
 | `@earendil-works/pi-durable` | Durable conversation and turn engine | `src/pi-engine/pi-chat-agent.ts` |
 | `@cloudflare/voice` | Voice turns into the canonical conversation | `src/voice-think-agent.ts` |
 | `@cloudflare/sandbox` | The `/home/user` container workspace | `src/workspace.ts` |
-| Pantry | Capability-scoped recipe store | `src/pantry-sync.ts` |
 | Machinectl | Owner's own machine over an authenticated relay | `src/routes/machinectl.ts` |
 | Promotion Atom | Deterministic evidence-to-promotion decision kernel | recipe promotion policy |
 

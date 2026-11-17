@@ -35,7 +35,7 @@ Every backend file must be assigned one of these classes before the migration is
 | Class | Meaning | Effect rule |
 |---|---|---|
 | Effect program | Business workflow with external work or meaningful failure, timing, concurrency, or cleanup semantics | Write the workflow as `Effect` values |
-| Effect service | GitHub, model, database, Sandbox, Browser, Pantry, OAuth, MCP, Workflow, clock, or telemetry capability | Define with `Context.Service`; construct with `Layer` |
+| Effect service | GitHub, model, database, Sandbox, Browser, OAuth, MCP, Workflow, clock, or telemetry capability | Define with `Context.Service`; construct with `Layer` |
 | Runtime adapter | Cloudflare `fetch`, scheduled, Workflow, Durable Object, or RPC entrypoint | Parse input, provide Layers, run one program, translate the exit |
 | Pure TypeScript | Classification, formatting, policy, immutable data transforms, constants | Keep plain TypeScript |
 | Frontend or generated | Svelte, browser-only helpers, styles, generated bundles and documentation | Do not migrate |
@@ -99,7 +99,7 @@ External JSON, webhook payloads, environment configuration, stored JSON, and mod
 3. Migrate factory configuration, GitHub, Terrarium, model, and clock services.
 4. Migrate factory triage, review, audit, sweep, and implementation workflows.
 5. Convert active factory and deployment proof workflows; classify historical evidence and delete obsolete gates.
-6. Migrate shared external clients: OAuth, Pantry, MCP, Browser, web search, gateway, and notifications.
+6. Migrate shared external clients: OAuth, MCP, Browser, web search, gateway, and notifications.
 7. Migrate Sandbox lifecycle, jobs, schedules, receipts, and database repositories.
 8. Split the main agent runtime into services and migrate it last.
 9. Run independent architecture and behavior review.

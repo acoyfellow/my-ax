@@ -122,27 +122,6 @@ It connects outbound to My AX and publishes a live capability catalog. Configure
 
 The `page.*` connector needs no configuration or secret. It resolves over the owner chat WebSocket, so it is available automatically whenever an owner chat tab is connected, and every verb errors `page_unavailable` otherwise. It lets the agent drive the owner's own browser session and invoke tools that artifacts self-register. There is nothing to deploy or provision for it.
 
-### Pantry Bridge
-
-The pantry bridge (`src/pantry-sync.ts`) pushes the owner's enabled `saved_recipes` to a live pantry so a recipe authored in My AX becomes reusable from an external agent session through the pantry tool. It is additive: nothing in the request path calls it, so callers opt in explicitly.
-
-The bridge is env-gated, enabled-only, and fail-soft. It reads two values:
-
-```jsonc
-"vars": {
-  "PANTRY_URL": "https://pantry.coey.dev"
-}
-```
-
-```bash
-npx wrangler secret put PANTRY_TOKEN
-```
-
-`PANTRY_URL` defaults to `https://pantry.coey.dev` when unset. With no `PANTRY_TOKEN` the bridge is a clear-logged no-op, so leaving the secret unset disables it. Only recipes whose status is `enabled` are pushed; disabled recipes and recipes with zero capabilities are skipped. A network error, a rejected recipe, or a malformed row is logged and skipped, never thrown into a My AX flow. The token is sent only in the `Authorization` header and is never logged.
-
-Capabilities are passed through verbatim. Pantry stores them and grants nothing; the caller that later fetches a recipe decides whether the code is safe to run.
-
-An operator invokes the bridge from worker code by calling `syncRecipesToPantry(env, ownerEmail)`, which lists the owner's recipes and pushes each enabled one. A single recipe row can be pushed with `pushRecipe(env, recipe)`. Both return a result describing what was pushed, skipped, or failed; neither requires the bridge to be wired into a route. The bridge is optional and has no effect on the rest of My AX when the token is absent.
 
 ## 7. Deploy and Verify
 

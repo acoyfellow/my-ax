@@ -10,8 +10,6 @@ import { autoTrustMode } from "../auto-trust";
 import { databaseLayer } from "../effect/database";
 import { reusableToolApprovalMode, setReusableToolApprovalMode } from "../reusable-tool-preferences-program";
 import { requireOwnedSession } from "../session-ownership";
-import { syncRecipesToPantry } from "../pantry-sync";
-import { listPantryRecipes } from "../pantry-program";
 
 function body(c: Context<AppEnv>): Promise<Record<string, unknown>> {
   return c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
@@ -37,11 +35,7 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
     const command = "GET /api/recipes";
     try {
       const recipes = await service(c).list();
-      let pantry: unknown[] = [];
-      try {
-        pantry = await Effect.runPromise(listPantryRecipes(c.env));
-      } catch { pantry = []; }
-      return ok(c, command, { recipes, pantry });
+      return ok(c, command, { recipes });
     }
     catch (error) { return failure(c, command, error); }
   });
@@ -114,7 +108,6 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       if (action === "approve") {
         const row = await service(c).get(existing.id);
         await projectSavedRecipe(c.env, row);
-        c.executionCtx.waitUntil(syncRecipesToPantry(c.env, c.get("identity").email).then(() => undefined));
       }
       return ok(c, command, { recipe, action });
     } catch (error) { return failure(c, command, error); }
@@ -148,7 +141,6 @@ export function registerRecipeRoutes(app: Hono<AppEnv>) {
       if (action === "approve") {
         const row = await service(c).get(c.req.param("id"));
         await projectSavedRecipe(c.env, row);
-        c.executionCtx.waitUntil(syncRecipesToPantry(c.env, c.get("identity").email).then(() => undefined));
       }
       return ok(c, command, { recipe, action });
     }

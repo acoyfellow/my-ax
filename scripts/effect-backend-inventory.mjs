@@ -52,8 +52,6 @@ const runtimeBoundaries = new Set([
   "src/jobs.ts",
   "src/notify.ts",
   "src/oauth-store.ts",
-  "src/pantry-client.ts",
-  "src/pantry-sync.ts",
   "src/recurring-job-run.ts",
   "src/run-receipts.ts",
   "src/saved-recipes.ts",
