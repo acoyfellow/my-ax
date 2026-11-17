@@ -11,6 +11,7 @@ import { storeInlineMediaArtifact } from "../uploads";
 import { workspaceFor } from "../workspace";
 import { machineBusyOutcome, parseMachineShellContent } from "../machinectl-output";
 import { invokeMachineTool, machineHostStub, readMachineStatus } from "../rpc/machine-host-client";
+import { connectMachine } from "./machines";
 import { isFocusTool, isVerifiedPromptTool, withVerifiedCmuxDelivery } from "../cmux-delivery-verification";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
@@ -34,11 +35,7 @@ function hostFor(c: Context<AppEnv>) {
 }
 
 export function registerMachinectlRoutes(app: Hono<AppEnv>) {
-  app.get("/machinectl/connect", async (c) => {
-    const headers = new Headers(c.req.raw.headers);
-    headers.set("X-Machinectl-User", c.get("identity").email.toLowerCase());
-    return hostFor(c).fetch(new Request("http://internal/connect", { method: "GET", headers }));
-  });
+  app.get("/machinectl/connect", connectMachine);
   app.post("/machinectl/mcp", async (c) => {
     const headers = new Headers(c.req.raw.headers);
     headers.set("X-Machinectl-User", c.get("identity").email.toLowerCase());

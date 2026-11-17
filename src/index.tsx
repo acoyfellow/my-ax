@@ -47,7 +47,7 @@ import { registerThemeRoutes } from "./routes/theme";
 import { registerStarterRoutes } from "./routes/starters";
 import { registerMorningPickRoutes } from "./routes/morning-pick";
 import { registerMachinectlRoutes } from "./routes/machinectl";
-import { MACHINE_PUBLIC_PATHS, registerMachineOwnerRoutes, registerMachinePublicRoutes } from "./routes/machines";
+import { registerMachineOwnerRoutes } from "./routes/machines";
 import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computers";
@@ -113,7 +113,7 @@ function missingSecrets(env: Env): string[] {
 }
 
 function isMachinectlPath(path: string): boolean {
-  return (MACHINE_PUBLIC_PATHS as readonly string[]).includes(path) || path === "/api/machines" || path.startsWith("/api/machines/") || path === "/machinectl/connect" || path === "/machinectl/mcp" || path === "/api/machinectl/status" || path === "/api/machinectl/call" || path === "/api/machinectl/observations/session";
+  return path === "/api/machines" || path.startsWith("/api/machines/") || path === "/machinectl/connect" || path === "/machinectl/mcp" || path === "/api/machinectl/status" || path === "/api/machinectl/call" || path === "/api/machinectl/observations/session";
 }
 
 app.use("*", async (c, next) => {
@@ -203,8 +203,6 @@ app.get("/api/version", (c) => deploymentVersionResponse(
   c.env.CF_VERSION_METADATA,
   c.req.header("If-None-Match"),
 ));
-
-registerMachinePublicRoutes(app);
 
 // Cloudflare Access in front of EVERYTHING that matters.
 app.use("/api/*", accessMiddleware());

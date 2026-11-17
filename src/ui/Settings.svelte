@@ -13,6 +13,7 @@
   import TokenUsage from "./TokenUsage.svelte";
   import WebPlatform from "./WebPlatform.svelte";
   import SkillsPanel from "./SkillsPanel.svelte";
+  import MachinesPanel from "./MachinesPanel.svelte";
   import {
     modelState,
     setModel,
@@ -70,7 +71,7 @@
     { id: "skills" as const, label: "Skills & commands", hint: "Your / menu" },
     { id: "jobs" as const, label: "Recurring jobs", hint: "Schedules" },
     { id: "starters" as const, label: "Starters", hint: "New chat ideas" },
-    { id: "connections" as const, label: "Connections", hint: "Services" },
+    { id: "connections" as const, label: "Connections", hint: "Machines, services" },
   ];
 
   const capabilityGroups = [
@@ -1600,7 +1601,8 @@
 
       <!-- Health + Connectors panels live in other Svelte mounts and are
            relocated into this stable slot by the mount effect. -->
-      <div hidden={activeSection !== "connections"}>
+      <div hidden={activeSection !== "connections"} class="space-y-6">
+        <MachinesPanel active={open && activeSection === "connections"} />
         <div id="settings-extras-slot" class="space-y-4"></div>
       </div>
 
