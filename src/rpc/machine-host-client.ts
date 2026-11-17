@@ -7,14 +7,15 @@ export const MACHINE_INVOKE_TIMEOUT_MS = 65_000;
 
 type HostNamespace = { idFromName(name: string): DurableObjectId; get(id: DurableObjectId): { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> } };
 
-export function machineHostStub(namespace: HostNamespace, ownerEmail: string) {
-  return namespace.get(namespace.idFromName(ownerEmail.toLowerCase()));
+export function machineHostStub(namespace: HostNamespace, ownerEmail: string, machineName?: string) {
+  const owner = ownerEmail.toLowerCase();
+  return namespace.get(namespace.idFromName(machineName ? `${owner}#${machineName}` : owner));
 }
 
 export const DISCONNECTED_STATUS: MachineStatus = { connected: false, tools: [] };
 
-export async function readMachineStatus(namespace: HostNamespace, ownerEmail: string, timeoutMs = MACHINE_STATUS_TIMEOUT_MS): Promise<MachineStatus> {
-  const host = machineHostStub(namespace, ownerEmail);
+export async function readMachineStatus(namespace: HostNamespace, ownerEmail: string, timeoutMs = MACHINE_STATUS_TIMEOUT_MS, machineName?: string): Promise<MachineStatus> {
+  const host = machineHostStub(namespace, ownerEmail, machineName);
   const timed = await withTimeout({
     promise: host.fetch("http://internal/status").then((response) => response.json<MachineStatus>()),
     timeoutMs,
@@ -23,8 +24,8 @@ export async function readMachineStatus(namespace: HostNamespace, ownerEmail: st
   return timed.ok ? timed.value : DISCONNECTED_STATUS;
 }
 
-export async function invokeMachineTool<T>(namespace: HostNamespace, ownerEmail: string, tool: string, args: Record<string, unknown>, timeoutMs = MACHINE_INVOKE_TIMEOUT_MS, opId: string = crypto.randomUUID()): Promise<T | { ok: false; error: string }> {
-  const host = machineHostStub(namespace, ownerEmail);
+export async function invokeMachineTool<T>(namespace: HostNamespace, ownerEmail: string, tool: string, args: Record<string, unknown>, timeoutMs = MACHINE_INVOKE_TIMEOUT_MS, opId: string = crypto.randomUUID(), machineName?: string): Promise<T | { ok: false; error: string }> {
+  const host = machineHostStub(namespace, ownerEmail, machineName);
   const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": ownerEmail.toLowerCase(), "X-Machinectl-Op-Id": opId });
   const timed = await withTimeout({
     promise: host.fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool, args }) }).then((response) => response.json<T>()),

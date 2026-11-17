@@ -144,12 +144,22 @@ export class MachineHost extends DurableObject<HostEnv> {
     if (url.pathname === "/connect") return this.acceptLaptopConnection(request);
     if (url.pathname === "/mcp") return this.mcp(request);
     if (url.pathname === "/invoke") return this.invoke(request);
+    if (url.pathname === "/disconnect" && request.method === "POST") return this.disconnectAll();
     if (url.pathname === "/status") {
       const connected = this.socket() !== null;
       const [tools, machineName] = connected ? await Promise.all([this.tools(), this.machineName()]) : [[], null];
       return Response.json({ connected, machineName, tools });
     }
     return new Response("not found", { status: 404 });
+  }
+
+  private async disconnectAll(): Promise<Response> {
+    const sockets = this.ctx.getWebSockets("laptop");
+    for (const socket of sockets) {
+      try { socket.close(4401, "machine revoked"); } catch { /* already gone */ }
+      await this.clearActiveSocket(socket, "Machine revoked while executing the tool call.");
+    }
+    return Response.json({ ok: true, closed: sockets.length });
   }
 
   private socket(): WebSocket | null {
