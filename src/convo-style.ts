@@ -1,8 +1,7 @@
 import type { MidTurn } from "./convo-ask";
 import { VOICE_ACK_THRESHOLD_MS, WORK_ACK } from "./voice-narration";
 
-export const CONVO_STYLES = ["standard", "narrated", "instant", "background", "fleet", "draft", "tandem"] as const;
-export const PICKER_STYLES = ["standard", "tandem"] as const satisfies readonly ConvoStyle[];
+export const CONVO_STYLES = ["standard", "narrated", "instant", "background", "fleet", "draft"] as const;
 export type ConvoStyle = (typeof CONVO_STYLES)[number];
 export const DEFAULT_CONVO_STYLE: ConvoStyle = "standard";
 
@@ -32,7 +31,7 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
   standard: {
     id: "standard",
     label: "Standard",
-    summary: "Messages wait until it finishes.",
+    summary: "Normal replies.",
     prompt: "",
     voice: { ackMs: VOICE_ACK_THRESHOLD_MS, checkinMs: 20000, ack: DEFAULT_ACK },
     midTurn: "queue",
@@ -115,20 +114,6 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
     midTurn: "interrupt",
     midTurnHint: "A new message stops it and starts over.",
     whileWorking: "Restarts",
-  },
-  tandem: {
-    id: "tandem",
-    label: "Tandem",
-    summary: "Talk to it while it works.",
-    prompt: [
-      "A separate fast assistant talks with the owner while you work. It answers the owner's questions itself.",
-      "Messages that reach you mid-task are instructions or corrections from the owner. Apply them at once and say in one short sentence what you changed.",
-      PROOF_RULE,
-    ].join(" "),
-    voice: { ackMs: 400, checkinMs: 20000, ack: "Got it." },
-    midTurn: "tandem",
-    midTurnHint: "Ask anything while it works. Changes join after the current step. Say stop to stop.",
-    whileWorking: "Talk anytime",
   },
 };
 

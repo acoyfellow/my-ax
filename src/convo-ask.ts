@@ -1,5 +1,5 @@
-export type MidTurn = "queue" | "steer" | "ask" | "interrupt" | "tandem";
-export type MidTurnAction = "queue" | "steer" | "ask" | "interrupt" | "tandem";
+export type MidTurn = "queue" | "steer" | "ask" | "interrupt";
+export type MidTurnAction = "queue" | "steer" | "ask" | "interrupt";
 
 export const ASK_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 export const ASK_MAX_CHARS = 2000;
@@ -26,9 +26,6 @@ function textOf(value: unknown): string {
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
     if (typeof record.text === "string") return record.text;
-    if (record.type === "toolCall" && typeof record.name === "string") return `[called ${record.name} ${clip(JSON.stringify(record.arguments ?? {}), 120)}]`;
-    if (record.type === "thinking") return "";
-    if ("model" in record) return textOf(record.model);
     if ("content" in record) return textOf(record.content);
     if ("message" in record) return textOf(record.message);
   }
@@ -43,8 +40,7 @@ function clip(text: string, max: number): string {
 function roleOf(entry: unknown): string {
   if (!entry || typeof entry !== "object") return "entry";
   const record = entry as Record<string, unknown>;
-  const model = Array.isArray(record.model) && record.model[0] && typeof record.model[0] === "object" ? (record.model[0] as Record<string, unknown>) : null;
-  const message = model ?? (record.message && typeof record.message === "object" ? (record.message as Record<string, unknown>) : record);
+  const message = record.message && typeof record.message === "object" ? (record.message as Record<string, unknown>) : record;
   if (typeof message.role === "string") return message.role;
   return typeof record.type === "string" ? record.type : "entry";
 }

@@ -16,7 +16,6 @@ import { ownerInstructionsExtension } from "./owner-instructions-tools";
 import { convoStyleExtension } from "./convo-style-tools";
 import { convoStyleSection, readConvoStyle } from "../convo-style";
 import { ASK_MODEL, askMessages, cleanAnswer, fallbackAnswer, summarizeLiveState } from "../convo-ask";
-import { TANDEM_ACK, TANDEM_SAFE_POINT_WAIT_MS, planFor, routeMessage, type TandemKind } from "../tandem";
 import { connectorToolsExtension, type ConnectorRunner } from "./connector-tools";
 import { withRadar } from "./radar-connector";
 import { createToolContext } from "../tool-context";
@@ -212,13 +211,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       } catch (error) {
         connection.send(JSON.stringify({ type: "pi_steer_receipt", noteId: frame.noteId, accepted: false, message: error instanceof Error ? error.message : String(error) }));
       }
-      return;
-    }
-    if (frame.type === "pi_tandem") {
-      const noteId = frame.noteId;
-      const text = String(frame.text ?? "");
-      const result = await this.tandem(text, (update) => connection.send(JSON.stringify({ type: "pi_tandem_update", noteId, ...update }))).catch((error: unknown) => ({ kind: "instruction" as TandemKind, reply: "I could not pass that on. Send it again when it finishes.", delivered: false, error: error instanceof Error ? error.message : String(error) }));
-      connection.send(JSON.stringify({ type: "pi_tandem_done", noteId, ...result }));
       return;
     }
     if (frame.type === "pi_ask") {
@@ -552,44 +544,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       console.error("pi_ask_failed", { err: error instanceof Error ? error.message : String(error) });
     }
     return { answer: fallbackAnswer(view), grounded: false };
-  }
-
-  async tandem(text: string, update: (state: { kind: TandemKind; source: string; routeMs: number; reply: string; phase: string }) => void): Promise<{ kind: TandemKind; reply: string; delivered: boolean; routeMs: number; totalMs: number; source: string }> {
-    const started = Date.now();
-    const ai = this.env.AI as unknown as { run(model: string, input: unknown): Promise<unknown> };
-    const route = await routeMessage(ai, text);
-    console.log("tandem_route", { kind: route.kind, confidence: route.confidence, source: route.source, ms: route.ms });
-    const plan = planFor(route.kind, text);
-    if (plan.action === "answer") {
-      update({ kind: route.kind, source: route.source, routeMs: route.ms, reply: "", phase: "answering" });
-      const answer = await this.ask(text);
-      return { kind: route.kind, reply: answer.answer, delivered: true, routeMs: route.ms, totalMs: Date.now() - started, source: route.source };
-    }
-    if (plan.action === "steer") {
-      const receipt = await this.steer(plan.text);
-      const ack = route.kind === "correction" ? TANDEM_ACK.correction : TANDEM_ACK.instruction;
-      return { kind: route.kind, reply: receipt.accepted ? ack : "I could not pass that on. Send it again when it finishes.", delivered: receipt.accepted, routeMs: route.ms, totalMs: Date.now() - started, source: route.source };
-    }
-    update({ kind: route.kind, source: route.source, routeMs: route.ms, reply: TANDEM_ACK.stop, phase: "stopping" });
-    const stopped = await this.stopAtSafePoint(TANDEM_SAFE_POINT_WAIT_MS);
-    return { kind: route.kind, reply: stopped === "safe-point" ? "Stopped after the current step finished." : stopped === "idle" ? "It had already finished." : "Stopped. The current step did not finish in time, so it was cut off.", delivered: true, routeMs: route.ms, totalMs: Date.now() - started, source: route.source };
-  }
-
-  async stopAtSafePoint(maxWaitMs: number): Promise<"safe-point" | "idle" | "forced"> {
-    const deadline = Date.now() + maxWaitMs;
-    let view = await this.live();
-    if (!view.busy) return "idle";
-    while (Date.now() < deadline) {
-      if (!view.busy) return "idle";
-      if (view.tools.length === 0) {
-        await this.abortAll();
-        return "safe-point";
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      view = await this.live();
-    }
-    await this.abortAll();
-    return "forced";
   }
 
   async busy(): Promise<boolean> {

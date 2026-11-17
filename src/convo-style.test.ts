@@ -62,7 +62,7 @@ test("the style write goes through the Session domain store", () => {
 });
 
 test("each style has a mid-turn rule and a plain hint", () => {
-  const expected = { standard: "queue", narrated: "steer", instant: "ask", background: "steer", fleet: "steer", draft: "interrupt", tandem: "tandem" };
+  const expected = { standard: "queue", narrated: "steer", instant: "ask", background: "steer", fleet: "steer", draft: "interrupt" };
   for (const id of CONVO_STYLES) {
     assert.equal(CONVO_STYLE_SPECS[id].midTurn, expected[id], id);
     assert.ok(CONVO_STYLE_SPECS[id].midTurnHint.length > 10, id);

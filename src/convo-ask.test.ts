@@ -51,16 +51,3 @@ test("the fallback never claims completion", () => {
   assert.doesNotMatch(fallbackAnswer({ busy: true }), /done|deployed|fixed/i);
   assert.equal(cleanAnswer("  hi   there "), "hi there");
 });
-
-test("live-view entries in {kind, model} shape reach the fast model, with tool calls and no thinking", () => {
-  const state = summarizeLiveState({
-    busy: true,
-    entries: [
-      { id: 1, kind: "pi.user", model: [{ role: "user", content: "search for deploy, then widget" }] },
-      { id: 2, kind: "pi.assistant", model: [{ role: "assistant", content: [{ type: "thinking", thinking: "secret plan" }, { type: "text", text: "Deploy search found two hits." }, { type: "toolCall", name: "search_conversations", arguments: { query: "widget" } }] }] },
-    ],
-  });
-  assert.match(state, /user: search for deploy, then widget/);
-  assert.match(state, /assistant: Deploy search found two hits\. \[called search_conversations \{"query":"widget"\}\]/);
-  assert.doesNotMatch(state, /secret plan/);
-});
