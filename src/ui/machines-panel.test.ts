@@ -10,12 +10,13 @@ const pair = { code: "ABCD-EFGH", expiresAt: 0, origin: "https://my.ax.example" 
 test("the pair command installs machinectl once, then pairs with the code and this origin", () => {
   const command = pairCommandFor(pair, "");
   assert.match(command, /\[ -d ~\/machinectl \] \|\| git clone https:\/\/github\.com\/acoyfellow\/machinectl\.git ~\/machinectl/);
-  assert.match(command, /node dist\/index\.js pair ABCD-EFGH --url 'https:\/\/my\.ax\.example'$/);
+  assert.match(command, /node dist\/index\.js pair ABCD-EFGH --url 'https:\/\/my\.ax\.example' --shell$/);
+  assert.doesNotMatch(pairCommandFor(pair, "", false), /--shell/);
 });
 
 test("a typed name becomes a safe machine name flag, and shell characters cannot escape", () => {
-  assert.match(pairCommandFor(pair, " Work Laptop "), /--name 'work-laptop'$/);
-  assert.match(pairCommandFor(pair, "a'; rm -rf ~"), /--name 'a-rm-rf'$/);
+  assert.match(pairCommandFor(pair, " Work Laptop "), /--name 'work-laptop' --shell$/);
+  assert.match(pairCommandFor(pair, "a'; rm -rf ~"), /--name 'a-rm-rf' --shell$/);
 });
 
 test("Machines sit at the top of Connections, with add, rename and remove", () => {

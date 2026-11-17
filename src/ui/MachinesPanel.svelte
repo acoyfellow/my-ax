@@ -10,9 +10,10 @@
   let pairCode = $state<PairCode | null>(null);
   let pairName = $state("");
   let copied = $state(false);
+  let allowShell = $state(true);
   let now = $state(Date.now());
 
-  const command = $derived(pairCode ? pairCommandFor(pairCode, pairName) : "");
+  const command = $derived(pairCode ? pairCommandFor(pairCode, pairName, allowShell) : "");
   const minutesLeft = $derived(pairCode ? Math.max(0, Math.ceil((pairCode.expiresAt - now) / 60_000)) : 0);
 
   async function refresh() {
@@ -87,6 +88,7 @@
       <label class="block text-[11px] text-fg-mut">Name (optional)
         <input bind:value={pairName} placeholder="work-laptop" class="mt-1 w-full rounded-md border border-line bg-bg-alt px-2 py-1 text-xs text-fg" />
       </label>
+      <label class="flex items-center gap-2 text-[11px] text-fg-mut"><input type="checkbox" bind:checked={allowShell} /> Let the agent run terminal commands in your home folder</label>
       <pre class="whitespace-pre-wrap break-all rounded-md border border-line bg-bg-alt p-2 font-mono text-[11px] text-fg" data-pair-command>{command}</pre>
       <div class="flex items-center gap-2">
         <button type="button" onclick={copyCommand} class="job-action-button hover:border-brand/60">{copied ? "Copied" : "Copy"}</button>
