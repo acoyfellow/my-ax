@@ -14,7 +14,6 @@
   import ActivitySignal from "./ActivitySignal.svelte";
   import AppPopOut from "./AppPopOut.svelte";
   import VoiceListen from "./VoiceListen.svelte";
-  import ConvoStylePicker from "./ConvoStylePicker.svelte";
   import Miniplayer from "./Miniplayer.svelte";
 
   interface Props {
@@ -78,7 +77,7 @@
 
   {#if sessionState.id}<ActivitySignal />{/if}
 
-  <div class="flex-1 min-w-[4.5rem]">
+  <div class="flex-1 min-w-0">
     {#if editingTitle}
       <input bind:this={titleInput} bind:value={titleDraft} onkeydown={renameKeydown} onblur={saveRename} maxlength={200} class="w-full min-w-0 rounded border border-brand/40 bg-bg px-2 py-1 text-sm text-fg outline-none" aria-label="Rename active conversation" />
     {:else}
@@ -89,8 +88,6 @@
     {/if}
   </div>
 
-
-  {#if sessionState.id}<ConvoStylePicker getSessionId={() => sessionState.id ?? ""} />{/if}
 
   <VoiceListen />
 

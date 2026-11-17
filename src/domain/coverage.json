@@ -8,8 +8,7 @@
         "status",
         "pinned",
         "amber",
-        "pin_size",
-        "convo_style"
+        "pin_size"
       ]
     },
     "jobs": {

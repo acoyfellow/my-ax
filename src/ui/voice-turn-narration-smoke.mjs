@@ -11,13 +11,11 @@ function has(needle, label) {
   if (!agent.includes(needle)) throw new Error(`${label}: missing ${JSON.stringify(needle)}`);
 }
 
-has("import { StillWorkingTimer } from \"./voice-narration\"", "voice turn imports the check-in policy");
-has("import { CONVO_STYLE_SPECS, readConvoStyle } from \"./convo-style\"", "voice turn reads the conversation style");
+has("import { StillWorkingTimer, WORK_ACK, VOICE_ACK_THRESHOLD_MS } from \"./voice-narration\"", "voice turn imports the check-in policy");
 has("Promise<AsyncGenerator<string>>", "onTurn returns a streaming AsyncGenerator (multi-utterance TTS)");
-has("CONVO_STYLE_SPECS[await readConvoStyle(", "the conversation style picks the voice timings");
-has("await settledWithin(runReply, voiceStyle.ackMs);", "fast turns stay terse; ack only past the style's threshold");
-has("yield voiceStyle.ack;", "slow turns speak the style's up-front acknowledgement");
-has("new StillWorkingTimer(voiceStyle.checkinMs, now)", "slow turns emit bounded 'still working' check-ins at the style's pace");
+has("VOICE_ACK_THRESHOLD_MS", "fast turns stay terse; ack only past a threshold");
+has("yield WORK_ACK;", "slow turns speak an up-front acknowledgement");
+has("new StillWorkingTimer(", "slow turns emit bounded 'still working' check-ins");
 has("checkins.tick(", "check-ins are driven by the bounded idle timer");
 has("const result = await chat.wait(receipt.operationId);", "the real reply comes from the pi chat turn");
 // Feedback safety note is documented; the generator only yields agent audio

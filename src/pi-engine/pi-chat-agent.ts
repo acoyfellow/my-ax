@@ -13,10 +13,6 @@ import { indexRowsFor, type ConversationMemory } from "./conversation-index";
 import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
 import { sharedToolsExtension } from "./legacy-tools";
 import { ownerInstructionsExtension } from "./owner-instructions-tools";
-import { convoStyleExtension } from "./convo-style-tools";
-import { convoStyleSection, readConvoStyle } from "../convo-style";
-import { ASK_MODEL, askMessages, cleanAnswer, fallbackAnswer, summarizeLiveState } from "../convo-ask";
-import { TANDEM_ACK, TANDEM_SAFE_POINT_WAIT_MS, planFor, routeMessage, type TandemKind } from "../tandem";
 import { connectorToolsExtension, type ConnectorRunner } from "./connector-tools";
 import { withRadar } from "./radar-connector";
 import { createToolContext } from "../tool-context";
@@ -105,7 +101,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
-      this.registry.install(convoStyleExtension(() => this.convoStyleText()));
       this.registry.install(connectorToolsExtension(() => this.connectorRunner()));
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
       return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport }, context);
@@ -203,27 +198,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }
     if (frame.type === "pi_abort") {
       await this.abortAll();
-      return;
-    }
-    if (frame.type === "pi_steer") {
-      try {
-        const receipt = await this.steer(String(frame.text ?? ""));
-        connection.send(JSON.stringify({ type: "pi_steer_receipt", noteId: frame.noteId, operationId: receipt.operationId, accepted: receipt.accepted }));
-      } catch (error) {
-        connection.send(JSON.stringify({ type: "pi_steer_receipt", noteId: frame.noteId, accepted: false, message: error instanceof Error ? error.message : String(error) }));
-      }
-      return;
-    }
-    if (frame.type === "pi_tandem") {
-      const noteId = frame.noteId;
-      const text = String(frame.text ?? "");
-      const result = await this.tandem(text, (update) => connection.send(JSON.stringify({ type: "pi_tandem_update", noteId, ...update }))).catch((error: unknown) => ({ kind: "instruction" as TandemKind, reply: "I could not pass that on. Send it again when it finishes.", delivered: false, error: error instanceof Error ? error.message : String(error) }));
-      connection.send(JSON.stringify({ type: "pi_tandem_done", noteId, ...result }));
-      return;
-    }
-    if (frame.type === "pi_ask") {
-      const result = await this.ask(String(frame.text ?? "")).catch(() => ({ answer: "I could not check right now.", grounded: false }));
-      connection.send(JSON.stringify({ type: "pi_ask_answer", noteId: frame.noteId, answer: result.answer, grounded: result.grounded }));
       return;
     }
     if (frame.type === "pi_submit") {
@@ -339,15 +313,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return {
       ...createMyAxBrowserTools(this.env, () => this.identity(), () => this.chatId()),
     };
-  }
-
-  private async convoStyleText(): Promise<string> {
-    try {
-      const style = await readConvoStyle(this.env.DB as unknown as Parameters<typeof readConvoStyle>[0], this.chatId(), this.identity().email);
-      return convoStyleSection(style) ?? "";
-    } catch {
-      return "";
-    }
   }
 
   private async ownerInstructions(): Promise<string> {
@@ -529,67 +494,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       retry: snapshot.generation?.retry ?? null,
       entryTimes: this.entryTimes(),
     };
-  }
-
-  async steer(text: string): Promise<PiChatSubmitResult> {
-    const content = text.trim();
-    if (!content) return { operationId: "", accepted: false };
-    await this.ensureEventStream();
-    const receipt = await this.harness.submit(content, { whenBusy: "steer" });
-    await this.publishCurrentRunStatus();
-    return { operationId: receipt.operationId, accepted: receipt.accepted };
-  }
-
-  async ask(question: string): Promise<{ answer: string; grounded: boolean }> {
-    const view = await this.live();
-    const state = summarizeLiveState(view);
-    try {
-      const ai = this.env.AI as unknown as { run(model: string, input: unknown): Promise<{ response?: unknown }> };
-      const output = await ai.run(ASK_MODEL, { messages: askMessages(state, question), max_tokens: 160 });
-      const answer = cleanAnswer(output?.response);
-      if (answer) return { answer, grounded: true };
-    } catch (error) {
-      console.error("pi_ask_failed", { err: error instanceof Error ? error.message : String(error) });
-    }
-    return { answer: fallbackAnswer(view), grounded: false };
-  }
-
-  async tandem(text: string, update: (state: { kind: TandemKind; source: string; routeMs: number; reply: string; phase: string }) => void): Promise<{ kind: TandemKind; reply: string; delivered: boolean; routeMs: number; totalMs: number; source: string }> {
-    const started = Date.now();
-    const ai = this.env.AI as unknown as { run(model: string, input: unknown): Promise<unknown> };
-    const route = await routeMessage(ai, text);
-    console.log("tandem_route", { kind: route.kind, confidence: route.confidence, source: route.source, ms: route.ms });
-    const plan = planFor(route.kind, text);
-    if (plan.action === "answer") {
-      update({ kind: route.kind, source: route.source, routeMs: route.ms, reply: "", phase: "answering" });
-      const answer = await this.ask(text);
-      return { kind: route.kind, reply: answer.answer, delivered: true, routeMs: route.ms, totalMs: Date.now() - started, source: route.source };
-    }
-    if (plan.action === "steer") {
-      const receipt = await this.steer(plan.text);
-      const ack = route.kind === "correction" ? TANDEM_ACK.correction : TANDEM_ACK.instruction;
-      return { kind: route.kind, reply: receipt.accepted ? ack : "I could not pass that on. Send it again when it finishes.", delivered: receipt.accepted, routeMs: route.ms, totalMs: Date.now() - started, source: route.source };
-    }
-    update({ kind: route.kind, source: route.source, routeMs: route.ms, reply: TANDEM_ACK.stop, phase: "stopping" });
-    const stopped = await this.stopAtSafePoint(TANDEM_SAFE_POINT_WAIT_MS);
-    return { kind: route.kind, reply: stopped === "safe-point" ? "Stopped after the current step finished." : stopped === "idle" ? "It had already finished." : "Stopped. The current step did not finish in time, so it was cut off.", delivered: true, routeMs: route.ms, totalMs: Date.now() - started, source: route.source };
-  }
-
-  async stopAtSafePoint(maxWaitMs: number): Promise<"safe-point" | "idle" | "forced"> {
-    const deadline = Date.now() + maxWaitMs;
-    let view = await this.live();
-    if (!view.busy) return "idle";
-    while (Date.now() < deadline) {
-      if (!view.busy) return "idle";
-      if (view.tools.length === 0) {
-        await this.abortAll();
-        return "safe-point";
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      view = await this.live();
-    }
-    await this.abortAll();
-    return "forced";
   }
 
   async busy(): Promise<boolean> {
