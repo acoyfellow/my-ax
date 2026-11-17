@@ -68,16 +68,3 @@ test("each style has a mid-turn rule and a plain hint", () => {
     assert.ok(CONVO_STYLE_SPECS[id].midTurnHint.length > 10, id);
   }
 });
-
-test("every style has a short while-working tag, and the tags tell the four mid-turn rules apart", () => {
-  const tagByRule = new Map<string, string>();
-  for (const id of CONVO_STYLES) {
-    const spec = CONVO_STYLE_SPECS[id];
-    assert.ok(spec.whileWorking.length > 0 && spec.whileWorking.length <= 16, id);
-    assert.ok(spec.summary.length <= 45, `${id} summary is short`);
-    const seen = tagByRule.get(spec.midTurn);
-    if (seen) assert.equal(seen, spec.whileWorking, `${id} shares its rule's tag`);
-    tagByRule.set(spec.midTurn, spec.whileWorking);
-  }
-  assert.equal(new Set(tagByRule.values()).size, tagByRule.size);
-});

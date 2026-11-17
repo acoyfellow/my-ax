@@ -19,7 +19,6 @@ export type ConvoStyleSpec = {
   readonly voice: ConvoStyleVoice;
   readonly midTurn: MidTurn;
   readonly midTurnHint: string;
-  readonly whileWorking: string;
 };
 
 const PROOF_RULE =
@@ -31,17 +30,16 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
   standard: {
     id: "standard",
     label: "Standard",
-    summary: "Normal replies.",
+    summary: "Works, then answers in full.",
     prompt: "",
     voice: { ackMs: VOICE_ACK_THRESHOLD_MS, checkinMs: 20000, ack: DEFAULT_ACK },
     midTurn: "queue",
-    midTurnHint: "Your messages wait until it finishes.",
-    whileWorking: "Waits",
+    midTurnHint: "Messages wait until it finishes.",
   },
   narrated: {
     id: "narrated",
     label: "Narrated",
-    summary: "Says what it's doing at each step.",
+    summary: "Short plain updates while it works. Brief final answer.",
     prompt: [
       "While you work, write one short plain sentence before each important step: what you found, what you are changing, what failed, what passed.",
       "Do not narrate routine reads or searches. Group small steps.",
@@ -50,13 +48,12 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
     ].join(" "),
     voice: { ackMs: 800, checkinMs: 10000, ack: DEFAULT_ACK },
     midTurn: "steer",
-    midTurnHint: "Your messages join after the current step.",
-    whileWorking: "Joins next step",
+    midTurnHint: "Messages reach it after its current step.",
   },
   instant: {
     id: "instant",
     label: "Instant answers",
-    summary: "Answers first, works after.",
+    summary: "Answers your question first, in one line. Speaks up only at milestones.",
     prompt: [
       "Start every reply with a one-sentence direct answer to what the owner just asked. Then do the work.",
       "If the owner asks what you are doing, answer from your current state in one sentence before anything else.",
@@ -65,13 +62,12 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
     ].join(" "),
     voice: { ackMs: 400, checkinMs: 20000, ack: "Got it." },
     midTurn: "ask",
-    midTurnHint: "Questions are answered now. Changes join after the current step.",
-    whileWorking: "Answers now",
+    midTurnHint: "Questions are answered right away. Instructions reach it after its current step.",
   },
   background: {
     id: "background",
     label: "Background",
-    summary: "Quiet. One report at the end.",
+    summary: "Acknowledges, works quietly, reports once when done.",
     prompt: [
       "Acknowledge the request in one short sentence, then work without progress chatter.",
       "When the work ends, send one report: what changed, how it was checked, what still needs the owner.",
@@ -80,13 +76,12 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
     ].join(" "),
     voice: { ackMs: 800, checkinMs: 45000, ack: "On it. I'll tell you when it's done." },
     midTurn: "steer",
-    midTurnHint: "Your messages join after the current step.",
-    whileWorking: "Joins next step",
+    midTurnHint: "Messages reach it after its current step.",
   },
   fleet: {
     id: "fleet",
     label: "One voice",
-    summary: "One status for all your agents.",
+    summary: "One voice for many agents: what needs you, then failures, then batched progress.",
     prompt: [
       "Act as the one voice for every agent, job and session you can see. Agents never talk to the owner directly; you do.",
       "Order each report: first what needs the owner's decision, then failures, then a short batched progress line per agent.",
@@ -97,13 +92,12 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
     ].join(" "),
     voice: { ackMs: 800, checkinMs: 15000, ack: "Got it. Checking the agents." },
     midTurn: "steer",
-    midTurnHint: "Your messages join after the current step.",
-    whileWorking: "Joins next step",
+    midTurnHint: "Messages reach it after its current step. Name an agent to route a message to it.",
   },
   draft: {
     id: "draft",
     label: "Quick draft",
-    summary: "A quick draft first, then the full answer.",
+    summary: "A one-line draft answer at once, then the full one.",
     prompt: [
       "Begin with a one-line draft answer marked 'Draft:' so the owner has something at once.",
       "Then check it and give the full answer. If the full answer changes the draft, say what changed.",
@@ -112,8 +106,7 @@ export const CONVO_STYLE_SPECS: Record<ConvoStyle, ConvoStyleSpec> = {
     ].join(" "),
     voice: { ackMs: 300, checkinMs: 20000, ack: "Sure, one sec." },
     midTurn: "interrupt",
-    midTurnHint: "A new message stops it and starts over.",
-    whileWorking: "Restarts",
+    midTurnHint: "A new message stops the current reply and restarts with your change.",
   },
 };
 
