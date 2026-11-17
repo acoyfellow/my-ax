@@ -52,7 +52,7 @@ import { registerRunRoutes } from "./routes/runs";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerComputerRoutes } from "./routes/computers";
 import { registerDecisionRoutes } from "./routes/decisions";
-import { readMachineStatus } from "./rpc/machine-host-client";
+import { onlineMachines } from "./machine-target";
 import { registerRigRoutes } from "./routes/rig";
 import { registerDeskRoutes } from "./routes/desk";
 import { registerVoiceRoutes } from "./routes/voice";
@@ -259,13 +259,13 @@ app.get("/api", async (c) => {
     };
   }
 
-  const machineStatus = await readMachineStatus(c.env.MACHINE_HOST, email);
+  const machines = await onlineMachines(c.env.DB, c.env.MACHINE_HOST, email);
   connectorStatus.machinectl = {
     kind: "access-session",
     authorized: true,
-    connected: !!machineStatus.connected,
-    machineName: machineStatus.machineName ?? null,
-    tools: Array.isArray(machineStatus.tools) ? machineStatus.tools.length : 0,
+    connected: machines.length > 0,
+    machineName: machines.map((machine) => machine.name).join(", ") || null,
+    tools: machines.reduce((total, machine) => total + (machine.status.tools ?? []).length, 0),
     authorize_url: null,
     path: "cloudflare-access",
     userAdded: false,

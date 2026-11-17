@@ -2,7 +2,7 @@ import type { Context, Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { SavedRecipeService } from "../saved-recipes";
-import { readMachineStatus } from "../rpc/machine-host-client";
+import { resolveMachine } from "../machine-target";
 import { oauthStoreFor } from "../oauth-store";
 import {
   builtinCommands,
@@ -79,7 +79,7 @@ export async function allCommands(c: Ctx): Promise<Command[]> {
     new SavedRecipeService(c.env, email).list().catch(() => []),
     skills(c).list().catch(() => []),
     c.req.query("connectors") === "0" ? Promise.resolve([]) : connectorTools(c).catch(() => []),
-    c.env.MACHINE_HOST ? readMachineStatus(c.env.MACHINE_HOST, email).catch(() => ({ connected: false, tools: [] })) : Promise.resolve({ connected: false, tools: [] }),
+    c.env.MACHINE_HOST ? resolveMachine(c.env.DB, c.env.MACHINE_HOST, email, undefined).then((target) => target.ok ? target.machine.status : { connected: false, tools: [] }).catch(() => ({ connected: false, tools: [] })) : Promise.resolve({ connected: false, tools: [] }),
   ]);
   return [
     ...builtinCommands(),

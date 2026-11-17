@@ -3,7 +3,7 @@
   // Connectors panel — public/self-host engine.
   //
   // The panel owns:
-  //   - GET /api → laptop connected state + per-MCP auth status
+  //   - GET /api → per-MCP auth status
   //   - GET /api/mcps → user-added MCPs list
   //   - DELETE /api/mcps/:id
   //   - POST /api/mcps/probe (Test button)
@@ -54,7 +54,6 @@
 
   let userMcps = $state<UserMcp[]>([]);
   let authStatus = $state<Record<string, ConnectorStatusPayload & { connected?: boolean; kind?: string }>>({});
-  let laptopConnected = $state<boolean>(false);
   let userMcpsError = $state<string | null>(null);
   let userMcpsLoading = $state<boolean>(true);
 
@@ -96,7 +95,6 @@
       const d = await fetchJson("/api");
       const conns = d?.result?.connectors ?? {};
       authStatus = conns;
-      laptopConnected = !!conns.machinectl?.connected;
     } catch {
       // /api status is best-effort here. The list below still loads.
     }
@@ -235,18 +233,6 @@
     </h3>
     <span class="text-[10px] text-fg-mut">{summary}</span>
   </header>
-
-  <!-- Physical laptop: same Access identity, no second OAuth consent. -->
-  <div class="mb-3 pb-3 border-b border-line/60">
-    <h4 class="text-xs font-medium text-fg-mut mb-1.5">
-      Physical laptop
-    </h4>
-    <div class="laptop-row" data-mcp-id="machinectl" title={laptopConnected ? "Laptop connected" : "Laptop offline"}>
-      <span class="conn-status-dot" data-state={laptopConnected ? "enabled" : "disabled"} aria-label={laptopConnected ? "Laptop connected" : "Laptop offline"}></span>
-      <span class="laptop-row__name">Laptop</span>
-      <span class="laptop-row__tools">shell · desktop · auth · agents</span>
-    </div>
-  </div>
 
   <!-- Deploy-provided built-ins. Names and endpoints come from the private
        deployment status API; the public client contains no private catalog. -->
@@ -492,37 +478,6 @@
   :global(.conn-status-dot[data-state="enabled"]) { background: var(--good); }
   :global(.conn-status-dot[data-state="disabled"]) { background: var(--fg-mut); opacity: 0.55; }
   :global(.conn-status-dot[data-state="degraded"]) { background: var(--warn); }
-  :global(.laptop-row) {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    padding: 5px 0;
-    font-size: 12px;
-  }
-  :global(.laptop-row__name) {
-    color: var(--fg);
-    font-family: 'JetBrains Mono Variable', monospace;
-  }
-  :global(.laptop-row__tools) {
-    min-width: 0;
-    margin-left: auto;
-    color: var(--fg-mut);
-    font-family: 'JetBrains Mono Variable', monospace;
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  @media (max-width: 420px) {
-    :global(.laptop-row) { flex-wrap: wrap; }
-    :global(.laptop-row__tools) {
-      flex-basis: 100%;
-      margin-left: 15px;
-      white-space: normal;
-      line-height: 1.45;
-    }
-  }
   :global(.user-mcp-retry) {
     padding: 2px 6px;
     border: 1px solid var(--line);
