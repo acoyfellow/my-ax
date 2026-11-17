@@ -10,15 +10,15 @@ import { appendOwnedRunEvent, isValidSessionHarnessId, RunReceiptNotFoundError }
 import { storeInlineMediaArtifact } from "../uploads";
 import { workspaceFor } from "../workspace";
 import { machineBusyOutcome, parseMachineShellContent } from "../machinectl-output";
-import { invokeMachineTool, machineHostStub, readMachineStatus } from "../rpc/machine-host-client";
+import { invokeMachineTool, machineHostStub } from "../rpc/machine-host-client";
 import { connectMachine } from "./machines";
+import { resolveMachine, type MachineTarget } from "../machine-target";
 import { isFocusTool, isVerifiedPromptTool, withVerifiedCmuxDelivery } from "../cmux-delivery-verification";
 
 interface PublishedTool { name: string; description: string; inputSchema: Record<string, unknown> }
 type MachineResult = { ok?: boolean; content?: string; error?: string; busy?: boolean; retryAfterMs?: number };
 type ObserveSessionBody = { runId?: string; session?: { harness?: string; id?: string; label?: string; state?: string }; note?: string };
-const MACHINE_STATUS_CACHE_MS = 5_000;
-const machineStatusCache = new Map<string, { at: number; status: { connected: boolean; machineName?: string; tools?: PublishedTool[] } }>();
+type ToolContext = Parameters<ToolDef["execute"]>[1];
 
 async function persistScreenshotToWorkspace(env: AppEnv["Bindings"], identity: { email: string }, artifact: { workspacePath?: string }, dataUrl: string) {
   const path = artifact.workspacePath;
@@ -30,18 +30,22 @@ async function persistScreenshotToWorkspace(env: AppEnv["Bindings"], identity: {
   await workspace.write(path, bytes);
 }
 
-function hostFor(c: Context<AppEnv>) {
-  return machineHostStub(c.env.MACHINE_HOST, c.get("identity").email);
-}
 
 export function registerMachinectlRoutes(app: Hono<AppEnv>) {
   app.get("/machinectl/connect", connectMachine);
   app.post("/machinectl/mcp", async (c) => {
+    const email = c.get("identity").email.toLowerCase();
+    const target = await resolveMachine(c.env.DB, c.env.MACHINE_HOST, email, c.req.query("machine"));
+    if (!target.ok) return c.json({ jsonrpc: "2.0", id: null, error: { code: -32000, message: target.message } }, 409);
     const headers = new Headers(c.req.raw.headers);
-    headers.set("X-Machinectl-User", c.get("identity").email.toLowerCase());
-    return hostFor(c).fetch(new Request("http://internal/mcp", { method: "POST", headers, body: c.req.raw.body }));
+    headers.set("X-Machinectl-User", email);
+    return machineHostStub(c.env.MACHINE_HOST, email, target.machine.slot).fetch(new Request("http://internal/mcp", { method: "POST", headers, body: c.req.raw.body }));
   });
-  app.get("/api/machinectl/status", async (c) => hostFor(c).fetch("http://internal/status"));
+  app.get("/api/machinectl/status", async (c) => {
+    const target = await resolveMachine(c.env.DB, c.env.MACHINE_HOST, c.get("identity").email, c.req.query("machine"));
+    if (!target.ok) return c.json({ connected: false, machineName: null, tools: [], machines: target.online.map((machine) => machine.name), error: target.message });
+    return c.json({ connected: true, machine: target.machine.name, machineName: target.machine.status.machineName ?? null, tools: target.machine.status.tools ?? [], machines: target.online.map((machine) => machine.name) });
+  });
   // Explicit live-attach-adjacent slice: record one caller-supplied identity
   // for a session the owner already observed on their connected laptop. This
   // appends a receipt event only; it does not discover, attach, mirror, or steer.
@@ -54,8 +58,9 @@ export function registerMachinectlRoutes(app: Hono<AppEnv>) {
     if (!isValidSessionHarnessId(harness)) return c.json({ ok: false, error: { code: "BAD_SESSION_HARNESS", message: "session.harness must be a harness id, for example pi, codex or opencode" } }, 400);
     if (!sessionId) return c.json({ ok: false, error: { code: "BAD_SESSION_ID", message: "session.id is required" } }, 400);
 
-    const status = await hostFor(c).fetch("http://internal/status").then((response) => response.json<{ connected?: boolean; machineName?: string | null }>());
-    if (!status.connected) return c.json({ ok: false, error: { code: "LAPTOP_NOT_CONNECTED", message: "No laptop is currently connected." } }, 409);
+    const target = await resolveMachine(c.env.DB, c.env.MACHINE_HOST, c.get("identity").email, c.req.query("machine"));
+    if (!target.ok) return c.json({ ok: false, error: { code: "LAPTOP_NOT_CONNECTED", message: target.message } }, 409);
+    const status = { machineName: target.machine.status.machineName ?? target.machine.name };
 
     try {
       const event = await appendOwnedRunEvent(c, runId, {
@@ -85,40 +90,27 @@ export function registerMachinectlRoutes(app: Hono<AppEnv>) {
   // Local-dev/native-agent proof endpoint. Keeps laptop invocation testable
   // without spinning a Think chat turn; still Access-gated by /api/* middleware.
   app.post("/api/machinectl/call", async (c) => {
-    const body = await c.req.json<{ tool?: string; arguments?: Record<string, unknown> }>().catch(() => null);
+    const body = await c.req.json<{ tool?: string; arguments?: Record<string, unknown>; machine?: string }>().catch(() => null);
     if (!body?.tool) return c.json({ ok: false, error: "tool is required" }, 400);
-    if (body.tool === "tools/list") return hostFor(c).fetch("http://internal/status");
-    const headers = new Headers({ "Content-Type": "application/json", "X-Machinectl-User": c.get("identity").email.toLowerCase() });
-    const response = await hostFor(c).fetch("http://internal/invoke", { method: "POST", headers, body: JSON.stringify({ tool: body.tool, args: body.arguments ?? {} }) });
-    if (body.tool !== "screenshot" && body.tool !== "screen_record") return response;
-    const result = await response.json<{ ok?: boolean; content?: string; error?: string }>();
-    if (result.ok && typeof result.content === "string") {
-      const artifact = await storeInlineMediaArtifact(c.env, c.get("identity"), result.content);
-      if (artifact) {
-        await persistScreenshotToWorkspace(c.env, c.get("identity"), artifact, result.content).catch(() => undefined);
-        return c.json({ ...result, content: artifact });
-      }
-    }
-    return c.json(result);
+    const context = { env: c.env, identity: c.get("identity") } as ToolContext;
+    return c.json(JSON.parse(await MACHINECTL_TOOL.execute({ tool: body.tool, arguments: body.arguments ?? {}, machine: body.machine }, context)) as Record<string, unknown>);
   });
   app.post("/api/machinectl/code", async (c) => {
-    const body = await c.req.json<{ code?: string }>().catch(() => null);
+    const body = await c.req.json<{ code?: string; machine?: string }>().catch(() => null);
     if (!body?.code) return c.json({ ok: false, error: "code is required" }, 400);
     if (body.code.length > 32_000) return c.json({ ok: false, error: "code exceeds 32000 characters" }, 413);
-    const context = { env: c.env, identity: c.get("identity") } as Parameters<ToolDef["execute"]>[1];
-    return c.json(JSON.parse(await MACHINECTL_CODE_TOOL.execute({ code: body.code }, context)) as Record<string, unknown>);
+    const context = { env: c.env, identity: c.get("identity") } as ToolContext;
+    return c.json(JSON.parse(await MACHINECTL_CODE_TOOL.execute({ code: body.code, machine: body.machine }, context)) as Record<string, unknown>);
   });
 
 }
 
-async function machineStatus(ctx: Parameters<ToolDef["execute"]>[1]) {
-  const key = ctx.identity.email.toLowerCase();
-  const cached = machineStatusCache.get(key);
-  if (cached && Date.now() - cached.at < MACHINE_STATUS_CACHE_MS) return cached.status;
-  const read = await readMachineStatus(ctx.env.MACHINE_HOST, key);
-  const status = { connected: read.connected, machineName: read.machineName ?? undefined, tools: read.tools as PublishedTool[] | undefined };
-  machineStatusCache.set(key, { at: Date.now(), status });
-  return status;
+function targetFor(ctx: ToolContext, machine: unknown): Promise<MachineTarget> {
+  return resolveMachine(ctx.env.DB, ctx.env.MACHINE_HOST, ctx.identity.email, typeof machine === "string" ? machine : undefined);
+}
+
+function machineChoiceError(target: Extract<MachineTarget, { ok: false }>): string {
+  return JSON.stringify({ ok: false, error: target.message, machines: target.online.map((machine) => ({ name: machine.name, title: machine.title })) });
 }
 
 function schemaType(schema: unknown): string {
@@ -141,17 +133,14 @@ function laptopTypes(catalog: PublishedTool[]): string {
   return `declare const codemode: {\n${catalog.map((tool) => `  /** ${tool.description.replaceAll("*/", "* /")} */\n  ${sanitizeToolName(tool.name)}: (args: ${schemaType(tool.inputSchema)}) => Promise<unknown>;`).join("\n\n")}\n};`;
 }
 
-async function machineInvoke(tool: string, args: Record<string, unknown>, ctx: Parameters<ToolDef["execute"]>[1]): Promise<MachineResult> {
-  return invokeMachineTool<MachineResult>(ctx.env.MACHINE_HOST, ctx.identity.email, tool, args);
-}
-
-export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute"]>[1]) {
-  const status = await machineStatus(ctx);
-  const catalog = status.tools ?? [];
+export async function createMachineWorkProvider(ctx: ToolContext, requested?: string) {
+  const target = await targetFor(ctx, requested);
+  const slot = target.ok ? target.machine.slot : undefined;
+  const catalog = (target.ok ? target.machine.status.tools ?? [] : []) as PublishedTool[];
   const fns: Record<string, (input: unknown) => Promise<unknown>> = {};
   for (const published of catalog) {
     fns[published.name] = async (input) => {
-      const result = await machineInvoke(published.name, (input && typeof input === "object" ? input : {}) as Record<string, unknown>, ctx);
+      const result: MachineResult = await invokeMachineTool<MachineResult>(ctx.env.MACHINE_HOST, ctx.identity.email, published.name, (input && typeof input === "object" ? input : {}) as Record<string, unknown>, undefined, undefined, slot);
       const busy = machineBusyOutcome(result);
       if (busy) return busy;
       if (!result.ok) throw new Error(result.error ?? `Laptop tool failed: ${published.name}`);
@@ -163,7 +152,7 @@ export async function createMachineWorkProvider(ctx: Parameters<ToolDef["execute
       try { return JSON.parse(result.content ?? "") as unknown; } catch { return result.content ?? ""; }
     };
   }
-  return { connected: status.connected, machineName: status.machineName, catalog, fns: withVerifiedCmuxDelivery(fns) };
+  return { connected: target.ok, target, machineName: target.ok ? target.machine.name : undefined, catalog, fns: withVerifiedCmuxDelivery(fns) };
 }
 
 export const MACHINECTL_CODE_TOOL: ToolDef = {
@@ -171,15 +160,18 @@ export const MACHINECTL_CODE_TOOL: ToolDef = {
   description: "Execute JavaScript against the user's explicitly connected physical laptop through isolated Code Mode. Use this as the default laptop-control interface after the user explicitly asks to operate or inspect their laptop. Discover the live catalog first. Prefer semantic cmux_workspace_* and cmux_pi_* tools for durable cmux/Pi sessions when available; prefer harness_* for daemon-owned agents; use GUI controls only as fallback. Batch GUI actions with input_sequence and use compressed screenshot previews unless exact PNG pixels are required. Underlying shell remains terminal-equivalent; Code Mode isolates orchestration and does not reduce laptop authority.",
   parameters: {
     type: "object",
-    properties: { code: { type: "string", description: "JavaScript async arrow function using codemode.<laptop_tool>(args)." } },
+    properties: {
+      code: { type: "string", description: "JavaScript async arrow function using codemode.<laptop_tool>(args)." },
+      machine: { type: "string", description: "Which machine to use, by name or title from Settings > Connections. Leave out when only one machine is online." },
+    },
     required: ["code"],
   },
   execute: async (args, ctx) => {
     const code = typeof args.code === "string" ? args.code : "";
     if (!code) return JSON.stringify({ ok: false, error: "code is required" });
     if (code.length > 32_000) return JSON.stringify({ ok: false, error: "code exceeds 32000 characters" });
-    const provider = await createMachineWorkProvider(ctx);
-    if (!provider.connected) return JSON.stringify({ ok: false, error: "No laptop is currently connected." });
+    const provider = await createMachineWorkProvider(ctx, typeof args.machine === "string" ? args.machine : undefined);
+    if (!provider.target.ok) return machineChoiceError(provider.target);
     const types = laptopTypes(provider.catalog);
     const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: 30_000 });
     const execution = await executor.execute(code, [{ name: "codemode", fns: provider.fns }]);
@@ -196,6 +188,7 @@ export const MACHINECTL_TOOL: ToolDef = {
     properties: {
       tool: { type: "string", description: "Laptop tool name, or the special discovery value tools/list." },
       arguments: { type: "object", description: "Arguments for the laptop tool." },
+      machine: { type: "string", description: "Which machine to use, by name or title from Settings > Connections. Leave out when only one machine is online." },
       opId: { type: "string", description: "Only when retrying a call that timed out: pass the opId from that error to get its result instead of running it again." },
     },
     required: ["tool"],
@@ -213,18 +206,24 @@ export const MACHINECTL_TOOL: ToolDef = {
       });
     }
     const { identity, env } = ctx;
-    if (tool === "tools/list") return JSON.stringify(await readMachineStatus(env.MACHINE_HOST, identity.email));
+    const target = await targetFor(ctx, args.machine);
+    if (tool === "tools/list") {
+      return JSON.stringify(target.ok
+        ? { connected: true, machine: target.machine.name, machineName: target.machine.status.machineName ?? null, tools: target.machine.status.tools ?? [], online: target.online.map((machine) => machine.name) }
+        : { connected: false, error: target.message, online: target.online.map((machine) => ({ name: machine.name, title: machine.title, tools: (machine.status.tools ?? []).length })), tools: [] });
+    }
+    if (!target.ok) return machineChoiceError(target);
     if (isVerifiedPromptTool(tool) || isFocusTool(tool)) {
-      const provider = await createMachineWorkProvider(ctx);
+      const provider = await createMachineWorkProvider(ctx, target.machine.name);
       const verified = provider.fns[tool];
-      if (!verified) return JSON.stringify({ ok: false, verified: false, reason: `My Machine does not publish ${tool}` });
+      if (!verified) return JSON.stringify({ ok: false, verified: false, reason: `Machine ${target.machine.name} does not publish ${tool}` });
       try {
         return JSON.stringify(await verified((args.arguments as Record<string, unknown> | undefined) ?? {}));
       } catch (error) {
         return JSON.stringify({ ok: false, verified: false, reason: error instanceof Error ? error.message : String(error) });
       }
     }
-    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {}, undefined, typeof args.opId === "string" && args.opId.length > 0 ? args.opId : undefined);
+    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {}, undefined, typeof args.opId === "string" && args.opId.length > 0 ? args.opId : undefined, target.machine.slot);
     if ((tool === "screenshot" || tool === "screen_record") && result.ok && typeof result.content === "string") {
       const artifact = await storeInlineMediaArtifact(env, identity, result.content);
       if (artifact) {

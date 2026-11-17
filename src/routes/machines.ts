@@ -2,13 +2,9 @@ import type { Context, Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import { admitMachine, approveMachine, forgetMachine, listMachines, logOutAllMachines, logOutMachine, normalizeMachineName, renameMachine } from "../machine-pairing";
 import { invokeMachineTool, machineHostStub, readMachineStatus } from "../rpc/machine-host-client";
+import { DEFAULT_MACHINE_NAME, machineSlot } from "../machine-target";
 
-export const DEFAULT_MACHINE_NAME = "default";
 export const MACHINE_STATE_HEADER = "X-Machine-State";
-
-export function machineSlot(name: string): string | undefined {
-  return name === DEFAULT_MACHINE_NAME ? undefined : name;
-}
 
 function ownerEmail(c: Context<AppEnv>): string {
   return c.get("identity").email.toLowerCase();
