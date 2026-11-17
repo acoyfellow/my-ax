@@ -3,7 +3,8 @@ export const MACHINE_CREDENTIAL_PREFIX = "mxm_";
 const MACHINE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const PAIR_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-export type MachineRecord = { name: string; createdAt: number; revokedAt: number | null };
+export type MachineRecord = { name: string; title: string; createdAt: number; revokedAt: number | null };
+export const MACHINE_TITLE_MAX = 80;
 export type MachineIdentity = { ownerEmail: string; name: string };
 export type PairOutcome =
   | { ok: true; name: string; credential: string }
@@ -70,13 +71,27 @@ export async function machineForCredential(db: D1Database, credential: string): 
 }
 
 export async function listMachines(db: D1Database, ownerEmail: string): Promise<MachineRecord[]> {
-  const { results } = await db.prepare("SELECT name, created_at, revoked_at FROM machines WHERE owner_email = ? AND revoked_at IS NULL ORDER BY name")
-    .bind(ownerEmail.toLowerCase()).all<{ name: string; created_at: number; revoked_at: number | null }>();
-  return results.map((row) => ({ name: row.name, createdAt: row.created_at, revokedAt: row.revoked_at }));
+  const { results } = await db.prepare("SELECT name, title, created_at, revoked_at FROM machines WHERE owner_email = ? AND revoked_at IS NULL ORDER BY created_at, name")
+    .bind(ownerEmail.toLowerCase()).all<{ name: string; title: string | null; created_at: number; revoked_at: number | null }>();
+  return results.map((row) => ({ name: row.name, title: row.title?.trim() || row.name, createdAt: row.created_at, revokedAt: row.revoked_at }));
 }
 
 export async function revokeMachine(db: D1Database, ownerEmail: string, name: string, now = Date.now()): Promise<boolean> {
   const result = await db.prepare("UPDATE machines SET revoked_at = ? WHERE owner_email = ? AND name = ? AND revoked_at IS NULL")
     .bind(now, ownerEmail.toLowerCase(), name).run();
   return (result.meta.changes ?? 0) > 0;
+}
+
+export function cleanMachineTitle(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const title = raw.replace(/\s+/g, " ").trim().slice(0, MACHINE_TITLE_MAX);
+  return title || null;
+}
+
+export async function renameMachine(db: D1Database, ownerEmail: string, name: string, rawTitle: unknown): Promise<string | null> {
+  const title = cleanMachineTitle(rawTitle);
+  if (!title) return null;
+  const result = await db.prepare("UPDATE machines SET title = ? WHERE owner_email = ? AND name = ? AND revoked_at IS NULL")
+    .bind(title, ownerEmail.toLowerCase(), name).run();
+  return (result.meta.changes ?? 0) > 0 ? title : null;
 }

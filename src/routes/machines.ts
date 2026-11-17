@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
-import { createPairCode, listMachines, machineForCredential, normalizeMachineName, redeemPairCode, revokeMachine } from "../machine-pairing";
+import { createPairCode, listMachines, machineForCredential, normalizeMachineName, redeemPairCode, renameMachine, revokeMachine } from "../machine-pairing";
 import { invokeMachineTool, machineHostStub, readMachineStatus } from "../rpc/machine-host-client";
 
 export const MACHINE_PUBLIC_PATHS = ["/machines/pair", "/machines/connect"] as const;
@@ -44,6 +44,8 @@ export function registerMachineOwnerRoutes(app: Hono<AppEnv>) {
       ok: true,
       machines: machines.map((machine, index) => ({
         name: machine.name,
+        title: machine.title,
+        hostName: statuses[index].machineName ?? null,
         createdAt: machine.createdAt,
         connected: statuses[index].connected,
         tools: (statuses[index].tools ?? []).map((tool) => tool.name),
@@ -60,6 +62,14 @@ export function registerMachineOwnerRoutes(app: Hono<AppEnv>) {
     const body = await c.req.json<{ tool?: string; arguments?: Record<string, unknown> }>().catch(() => null);
     if (!body?.tool) return c.json({ ok: false, error: { code: "BAD_REQUEST", message: "tool is required" } }, 400);
     return c.json(await invokeMachineTool(c.env.MACHINE_HOST, email, body.tool, body.arguments ?? {}, undefined, undefined, name));
+  });
+
+  app.patch("/api/machines/:name", async (c) => {
+    const name = normalizeMachineName(c.req.param("name"));
+    const body = await c.req.json<{ title?: unknown }>().catch(() => null);
+    const title = name ? await renameMachine(c.env.DB, c.get("identity").email, name, body?.title) : null;
+    if (!title) return c.json({ ok: false, error: { code: "BAD_RENAME", message: "Give a name of 1-80 characters for a paired machine." } }, 400);
+    return c.json({ ok: true, name, title });
   });
 
   app.delete("/api/machines/:name", async (c) => {

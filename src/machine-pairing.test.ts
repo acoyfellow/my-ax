@@ -8,12 +8,13 @@ import {
   machineForCredential,
   machineHostKey,
   normalizeMachineName,
+  renameMachine,
   PAIR_CODE_TTL_MS,
   redeemPairCode,
   revokeMachine,
 } from "./machine-pairing";
 
-const schema = readFileSync(new URL("../migrations/0045_machines.sql", import.meta.url), "utf8");
+const schema = ["0045_machines.sql", "0046_machine_titles.sql"].map((file) => readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8")).join("\n");
 const owner = "Owner@Example.com";
 const freshDb = () => sqliteD1(schema) as unknown as D1Database;
 
@@ -87,4 +88,27 @@ test("bad names and foreign credentials are refused", async () => {
 test("each machine gets its own relay key under the owner", () => {
   assert.notEqual(machineHostKey(owner, "mac-a"), machineHostKey(owner, "mac-b"));
   assert.equal(machineHostKey(owner, "mac-a"), "owner@example.com#mac-a");
+});
+
+test("a paired machine can be renamed, the title is trimmed and capped, and its name stays the same", async () => {
+  const db = freshDb();
+  const { code } = await createPairCode(db, owner, 0);
+  await redeemPairCode(db, code, "mac-a", 1);
+  assert.equal((await listMachines(db, owner))[0].title, "mac-a");
+  assert.equal(await renameMachine(db, owner, "mac-a", "  Jordan's   Air  "), "Jordan's Air");
+  const [machine] = await listMachines(db, owner);
+  assert.deepEqual([machine.name, machine.title], ["mac-a", "Jordan's Air"]);
+  assert.equal((await renameMachine(db, owner, "mac-a", "x".repeat(200)))?.length, 80);
+});
+
+test("rename refuses a blank title, an unknown or revoked machine, and another owner's machine", async () => {
+  const db = freshDb();
+  const { code } = await createPairCode(db, owner, 0);
+  await redeemPairCode(db, code, "mac-a", 1);
+  assert.equal(await renameMachine(db, owner, "mac-a", "   "), null);
+  assert.equal(await renameMachine(db, owner, "mac-a", 42), null);
+  assert.equal(await renameMachine(db, owner, "nope", "x"), null);
+  assert.equal(await renameMachine(db, "other@example.com", "mac-a", "x"), null);
+  await revokeMachine(db, owner, "mac-a", 2);
+  assert.equal(await renameMachine(db, owner, "mac-a", "x"), null);
 });
