@@ -9,6 +9,7 @@ import type { Attachment } from "../types";
 import { PiHarness } from "agents-pi/harness/pi";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { forkEntriesUpTo, type ForkEntry } from "./fork";
+import { transferEntries, type TransferEntry } from "./chat-transfer";
 import { indexRowsFor, type ConversationMemory } from "./conversation-index";
 import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
 import { sharedToolsExtension } from "./legacy-tools";
@@ -375,6 +376,25 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async forkEntriesAt(entryId: number): Promise<ForkEntry[]> {
     const entries: EntryRecord[] = await this.harness.messages();
     return forkEntriesUpTo(entries, entryId);
+  }
+
+  async exportEntries(): Promise<TransferEntry[]> {
+    return transferEntries(await this.harness.messages(), this.entryTimes());
+  }
+
+  async importTransfer(entries: readonly TransferEntry[]): Promise<number> {
+    if ((await this.harness.messages()).length > 0) throw new Error("import target already has messages");
+    const conversation = await this.harness.conversation("1");
+    const times: number[] = [];
+    await conversation.commit(async (tx) => {
+      for (const { at, ...entry } of entries) {
+        const appended = await tx.appendEntry(conversation.id, entry as never) as { id: number };
+        if (typeof at === "number") times[appended.id] = at;
+      }
+    }, BACKGROUND_CONTEXT);
+    times.forEach((at, id) => this.ctx.storage.kv.put(`entry-time:${id}`, at));
+    await this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) }));
+    return entries.length;
   }
 
   async seedFromFork(entries: readonly ForkEntry[]): Promise<number> {
