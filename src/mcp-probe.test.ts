@@ -61,5 +61,5 @@ test("freeConnectorId keeps a free id and suffixes a taken one", async () => {
 test("sameMcpUrl ignores case and trailing slashes only", async () => {
   const { sameMcpUrl } = await import("./mcp-probe");
   assert.equal(sameMcpUrl("https://mcp.cloudflare.com/mcp/", "https://MCP.cloudflare.com/mcp"), true);
-  assert.equal(sameMcpUrl("https://terrarium.ax.cloudflare.dev/mcp", "https://mcp.cloudflare.com/mcp"), false);
+  assert.equal(sameMcpUrl("https://tools.example.com/mcp", "https://mcp.cloudflare.com/mcp"), false);
 });
