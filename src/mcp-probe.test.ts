@@ -50,3 +50,16 @@ test("probeMcp discovers metadata and confirms the MCP through one Effect progra
     globalThis.fetch = originalFetch;
   }
 });
+
+test("freeConnectorId keeps a free id and suffixes a taken one", async () => {
+  const { freeConnectorId } = await import("./mcp-probe");
+  assert.equal(freeConnectorId("cloudflare", () => false), "cloudflare");
+  const taken = new Set(["cloudflare", "cloudflare-2"]);
+  assert.equal(freeConnectorId("cloudflare", (id) => taken.has(id)), "cloudflare-3");
+});
+
+test("sameMcpUrl ignores case and trailing slashes only", async () => {
+  const { sameMcpUrl } = await import("./mcp-probe");
+  assert.equal(sameMcpUrl("https://mcp.cloudflare.com/mcp/", "https://MCP.cloudflare.com/mcp"), true);
+  assert.equal(sameMcpUrl("https://tools.example.com/mcp", "https://mcp.cloudflare.com/mcp"), false);
+});

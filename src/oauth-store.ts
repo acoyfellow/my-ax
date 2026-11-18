@@ -37,6 +37,7 @@ import { normalizeMcpDisplayName } from "./oauth-store-names";
 import { encryptToken, decryptToken, looksEncrypted } from "./grant-crypto";
 import { requirePublicHttpsUrl } from "./public-url";
 import { isConnectorHealth, type ConnectorHealth } from "./connector-health";
+import { freeConnectorId, sameMcpUrl } from "./mcp-probe";
 
 // Token-endpoint calls can hit transient network blips; without a retry, a
 // single blip forces an unnecessary full re-authorization. Retry only on a
@@ -682,21 +683,23 @@ export class OAuthClientDO extends DurableObject<Env> {
         error: `"${connector.id}" is a reserved built-in id; pick a different slug`,
       };
     }
-    // Refuse to overwrite an existing user MCP (caller should DELETE first).
     const existing = await this.ctx.storage.get<Connector>(`mcps:${connector.id}`);
-    if (existing) {
+    if (existing && sameMcpUrl(existing.upstream, connector.upstream)) {
       return {
         ok: false,
         error: `MCP "${connector.id}" already exists; remove it first if you want to replace`,
       };
     }
-    // Force the userAdded flag; never trust the wire payload to set it.
+    const builtinIds = new Set(Object.keys(getBuiltinConnectors(this.env)));
+    const storedIds = new Set((await this.ctx.storage.list<Connector>({ prefix: "mcps:" })).keys());
+    const id = existing ? freeConnectorId(connector.id, (candidate) => builtinIds.has(candidate) || storedIds.has(`mcps:${candidate}`)) : connector.id;
     const persisted: Connector = {
       ...connector,
+      id,
       userAdded: true,
       addedAt: connector.addedAt ?? new Date().toISOString(),
     };
-    await this.ctx.storage.put(`mcps:${connector.id}`, persisted);
+    await this.ctx.storage.put(`mcps:${persisted.id}`, persisted);
     return { ok: true, connector: persisted };
   }
 

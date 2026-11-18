@@ -113,6 +113,20 @@ export function slugIdFromUrl(rawUrl: string): string {
   return parts[parts.length - 2];
 }
 
+export function freeConnectorId(base: string, taken: (id: string) => boolean): string {
+  if (!taken(base)) return base;
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const candidate = `${base}-${suffix}`;
+    if (!taken(candidate)) return candidate;
+  }
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+export function sameMcpUrl(left: string | undefined, right: string | undefined): boolean {
+  const normal = (url: string | undefined) => (url ?? "").trim().replace(/\/+$/, "").toLowerCase();
+  return normal(left) === normal(right);
+}
+
 /** Attempt to fetch the OAuth 2.0 Authorization Server Metadata doc.
  *  RFC 8414 specifies /.well-known/oauth-authorization-server. We also
  *  try the OIDC well-known path as a fallback because many MCP servers
