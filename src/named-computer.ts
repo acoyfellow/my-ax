@@ -52,9 +52,16 @@ async function openNamedComputer(env: Env, identity: AccessIdentity, rawId: stri
   return { sandbox, home: WORKSPACE_HOME, computerId };
 }
 
+export function runningProcessCheck(processName: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(processName)) throw new Error(`unsafe process name: ${processName}`);
+  return `cat /proc/[0-9]*/comm 2>/dev/null | grep -q '^${processName}'`;
+}
+
 async function processRunning(sandbox: Sandbox, needle: string) {
   const listed = await sandbox.listProcesses().catch(() => []);
-  return listed.some((proc) => (proc.status === "running" || proc.status === "starting") && (proc.command ?? "").includes(needle));
+  if (listed.some((proc) => (proc.status === "running" || proc.status === "starting") && (proc.command ?? "").includes(needle))) return true;
+  const found = await sandbox.exec(runningProcessCheck(needle.trim()), { cwd: "/", timeout: 10_000, origin: "internal" }).catch(() => null);
+  return found?.exitCode === 0;
 }
 
 export const COMPUTER_SCREEN_PORT = 6080;
