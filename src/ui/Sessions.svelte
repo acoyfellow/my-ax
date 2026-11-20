@@ -2,6 +2,7 @@
   import { confirmDialog, promptDialog } from "./alert-store.svelte";
   import SessionSignalDot from "./SessionSignal.svelte";
   import { sessionSignalOf, type SessionSignal } from "./session-signal";
+  import { recurringJobCount, recurringJobText } from "./session-job-indicator";
   import { emptyListView } from "./session-list-empty";
   // 1:1 port of src/views/SessionsSidebar.tsx + the conversations-sidebar
   // block of chat.js (~250 lines: refreshSessions, loadMoreSessions,
@@ -36,6 +37,7 @@
     pin_rank?: string | null;
     pin_size?: string | null;
     engine?: string | null;
+    active_jobs?: number | null;
   };
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -141,6 +143,14 @@
     const status = (row.status || "active").toLowerCase();
     if (status === "running" || status === "thinking") return "running";
     return sessionSignalOf(row.status);
+  }
+
+  function hasRecurringJob(row: SessionRow): boolean {
+    return recurringJobCount(row.active_jobs) > 0;
+  }
+
+  function recurringJobLabel(row: SessionRow): string {
+    return recurringJobText(recurringJobCount(row.active_jobs));
   }
 
   function shortSessionTime(iso: string | null | undefined): string {
@@ -741,6 +751,11 @@
             }}
           >
             <span class="session-row__title">{title}</span>
+            {#if hasRecurringJob(row)}
+              <span class="session-row__job" data-testid="session-job-indicator" role="img" aria-label={recurringJobLabel(row)} title={recurringJobLabel(row)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/></svg>
+              </span>
+            {/if}
             <span class="session-row__meta">{shortSessionTime(row.updated_at)}</span>
           </div>
           {@render rowMenu(row, title, pinnedGroup, indexInGroup, groupTotal)}
@@ -874,6 +889,7 @@
   :global(.session-row[data-active="1"]) { background: var(--bg); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.04); }
   :global(.session-row__main) { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 100%; outline: none; }
   :global(.session-row__title) { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :global(.session-row__job) { display: inline-flex; flex: none; align-items: center; color: var(--accent, var(--fg-mut)); }
   :global(.session-row__meta) { font-size: 11.5px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
   :global(.session-row__main:focus-visible) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 6px; }
 
