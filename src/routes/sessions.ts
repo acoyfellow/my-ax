@@ -99,11 +99,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       const pinned = before
         ? []
         : ((await c.env.DB.prepare(
-            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
+            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
           ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
-        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
+        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
+        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
       const stmt = before
         ? c.env.DB.prepare(query).bind(email, before, limit)
         : c.env.DB.prepare(query).bind(email, limit);
