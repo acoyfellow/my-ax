@@ -14,7 +14,9 @@ import { indexRowsFor, type ConversationMemory } from "./conversation-index";
 import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
 import { sharedToolsExtension } from "./legacy-tools";
 import { ownerInstructionsExtension } from "./owner-instructions-tools";
-import { connectorToolsExtension, type ConnectorRunner } from "./connector-tools";
+import type { ConnectorRunner } from "./connector-tools";
+import { mcpToolsExtension } from "./mcp-tools";
+import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import { withRadar } from "./radar-connector";
 import { createToolContext } from "../tool-context";
 import { PUBLIC_SYSTEM } from "../system-prompt";
@@ -85,6 +87,8 @@ function logHarnessReport(error: unknown, info: unknown): void {
   console.error("pi_harness_report", { info, err: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });
 }
 
+const MCP_CATALOG_TIMEOUT_MS = 8_000;
+
 export class PiChatAgent extends Agent<Env, PiChatState> {
   static options = { sendIdentityOnConnect: false };
   initialState: PiChatState = {};
@@ -102,7 +106,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
-      this.registry.install(connectorToolsExtension(() => this.connectorRunner()));
+      this.registry.install(mcpToolsExtension([], () => this.connectorRunner()));
+      this.registry.install(createToolSearchExtension());
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
       return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport }, context);
     },
@@ -231,6 +236,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     })));
     const content = images.length ? [{ type: "text" as const, text: text || "Describe the attached image." }, ...images] : text;
     await this.ensureEventStream();
+    await this.refreshMcpTools();
     const receipt = await this.harness.submit(content, { whenBusy: "followUp", ...(operationId ? { operationId } : {}) });
     this.progressSample = undefined;
     await this.publishCurrentRunStatus();
@@ -301,6 +307,18 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const { getConnectorAgent } = await import("../agent-stub");
     const { command } = await import("../rpc/contract");
     return command("Connector.open", () => getConnectorAgent(this.env, this.identity()));
+  }
+
+  private async refreshMcpTools(): Promise<void> {
+    try {
+      const catalog = await Promise.race([
+        this.connectorRunner().list(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connector catalog timed out")), MCP_CATALOG_TIMEOUT_MS)),
+      ]);
+      this.registry.install(mcpToolsExtension(catalog, () => this.connectorRunner()));
+    } catch (error) {
+      console.error("pi_mcp_tools_refresh_failed", { err: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private connectorRunner(): ConnectorRunner {
