@@ -74,3 +74,14 @@ test("a slimmed image keeps its upload key so the transcript can show a thumbnai
   assert.equal(image.data, undefined);
   assert.equal(image.uploadKey, "u/abc.jpg");
 });
+
+test("a long ask_user result stays a decision card after trimming", async () => {
+  const { decisionReceipt } = await import("../ui/decision-widget");
+  const options = ["Ship it now to both sites", "Wait for Jordan to test it first", "Roll back the change", "Ask again tomorrow"];
+  const full = JSON.stringify({ ok: true, awaiting: true, decisionId: "run-decision-12345678-1234-1234-1234-123456789abc", href: "https://agent.example.com/decisions/run-decision-12345678-1234-1234-1234-123456789abc", options, note: "Stop and wait. The owner's choice will arrive as a new user message." });
+  const entry = { id: 5, kind: "pi.tool-result", model: [{ role: "toolResult", toolCallId: "c1", toolName: "ask_user", content: [{ type: "text", text: full }] }] };
+  const slim = slimEntry(entry) as { model: Array<{ content: Array<{ text: string }> }> };
+  const trimmed = slim.model[0].content[0].text;
+  assert.ok(full.length > 300);
+  assert.deepEqual(decisionReceipt(trimmed, "ask_user"), decisionReceipt(full, "ask_user"));
+});

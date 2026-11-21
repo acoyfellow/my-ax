@@ -25,12 +25,28 @@ function widgetFields(value: unknown): Record<string, unknown> | null {
   return kept;
 }
 
+const DECISION_OPTION_LIMIT = 4;
+const DECISION_OPTION_CHARS = 200;
+
+function decisionFields(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.ok !== true || typeof record.decisionId !== "string" || !record.decisionId.startsWith("run-decision-")) return null;
+  const options = Array.isArray(record.options)
+    ? record.options.filter((option): option is string => typeof option === "string").slice(0, DECISION_OPTION_LIMIT).map((option) => option.slice(0, DECISION_OPTION_CHARS))
+    : [];
+  return { ok: true, awaiting: record.awaiting === true, decisionId: record.decisionId, options };
+}
+
 function clipToolOutput(text: string): { text: string; clipped: boolean } {
   if (text.length <= SLIM_TEXT_LIMIT) return { text, clipped: false };
   const trimmed = text.trimStart();
   if (trimmed.startsWith("{")) {
     try {
-      const widget = widgetFields(JSON.parse(text));
+      const parsed = JSON.parse(text);
+      const decision = decisionFields(parsed);
+      if (decision) return { text: JSON.stringify(decision), clipped: true };
+      const widget = widgetFields(parsed);
       if (widget) return { text: JSON.stringify(widget), clipped: true };
     } catch {}
   }
