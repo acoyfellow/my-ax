@@ -151,18 +151,6 @@ export class PiTranscript {
   applyEvents(events: ReadonlyArray<Record<string, unknown>>): void {
     for (const event of events) {
       switch (event.type) {
-        case "snapshot": {
-          const generation = event.generation as { message?: ModelMessage } | undefined;
-          this.applySnapshot({
-            busy: event.run !== undefined,
-            model: this.model,
-            entries: (event.entries as PiEntry[]) ?? [],
-            partial: generation?.message ?? null,
-            tools: (event.tools as PiSnapshot["tools"]) ?? [],
-            queued: Array.isArray(event.inbox) ? event.inbox.length : 0,
-          });
-          break;
-        }
         case "run_start": this.busy = true; break;
         case "run_end": this.busy = false; this.partial = null; break;
         case "message_start": {

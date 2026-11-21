@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { map, obj, opt, str, unknown } from "@earendil-works/pi-schema";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import { awaitWithContext } from "@earendil-works/chord/context";
 import { clipToolOutput } from "./workspace-tools";
@@ -31,17 +31,17 @@ export function machineToolsExtension(runner: () => MachineToolRunner) {
   const call = defineTool({
     name: "machinectl_call",
     description: "Discover or directly invoke a tool on the user's connected machine. Use { tool: \"tools/list\" } first to see what is connected. Core tools are shell, screenshot, mouse, keyboard and input_sequence. When published, cmux_* tools list cmux workspaces, tail Pi terminals, and prompt, steer or abort a live Pi session.",
-    parameters: Type.Object({
-      tool: Type.String({ description: "Machine tool name, or tools/list for discovery." }),
-      arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "Arguments for the machine tool." })),
+    parameters: obj({
+      tool: str({ description: "Machine tool name, or tools/list for discovery." }),
+      arguments: opt(map(unknown(), { description: "Arguments for the machine tool." })),
     }),
     execute: async (args, _api, context) => textResult(await awaitWithContext(runner().call(args), context)),
   });
   const code = defineTool({
     name: "machinectl_code",
     description: "Run a JavaScript async arrow function against the user's connected machine via isolated Code Mode, calling codemode.<machine_tool>(args). Use it to batch several machine calls, such as finding a cmux surface and then prompting its Pi session.",
-    parameters: Type.Object({
-      code: Type.String({ description: "JavaScript async arrow function using codemode.<machine_tool>(args)." }),
+    parameters: obj({
+      code: str({ description: "JavaScript async arrow function using codemode.<machine_tool>(args)." }),
     }),
     execute: async (args, _api, context) => textResult(await awaitWithContext(runner().code(args), context)),
   });

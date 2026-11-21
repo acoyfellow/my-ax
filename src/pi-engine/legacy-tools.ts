@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { unsafe } from "@earendil-works/pi-schema";
 import { defineExtension, section } from "@earendil-works/pi-durable";
 import { awaitWithContext } from "@earendil-works/chord/context";
 import type { ToolSet } from "ai";
@@ -20,7 +20,7 @@ function piToolFromDef(definition: ToolDef, context: () => ToolContext): AnyTool
   return {
     name: widgetToolName(definition.name),
     description: widgetWording(definition.description),
-    parameters: Type.Unsafe<Record<string, unknown>>(describeParametersAsWidgets(definition.parameters) as never),
+    parameters: unsafe<Record<string, unknown>>(describeParametersAsWidgets(definition.parameters) as never),
     execute: async (args: Record<string, unknown>, _api: unknown, ctx: Parameters<typeof awaitWithContext>[1]) => {
       const toolContext = context();
       const output = await awaitWithContext(definition.execute(coerceToolArguments(args), toolContext), ctx);
@@ -40,7 +40,7 @@ function piToolFromAiSdk(name: string, aiTool: ToolSet[string]): AnyToolRegistra
   return {
     name,
     description: String((aiTool as { description?: string }).description ?? name),
-    parameters: Type.Unsafe<Record<string, unknown>>(schema as never),
+    parameters: unsafe<Record<string, unknown>>(schema as never),
     execute: async (args: Record<string, unknown>, _api: unknown, ctx: Parameters<typeof awaitWithContext>[1]) => {
       const run = (aiTool as { execute?: (input: unknown, options: unknown) => Promise<unknown> }).execute;
       if (!run) throw new Error(`${name} cannot run here`);

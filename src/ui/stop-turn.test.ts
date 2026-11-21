@@ -15,10 +15,10 @@ test("Stop reaches the server over HTTP, so it works when the socket is down or 
   assert.match(chat, /\/api\/sessions\/\$\{encodeURIComponent\(sessionId\)\}\/stop`, \{ method: "POST"/);
 });
 
-test("abort releases a task the restart limit parked, then aborts it, and the stuck watchdog uses the same path", () => {
+test("stop aborts the run directly, and the stuck watchdog uses the same path", () => {
   const abort = agent.slice(agent.indexOf("async abortAll()"), agent.indexOf("private progressSample"));
-  assert.match(abort, /operation\.status === "parked"/);
-  assert.match(abort, /session\(\)\.retry\(\);\s*await this\.harness\.abort\(\);/);
+  assert.match(abort, /await this\.harness\.abort\(\);/);
+  assert.doesNotMatch(abort, /parked|retry\(\)/);
   assert.match(agent, /pi_turn_stuck_ended[^\n]*\n\s*await this\.abortAll\(\);/);
 });
 

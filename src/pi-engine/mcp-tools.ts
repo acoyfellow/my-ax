@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { unsafe } from "@earendil-works/pi-schema";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import { awaitWithContext } from "@earendil-works/chord/context";
 import type { ConnectorRunner } from "./connector-tools";
@@ -56,7 +56,7 @@ export function mcpToolsExtension(catalog: readonly CatalogTool[], runner: () =>
   const tools = catalogToolEntries(catalog).map(({ name, tool }) => defineTool({
     name,
     description: `${mcpServerName(tool)} (MCP): ${tool.description}`.slice(0, 1024),
-    parameters: Type.Unsafe<Record<string, unknown>>(mcpInputSchema(tool.inputSchema) as never),
+    parameters: unsafe<Record<string, unknown>>(mcpInputSchema(tool.inputSchema) as never),
     deferred: true,
     execute: async (args, _api, context) => textResult(await awaitWithContext(runner().call(tool.serverId, tool.toolName, (args ?? {}) as Record<string, unknown>), context)),
   }));

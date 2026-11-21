@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { num, obj, opt, str } from "@earendil-works/pi-schema";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import { awaitWithContext } from "@earendil-works/chord/context";
 
@@ -31,9 +31,9 @@ export function chatWorkspaceExtension(workspace: () => Promise<ChatWorkspace>, 
   const exec = defineTool({
     name: "exec",
     description: "Run a shell command in this chat's own Linux workspace (home /home/user). Returns stdout, stderr and the exit code.",
-    parameters: Type.Object({
-      command: Type.String(),
-      timeoutMs: Type.Optional(Type.Number()),
+    parameters: obj({
+      command: str(),
+      timeoutMs: opt(num()),
     }),
     execute: async (args, _api, context) => {
       const result = await awaitWithContext((await workspace()).exec(args.command, boundedExecTimeout(args.timeoutMs)), context);
@@ -43,14 +43,14 @@ export function chatWorkspaceExtension(workspace: () => Promise<ChatWorkspace>, 
   const read = defineTool({
     name: "read_file",
     description: "Read a text file from this chat's workspace.",
-    parameters: Type.Object({ path: Type.String() }),
+    parameters: obj({ path: str() }),
     replay: "safe",
     execute: async (args) => textResult(await (await workspace()).readFile(args.path)),
   });
   const write = defineTool({
     name: "write_file",
     description: "Write a text file in this chat's workspace, creating parent folders.",
-    parameters: Type.Object({ path: Type.String(), content: Type.String() }),
+    parameters: obj({ path: str(), content: str() }),
     replay: "safe",
     execute: async (args) => {
       await (await workspace()).writeFile(args.path, args.content);
@@ -60,7 +60,7 @@ export function chatWorkspaceExtension(workspace: () => Promise<ChatWorkspace>, 
   const list = defineTool({
     name: "list_files",
     description: "List files under a folder in this chat's workspace.",
-    parameters: Type.Object({ path: Type.String() }),
+    parameters: obj({ path: str() }),
     replay: "safe",
     execute: async (args) => textResult((await (await workspace()).listFiles(args.path)).join("\n")),
   });

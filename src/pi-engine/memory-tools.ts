@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { num, obj, oneOf, opt, str } from "@earendil-works/pi-schema";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import { awaitWithContext } from "@earendil-works/chord/context";
 import { clipToolOutput } from "./workspace-tools";
@@ -12,12 +12,12 @@ export function memoryToolsExtension(memory: () => ConversationMemory) {
   const search = defineTool({
     name: "search_conversations",
     description: "Full-text search across all of the owner's past conversations, on both engines. Returns sessionId, timestamp, role and a snippet.",
-    parameters: Type.Object({
-      query: Type.String({ description: "Full-text query" }),
-      limit: Type.Optional(Type.Number({ description: "Maximum results, default 20, max 100" })),
-      sort: Type.Optional(Type.Union([Type.Literal("relevance"), Type.Literal("recent")])),
-      since: Type.Optional(Type.String({ description: "ISO date/time lower bound" })),
-      until: Type.Optional(Type.String({ description: "ISO date/time upper bound" })),
+    parameters: obj({
+      query: str({ description: "Full-text query" }),
+      limit: opt(num({ description: "Maximum results, default 20, max 100" })),
+      sort: opt(oneOf(["relevance", "recent"])),
+      since: opt(str({ description: "ISO date/time lower bound" })),
+      until: opt(str({ description: "ISO date/time upper bound" })),
     }),
     replay: "safe",
     execute: async (args, _api, context) => textResult(JSON.stringify(await awaitWithContext(memory().search(args.query, args), context))),
@@ -25,9 +25,9 @@ export function memoryToolsExtension(memory: () => ConversationMemory) {
   const read = defineTool({
     name: "read_conversation",
     description: "Read one past conversation's indexed transcript in order (user, assistant and tool entries). Use a sessionId from search_conversations.",
-    parameters: Type.Object({
-      sessionId: Type.String(),
-      limit: Type.Optional(Type.Number({ description: "Most recent entries to return, default 100, max 400" })),
+    parameters: obj({
+      sessionId: str(),
+      limit: opt(num({ description: "Most recent entries to return, default 100, max 400" })),
     }),
     replay: "safe",
     execute: async (args, _api, context) => textResult(JSON.stringify(await awaitWithContext(memory().read(args.sessionId, Math.min(Math.max(args.limit ?? 100, 1), 400)), context))),
@@ -43,7 +43,7 @@ export function chatMemoryExtension(store: () => ChatMemoryStore) {
   const write = defineTool({
     name: "memory_write",
     description: "Replace this conversation's long-lived memory: facts, decisions and preferences later turns should know. Keep it concise; replace stale lines instead of appending. Never store secrets.",
-    parameters: Type.Object({ content: Type.String() }),
+    parameters: obj({ content: str() }),
     replay: "safe",
     execute: async (args) => {
       const text = args.content.slice(0, PI_CHAT_MEMORY_MAX_CHARS);

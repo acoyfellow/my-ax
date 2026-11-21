@@ -2,7 +2,8 @@ import { createModels } from "@earendil-works/pi-ai/models";
 import { applySessionEvent } from "../fsm/session-status";
 import { createRegistry, Harness, type EntryRecord } from "@earendil-works/pi-durable";
 import { Agent, type Connection, type WSMessage } from "agents-pi";
-import type { AgentEvent, AgentEventStream } from "@earendil-works/pi-durable";
+import type { ConversationWatch, Report } from "@earendil-works/pi-durable";
+import { agentModel, inboxLength, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
 import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
@@ -83,7 +84,8 @@ function hasGatewayModels(env: Env): boolean {
   return Boolean((env as unknown as { LLM_GATEWAY_URL?: string }).LLM_GATEWAY_URL?.trim());
 }
 
-function logHarnessReport(error: unknown, info: unknown): void {
+function logHarnessReport(report: Report): void {
+  const { error, ...info } = report;
   console.error("pi_harness_report", { info, err: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });
 }
 
@@ -125,7 +127,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     if ([...this.getConnections()].length) await this.ensureEventStream();
   }
 
-  private eventStream: AgentEventStream | null = null;
+  private eventStream: ConversationWatch | null = null;
+
+  private watchedView: WatchedView | null = null;
 
   private publishedRunning: boolean | null = null;
 
@@ -155,19 +159,25 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private async ensureEventStream(): Promise<void> {
     if (this.eventStream) return;
-    const stream = await this.harness.session().events();
+    const stream = await this.harness.session().watch();
     this.eventStream = stream;
-    stream.start(async (events: readonly AgentEvent[]) => {
+    this.watchedView = stream.value as unknown as WatchedView;
+    stream.start(async (call) => {
+      if (call.kind !== "value") return;
+      const next = call.value as unknown as WatchedView;
+      const events = viewEvents(this.watchedView, next, call.ops);
+      this.watchedView = next;
+      if (!events.length) return;
       this.cachedSlimView = null;
       this.ctx.waitUntil(this.publishCurrentRunStatus());
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events: events.map(slimEvent), entryTimes }));
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
-      if (compactionFinished(events as readonly { type: string; error?: string }[])) this.ctx.waitUntil(this.keepAliveWhile(() => this.saveWorkspaceAt("compaction")));
+      if (compactionFinished(events)) this.ctx.waitUntil(this.keepAliveWhile(() => this.saveWorkspaceAt("compaction")));
     });
     void stream.closed.finally(() => {
       this.cachedSlimView = null;
-      if (this.eventStream === stream) this.eventStream = null;
+      if (this.eventStream === stream) { this.eventStream = null; this.watchedView = null; }
     });
   }
 
@@ -449,7 +459,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     return JSON.stringify(entries);
   }
 
-  private recordEntryTimes(events: readonly AgentEvent[]): Record<number, number> {
+  private recordEntryTimes(events: readonly ViewEvent[]): Record<number, number> {
     const now = Date.now();
     const recorded: Record<number, number> = {};
     for (const event of events as ReadonlyArray<{ entry?: { id?: unknown } }>) {
@@ -470,10 +480,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   private async currentEntries(): Promise<readonly unknown[]> {
-    const stream = await this.harness.session().events();
-    const entries = [...stream.snapshot.entries];
-    await stream.stop();
-    return entries;
+    return this.harness.messages();
   }
 
   async broadcastFrame(frame: string): Promise<void> {
@@ -519,21 +526,28 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async live(): Promise<PiChatLiveView> {
-    const stream = await this.harness.session().events();
-    const snapshot = stream.snapshot;
-    await stream.stop();
-    this.ctx.waitUntil(this.publishCurrentRunStatus(snapshot.entries));
-    const model = (snapshot.agent as { model?: { modelId?: string; id?: string } }).model;
+    const entries = await this.harness.messages();
+    const view = await this.currentView();
+    this.ctx.waitUntil(this.publishCurrentRunStatus(entries));
+    const live = liveDoc(view);
     return {
-      busy: snapshot.run !== undefined,
-      model: model?.modelId ?? model?.id ?? "",
-      entries: [...snapshot.entries],
-      partial: snapshot.generation?.message ?? null,
-      tools: [...snapshot.tools],
-      queued: snapshot.inbox.length,
-      retry: snapshot.generation?.retry ?? null,
+      busy: live.run !== undefined,
+      model: agentModel(view),
+      entries: [...entries],
+      partial: live.generation?.message ?? null,
+      tools: [...(live.tools ?? [])],
+      queued: inboxLength(view),
+      retry: live.generation?.retry ?? null,
       entryTimes: this.entryTimes(),
     };
+  }
+
+  private async currentView(): Promise<WatchedView> {
+    if (this.eventStream && this.watchedView) return this.watchedView;
+    const watch = await this.harness.session().watch({ min: 1 });
+    const view = watch.value as unknown as WatchedView;
+    await watch.stop();
+    return view;
   }
 
   async busy(): Promise<boolean> {
@@ -542,11 +556,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   async abortAll(): Promise<void> {
     await this.harness.abort();
-    if ((await this.harness.pending()).some((operation) => operation.status === "parked")) {
-      console.error("pi_abort_parked_retry", { chatId: this.state.chatId });
-      await this.harness.session().retry();
-      await this.harness.abort();
-    }
     this.progressSample = undefined;
     this.broadcast(JSON.stringify({ type: "pi_aborted" }));
   }
