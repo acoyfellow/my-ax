@@ -8,125 +8,59 @@ export type BrainQuestion = (typeof BRAIN_QUESTIONS)[number];
 
 export type BrainArgs = { question: BrainQuestion; hours?: number; chat?: string; tool?: string; limit?: number };
 
-export type BrainConfig = { accountId: string; token: string; service: string; fetch?: typeof fetch };
-
-type Filter = { key: string; operation: string; type: "string" | "number"; value: string | number };
-type Calculation = { operator: string; key?: string; keyType?: "number"; alias: string };
-
-const MAX_HOURS = 24 * 7;
+const MAX_HOURS = 24 * 90;
 const MAX_LIMIT = 50;
 
-function span(filters: Filter[], service: string): Filter[] {
-  return [{ key: "$metadata.service", operation: "eq", type: "string", value: service }, { key: "ev", operation: "eq", type: "string", value: "pi.span" }, ...filters];
+type Query = { sql: string; params: Array<string | number> };
+
+export function brainWindow(args: BrainArgs): { hours: number; limit: number } {
+  return { hours: Math.min(Math.max(args.hours ?? 24, 1), MAX_HOURS), limit: Math.min(Math.max(Math.floor(args.limit ?? 15), 1), MAX_LIMIT) };
 }
 
-function scoped(args: BrainArgs): Filter[] {
-  const filters: Filter[] = [];
-  if (args.chat) filters.push({ key: "chat", operation: "eq", type: "string", value: args.chat });
-  if (args.tool) filters.push({ key: "attrs.tool.name", operation: "eq", type: "string", value: args.tool });
-  return filters;
-}
-
-const duration: Calculation[] = [
-  { operator: "count", alias: "count" },
-  { operator: "median", key: "durMs", keyType: "number", alias: "median_ms" },
-  { operator: "p99", key: "durMs", keyType: "number", alias: "p99_ms" },
-  { operator: "sum", key: "durMs", keyType: "number", alias: "total_ms" },
-];
-
-export function brainQuery(args: BrainArgs, service: string, now: number): Record<string, unknown> {
-  const hours = Math.min(Math.max(args.hours ?? 24, 1), MAX_HOURS);
-  const limit = Math.min(Math.max(args.limit ?? 15, 1), MAX_LIMIT);
-  const timeframe = { from: now - hours * 3_600_000, to: now };
-  const base = { queryId: `brain-${args.question}`, timeframe };
-  const extra = scoped(args);
-  const calculations = (filters: Filter[], calcs: Calculation[], groupBy: string[]) => ({
-    ...base,
-    view: "calculations",
-    parameters: { datasets: ["cloudflare-workers"], filters: span(filters, service), calculations: calcs, groupBys: groupBy.map((value) => ({ type: "string", value })), orderBy: { value: calcs[0].alias, order: "desc" }, limit },
-  });
+export function brainQuery(args: BrainArgs, ownerEmail: string, now: number): Query {
+  const { hours, limit } = brainWindow(args);
+  const where = ["owner_email = ?", "started_ms >= ?"];
+  const params: Array<string | number> = [ownerEmail.toLowerCase(), now - hours * 3_600_000];
+  if (args.chat) { where.push("chat_id = ?"); params.push(args.chat); }
+  if (args.tool) { where.push("tool_name = ?"); params.push(args.tool); }
+  const scope = (extra: string[] = []) => [...where, ...extra].join(" AND ");
+  const done = (sql: string) => ({ sql: `${sql} LIMIT ?`, params: [...params, limit] });
   switch (args.question) {
     case "slowest_steps":
-      return calculations(extra, [{ operator: "p99", key: "durMs", keyType: "number", alias: "p99_ms" }, ...duration.filter((calc) => calc.alias !== "p99_ms")], ["name", "attrs.phase", "attrs.tool.name"]);
+      return done(`SELECT name, phase, tool_name AS tool, COUNT(*) AS count, MAX(dur_ms) AS max_ms, CAST(AVG(dur_ms) AS INTEGER) AS avg_ms, SUM(dur_ms) AS total_ms FROM pi_spans WHERE ${scope(["name != 'pi.durable.submit'"])} GROUP BY name, phase, tool_name ORDER BY max_ms DESC`);
     case "tool_usage":
-      return calculations([...extra, { key: "attrs.task.name", operation: "eq", type: "string", value: "pi.tool" }], duration, ["attrs.tool.name", "status"]);
+      return done(`SELECT tool_name AS tool, COUNT(*) AS calls, SUM(status = 'error') AS failures, CAST(AVG(dur_ms) AS INTEGER) AS avg_ms, MAX(dur_ms) AS max_ms, SUM(dur_ms) AS total_ms FROM pi_spans WHERE ${scope(["task_name = 'pi.tool'", "phase = 'call'"])} GROUP BY tool_name ORDER BY calls DESC`);
     case "model_cost":
-      return calculations([...extra, { key: "name", operation: "eq", type: "string", value: "pi.ai.request" }], [
-        { operator: "sum", key: "attrs.cost.total", keyType: "number", alias: "cost_usd" },
-        { operator: "count", alias: "requests" },
-        { operator: "sum", key: "attrs.usage.input", keyType: "number", alias: "input_tokens" },
-        { operator: "sum", key: "attrs.usage.cache_read", keyType: "number", alias: "cache_read_tokens" },
-        { operator: "sum", key: "attrs.usage.output", keyType: "number", alias: "output_tokens" },
-        { operator: "median", key: "durMs", keyType: "number", alias: "median_ms" },
-      ], ["attrs.model", "chat"]);
+      return done(`SELECT model, chat_id AS chat, COUNT(*) AS requests, ROUND(SUM(cost_usd), 4) AS cost_usd, SUM(input_tokens) AS input_tokens, SUM(cache_read_tokens) AS cache_read_tokens, SUM(cache_write_tokens) AS cache_write_tokens, SUM(output_tokens) AS output_tokens, CAST(AVG(dur_ms) AS INTEGER) AS avg_ms FROM pi_spans WHERE ${scope(["name = 'pi.ai.request'"])} GROUP BY model, chat_id ORDER BY cost_usd DESC`);
     case "errors":
-      return calculations([...extra, { key: "status", operation: "eq", type: "string", value: "error" }], [{ operator: "count", alias: "count" }], ["name", "attrs.tool.name", "error"]);
+      return done(`SELECT name, phase, tool_name AS tool, error, COUNT(*) AS count, MAX(started_ms) AS last_ms FROM pi_spans WHERE ${scope(["status = 'error'"])} GROUP BY name, phase, tool_name, error ORDER BY count DESC`);
     case "chat_timeline":
-      return { ...base, view: "events", limit, parameters: { datasets: ["cloudflare-workers"], filters: span(extra, service) } };
+      return done(`SELECT started_ms, chat_id AS chat, name, phase, tool_name AS tool, model, status, dur_ms, cost_usd, error FROM pi_spans WHERE ${scope()} ORDER BY started_ms DESC`);
   }
 }
 
-type Aggregate = { groups?: Array<{ key: string; value: unknown }>; value?: number };
-type CalculationResult = { alias?: string; calculation?: string; aggregates?: Aggregate[] };
-type EventResult = { timestamp?: number; source?: Record<string, unknown> };
-
-function round(value: number | undefined): number | undefined {
-  if (value === undefined || !Number.isFinite(value)) return undefined;
-  return Math.abs(value) < 1 ? Number(value.toFixed(4)) : Math.round(value);
-}
-
-export function brainRows(result: unknown): Array<Record<string, unknown>> {
-  const body = (result ?? {}) as { calculations?: CalculationResult[]; events?: { events?: EventResult[] } };
-  if (body.events?.events) {
-    return body.events.events.map((event) => {
-      const source = event.source ?? {};
-      const attrs = (source.attrs ?? {}) as Record<string, unknown>;
-      const pick = (path: string) => attrs[path] ?? path.split(".").reduce<unknown>((value, key) => (value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined), attrs);
-      return {
-        at: event.timestamp ? new Date(event.timestamp).toISOString() : undefined,
-        name: source.name,
-        ms: source.durMs,
-        status: source.status,
-        phase: attrs.phase,
-        tool: pick("tool.name"),
-        model: attrs.model,
-        cost: pick("cost.total"),
-        error: source.error,
-      };
-    });
+function tidy(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null || value === undefined) continue;
+    if ((key === "started_ms" || key === "last_ms") && typeof value === "number") out[key === "started_ms" ? "at" : "last_at"] = new Date(value).toISOString();
+    else out[key] = value;
   }
-  const rows = new Map<string, Record<string, unknown>>();
-  for (const calculation of body.calculations ?? []) {
-    const alias = calculation.alias ?? calculation.calculation ?? "value";
-    for (const aggregate of calculation.aggregates ?? []) {
-      const groups = aggregate.groups ?? [];
-      const key = JSON.stringify(groups.map((group) => group.value));
-      const row = rows.get(key) ?? Object.fromEntries(groups.map((group) => [group.key.replace(/^attrs\./, ""), group.value]));
-      row[alias] = round(aggregate.value);
-      rows.set(key, row);
-    }
-  }
-  return [...rows.values()];
+  return out;
 }
 
-export async function askBrain(config: BrainConfig, args: BrainArgs, now = Date.now()): Promise<{ question: BrainQuestion; hours: number; rows: Array<Record<string, unknown>> }> {
-  const load = config.fetch ?? fetch;
-  const response = await load(`https://api.cloudflare.com/client/v4/accounts/${config.accountId}/workers/observability/telemetry/query`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${config.token}`, "content-type": "application/json" },
-    body: JSON.stringify(brainQuery(args, config.service, now)),
-  });
-  const body = (await response.json().catch(() => null)) as { success?: boolean; result?: unknown; errors?: Array<{ message?: string }> } | null;
-  if (!response.ok || !body?.success) throw new Error(`Observability query failed (HTTP ${response.status}): ${body?.errors?.map((error) => error.message).join("; ") || "no detail"}`);
-  return { question: args.question, hours: Math.min(Math.max(args.hours ?? 24, 1), MAX_HOURS), rows: brainRows(body.result) };
+export async function askBrain(db: D1Database, ownerEmail: string, args: BrainArgs, now = Date.now()): Promise<{ question: BrainQuestion; hours: number; rows: Array<Record<string, unknown>> }> {
+  const query = brainQuery(args, ownerEmail, now);
+  const result = await db.prepare(query.sql).bind(...query.params).all<Record<string, unknown>>();
+  return { question: args.question, hours: brainWindow(args).hours, rows: (result.results ?? []).map(tidy) };
 }
 
-export const BRAIN_INSTRUCTIONS = "brain_query reads the owner's own Pi chat traces: every turn, model request (tokens, cost) and tool call, with durations and errors, across all chats, for up to 7 days. It holds IDs and timings, never message content; use search_conversations for content. Use it to answer questions about speed, cost, failures and tool use, including about this chat.";
+export const BRAIN_INSTRUCTIONS = "brain_query reads the owner's own Pi chat traces: every turn, model request (tokens, cost) and tool call, with durations and errors, across all chats, for up to 90 days. It holds IDs and timings, never message content; use search_conversations for content. Use it to answer questions about speed, cost, failures and tool use, including about this chat.";
 
-export function brainToolsExtension(config: () => BrainConfig | null) {
+export function brainToolsExtension(db: () => D1Database, owner: () => string) {
   const query = defineTool({
     name: "brain_query",
-    description: `Query the owner's Pi chat traces. question: slowest_steps (p99/median by step and tool), tool_usage (calls, failures, time per tool), model_cost (cost and tokens by model and chat), errors (failed steps), chat_timeline (recent steps, newest first). Optional: hours (1-${MAX_HOURS}, default 24), chat (chat id), tool (tool name), limit (default 15).`,
+    description: `Query the owner's Pi chat traces. question: slowest_steps (slowest steps and tools), tool_usage (calls, failures, time per tool), model_cost (cost and tokens by model and chat), errors (failed steps), chat_timeline (recent steps, newest first). Optional: hours (1-${MAX_HOURS}, default 24), chat (chat id), tool (tool name), limit (default 15, max ${MAX_LIMIT}).`,
     parameters: obj({
       question: oneOf([...BRAIN_QUESTIONS]),
       hours: opt(num()),
@@ -136,11 +70,9 @@ export function brainToolsExtension(config: () => BrainConfig | null) {
     }),
     replay: "safe",
     execute: async (args, _api, context) => {
-      const settings = config();
-      if (!settings) return { output: [{ type: "text" as const, text: "brain_query is not set up: this deployment has no OBSERVABILITY_API_TOKEN secret (a Cloudflare API token with Workers Observability read)." }] };
-      const answer = await awaitWithContext(askBrain(settings, args as BrainArgs), context);
+      const answer = await awaitWithContext(askBrain(db(), owner(), args as BrainArgs), context);
       return { output: [{ type: "text" as const, text: clipToolOutput(JSON.stringify(answer)) }] };
     },
   });
-  return defineExtension({ name: "myax.brain", tools: [query], sections: [section("myax-brain", () => (config() ? BRAIN_INSTRUCTIONS : ""))] });
+  return defineExtension({ name: "myax.brain", tools: [query], sections: [section("myax-brain", () => BRAIN_INSTRUCTIONS)] });
 }

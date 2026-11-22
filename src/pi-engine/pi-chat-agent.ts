@@ -36,8 +36,9 @@ import { saveWorkspaceDisk, snapshotWorkspace, workspaceFor, type WorkspaceStub 
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { compactionFinished } from "../workspace-save-policy";
-import { SpanLogContext, consoleSpanSink } from "./span-log";
-import { brainToolsExtension, type BrainConfig } from "./brain-tools";
+import { SpanLogContext, consoleSpanSink, type SpanRecord } from "./span-log";
+import { brainToolsExtension } from "./brain-tools";
+import { SpanBuffer } from "./span-store";
 import { publishWorkspaceChange } from "../workspace-hub-client";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
@@ -98,6 +99,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   initialState: PiChatState = {};
   ai = createAI({ binding: this.env.AI });
   registry = createRegistry();
+  spanBuffer = new SpanBuffer(this.env.DB, () => this.state?.ownerEmail, (flush) => this.ctx.waitUntil(flush));
+  recordSpan = (record: SpanRecord): void => {
+    consoleSpanSink(record);
+    this.spanBuffer.add(record);
+  };
 
   harness = new PiHarness({
     harness: ({ storage, context, onWake }) => {
@@ -111,10 +117,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
       this.registry.install(mcpToolsExtension([], () => this.connectorRunner()));
-      this.registry.install(brainToolsExtension(() => this.brainConfig()));
+      this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
       this.registry.install(createToolSearchExtension());
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
-      return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), consoleSpanSink) }, context);
+      return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
     },
     defaults: hasGatewayModels(this.env)
       ? { model: { provider: PI_GATEWAY_PROVIDER_ID, id: PI_ENGINE_GATEWAY_DEFAULT_MODEL }, thinkingLevel: "medium" }
@@ -267,12 +273,6 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const ownerEmail = this.state.ownerEmail;
     if (!ownerEmail) throw new Error("pi chat is not bound to an owner");
     return { email: ownerEmail } as AccessIdentity;
-  }
-
-  private brainConfig(): BrainConfig | null {
-    const token = this.env.OBSERVABILITY_API_TOKEN;
-    const accountId: string = this.env.CLOUDFLARE_ACCOUNT_ID;
-    return token && accountId ? { token, accountId, service: this.env.OBSERVABILITY_SERVICE || "my-ax" } : null;
   }
 
   private chatId(): string {
