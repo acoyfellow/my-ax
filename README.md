@@ -133,25 +133,29 @@ Optional providers:
 
 | Layer | Responsibility |
 |---|---|
-| Agents SDK | Durable identity, conversation facets, WebSockets, schedules, MCP, RPC, and child runs. |
-| Think | Model and tool turns, message history, recovery, conversation memory, and compaction. |
+| Agents SDK | Durable identity, WebSockets, schedules, MCP connections, RPC, and child runs. |
+| pi-durable harness | Model and tool turns, message history, turn recovery, and compaction for every chat. Each chat is one `PiChatAgent` Durable Object. |
 | My AX | Single-operator authorization, UI, product policy, jobs, Attention, receipts, and work providers. |
 
-Think is authoritative for conversation execution and history. D1 stores application records and derived indexes. R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups. Code Mode has no direct database, secret, or network bindings. Its allowlisted server-side callbacks keep their normal authority.
+The pi-durable harness is authoritative for conversation execution and history. The earlier Think engine is retired. D1 stores application records, derived indexes, and turn traces. R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups. Code Mode has no direct database, secret, or network bindings. Its allowlisted server-side callbacks keep their normal authority.
+
+The harness version is pinned in `package.json`. Data written by a newer harness version cannot be read by an older one, so do not roll the harness back after a deploy.
 
 ## Repository Map
 
 ```text
-src/agent.ts             canonical Think agent and tool assembly
-src/user-agent.ts        owner root and conversation facets
+src/pi-engine/           pi chat Durable Object, harness wiring, chat tools, MCP tools, traces
+src/user-agent.ts        owner root: job alarms and desk fan-out
+src/agent-tree.ts        spawn_child and wait_child child chats
+src/connector-agent.ts   owner MCP connections used by chats and the MCP explorer
+src/named-computer.ts    named persistent computers with a viewable screen
 src/check-in.ts          owner-scoped check-in read model
 src/jobs.ts              native recurring schedules
 src/job-service.ts       owner-scoped job CRUD and evidence
 src/saved-recipes.ts     owner-approved reusable work_code tools
-src/delegate-many.ts     bounded agents-as-tools delegation
 src/work-tools.ts        workspace, machine, page, and codemode catalog
 src/routes/              authenticated HTTP adapters
-src/ui/            product UI and allowlisted result widgets
+src/ui/                  product UI and allowlisted result widgets
 migrations/              D1 application and projection schemas
 ```
 

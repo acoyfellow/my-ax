@@ -10,6 +10,10 @@ The request path starts in `src/index.tsx`; session state, execution providers, 
 | `src/artifacts.ts` + `src/routes/artifacts.ts` | One-off Svelte artifact compile/storage path plus owner-scoped preview/index routes. |
 | `src/auth.ts` | Verifies the Cloudflare Access JWT (when configured); attaches `identity` to the request context. |
 | `src/pi-engine/pi-chat-agent.ts` | `PiChatAgent` Durable Object, one per conversation. It runs the pi durable harness: chat, tools, turn recovery, compaction, and the D1 conversation index. |
+| `src/pi-engine/mcp-tools.ts` | Exposes the owner's MCP connector tools to pi chats as deferred tools named `mcp__<server>__<tool>`. The model finds them with `tool_search`, so they do not fill every prompt. |
+| `src/pi-engine/span-log.ts` + `src/pi-engine/span-store.ts` | Turn traces. The harness telemetry hook writes one span per turn, phase, model request, and tool call to Workers Logs (`ev: "pi.span"`) and, in one batch per turn, to the D1 `pi_spans` table. |
+| `src/pi-engine/brain-tools.ts` | `brain_query`, a chat tool that answers fixed questions over the owner's `pi_spans` rows: slowest steps, tool use, model cost, errors, and a chat timeline. |
+| `src/named-computer.ts` + `src/named-computer-object.ts` + `src/routes/computers.ts` | Named persistent computers (for example `desk`). Each is its own Sandbox with a desktop screen the owner can watch, R2 snapshots, and idle shutdown. |
 | `src/agent-tree.ts` + `src/agent-tree-tools.ts` | `spawn_child` and `wait_child`. A parent chat starts a full pi child chat with tools, and the child reports back when it is done. |
 | `src/connector-agent.ts` | `ConnectorAgent`, one per owner. It holds the native MCP connections that pi chats and the MCP explorer call. |
 | `src/saved-recipe-run.ts` | Runs a saved recipe in-process with the caller's tool context and appends its run receipt. |
@@ -61,6 +65,8 @@ Browser
   |            |-> Browser Run    -- public-page browser sessions + native rrweb recording receipts
   |            `-> Models         -- curated operator-controlled models
   |
+  |-> NamedComputer DO          -- one per named computer: Sandbox with a viewable desktop screen
+  |-> WorkspaceHub DO           -- owner change fan-out to open browser tabs
   |-> MachineHost DO            -- per-user outbound-connected physical laptop relay
   `-> User-added MCP servers    -- native MCP tools forwarded per-user (Settings, then Connectors)
 ```
@@ -79,8 +85,15 @@ Wrangler bindings (see `wrangler.jsonc`):
 | `MACHINE_HOST` | Durable Object (`MachineHost`) | One outbound-connected physical laptop relay per user |
 | `SANDBOX` | Durable Object (`Sandbox` from @cloudflare/sandbox) | One container per user; canonical shell/process/preview workspace |
 | `COMPUTER` | Durable Object (`ComputerWorkspace`) | Legacy binding retained to prevent orphaning owner data before an explicit storage migration. It has no model or product API surface. |
+| `NAMED_COMPUTER` | Durable Object (`NamedComputer`, Sandbox container) | One per named computer. Persistent Sandbox with a viewable desktop screen. |
+| `WORKSPACE_HUB` | Durable Object (`WorkspaceHub`) | Owner change fan-out to open browser tabs over WebSocket. |
+| `RIG_PIPELINE` | Workflow (`RigPipeline`) | Durable multi-step rig build and deploy pipeline. |
+| `USER_UPLOADS` | R2 | Owner-scoped image attachments and artifact objects. |
+| `USAGE` | Analytics Engine (`my_ax_usage`) | Model usage and cost metering. |
+| `RADAR` | Service binding (`arxiv-radar`, `RadarTools`) | Optional. Exposes the arXiv radar tools to pi chats as an MCP connector. |
+| `WEBSEARCH` | Web search binding | Web search for model tool calls. |
 | `BACKUP_BUCKET` | R2 | Sandbox workspace backup archives |
-| `DB` | D1 | Session registry, conversation mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
+| `DB` | D1 | Turn traces (`pi_spans`), session registry, conversation mirror/FTS/export feed, workspace snapshot pointers, push subscriptions, attention, artifact metadata, manually appended run receipts |
 | `AUDIT_KV` | KV | 90-day audit receipts written by `bridge.ts` |
 | `BROWSER` | Browser Run binding | Hosted public-page browser sessions and native recording sessions for `browser_open` |
 | `LOADER` | Worker Loader | Unified Work Code Mode plus optional deploy-approved MCP Code Mode. |
@@ -142,6 +155,17 @@ Beyond the WebSocket (`/agents/pi-chat/:id`) and the CRUD on `/api/sessions`, th
 ## Memory Boundary
 
 Each pi chat keeps a small writable chat memory in its own Durable Object storage, and the pi harness compacts long conversations. Each conversation runs as its own `PiChatAgent`. There is no memory UI. The only product surface is talking to the agent.
+
+## Turn Traces
+
+Every pi chat turn produces spans through the harness telemetry hook: one for the submit, one per phase (`prepare`, `request`, `call`, `tools`), one per model request, and one per tool call. A span holds IDs, timings, status, the tool or model name, token counts, and cost. It never holds message text, tool arguments, or tool results.
+
+Spans go to two places:
+
+- **Workers Logs**, as `ev: "pi.span"` lines. Use them with the Workers Observability query tools. Retention follows the account's Workers Logs retention.
+- **D1 `pi_spans`**, written in one batch when a turn ends. Rows are scoped by owner and deleted after 90 days by the scheduled handler. A failed write is logged and never fails the chat.
+
+The `brain_query` chat tool reads `pi_spans` for the asking owner only. It cannot read another owner's rows and needs no API token.
 
 ## Browser and MCP Surfaces
 
