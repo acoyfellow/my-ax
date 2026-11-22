@@ -14,6 +14,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # Use the npm in package.json packageManager; npm 10 resolves optional peers differently and rejects this lockfile.
+      - run: npm install -g npm@11.13.0
       - run: npm ci
       - run: npm run verify:public
       - name: Scan public issue and PR text

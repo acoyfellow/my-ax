@@ -64,7 +64,8 @@ jobs:
           cache: npm
 
       - name: Install
-        run: npm ci
+        # npm from package.json packageManager; npm 10 rejects this lockfile.
+        run: npm install -g npm@11.13.0 && npm ci
 
       - name: Refuse to deploy an empty production config
         run: node scripts/verify-deployable-config.mjs
