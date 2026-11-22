@@ -2,7 +2,7 @@
   import CodeDiffWidget from "./CodeDiffWidget.svelte";
   import DecisionWidget from "./DecisionWidget.svelte";
   import DelegationGroup from "./DelegationGroup.svelte";
-  import { resolveToolResultWidget } from "./tool-result-widgets";
+  import { recordingAvailable, resolveToolResultWidget } from "./tool-result-widgets";
 
   let { result, toolName = "tool" }: { result: unknown; toolName?: string } = $props();
   let widget = $derived(resolveToolResultWidget(result, toolName));
@@ -70,14 +70,14 @@
     };
   });
 
+  let recordingHref = $derived(widget.kind === "browser-run" ? widget.recordingHref : undefined);
+
   $effect(() => {
-    const href = widget.kind === "browser-run" ? widget.recordingHref : undefined;
+    const href = recordingHref;
     if (!href) { replayFailed = false; return; }
     replayFailed = false;
     let cancelled = false;
-    fetch(href, { credentials: "include", headers: { accept: "application/json" } })
-      .then((response) => { if (!cancelled && !response.ok) replayFailed = true; })
-      .catch(() => { if (!cancelled) replayFailed = true; });
+    void recordingAvailable(href).then((available) => { if (!cancelled) replayFailed = !available; });
     return () => { cancelled = true; };
   });
 </script>

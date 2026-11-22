@@ -19,6 +19,18 @@ export function browserReplayRecordingHref(replaySrc: string | undefined): strin
   const match = /^\/browser\/replay\/([A-Za-z0-9._~%+-]+)/.exec(replaySrc);
   return match ? `/api/browser/recordings/${match[1]}` : undefined;
 }
+const recordingChecks = new Map<string, Promise<boolean>>();
+
+export function recordingAvailable(href: string, load: typeof fetch = (input, init) => fetch(input, init)): Promise<boolean> {
+  const known = recordingChecks.get(href);
+  if (known) return known;
+  const check = load(href, { credentials: "include", headers: { accept: "application/json" } })
+    .then((response) => response.ok)
+    .catch(() => false);
+  recordingChecks.set(href, check);
+  return check;
+}
+
 // Match the RFC-4122 structure (group boundaries + version 1-5 + variant 8-b),
 // same as the Svelte/audio artifact routes below — a bare {36} char class also
 // accepted 36 hyphens or a wrong-boundary string.

@@ -256,14 +256,21 @@
     queueScrollToBottom();
     return true;
   }
+  const PREFETCH_CHAT_LIMIT = 6;
   let prefetchStarted = false;
+  function whenIdle(task: () => void) {
+    const idle = (window as unknown as { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(task, { timeout: 10_000 });
+    else setTimeout(task, 5_000);
+  }
   async function prefetchRecentChats() {
     if (prefetchStarted) return;
     prefetchStarted = true;
-    const body = await fetch("/api/sessions?limit=16", { credentials: "include" }).then((response) => response.json()).catch(() => null);
+    const body = await fetch(`/api/sessions?limit=${PREFETCH_CHAT_LIMIT}`, { credentials: "include" }).then((response) => response.json()).catch(() => null);
     const rows: Array<{ id: string; engine?: string }> = body?.result?.sessions ?? [];
-    for (const row of rows) {
+    for (const row of rows.slice(0, PREFETCH_CHAT_LIMIT)) {
       if (row.engine !== "pi" || savedSnapshots.read(row.id)) continue;
+      if (document.visibilityState !== "visible") return;
       rememberSessionEngine(row.id, "pi");
       const live = await fetch(`/api/pi/chats/${encodeURIComponent(row.id)}/live`, { credentials: "include" }).then((response) => response.json()).catch(() => null);
       if (live?.result?.entries) savedSnapshots.write(row.id, { ...live.result, busy: false, partial: null, tools: [] });
@@ -1506,7 +1513,7 @@
     lastTurnFrameAt = Date.now();
     if (frame.type === "pi_snapshot") {
       savingSnapshots = true;
-      setTimeout(() => void prefetchRecentChats(), 1500);
+      whenIdle(() => void prefetchRecentChats());
       piTranscript.applySnapshot(frame.view as PiSnapshot);
       renderPiTranscript();
       return true;
