@@ -51,6 +51,8 @@ declare global {
        * at the call site if this is missing; no silent UI degradation.
        */
       BROWSER_API_TOKEN?: string;
+      OBSERVABILITY_API_TOKEN?: string;
+      OBSERVABILITY_SERVICE?: string;
 
       MY_AX_BROWSER_ENGINE?: string;
       MY_AX_KITESURF_RECORDING?: string;

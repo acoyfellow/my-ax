@@ -32,7 +32,7 @@ export async function withRetry<T>(o: RetryOptions<T>): Promise<Retried<T>> {
   const attempts: Attempt[] = [];
 
   const done = (r: Retried<T>) => {
-    console.log(JSON.stringify({ ev: "rpc.retry", op, outcome: r.ok ? "ok" : r.reason, attempts: attempts.length, attemptOutcomes: attempts.map((a) => a.outcome).join(","), totalMs: Date.now() - startedAt, budgetMs }));
+    if (!(r.ok && attempts.length === 1)) console.log(JSON.stringify({ ev: "rpc.retry", op, outcome: r.ok ? "ok" : r.reason, attempts: attempts.length, attemptOutcomes: attempts.map((a) => a.outcome).join(","), totalMs: Date.now() - startedAt, budgetMs }));
     return r;
   };
 

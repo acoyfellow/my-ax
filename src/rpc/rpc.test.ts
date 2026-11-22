@@ -125,3 +125,11 @@ test("withRetry: summary line reports the failure reason", async () => {
   assert.equal(summary.outcome, "error");
   assert.equal(summary.attempts, 1);
 });
+
+test("withRetry: a call that succeeds first time writes no retry line", async () => {
+  const lines: string[] = []; const o = console.log; console.log = (s: string) => lines.push(s);
+  const r = await withRetry({ start: () => sleep(1, "v"), op: "op", timeoutMs: 100 });
+  console.log = o;
+  assert.equal(r.ok, true);
+  assert.deepEqual(lines.map((l) => JSON.parse(l).ev).filter((ev) => ev === "rpc.retry"), []);
+});
