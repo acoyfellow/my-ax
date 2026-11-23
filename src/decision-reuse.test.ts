@@ -18,7 +18,7 @@ function sqliteEnv() {
   });
   const status = (id: string) => (db.prepare("SELECT status FROM runs WHERE id = ?").get(id) as { status: string } | undefined)?.status;
   const events = (id: string) => db.prepare("SELECT type, data_json FROM run_events WHERE run_id = ?").all(id) as Array<{ type: string; data_json: string }>;
-  return { env: { DB: { prepare } } as never, status, events };
+  return { env: { DB: { prepare } } as never, status, events, db };
 }
 
 const OWNER = "owner@example.com";
@@ -120,4 +120,49 @@ test("opening a retired decision link redirects to its replacement", async () =>
   assert.equal(response.headers.get("location"), `/?session=s1&decision=${second.id}`);
   const pending = await request("/api/decisions/pending?sessionId=s1");
   assert.equal(((await pending.json()) as { result: { decision: { id: string } } }).result.decision.id, second.id);
+});
+
+test("dismissing an open decision closes it for good: the state says dismissed and pending is empty", async () => {
+  const { env, request, status, events } = await routes();
+  const open = await createDecision(env, OWNER, "s1", "Which flight?", ["UA 123", "DL 456"]);
+  const response = await request(`/api/decisions/${open.id}/dismiss`, { method: "POST" });
+  assert.equal(response.status, 200);
+  assert.equal(((await response.json()) as { result: { outcome: string } }).result.outcome, "dismissed");
+  assert.equal(status(open.id), "aborted");
+  assert.deepEqual(events(open.id).map((event) => event.type), ["decision.dismissed"]);
+  const state = (await (await request(`/api/decisions/${open.id}/state`)).json()) as { result: { state: string } };
+  assert.equal(state.result.state, "dismissed");
+  const pending = (await (await request("/api/decisions/pending?sessionId=s1")).json()) as { result: { decision: unknown } };
+  assert.equal(pending.result.decision, null);
+});
+
+test("a dismissed decision refuses a late answer, so a stale push button cannot resume the agent", async () => {
+  const { env, request } = await routes();
+  const open = await createDecision(env, OWNER, "s1", "Which flight?", ["UA 123", "DL 456"]);
+  await request(`/api/decisions/${open.id}/dismiss`, { method: "POST" });
+  const late = await request(`/api/decisions/${open.id}/respond`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ choice: "UA 123" }) });
+  assert.equal(late.status, 409);
+  assert.equal(((await late.json()) as { error: { code: string } }).error.code, "DECISION_DISMISSED");
+});
+
+test("dismissing twice, or dismissing an answered decision, changes nothing", async () => {
+  const { env, request, status, events, db } = await routes();
+  const open = await createDecision(env, OWNER, "s1", "Which flight?", ["UA 123", "DL 456"]);
+  await request(`/api/decisions/${open.id}/dismiss`, { method: "POST" });
+  const again = (await (await request(`/api/decisions/${open.id}/dismiss`, { method: "POST" })).json()) as { result: { outcome: string } };
+  assert.equal(again.result.outcome, "already_closed");
+  assert.equal(events(open.id).length, 1);
+  const other = await createDecision(env, OWNER, "s2", "Ship it?", ["Yes", "No"]);
+  db.prepare("UPDATE runs SET status = 'completed' WHERE id = ?").run(other.id);
+  const answered = (await (await request(`/api/decisions/${other.id}/dismiss`, { method: "POST" })).json()) as { result: { outcome: string } };
+  assert.equal(answered.result.outcome, "already_closed");
+  assert.equal(status(other.id), "completed");
+});
+
+test("one owner cannot dismiss another owner's decision", async () => {
+  const { env, request, status } = await routes();
+  const theirs = await createDecision(env, "someone-else@example.com", "s1", "Which flight?", ["UA 123", "DL 456"]);
+  const response = await request(`/api/decisions/${theirs.id}/dismiss`, { method: "POST" });
+  assert.equal(response.status, 404);
+  assert.equal(status(theirs.id), "open");
 });

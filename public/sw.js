@@ -212,6 +212,25 @@ async function navigateNotification(href) {
   return clients.openWindow(absolute);
 }
 
+function notificationDecisionId(data) {
+  const id = data?.decision?.id;
+  return typeof id === "string" && /^run-decision-[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+
+async function dismissDecisionFromNotification(notification) {
+  const id = notificationDecisionId(notification.data);
+  if (!id) return;
+  try {
+    await fetch(`/api/decisions/${encodeURIComponent(id)}/dismiss`, { method: "POST", credentials: "include" });
+  } catch {
+    return;
+  }
+}
+
+self.addEventListener("notificationclose", (event) => {
+  event.waitUntil(dismissDecisionFromNotification(event.notification));
+});
+
 self.addEventListener("notificationclick", (event) => {
   if (isDecisionAction(event.action)) {
     event.waitUntil(submitDecision(event.notification, event.action));

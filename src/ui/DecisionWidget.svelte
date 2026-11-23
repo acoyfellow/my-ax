@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { viewAfterAnswer, viewFromState, type DecisionView } from "./decision-widget";
+  import { canDismiss, dismissDecisionOnServer, viewAfterAnswer, viewAfterDismiss, viewFromState, type DecisionView } from "./decision-widget";
 
   let { decisionId, options: initialOptions }: { decisionId: string; options: string[] } = $props();
   let view = $state<DecisionView>({ phase: "loading" });
@@ -37,6 +37,18 @@
     }
   }
 
+  async function dismiss() {
+    if (!canDismiss(view)) return;
+    const before = view;
+    try {
+      view = viewAfterDismiss(before, await dismissDecisionOnServer(decisionId, fetch));
+      if (view.phase === "dismissed") window.dispatchEvent(new CustomEvent("my-ax:decision-answered", { detail: { decisionId } }));
+      else await load();
+    } catch {
+      view = before;
+    }
+  }
+
   function when(iso: string | null): string {
     if (!iso) return "";
     const date = new Date(iso);
@@ -58,7 +70,12 @@
     <p class="decision__note">Loading decision…</p>
   {:else}
     {#if "question" in view && view.question}
-      <p class="decision__question">{view.question}</p>
+      <div class="decision__head">
+        <p class="decision__question">{view.question}</p>
+        {#if canDismiss(view)}
+          <button type="button" class="decision__dismiss" aria-label="Dismiss question" title="Dismiss" data-decision-dismiss onclick={dismiss}>×</button>
+        {/if}
+      </div>
     {/if}
     {#if view.phase === "open" || view.phase === "sending" || view.phase === "error"}
       <div class="decision__options" role="group" aria-label="Choose an answer">
@@ -81,6 +98,8 @@
         {/each}
       </div>
       <p class="decision__note">{view.choice ? `You chose ${view.choice}` : "Already answered"}{view.answeredAt ? ` · ${when(view.answeredAt)}` : ""}</p>
+    {:else if view.phase === "dismissed"}
+      <p class="decision__note">Dismissed.</p>
     {:else if view.phase === "replaced"}
       <p class="decision__note">Replaced by a newer question further down.</p>
     {/if}
@@ -89,7 +108,11 @@
 
 <style>
   .decision { display: grid; gap: 10px; margin: 8px 0 4px; padding: 14px; border: 1px solid color-mix(in srgb, var(--brand) 40%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--brand) 6%, var(--bg-alt)); min-width: 0; max-width: 100%; }
-  .decision[data-decision-phase="answered"], .decision[data-decision-phase="replaced"] { border-color: var(--line); background: var(--bg-alt); }
+  .decision__head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+  .decision__head .decision__question { flex: 1; min-width: 0; }
+  .decision__dismiss { flex: none; width: 28px; height: 28px; margin: -4px -4px 0 0; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--fg-mut); font-size: 18px; line-height: 1; cursor: pointer; }
+  .decision__dismiss:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  .decision[data-decision-phase="answered"], .decision[data-decision-phase="replaced"], .decision[data-decision-phase="dismissed"] { border-color: var(--line); background: var(--bg-alt); }
   .decision__question { margin: 0; font-weight: 600; color: var(--fg); line-height: 1.4; overflow-wrap: anywhere; }
   .decision__options { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
   .decision__option { min-height: 44px; max-width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font-size: 14px; font-weight: 600; text-align: left; overflow-wrap: anywhere; cursor: pointer; }

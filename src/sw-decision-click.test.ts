@@ -14,6 +14,7 @@ type ShowCall = { title: string; options: Record<string, unknown> };
 
 type Harness = {
   click(action: string, data: Record<string, unknown>): Promise<NotificationRecord>;
+  swipe(data: Record<string, unknown>): Promise<void>;
   fetchCalls: Array<{ input: string; init: RequestInit }>;
   showCalls: ShowCall[];
   badgeCalls: number[];
@@ -84,6 +85,14 @@ function workerHarness(fetchResult: () => Promise<{ ok: boolean; status: number 
       await work;
       return notification;
     },
+    async swipe(data) {
+      let work: Promise<unknown> | undefined;
+      const listener = listeners.get("notificationclose")?.[0];
+      assert.ok(listener, "notificationclose listener is registered");
+      listener({ notification: { tag: "decision-tag", data, closed: true, close() {} }, waitUntil(promise: Promise<unknown>) { work = promise; } });
+      assert.ok(work, "close work is retained by waitUntil");
+      await work;
+    },
     fetchCalls,
     showCalls,
     badgeCalls,
@@ -129,4 +138,26 @@ test("a 409 decision response is visibly reported as already answered", async ()
   assert.equal(harness.showCalls.length, 1);
   assert.equal(harness.showCalls[0]?.title, "Decision already answered");
   assert.match(String(harness.showCalls[0]?.options.body), /already answered/);
+});
+
+test("swiping away a decision notification dismisses that decision on the server", async () => {
+  const harness = workerHarness(async () => ({ ok: true, status: 200 }));
+  await harness.swipe(decisionData);
+  assert.equal(harness.fetchCalls.length, 1);
+  assert.equal(harness.fetchCalls[0].input, "/api/decisions/run-decision-11111111-1111-4111-8111-111111111111/dismiss");
+  assert.equal(harness.fetchCalls[0].init.method, "POST");
+  assert.equal(harness.fetchCalls[0].init.credentials, "include");
+});
+
+test("swiping away a notification that is not a decision sends nothing", async () => {
+  const harness = workerHarness(async () => ({ ok: true, status: 200 }));
+  await harness.swipe({ href: "/?session=s" });
+  await harness.swipe({ decision: { id: "../../api/sessions" } });
+  assert.equal(harness.fetchCalls.length, 0);
+});
+
+test("a failed dismiss from a swipe never throws inside the service worker", async () => {
+  const harness = workerHarness(async () => { throw new Error("offline"); });
+  await harness.swipe(decisionData);
+  assert.equal(harness.fetchCalls.length, 1);
 });

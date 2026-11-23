@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decisionIdFromLocation, decisionReceipt, viewAfterAnswer, viewFromState } from "./decision-widget";
+import { canDismiss, decisionIdFromLocation, decisionReceipt, dismissDecisionOnServer, viewAfterAnswer, viewAfterDismiss, viewFromState, type DecisionView } from "./decision-widget";
 import { resolveToolResultWidget } from "./tool-result-widgets";
 
 const ID = "run-decision-11111111-1111-4111-8111-111111111111";
@@ -53,4 +53,36 @@ test("the thread link names which decision to scroll to", () => {
   assert.equal(decisionIdFromLocation(`https://my.ax/?session=s&decision=${ID}`), ID);
   assert.equal(decisionIdFromLocation("https://my.ax/?session=s&decision=<script>"), null);
   assert.equal(decisionIdFromLocation("https://my.ax/?session=s"), null);
+});
+
+test("a dismissed decision renders closed on reload, with no buttons to answer", () => {
+  const view = viewFromState({ question: "Q?", options: ["A", "B"], state: "dismissed", choice: null, answeredAt: "2026-11-23T00:00:00Z", replacedBy: null });
+  assert.deepEqual(view, { phase: "dismissed", question: "Q?" });
+  assert.equal(canDismiss(view), false);
+});
+
+test("the X is offered only while the decision is open or failed to send", () => {
+  assert.equal(canDismiss({ phase: "open", question: "Q", options: ["A"] }), true);
+  assert.equal(canDismiss({ phase: "error", message: "x", question: "Q", options: ["A"] }), true);
+  assert.equal(canDismiss({ phase: "sending", question: "Q", options: ["A"], choice: "A" }), false);
+  assert.equal(canDismiss({ phase: "answered", question: "Q", options: ["A"], choice: "A", answeredAt: null }), false);
+});
+
+test("a dismiss that the server refused keeps the widget as it was", () => {
+  const open: DecisionView = { phase: "open", question: "Q", options: ["A"] };
+  assert.deepEqual(viewAfterDismiss(open, 200), { phase: "dismissed", question: "Q" });
+  assert.deepEqual(viewAfterDismiss(open, 0), open);
+  assert.deepEqual(viewAfterDismiss(open, 404), open);
+});
+
+test("the client dismiss call posts with credentials and refuses a malformed id", async () => {
+  const calls: Array<{ input: string; init: RequestInit }> = [];
+  const send = async (input: string, init: RequestInit) => { calls.push({ input, init }); return { status: 200 }; };
+  assert.equal(await dismissDecisionOnServer(ID, send), 200);
+  assert.equal(calls[0].input, `/api/decisions/${ID}/dismiss`);
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.credentials, "include");
+  assert.equal(await dismissDecisionOnServer("../sessions", send), 400);
+  assert.equal(calls.length, 1);
+  assert.equal(await dismissDecisionOnServer(ID, async () => { throw new Error("offline"); }), 0);
 });

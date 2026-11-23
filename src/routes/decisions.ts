@@ -44,7 +44,7 @@ export type DecisionState = {
   sessionId: string;
   question: string;
   options: string[];
-  state: "open" | "answered" | "replaced";
+  state: "open" | "answered" | "replaced" | "dismissed";
   choice: string | null;
   answeredAt: string | null;
   replacedBy: string | null;
@@ -57,6 +57,8 @@ async function readDecisionState(env: DecisionDb, id: string, email: string): Pr
   const base = { id, sessionId: bounds.sessionId, question: bounds.question, options: bounds.options, choice: null, answeredAt: null, replacedBy: null };
   if (row.status === "open") return { ...base, state: "open" };
   if (row.status === "aborted") {
+    const dismissed = await env.DB.prepare("SELECT ts FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.dismissed' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ ts: string }>();
+    if (dismissed) return { ...base, state: "dismissed", answeredAt: dismissed.ts };
     const event = await env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.superseded' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
     const replacedBy = event ? (JSON.parse(event.data_json) as { replacedBy?: string }).replacedBy ?? null : null;
     return { ...base, state: "replaced", replacedBy: replacedBy && ID_RE.test(replacedBy) ? replacedBy : null };
@@ -97,6 +99,18 @@ async function supersedeDecision(env: DecisionDb, ownerEmail: string, staleId: s
   if (!await applyRunEvent(env.DB, { id: staleId, ownerEmail }, "decision_superseded")) return;
   await env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, 'decision.superseded', ?, NULL)")
     .bind(staleId, crypto.randomUUID(), ownerEmail, new Date().toISOString(), JSON.stringify({ id: "my-ax", kind: "agent", mode: "live" }), JSON.stringify({ replacedBy: replacementId })).run();
+}
+
+export type DismissOutcome = "dismissed" | "already_closed" | "not_found";
+
+export async function dismissDecision(env: DecisionDb, ownerEmail: string, id: string): Promise<DismissOutcome> {
+  const row = await env.DB.prepare("SELECT status FROM runs WHERE id = ? AND owner_email = ? AND json_extract(bounds_json, '$.surface') = 'decision'").bind(id, ownerEmail).first<{ status: string }>();
+  if (!row) return "not_found";
+  if (row.status !== "open") return "already_closed";
+  if (!await applyRunEvent(env.DB, { id, ownerEmail }, "owner_aborted")) return "already_closed";
+  await env.DB.prepare("INSERT INTO run_events(run_id, event_id, owner_email, ts, actor_json, type, data_json, evidence_json) VALUES (?, ?, ?, ?, ?, 'decision.dismissed', '{}', NULL)")
+    .bind(id, crypto.randomUUID(), ownerEmail, new Date().toISOString(), JSON.stringify({ id: ownerEmail, kind: "human", mode: "live" })).run();
+  return "dismissed";
 }
 
 export const DECISION_PAGE_SCRIPT = `(()=>{
@@ -182,7 +196,8 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
       const event = await c.env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.superseded' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
       const replacedBy = event ? (JSON.parse(event.data_json) as { replacedBy?: string }).replacedBy : undefined;
       if (replacedBy && ID_RE.test(replacedBy)) return c.redirect(`/api/decisions/${replacedBy}`, 302);
-      answered = "(replaced by a newer question)";
+      const dismissed = await c.env.DB.prepare("SELECT 1 AS hit FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.dismissed' LIMIT 1").bind(id, email).first<{ hit: number }>();
+      answered = dismissed ? "(dismissed)" : "(replaced by a newer question)";
     } else if (row.status !== "open") {
       const event = await c.env.DB.prepare("SELECT data_json FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.answered' ORDER BY ts DESC LIMIT 1").bind(id, email).first<{ data_json: string }>();
       answered = event ? ((JSON.parse(event.data_json) as { choice?: string }).choice ?? null) : "(already answered)";
@@ -195,6 +210,21 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     });
   });
 
+  app.post("/api/decisions/:id/dismiss", async (c) => {
+    const id = c.req.param("id");
+    if (!ID_RE.test(id)) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ID", message: "invalid decision id" }, next_actions: [] }, 400);
+    const email = c.get("identity").email.toLowerCase();
+    const outcome = await dismissDecision(c.env, email, id);
+    if (outcome === "not_found") return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "decision not found" }, next_actions: [] }, 404);
+    const settling = settleDecisionNotifications(c.env, email, id);
+    try {
+      c.executionCtx.waitUntil(settling);
+    } catch {
+      await settling;
+    }
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { id, outcome }, next_actions: [] });
+  });
+
   app.post("/api/decisions/:id/respond", async (c) => {
     const id = c.req.param("id");
     if (!ID_RE.test(id)) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_ID", message: "invalid decision id" }, next_actions: [] }, 400);
@@ -205,7 +235,11 @@ export function registerDecisionRoutes(app: Hono<AppEnv>) {
     if (!row) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "decision not found" }, next_actions: [] }, 404);
     const bounds = JSON.parse(row.bounds_json) as DecisionBounds;
     if (!bounds.options.includes(choice)) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_CHOICE", message: "choice is not an allowed option" }, next_actions: [] }, 400);
-    if (row.status === "aborted") return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "DECISION_SUPERSEDED", message: "this question was replaced by a newer one with different options" }, next_actions: [] }, 409);
+    if (row.status === "aborted") {
+      const dismissed = await c.env.DB.prepare("SELECT 1 AS hit FROM run_events WHERE run_id = ? AND owner_email = ? AND type = 'decision.dismissed' LIMIT 1").bind(id, email).first<{ hit: number }>();
+      if (dismissed) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "DECISION_DISMISSED", message: "this question was dismissed" }, next_actions: [] }, 409);
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "DECISION_SUPERSEDED", message: "this question was replaced by a newer one with different options" }, next_actions: [] }, 409);
+    }
     if (row.status !== "open") return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "ALREADY_ANSWERED", message: "decision already answered" }, next_actions: [] }, 409);
 
     const store: DecisionResponseStore = {
