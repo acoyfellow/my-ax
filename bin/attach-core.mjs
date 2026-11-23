@@ -1,4 +1,4 @@
-export const ATTACH_COMMANDS = { abort: "/abort", quit: "/quit" };
+export const ATTACH_COMMANDS = { abort: "/abort", quit: "/quit", image: "/image" };
 
 function textOf(content) {
   if (typeof content === "string") return content;
@@ -76,11 +76,39 @@ export class AttachView {
     if (frame.type === "pi_error") return this.write(`! ${oneLine(frame.message ?? "error")}\n`);
     if (frame.type !== "pi_events") return;
     for (const event of frame.events ?? []) {
-      if (event.type === "entry_appended") this.entry(event.entry);
+      if (event.type === "run_end") this.onSettled?.();
+      else if (event.type === "entry_appended") { this.entry(event.entry); if (event.entry?.kind === "pi.tool-result" && event.entry.model?.[0]?.toolName === "ask_user") this.onSettled?.(); }
       else if (event.type === "message_update") for (const change of event.changes ?? []) { if (change.type === "text_delta") this.delta(change.delta); }
       else if (event.type === "message_end" && event.message?.stopReason === "error") { this.endStream(); this.write(`! ${oneLine(event.message.errorMessage ?? "turn failed")}\n`); }
     }
   }
+}
+
+const IMAGE_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
+
+export function imageType(path) {
+  const dot = path.lastIndexOf(".");
+  return dot < 0 ? null : IMAGE_TYPES[path.slice(dot).toLowerCase()] ?? null;
+}
+
+export function parseImageCommand(line) {
+  const text = line.trim();
+  if (!text.startsWith(`${ATTACH_COMMANDS.image} `)) return null;
+  const rest = text.slice(ATTACH_COMMANDS.image.length + 1).trim();
+  const quoted = rest.match(/^"([^"]+)"\s*(.*)$/) ?? rest.match(/^'([^']+)'\s*(.*)$/);
+  const [path, message] = quoted ? [quoted[1], quoted[2]] : [rest.split(/\s+/)[0], rest.slice(rest.split(/\s+/)[0].length).trim()];
+  return path ? { path: path.replace(/^~(?=\/)/, process.env.HOME ?? "~"), message } : null;
+}
+
+export function decisionPrompt(decision) {
+  return [`? ${decision.question}`, ...decision.options.map((option, index) => `  ${index + 1}) ${option}`), "  answer with a number"].join("\n") + "\n";
+}
+
+export function decisionChoice(decision, line) {
+  const text = line.trim();
+  const index = Number(text);
+  if (Number.isInteger(index) && index >= 1 && index <= decision.options.length) return decision.options[index - 1];
+  return decision.options.find((option) => option.toLowerCase() === text.toLowerCase()) ?? null;
 }
 
 export function inputFrame(line, operationId) {

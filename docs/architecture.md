@@ -165,6 +165,8 @@ Spans go to two places:
 - **Workers Logs**, as `ev: "pi.span"` lines. Use them with the Workers Observability query tools. Retention follows the account's Workers Logs retention.
 - **D1 `pi_spans`**, written in one batch when a turn ends. Rows are scoped by owner and deleted after 90 days by the scheduled handler. A failed write is logged and never fails the chat.
 
+Local Pi sessions can add rows with `my-ax sync-pi`, which posts to `POST /api/spans` as `source: "pi-local"`. The route takes the owner from the Access identity, never from the body, validates every field, and prefixes ids with the source so local rows cannot overwrite my-ax rows.
+
 The `brain_query` chat tool reads `pi_spans` for the asking owner only. It cannot read another owner's rows and needs no API token.
 
 ## Browser and MCP Surfaces

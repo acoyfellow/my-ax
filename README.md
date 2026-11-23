@@ -139,6 +139,10 @@ node bin/my-ax.mjs chats
 node bin/my-ax.mjs attach <chat id, id prefix, or name>
 ```
 
+`/image <path> [message]` sends a PNG, JPEG, WebP or GIF. When the agent asks a question with `ask_user`, the terminal shows numbered options; type a number to answer.
+
+`node bin/my-ax.mjs sync-pi [--days N]` sends local Pi session traces to the same store `brain_query` reads, as `source: "pi-local"`. It sends timings, model names, token counts, cost and tool names. It never sends prompts, replies, tool arguments or tool output. Re-running it sends only new lines.
+
 The client uses your Cloudflare Access login (`cloudflared access token`) and the chat's normal WebSocket. It runs no agent itself. `/abort` stops a turn, and `/quit` or Ctrl-D leaves.
 
 ## Who Owns What
