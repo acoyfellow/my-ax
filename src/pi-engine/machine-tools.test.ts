@@ -19,3 +19,21 @@ test("instructions point the agent at cmux Pi tools and tools/list before giving
   assert.match(PI_MACHINE_INSTRUCTIONS, /tools\/list/);
   assert.match(PI_MACHINE_INSTRUCTIONS, /cmux_pi_/);
 });
+
+test("machinectl tools accept machine and pass it to the runner", async () => {
+  const { compile } = await import("@earendil-works/pi-schema");
+  const seen: unknown[] = [];
+  const runner: MachineToolRunner = { call: async (args) => { seen.push(args); return "{}"; }, code: async (args) => { seen.push(args); return "{}"; } };
+  const tools = toolsOf(machineToolsExtension(() => runner)) as Array<{ name: string; parameters: any; execute: (args: any, api: any, context: any) => Promise<any> }>;
+  const call = tools.find((tool) => tool.name === "machinectl_call")!;
+  const code = tools.find((tool) => tool.name === "machinectl_code")!;
+  const callArgs = { tool: "shell", arguments: { command: "uname" }, machine: "air" };
+  const codeArgs = { code: "async () => 1", machine: "air" };
+  assert.equal(compile(call.parameters).check(callArgs), true);
+  assert.equal(compile(code.parameters).check(codeArgs), true);
+  assert.equal(compile(call.parameters).check({ tool: "shell", machine: 3 }), false);
+  const context = { signal: new AbortController().signal };
+  await call.execute(callArgs, {}, context);
+  await code.execute(codeArgs, {}, context);
+  assert.deepEqual(seen, [callArgs, codeArgs]);
+});

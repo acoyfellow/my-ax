@@ -21,14 +21,17 @@
 
   let vpDebug = $state<string>("");
   let vpDebugOn = $state(false);
+  let syncViewportDebug: (on: boolean) => void = () => {};
   $effect(() => {
     if (typeof window === "undefined") return;
     if (/[?&]vpdebug=1/.test(location.search)) localStorage.setItem("my-ax-vpdebug", "1");
     if (/[?&]vpdebug=0/.test(location.search)) localStorage.removeItem("my-ax-vpdebug");
-    vpDebugOn = localStorage.getItem("my-ax-vpdebug") === "1";
+    const startOn = localStorage.getItem("my-ax-vpdebug") === "1";
+    vpDebugOn = startOn;
     const onToggle = (e: Event) => {
       const on = (e as CustomEvent<{ on?: boolean }>).detail?.on !== false;
       vpDebugOn = on;
+      syncViewportDebug(on);
     };
     window.addEventListener("my-ax:vpdebug", onToggle);
     let id: ReturnType<typeof setInterval> | null = null;
@@ -61,9 +64,16 @@
         `composerPadB ${cs?.paddingBottom ?? "n/a"}`,
       ].join("  ");
     };
-    measure();
-    id = setInterval(measure, 500);
-    window.addEventListener("resize", measure, { passive: true });
+    const sync = (on: boolean) => {
+      if (id) { clearInterval(id); id = null; }
+      window.removeEventListener("resize", measure);
+      if (!on) return;
+      measure();
+      id = setInterval(measure, 500);
+      window.addEventListener("resize", measure, { passive: true });
+    };
+    syncViewportDebug = sync;
+    sync(startOn);
     return () => { if (id) clearInterval(id); window.removeEventListener("resize", measure); window.removeEventListener("my-ax:vpdebug", onToggle); };
   });
 </script>

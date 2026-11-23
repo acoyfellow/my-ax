@@ -36,6 +36,9 @@ import { saveWorkspaceDisk, snapshotWorkspace, workspaceFor, type WorkspaceStub 
 import { WORKSPACE_HOME } from "../workspace-path";
 import { workspaceSandboxId } from "../workspace-policy";
 import { compactionFinished } from "../workspace-save-policy";
+import { SpanLogContext, consoleSpanSink, type SpanRecord } from "./span-log";
+import { brainToolsExtension } from "./brain-tools";
+import { SpanBuffer } from "./span-store";
 import { publishWorkspaceChange } from "../workspace-hub-client";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
@@ -96,6 +99,11 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   initialState: PiChatState = {};
   ai = createAI({ binding: this.env.AI });
   registry = createRegistry();
+  spanBuffer = new SpanBuffer(this.env.DB, () => this.state?.ownerEmail, (flush) => this.ctx.waitUntil(flush));
+  recordSpan = (record: SpanRecord): void => {
+    consoleSpanSink(record);
+    this.spanBuffer.add(record);
+  };
 
   harness = new PiHarness({
     harness: ({ storage, context, onWake }) => {
@@ -109,9 +117,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
       this.registry.install(mcpToolsExtension([], () => this.connectorRunner()));
+      this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
       this.registry.install(createToolSearchExtension());
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
-      return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport }, context);
+      return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
     },
     defaults: hasGatewayModels(this.env)
       ? { model: { provider: PI_GATEWAY_PROVIDER_ID, id: PI_ENGINE_GATEWAY_DEFAULT_MODEL }, thinkingLevel: "medium" }

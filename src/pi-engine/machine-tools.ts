@@ -14,14 +14,16 @@ import { clipToolOutput } from "./workspace-tools";
  * Pi chats the same two tools, backed by the same implementation.
  */
 export type MachineToolRunner = {
-  call(args: { tool: string; arguments?: Record<string, unknown> }): Promise<string>;
-  code(args: { code: string }): Promise<string>;
+  call(args: { tool: string; arguments?: Record<string, unknown>; machine?: string }): Promise<string>;
+  code(args: { code: string; machine?: string }): Promise<string>;
 };
 
 export const PI_MACHINE_INSTRUCTIONS = [
   "My Machine: when the user asks about their own computer, a terminal, cmux, or a Pi session running locally, use machinectl_call and machinectl_code. They run on the user's connected machine, not this chat's sandbox.",
   "Start with machinectl_call { tool: \"tools/list\" } to see whether a machine is connected and which tools it publishes. For cmux and Pi sessions prefer the cmux_workspace_* and cmux_pi_* tools (list, tail, prompt, steer, abort). Never claim the machine is unreachable without checking tools/list first.",
 ].join("\n");
+
+const machineField = () => opt(str({ description: "Which machine to use, by name or title from Settings > Connections. Leave out when only one machine is online." }));
 
 function textResult(text: string) {
   return { output: [{ type: "text" as const, text: clipToolOutput(text) }] };
@@ -34,6 +36,7 @@ export function machineToolsExtension(runner: () => MachineToolRunner) {
     parameters: obj({
       tool: str({ description: "Machine tool name, or tools/list for discovery." }),
       arguments: opt(map(unknown(), { description: "Arguments for the machine tool." })),
+      machine: machineField(),
     }),
     execute: async (args, _api, context) => textResult(await awaitWithContext(runner().call(args), context)),
   });
@@ -42,6 +45,7 @@ export function machineToolsExtension(runner: () => MachineToolRunner) {
     description: "Run a JavaScript async arrow function against the user's connected machine via isolated Code Mode, calling codemode.<machine_tool>(args). Use it to batch several machine calls, such as finding a cmux surface and then prompting its Pi session.",
     parameters: obj({
       code: str({ description: "JavaScript async arrow function using codemode.<machine_tool>(args)." }),
+      machine: machineField(),
     }),
     execute: async (args, _api, context) => textResult(await awaitWithContext(runner().code(args), context)),
   });

@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { pruneSpans } from "./pi-engine/span-store";
 import { cors } from "hono/cors";
 import * as rpc from "./rpc/contract";
 import { getAgentByName, routeAgentRequest } from "agents";
@@ -731,5 +732,6 @@ export default {
   scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(scanDeadSessions(env));
     ctx.waitUntil(pruneObserveEvents(env.DB).catch((error) => console.error("observe_prune_failed", { err: String(error) })));
+    ctx.waitUntil(pruneSpans(env.DB).catch((error) => console.error("span_prune_failed", { err: String(error) })));
   },
 };
