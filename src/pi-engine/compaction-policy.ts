@@ -1,6 +1,6 @@
 import type { CompactionSettings } from "@earendil-works/pi-durable";
 
-export const LARGE_WINDOW_COMPACT_AT_TOKENS = 150_000;
+export const LARGE_WINDOW_COMPACT_AT_TOKENS = 250_000;
 export const LARGE_WINDOW_KEEP_RECENT_TOKENS = 30_000;
 export const SUMMARY_MAX_TOKENS = 8_000;
 export const BACKGROUND_LEAD_TOKENS = 30_000;

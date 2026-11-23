@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { compactsAt, piCompactionSettings, summaryBudget, LARGE_WINDOW_COMPACT_AT_TOKENS, SUMMARY_MAX_TOKENS } from "./compaction-policy";
 import { gatewayModelWindows } from "./gateway-models";
 
-test("every 1M gateway model compacts at 150K tokens with a summary near 8K, starting in the background 30K earlier", () => {
+test("every 1M gateway model compacts at 250K tokens, like local Pi, with a summary near 8K, starting in the background 30K earlier", () => {
   const settings = piCompactionSettings(gatewayModelWindows());
   const keys = Object.keys(settings.modelOverrides ?? {});
   assert.deepEqual(keys.sort(), ["myax-gateway/claude-opus-5", "myax-gateway/claude-opus-5-5", "myax-gateway/claude-sonnet-5-5"]);
@@ -13,7 +13,8 @@ test("every 1M gateway model compacts at 150K tokens with a summary near 8K, sta
     assert.equal(policy.keepRecentTokens, 30_000);
     assert.equal(policy.backgroundTokens, 30_000);
   }
-  assert.equal(compactsAt(1_000_000), 150_000);
+  assert.equal(compactsAt(1_000_000), 250_000);
+  assert.equal(LARGE_WINDOW_COMPACT_AT_TOKENS, 250_000);
 });
 
 test("the summary budget is the harness's 80% of reserve, capped by the model's own output limit", () => {
