@@ -30,7 +30,7 @@
     writeTabSession,
   } from "@my-ax/store";
   import { MODELS } from "../../src/models";
-  import { MAX_MODEL_LAYERS, MODEL_LAYER_OPTIONS } from "../../src/model-layers";
+  import { MAX_MODEL_LAYERS, VERIFIED_LAYER_OPTIONS } from "../../src/model-layers";
   import { classifyJobHealth, jobResultAttr } from "./job-health";
 
   interface Props {
@@ -1298,8 +1298,8 @@
                   onchange={(e) => setModelLayerModel(idx, (e.target as HTMLSelectElement).value)}
                   class="w-full rounded-md bg-bg-alt border border-line text-fg text-xs px-2.5 py-2 min-h-[38px] focus:outline-none focus:border-brand/60"
                 >
-                  {#each MODEL_LAYER_OPTIONS as opt (opt.id)}
-                    <option value={opt.id}>{opt.label}{opt.fast ? "" : " (slow)"}</option>
+                  {#each VERIFIED_LAYER_OPTIONS as opt (opt.id)}
+                    <option value={opt.id}>{opt.label}</option>
                   {/each}
                 </select>
               </div>

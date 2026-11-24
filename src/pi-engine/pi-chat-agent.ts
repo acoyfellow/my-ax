@@ -5,7 +5,7 @@ import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { ConversationWatch, Report } from "@earendil-works/pi-durable";
 import { agentModel, inboxLength, isCompacting, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
 import { sanitizeLayerIds } from "../model-layers";
-import { LayerTurnController, type LayerAiBinding, type LayerFrame } from "./model-layers-runner";
+import { LayerTurnController, runClefJointRouter, type LayerAiBinding, type LayerFrame } from "./model-layers-runner";
 import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
@@ -243,15 +243,32 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }
     if (frame.type === "pi_submit") {
       try {
-        if (frame.model) await this.applyModelChoice(frame.model);
         const layers = sanitizeLayerIds(frame.layers);
         const turnId = typeof frame.operationId === "string" && frame.operationId ? frame.operationId : crypto.randomUUID();
+        const aiBinding = this.env.AI as unknown as LayerAiBinding | undefined;
+        const routerIdx = layers.indexOf("clef-router");
+        const requestedModel = typeof frame.model === "string" && frame.model ? frame.model : (await this.live()).model;
         this.activeLayerTurn?.stop();
+        let targetModel = frame.model;
+        let routedModel: string | null = null;
+        let routerDecision: Awaited<ReturnType<typeof runClefJointRouter>> | null = null;
+        if (routerIdx >= 0) {
+          routerDecision = await runClefJointRouter(aiBinding, frame.text ?? "", requestedModel, (frame.attachments ?? []).length > 0);
+          if (routerDecision.route === "fast") {
+            targetModel = routerDecision.targetModel;
+            routedModel = routerDecision.targetModel;
+          }
+        }
+        if (targetModel) await this.applyModelChoice(targetModel);
         if (layers.length > 0) {
-          const controller = new LayerTurnController(turnId, layers);
+          const controller = new LayerTurnController(turnId, layers, { routedModel });
           this.activeLayerTurn = controller;
-          const aiBinding = this.env.AI as unknown as LayerAiBinding | undefined;
-          this.ctx.waitUntil(controller.start(aiBinding, frame.text ?? "", this.emitLayerFrame).catch(() => {}));
+          if (routerDecision) {
+            this.emitLayerFrame({ type: "pi_layer", kind: "route", turnId, route: routerDecision.route, targetModel: routerDecision.targetModel, topic: routerDecision.topic, ms: routerDecision.ms });
+            controller.recordPrecomputedOpener(routerIdx + 1, "clef-router", routerDecision.opener, routerDecision.reaction, routerDecision.ms, routerDecision.fellBack, this.emitLayerFrame);
+          }
+          const skip = routerDecision ? new Set([routerIdx + 1]) : undefined;
+          this.ctx.waitUntil(controller.start(aiBinding, frame.text ?? "", this.emitLayerFrame, undefined, skip).catch(() => {}));
         } else {
           this.activeLayerTurn = null;
         }

@@ -1407,6 +1407,8 @@
     liveLayerSource = "";
     activeTurnMetric = null;
     turnMetricsByMsg = {};
+    reactionsByMsg = {};
+    activeUserReaction = null;
     piTranscript = new PiTranscript();
     return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
   }
@@ -1414,10 +1416,18 @@
   let piCompacting = $state(false);
   let liveLayerLine = $state<string | null>(null);
   let liveLayerSource = $state("");
-  type ClientTurnMetric = { startedAt: number; layers: string[]; firstResponseMs: number | null; firstReasoningMs: number | null; approvalMs: number | null; finishMs: number | null };
+  let reactionsByMsg = $state<Record<string, { emoji: string; label?: string }>>({});
+  let activeUserReaction = $state<{ emoji: string; label?: string } | null>(null);
+  type ClientTurnMetric = { startedAt: number; layers: string[]; firstResponseMs: number | null; firstReasoningMs: number | null; approvalMs: number | null; finishMs: number | null; routedModel?: string | null };
   let activeTurnMetric: ClientTurnMetric | null = null;
   let turnMetricsByMsg = $state<Record<string, TurnLayerMetrics>>({});
   const showTurnMetrics = $derived(modelLayersState.count > 0 || modelLayersState.showMetrics);
+
+  function setLatestUserReaction(emoji: string, label?: string) {
+    activeUserReaction = { emoji, label };
+    const lastUser = [...messages].reverse().find((item) => item.role === "user");
+    if (lastUser) reactionsByMsg = { ...reactionsByMsg, [lastUser.id]: { emoji, label } };
+  }
 
   function noteTurnEventsForMetrics(events: ReadonlyArray<Record<string, unknown>>) {
     if (!activeTurnMetric) return;
@@ -1467,12 +1477,14 @@
         activeTurnMetric.finishMs = elapsed;
         liveLayerLine = null;
         liveLayerSource = "";
+        setLatestUserReaction("✅", "done");
         const finished: TurnLayerMetrics = {
           layers: [...activeTurnMetric.layers],
           firstResponseMs: activeTurnMetric.firstResponseMs,
           firstReasoningMs: activeTurnMetric.firstReasoningMs,
           approvalMs: activeTurnMetric.approvalMs,
           finishMs: activeTurnMetric.finishMs,
+          ...(activeTurnMetric.routedModel ? { routedModel: activeTurnMetric.routedModel } : {}),
         };
         const lastAssistant = [...messages].reverse().find((item) => item.role === "assistant");
         if (lastAssistant) turnMetricsByMsg = { ...turnMetricsByMsg, [lastAssistant.id]: finished };
@@ -1576,6 +1588,12 @@
       if (match?.attachments?.length && !view.attachments?.length) view.attachments = match.attachments;
     }
     messages = annotateTurnDurations([...rendered, ...pendingUsers]);
+    if (activeUserReaction) {
+      const lastUser = [...messages].reverse().find((item) => item.role === "user");
+      if (lastUser && reactionsByMsg[lastUser.id]?.emoji !== activeUserReaction.emoji) {
+        reactionsByMsg = { ...reactionsByMsg, [lastUser.id]: activeUserReaction };
+      }
+    }
     if (sessionId && savingSnapshots) savedSnapshots.write(sessionId, piTranscript.toSnapshot());
     if (piTranscript.busy !== (wsState.status === "running" || wsState.status === "thinking")) applyStatus(piTranscript.busy ? "running" : "idle");
     bootstrapPending = false;
@@ -1603,8 +1621,13 @@
       return true;
     }
     if (frame.type === "pi_layer") {
-      if (frame.kind === "opener" || frame.kind === "status") {
+      if (frame.kind === "reaction" && typeof frame.emoji === "string") {
+        setLatestUserReaction(frame.emoji, typeof frame.label === "string" ? frame.label : undefined);
+      } else if (frame.kind === "route" && activeTurnMetric && frame.route === "fast" && typeof frame.targetModel === "string") {
+        activeTurnMetric.routedModel = frame.targetModel;
+      } else if (frame.kind === "opener" || frame.kind === "status") {
         const text = typeof frame.text === "string" ? frame.text.trim() : "";
+        if (typeof frame.reaction === "string" && frame.reaction) setLatestUserReaction(frame.reaction, frame.kind === "status" ? String(frame.toolName ?? "") : String(frame.layerId ?? ""));
         if (text) {
           liveLayerLine = text;
           liveLayerSource = frame.kind === "opener" ? `L${frame.layerIndex ?? 1} · ${frame.layerId ?? "layer"}` : String(frame.toolName ?? "status");
@@ -1627,12 +1650,14 @@
     if (frame.type === "pi_error") {
       liveLayerLine = null;
       activeTurnMetric = null;
+      setLatestUserReaction("⚠️", "error");
       pushError(String(frame.message ?? "Message failed"));
       return true;
     }
     if (frame.type === "pi_aborted") {
       liveLayerLine = null;
       activeTurnMetric = null;
+      setLatestUserReaction("⏹️", "stopped");
       return true;
     }
     return frame.type === "pi_receipt" || frame.type === "pi_pong" || frame.type === "my_ax_pong";
@@ -1641,7 +1666,8 @@
     const layers = activeLayerIds(modelLayersState);
     liveLayerLine = null;
     liveLayerSource = "";
-    activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: null, firstReasoningMs: null, approvalMs: null, finishMs: null };
+    activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: 0, firstReasoningMs: null, approvalMs: null, finishMs: null };
+    setLatestUserReaction("👀", "seen");
     ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, ...(layers.length ? { layers } : {}), model: modelState.current }));
   }
   let activeRequestId: string | null = null;
@@ -3504,6 +3530,18 @@
                   {:else if m.imageCount}
                     <div class="mb-2 inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-fg-mut">{m.imageCount === 1 ? "1 image" : `${m.imageCount} images`}</div>
                   {/if}<div class="msg-user-content">{#each [userTextBlock(m.content)] as block}{@render textBlock(block)}{/each}</div></div>
+                {#if reactionsByMsg[m.id]}
+                  <div class="mt-1 flex justify-end">
+                    <span
+                      class="inline-flex items-center gap-1 rounded-full border border-line bg-bg px-2 py-0.5 text-xs shadow-sm"
+                      data-msg-reaction={reactionsByMsg[m.id].emoji}
+                      title={reactionsByMsg[m.id].label ?? "Agent reaction"}
+                      aria-label={`Agent reacted ${reactionsByMsg[m.id].emoji}`}
+                    >
+                      <span>{reactionsByMsg[m.id].emoji}</span>
+                    </span>
+                  </div>
+                {/if}
               {:else if m.role === "assistant"}
                 {#if m.parts.length === 0 && !m.streaming}
                   <div class="msg-body" data-empty="1"></div>
