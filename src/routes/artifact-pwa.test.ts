@@ -60,7 +60,15 @@ test("artifact PWA shell keeps the widget inside a sandboxed iframe and links a 
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, new RegExp(`<link rel="manifest" href="/apps/${ID}/manifest\\.webmanifest" crossorigin="use-credentials">`));
-  assert.match(html, new RegExp(`<iframe src="/api/artifacts/${ID}/preview"[^>]*sandbox="allow-scripts"`));
+  assert.match(html, new RegExp(`<iframe src="/api/artifacts/${ID}/preview"[^>]*sandbox="allow-scripts allow-downloads allow-forms allow-popups allow-popups-to-escape-sandbox"`));
+  assert.doesNotMatch(html, /allow-same-origin/);
+  assert.doesNotMatch(html, /allow-top-navigation/);
+  assert.match(html, /allow="fullscreen; clipboard-write; clipboard-read; screen-wake-lock; web-share; autoplay"/);
+  assert.match(html, /my-ax:app-storage/);
+  assert.match(html, /my-ax:app-notify/);
+  assert.match(html, /my-ax:app-share/);
+  assert.match(html, /my-ax:app-env/);
+  assert.match(html, /e\.source!==frame\.contentWindow/);
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
   assert.match(html, /apple-mobile-web-app-capable/);
   assert.match(html, /navigator\.serviceWorker\.register\('\/sw\.js'/);
