@@ -44,6 +44,11 @@ export function installGatewayModels(models: MutableModels, env: Env): boolean {
   return true;
 }
 
+export function gatewayModelWindows(): Array<{ provider: string; id: string; contextWindow: number }> {
+  const wanted = new Set<string>(PI_GATEWAY_MODEL_IDS);
+  return anthropicProvider().getModels().filter((model) => wanted.has(model.id)).map((model) => ({ provider: PI_GATEWAY_PROVIDER_ID, id: model.id, contextWindow: model.contextWindow }));
+}
+
 export type PiModelChoice = { provider: string; id: string; label: string };
 
 export const PI_ENGINE_MODEL_CHOICES: readonly PiModelChoice[] = [

@@ -26,4 +26,9 @@ test("the session list counts only active jobs of the same owner", () => {
 test("each sidebar row renders the indicator from active_jobs", () => {
   const sidebar = readFileSync(new URL("./Sessions.svelte", import.meta.url), "utf8");
   assert.match(sidebar, /\{#if hasRecurringJob\(row\)\}[\s\S]{0,200}data-testid="session-job-indicator"/);
+  const status = sidebar.slice(sidebar.indexOf('<span class="session-row__status"'), sidebar.indexOf('<div\n            class="session-row__main"'));
+  assert.match(status, /<SessionSignalDot \{signal\} \/>[\s\S]*data-testid="session-job-indicator"/, "the clock sits inside the status group, right after the running spinner");
+  const rowStart = sidebar.indexOf('<span class="session-row__status"');
+  const main = sidebar.slice(sidebar.indexOf('class="session-row__main"', rowStart), sidebar.indexOf("{@render rowMenu(row, title", rowStart));
+  assert.doesNotMatch(main, /session-job-indicator/, "the clock is not a flex child of the title row, so it cannot wrap or push the time");
 });

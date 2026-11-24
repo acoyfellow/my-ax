@@ -39,6 +39,7 @@ import { compactionFinished } from "../workspace-save-policy";
 import { SpanLogContext, consoleSpanSink, type SpanRecord } from "./span-log";
 import { brainToolsExtension } from "./brain-tools";
 import { SpanBuffer } from "./span-store";
+import { piCompactionSettings } from "./compaction-policy";
 import { publishWorkspaceChange } from "../workspace-hub-client";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
@@ -50,7 +51,7 @@ import { forkPiChat, openPiChat } from "./routes";
 import { machineToolsExtension, type MachineToolRunner } from "./machine-tools";
 import { MACHINECTL_CODE_TOOL, MACHINECTL_TOOL } from "../routes/machinectl";
 import type { ToolContext } from "../types";
-import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID, resolvePiModelChoice } from "./gateway-models";
+import { installGatewayModels, PI_ENGINE_GATEWAY_DEFAULT_MODEL, PI_GATEWAY_PROVIDER_ID, resolvePiModelChoice, gatewayModelWindows } from "./gateway-models";
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -93,6 +94,7 @@ function logHarnessReport(report: Report): void {
 }
 
 const MCP_CATALOG_TIMEOUT_MS = 8_000;
+const PI_HARNESS_SETTINGS = { compaction: piCompactionSettings(gatewayModelWindows()) };
 
 export class PiChatAgent extends Agent<Env, PiChatState> {
   static options = { sendIdentityOnConnect: false };
@@ -120,7 +122,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
       this.registry.install(createToolSearchExtension());
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
-      return Harness.open(storage, { models, registry: this.registry, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
+      return Harness.open(storage, { models, registry: this.registry, settings: PI_HARNESS_SETTINGS, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
     },
     defaults: hasGatewayModels(this.env)
       ? { model: { provider: PI_GATEWAY_PROVIDER_ID, id: PI_ENGINE_GATEWAY_DEFAULT_MODEL }, thinkingLevel: "medium" }

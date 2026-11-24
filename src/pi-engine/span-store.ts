@@ -24,6 +24,8 @@ export type SpanRow = {
 };
 
 const COLUMNS = ["span_id", "trace_id", "parent_id", "owner_email", "chat_id", "source", "name", "phase", "task_name", "tool_name", "model", "status", "error", "started_ms", "dur_ms", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd"] as const;
+export const SPAN_INGEST_MAX = 500;
+export const SPAN_SOURCES = ["pi-local"] as const;
 const INSERT_SQL = `INSERT OR IGNORE INTO pi_spans (${COLUMNS.join(", ")}) VALUES (${COLUMNS.map(() => "?").join(", ")})`;
 export const SPAN_RETENTION_MS = 90 * 24 * 3_600_000;
 const MAX_BUFFERED = 200;
@@ -97,4 +99,57 @@ export class SpanBuffer {
 
 export async function pruneSpans(db: D1Database, now = Date.now()): Promise<void> {
   await db.prepare("DELETE FROM pi_spans WHERE started_ms < ?").bind(now - SPAN_RETENTION_MS).run();
+}
+
+const HEX = /^[0-9a-f]{8,64}$/;
+const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const SPAN_NAMES = new Set(["pi.durable.submit", "pi.durable.phase", "pi.ai.request"]);
+
+function bounded(value: unknown, max: number): string | null {
+  return typeof value === "string" && value ? value.slice(0, max) : null;
+}
+
+function finite(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function ingestRow(input: unknown, ownerEmail: string, source: string): SpanRow | null {
+  if (!input || typeof input !== "object") return null;
+  const row = input as Record<string, unknown>;
+  const spanId = typeof row.span_id === "string" && HEX.test(row.span_id) ? row.span_id : null;
+  const traceId = typeof row.trace_id === "string" && HEX.test(row.trace_id) ? row.trace_id : null;
+  const chatId = typeof row.chat_id === "string" && SAFE_ID.test(row.chat_id) ? row.chat_id : null;
+  const name = typeof row.name === "string" && SPAN_NAMES.has(row.name) ? row.name : null;
+  const status = row.status === "ok" || row.status === "error" ? row.status : null;
+  const startedMs = finite(row.started_ms);
+  const durMs = finite(row.dur_ms);
+  if (!spanId || !traceId || !chatId || !name || !status || startedMs === null || durMs === null) return null;
+  return {
+    span_id: `${source}:${spanId}`,
+    trace_id: traceId,
+    parent_id: typeof row.parent_id === "string" && HEX.test(row.parent_id) ? `${source}:${row.parent_id}` : null,
+    owner_email: ownerEmail.toLowerCase(),
+    chat_id: `${source}:${chatId}`,
+    source,
+    name,
+    phase: bounded(row.phase, 32),
+    task_name: bounded(row.task_name, 64),
+    tool_name: bounded(row.tool_name, 128),
+    model: bounded(row.model, 128),
+    status,
+    error: bounded(row.error, 300),
+    started_ms: Math.round(startedMs),
+    dur_ms: Math.round(durMs),
+    input_tokens: finite(row.input_tokens),
+    output_tokens: finite(row.output_tokens),
+    cache_read_tokens: finite(row.cache_read_tokens),
+    cache_write_tokens: finite(row.cache_write_tokens),
+    cost_usd: finite(row.cost_usd),
+  };
+}
+
+export async function ingestSpans(db: D1Database, ownerEmail: string, source: string, inputs: unknown[]): Promise<{ stored: number; rejected: number }> {
+  const rows = inputs.slice(0, SPAN_INGEST_MAX).map((input) => ingestRow(input, ownerEmail, source)).filter((row): row is SpanRow => row !== null);
+  if (rows.length) await db.batch(rows.map((row) => db.prepare(INSERT_SQL).bind(...COLUMNS.map((column) => row[column]))));
+  return { stored: rows.length, rejected: Math.min(inputs.length, SPAN_INGEST_MAX) - rows.length };
 }

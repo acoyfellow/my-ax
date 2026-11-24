@@ -737,7 +737,14 @@
           ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}
           ondragend={pinnedGroup ? onPinDragEnd : undefined}
         >
-          <SessionSignalDot {signal} />
+          <span class="session-row__status" data-testid="session-row-status">
+            <SessionSignalDot {signal} />
+            {#if hasRecurringJob(row)}
+              <span class="session-row__job" data-testid="session-job-indicator" role="img" aria-label={recurringJobLabel(row)} title={recurringJobLabel(row)}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/></svg>
+              </span>
+            {/if}
+          </span>
           <div
             class="session-row__main"
             data-run-state={runStateOf(signal)}
@@ -751,11 +758,6 @@
             }}
           >
             <span class="session-row__title">{title}</span>
-            {#if hasRecurringJob(row)}
-              <span class="session-row__job" data-testid="session-job-indicator" role="img" aria-label={recurringJobLabel(row)} title={recurringJobLabel(row)}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/><path d="M12 7v5l3 2"/></svg>
-              </span>
-            {/if}
             <span class="session-row__meta">{shortSessionTime(row.updated_at)}</span>
           </div>
           {@render rowMenu(row, title, pinnedGroup, indexInGroup, groupTotal)}
@@ -889,7 +891,9 @@
   :global(.session-row[data-active="1"]) { background: var(--bg); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.04); }
   :global(.session-row__main) { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 100%; outline: none; }
   :global(.session-row__title) { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  :global(.session-row__job) { display: inline-flex; flex: none; align-items: center; color: var(--accent, var(--fg-mut)); }
+  :global(.session-row__status) { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 12px; line-height: 0; }
+  :global(.session-row__job) { display: inline-flex; flex: none; align-items: center; width: 11px; height: 11px; color: var(--accent, var(--fg-mut)); }
+  :global(.session-row__job svg) { display: block; }
   :global(.session-row__meta) { font-size: 11.5px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
   :global(.session-row__main:focus-visible) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 6px; }
 
@@ -898,11 +902,11 @@
   :global(.session-tile[data-active="1"]) { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
   :global(.session-tile .session-row__main) { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 2px; }
   :global(.session-tile .session-row__title) { flex: none; width: 100%; font-weight: 500; font-size: 13px; padding-right: 14px; }
-  :global(.session-tile .session-row__signal) { position: absolute; top: 10px; right: 10px; }
+  :global(.session-tile .session-row__status) { position: absolute; top: 9px; right: 9px; }
+  :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 30px; }
   :global(.session-tile .session-row__actions) { position: absolute; right: 4px; bottom: 4px; }
 
-  :global(.session-tile .session-row__signal[data-signal="running"]) { top: 9px; right: 9px; }
-
+  
   :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
   :global(.session-menu[data-align="start"]) { right: auto; left: -2px; }
   :global(.session-row__more) { display: grid; width: 22px; height: 22px; border-radius: 5px; place-items: center; color: var(--fg-mut); font-size: 15px; line-height: 1; opacity: 0; }

@@ -42,7 +42,7 @@
   import { initialTranscriptGuard, onSuppress as guardSuppress, onReArm as guardReArm, acceptTranscript, type TranscriptGuardState } from "./voice-transcript-guard";
   import ToolResultWidget from "./ToolResultWidget.svelte";
   import { browserDecisionFocusEnv, focusDecision } from "./decision-focus";
-  import { decisionIdFromLocation } from "./decision-widget";
+  import { decisionIdFromLocation, dismissDecisionOnServer } from "./decision-widget";
   import Terminal from "./Terminal.svelte";
   import ImageLightbox from "./ImageLightbox.svelte";
   import { resolveToolResultWidget, selectVisibleReusableToolCandidates, type CandidateReceipt } from "./tool-result-widgets";
@@ -3254,7 +3254,7 @@
 
   {#if pendingDecision && dismissedDecisionId !== pendingDecision.id}
     <div class="decision-banner relative" data-decision-banner>
-    <button type="button" class="decision-banner__close" aria-label="Hide" data-decision-banner-close onclick={() => { if (pendingDecision) dismissedDecisionId = pendingDecision.id; }}>×</button>
+    <button type="button" class="decision-banner__close" aria-label="Dismiss question" data-decision-banner-close onclick={() => { if (!pendingDecision) return; const id = pendingDecision.id; dismissedDecisionId = id; pendingDecision = null; void dismissDecisionOnServer(id, fetch); }}>×</button>
     <a href={pendingDecision.href} onclick={(event) => { if (!pendingDecision) return; event.preventDefault(); dismissedDecisionId = pendingDecision.id; void focusDecision(pendingDecision.id, browserDecisionFocusEnv()); }} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
       <span class="min-w-0"><strong class="text-brand">Needs your input</strong><span class="ml-2 text-fg-mut">{pendingDecision.question}</span></span>
       <span class="flex-none text-brand font-semibold pr-6">Go to decision ↓</span>

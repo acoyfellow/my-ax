@@ -22,9 +22,9 @@ test("stop aborts the run directly, and the stuck watchdog uses the same path", 
   assert.match(agent, /pi_turn_stuck_ended[^\n]*\n\s*await this\.abortAll\(\);/);
 });
 
-test("Go to decision hides its banner when clicked, and an X hides it too, until a new decision arrives", () => {
+test("Go to decision hides its banner when clicked, and the X dismisses the decision on the server", () => {
   assert.match(chat, /\{#if pendingDecision && dismissedDecisionId !== pendingDecision\.id\}/);
-  assert.match(chat, /data-decision-banner-close onclick=\{\(\) => \{ if \(pendingDecision\) dismissedDecisionId = pendingDecision\.id; \}\}/);
+  assert.match(chat, /data-decision-banner-close onclick=\{\(\) => \{ if \(!pendingDecision\) return; const id = pendingDecision\.id; dismissedDecisionId = id; pendingDecision = null; void dismissDecisionOnServer\(id, fetch\); \}\}/);
   assert.match(chat, /event\.preventDefault\(\); dismissedDecisionId = pendingDecision\.id; void focusDecision/);
 });
 
