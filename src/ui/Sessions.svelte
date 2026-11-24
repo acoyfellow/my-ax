@@ -622,7 +622,7 @@
   class:pointer-events-auto={shown}
   class:pointer-events-none={!shown}
 >
-  <div class="flex-none flex flex-col p-2.5" class:safe-area-appbar={!docked}>
+  <div class="sessions-head flex-none flex flex-col" class:safe-area-appbar={!docked}>
     {#if !docked}
       <div class="flex items-center justify-between pb-2">
         <button type="button" onclick={dismissPanel} class="sessions-icon" aria-label="Close sidebar" title="Close">
@@ -643,7 +643,7 @@
 
   <div
     bind:this={scrollEl}
-    class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] px-2 pb-3"
+    class="sessions-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] pb-3"
   >
     {#if loading}
       <div class="px-3 py-4 text-center text-xs text-fg-mut">Loading…</div>
@@ -868,7 +868,9 @@
   @media (prefers-reduced-motion: reduce) { .sessions-docked-motion { transition: none; } #sessions-panel :global(.session-row), #sessions-panel .session-root { animation: none; } }
   .sessions-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--fg-mut); }
   .sessions-icon:hover { background: var(--color-surface-2); color: var(--fg); }
-  .sessions-tools { display: flex; align-items: center; gap: 6px; }
+  .sessions-head, .sessions-scroll { --rail-inset: 12px; --rail-gap: 6px; padding-inline: var(--rail-inset); scrollbar-gutter: stable; }
+  .sessions-head { padding-block: 10px var(--rail-gap); overflow-y: hidden; scrollbar-width: thin; }
+  .sessions-tools { display: flex; align-items: center; gap: var(--rail-gap); }
   .sessions-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); background: color-mix(in srgb, var(--color-surface-1) 70%, var(--bg)); color: var(--fg-mut); transition: border-color 140ms ease, background-color 140ms ease; }
   .sessions-search:hover { background: var(--color-surface-1); border-color: var(--line); }
   .sessions-search:focus-within { background: var(--bg); border-color: var(--line); }
@@ -877,7 +879,7 @@
   .sessions-search:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 55%, transparent); }
   .sessions-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 13px; color: var(--fg); appearance: none; }
   .sessions-search input::placeholder { color: var(--fg-mut); }
-  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 6px; padding: 6px 4px 8px; }
+  .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: var(--rail-gap); padding: 0 0 8px; }
   :global(.session-tile[data-size="medium"]) { grid-column: span 2; }
   :global(.session-tile[data-size="large"]) { grid-column: span 2; height: 112px; padding: 14px; }
   :global(.session-tile[data-size="large"] .session-row__title) { font-size: 16px; font-weight: 600; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
