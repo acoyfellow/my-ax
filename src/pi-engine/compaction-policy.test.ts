@@ -6,10 +6,11 @@ import { gatewayModelWindows } from "./gateway-models";
 test("every 1M gateway model compacts at 250K tokens, like local Pi, with a summary near 8K, starting in the background 30K earlier", () => {
   const settings = piCompactionSettings(gatewayModelWindows());
   const keys = Object.keys(settings.modelOverrides ?? {});
-  assert.deepEqual(keys.sort(), ["myax-gateway/claude-opus-5", "myax-gateway/claude-opus-5-5", "myax-gateway/claude-sonnet-5-5"]);
+  assert.deepEqual(keys.sort(), ["myax-gateway-google/gemini-4-hydrogen", "myax-gateway-google/gemini-4-neon", "myax-gateway/claude-opus-5", "myax-gateway/claude-opus-5-5", "myax-gateway/claude-sonnet-5-5"]);
+  const windows = new Map(gatewayModelWindows().map((model) => [`${model.provider}/${model.id}`, model.contextWindow]));
   for (const key of keys) {
     const policy = settings.modelOverrides![key]!;
-    assert.equal(1_000_000 - policy.reserveTokens!, LARGE_WINDOW_COMPACT_AT_TOKENS);
+    assert.equal(windows.get(key)! - policy.reserveTokens!, LARGE_WINDOW_COMPACT_AT_TOKENS);
     assert.equal(policy.keepRecentTokens, 30_000);
     assert.equal(policy.backgroundTokens, 30_000);
   }

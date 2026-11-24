@@ -5,7 +5,7 @@
 
 import type { Env } from "./types";
 
-export type ModelRoute = "workers-ai" | "gateway-openai" | "gateway-anthropic" | "gateway-workers-ai";
+export type ModelRoute = "workers-ai" | "gateway-openai" | "gateway-anthropic" | "gateway-workers-ai" | "gateway-google";
 
 export interface ModelEntry {
   id: string;
@@ -94,6 +94,26 @@ export const MODELS: ModelEntry[] = [
     tools: true,
     vision: true,
     label: "Opus 5",
+  },
+  {
+    id: "gemini-4-neon",
+    route: "gateway-google",
+    owned_by: "google",
+    context: 1_048_576,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "Gemini 4 Neon",
+  },
+  {
+    id: "gemini-4-hydrogen",
+    route: "gateway-google",
+    owned_by: "google",
+    context: 1_048_576,
+    reasoning: true,
+    tools: true,
+    vision: true,
+    label: "Gemini 4 Hydrogen",
   },
   {
     id: "claude-opus-4-8",

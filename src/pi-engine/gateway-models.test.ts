@@ -82,3 +82,43 @@ test("a reply refused after it already streamed some text is retried on the next
   assert.equal(events.includes("error"), false);
   assert.equal(events.at(-1), "done");
 });
+
+test("the Google route is derived from the OpenAI gateway URL, like the Anthropic one", async () => {
+  const { googleGatewayBaseUrl } = await import("./gateway-models");
+  assert.equal(googleGatewayBaseUrl("https://gateway.opencode.cloudflare.dev/openai"), "https://gateway.opencode.cloudflare.dev/google-ai-studio/v1beta");
+  assert.equal(googleGatewayBaseUrl("https://gw.example/openai/"), "https://gw.example/google-ai-studio/v1beta");
+  assert.equal(googleGatewayBaseUrl("https://gw.example/"), "https://gw.example/google-ai-studio/v1beta");
+});
+
+test("Google requests authenticate with cf-access-token only; a Bearer or api key alone gets 401 from the gateway", async () => {
+  const { googleGatewayHeaders } = await import("./gateway-models");
+  assert.deepEqual(googleGatewayHeaders({ "cf-access-token": "t", "X-Requested-With": "xmlhttprequest" }), { "X-Requested-With": "xmlhttprequest", "cf-access-token": "t" });
+  assert.deepEqual(googleGatewayHeaders({ authorization: "Bearer t" }), { "cf-access-token": "t" });
+  assert.deepEqual(googleGatewayHeaders({ "CF-Access-Client-Id": "id", "CF-Access-Client-Secret": "s" }), { "CF-Access-Client-Id": "id", "CF-Access-Client-Secret": "s" });
+});
+
+test("Gemini 4 Neon and Hydrogen are Pi engine choices on their own Google gateway provider, and Settings maps to them", async () => {
+  const { PI_GOOGLE_GATEWAY_PROVIDER_ID, resolvePiModelChoice, gatewayModelWindows } = await import("./gateway-models");
+  assert.deepEqual(resolvePiModelChoice("gemini-4-neon"), { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-neon", label: "Gemini 4 Neon" });
+  assert.equal(resolvePiModelChoice("gemini-4-hydrogen")?.provider, PI_GOOGLE_GATEWAY_PROVIDER_ID);
+  assert.equal(resolvePiModelChoice("gemini-4-carbon"), undefined);
+  const windows = gatewayModelWindows().filter((model) => model.provider === PI_GOOGLE_GATEWAY_PROVIDER_ID);
+  assert.deepEqual(windows.map((model) => model.id).sort(), ["gemini-4-hydrogen", "gemini-4-neon"]);
+  assert.ok(windows.every((model) => model.contextWindow >= 1_000_000));
+  const { MODELS } = await import("../models");
+  assert.equal(MODELS.find((model) => model.id === "gemini-4-neon")?.label, "Gemini 4 Neon");
+});
+
+test("installing gateway models registers a Google provider whose requests go to the gateway with cf-access-token and a placeholder key", async () => {
+  const { createModels } = await import("@earendil-works/pi-ai/models");
+  const { installGoogleGatewayModels, PI_GOOGLE_GATEWAY_PROVIDER_ID } = await import("./gateway-models");
+  const models = createModels();
+  assert.equal(installGoogleGatewayModels(models as never, { baseURL: "https://gw.example/openai", headers: { "cf-access-token": "t" } }), true);
+  const neon = models.getModel(PI_GOOGLE_GATEWAY_PROVIDER_ID, "gemini-4-neon");
+  assert.ok(neon);
+  assert.equal(neon.baseUrl, "https://gw.example/google-ai-studio/v1beta");
+  assert.equal(neon.api, "google-generative-ai");
+  const auth = await (models as unknown as { getAuth(model: unknown): Promise<{ auth: { apiKey?: string; headers?: Record<string, string> } }> }).getAuth(neon);
+  assert.equal(auth.auth.apiKey, "gateway");
+  assert.equal(auth.auth.headers?.["cf-access-token"], "t");
+});

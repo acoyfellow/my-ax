@@ -3,12 +3,29 @@ import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/e
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+import { googleGenerativeAIApi } from "@earendil-works/pi-ai/api/google-generative-ai.lazy";
+import { googleProvider } from "@earendil-works/pi-ai/providers/google";
 import { gatewayConfig } from "../llm";
 import type { Env } from "../types";
 
 export const PI_GATEWAY_PROVIDER_ID = "myax-gateway";
 export const PI_GATEWAY_MODEL_IDS = ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"] as const;
 export const PI_ENGINE_GATEWAY_DEFAULT_MODEL = "claude-opus-5-5";
+export const PI_GOOGLE_GATEWAY_PROVIDER_ID = "myax-gateway-google";
+export const PI_GOOGLE_GATEWAY_MODEL_IDS = ["gemini-4-neon", "gemini-4-hydrogen"] as const;
+export const GOOGLE_GATEWAY_API_KEY_PLACEHOLDER = "gateway";
+
+export function googleGatewayBaseUrl(baseURL: string): string {
+  return /\/openai\/?$/.test(baseURL) ? baseURL.replace(/\/openai\/?$/, "/google-ai-studio/v1beta") : `${baseURL.replace(/\/$/, "")}/google-ai-studio/v1beta`;
+}
+
+export function googleGatewayHeaders(headers: Record<string, string>): Record<string, string> {
+  const accessToken = Object.entries(headers).find(([name]) => name.toLowerCase() === "cf-access-token")?.[1];
+  const bearer = Object.entries(headers).find(([name]) => name.toLowerCase() === "authorization")?.[1]?.replace(/^Bearer\s+/i, "");
+  const token = accessToken ?? bearer;
+  const rest = Object.fromEntries(Object.entries(headers).filter(([name]) => !["authorization", "cf-access-token"].includes(name.toLowerCase())));
+  return token ? { ...rest, "cf-access-token": token } : rest;
+}
 
 export function anthropicGatewayBaseUrl(baseURL: string): string {
   return /\/openai\/?$/.test(baseURL) ? baseURL.replace(/\/openai\/?$/, "/anthropic") : baseURL.replace(/\/$/, "");
@@ -41,12 +58,34 @@ export function installGatewayModels(models: MutableModels, env: Env): boolean {
     models: catalog.map((model) => ({ ...model, provider: PI_GATEWAY_PROVIDER_ID, baseUrl })),
     api: anthropicMessagesApi(),
   })));
+  installGoogleGatewayModels(models, config);
+  return true;
+}
+
+export function installGoogleGatewayModels(models: MutableModels, config: { baseURL: string; headers: Record<string, string> }): boolean {
+  const baseUrl = googleGatewayBaseUrl(config.baseURL);
+  const headers = googleGatewayHeaders(config.headers);
+  const wanted = new Set<string>(PI_GOOGLE_GATEWAY_MODEL_IDS);
+  const catalog = googleProvider().getModels().filter((model) => wanted.has(model.id));
+  if (!catalog.length) return false;
+  models.setProvider(createProvider({
+    id: PI_GOOGLE_GATEWAY_PROVIDER_ID,
+    name: "My AX gateway (Google)",
+    baseUrl,
+    auth: { apiKey: { name: "My AX gateway (Google)", resolve: async () => ({ auth: { apiKey: GOOGLE_GATEWAY_API_KEY_PLACEHOLDER, headers }, source: "gateway" }) } },
+    models: catalog.map((model) => ({ ...model, provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, baseUrl })),
+    api: googleGenerativeAIApi(),
+  }));
   return true;
 }
 
 export function gatewayModelWindows(): Array<{ provider: string; id: string; contextWindow: number }> {
   const wanted = new Set<string>(PI_GATEWAY_MODEL_IDS);
-  return anthropicProvider().getModels().filter((model) => wanted.has(model.id)).map((model) => ({ provider: PI_GATEWAY_PROVIDER_ID, id: model.id, contextWindow: model.contextWindow }));
+  const google = new Set<string>(PI_GOOGLE_GATEWAY_MODEL_IDS);
+  return [
+    ...anthropicProvider().getModels().filter((model) => wanted.has(model.id)).map((model) => ({ provider: PI_GATEWAY_PROVIDER_ID, id: model.id, contextWindow: model.contextWindow })),
+    ...googleProvider().getModels().filter((model) => google.has(model.id)).map((model) => ({ provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: model.id, contextWindow: model.contextWindow })),
+  ];
 }
 
 export type PiModelChoice = { provider: string; id: string; label: string };
@@ -55,6 +94,8 @@ export const PI_ENGINE_MODEL_CHOICES: readonly PiModelChoice[] = [
   { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-opus-5-5", label: "Opus 5.5" },
   { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-opus-5", label: "Opus 5" },
   { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-neon", label: "Gemini 4 Neon" },
+  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen" },
   { provider: "cloudflare", id: "@cf/zai-org/glm-5.3", label: "GLM 5.3" },
 ];
 

@@ -55,6 +55,7 @@ function workersAiGatewayURL(baseURL: string): string {
 
 function gatewayRouteURL(baseURL: string, route: ModelEntry["route"]): string {
   if (route === "gateway-anthropic") return anthropicGatewayURL(baseURL);
+  if (route === "gateway-google") return /\/openai\/?$/.test(baseURL) ? baseURL.replace(/\/openai\/?$/, "/google-ai-studio/v1beta/openai") : `${baseURL.replace(/\/$/, "")}/google-ai-studio/v1beta/openai`;
   if (route === "gateway-workers-ai") return workersAiGatewayURL(baseURL);
   return baseURL;
 }
@@ -114,7 +115,7 @@ export function resolveMyAxModel(env: Env, requestedModel?: string) {
       // the turn. See src/gateway-retry-fetch.ts (#6).
       fetch: createRetryFetch({ fetch: globalThis.fetch.bind(globalThis) }),
     })(meta.upstreamId ?? modelId);
-  } else if (meta.route === "gateway-workers-ai") {
+  } else if (meta.route === "gateway-workers-ai" || meta.route === "gateway-google") {
     const gateway = modelGatewayConfig(env, meta);
     model = createOpenAI({
       baseURL: gateway.baseURL,
