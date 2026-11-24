@@ -25,6 +25,7 @@ type ModelMessage = Record<string, unknown>;
 export type PiEntry = { id: number; kind: string; model?: ModelMessage[]; clipped?: true };
 export type PiSnapshot = {
   busy: boolean;
+  compacting?: boolean;
   model: string;
   entries: PiEntry[];
   partial: ModelMessage | null;
@@ -76,6 +77,7 @@ export class PiTranscript {
   partial: ModelMessage | null = null;
   private streamError: string | null = null;
   busy = false;
+  compacting = false;
   model = "";
   queued = 0;
   olderCount = 0;
@@ -95,6 +97,7 @@ export class PiTranscript {
     if (snapshot.olderCount !== undefined) this.olderCount = snapshot.olderCount;
     this.partial = snapshot.partial;
     this.busy = snapshot.busy;
+    this.compacting = snapshot.compacting === true;
     this.model = snapshot.model;
     this.queued = snapshot.queued;
     this.liveOutput.clear();
@@ -152,7 +155,10 @@ export class PiTranscript {
     for (const event of events) {
       switch (event.type) {
         case "run_start": this.busy = true; break;
-        case "run_end": this.busy = false; this.partial = null; break;
+        case "run_end": this.busy = false; this.compacting = false; this.partial = null; break;
+        case "compaction_start": this.compacting = true; break;
+        case "compaction_end": this.compacting = false; break;
+        case "partial_cleared": this.partial = null; break;
         case "message_start": {
           const message = event.message as ModelMessage | undefined;
           if (message?.role === "assistant") this.partial = message;
@@ -164,7 +170,7 @@ export class PiTranscript {
         case "tool_execution_end": {
           const entry = event.entry as PiEntry | undefined;
           if (entry) this.entries.set(entry.id, entry);
-          if (event.type === "message_end" && entry?.model?.some((message) => message.role === "assistant")) this.partial = null;
+          if ((event.type === "message_end" || event.type === "entry_appended") && entry?.model?.some((message) => message.role === "assistant")) this.partial = null;
           const ended = event.message as ModelMessage | undefined;
           if (event.type === "message_end" && !entry && ended?.role === "assistant" && ended.stopReason === "error") {
             this.streamError = turnErrorText(ended);

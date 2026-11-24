@@ -11,11 +11,17 @@ type LiveDoc = {
   run?: unknown;
   generation?: { message?: Json; retry?: { at: number; error: string } };
   tools?: ReadonlyArray<{ callId: string; output?: string }>;
+  compactions?: ReadonlyArray<{ taskId?: unknown; reason?: string; blocking?: boolean }>;
+  compactionFailure?: { taskId?: unknown; reason?: string; error?: string };
   runFailure?: { taskId?: unknown; reason?: string; detail?: string };
 };
 
 export function liveDoc(view: WatchedView | null): LiveDoc {
   return (view?.docs["pi.live"] ?? {}) as LiveDoc;
+}
+
+export function isCompacting(view: WatchedView | null): boolean {
+  return (liveDoc(view).compactions?.length ?? 0) > 0;
 }
 
 export function inboxLength(view: WatchedView | null): number {
@@ -68,17 +74,35 @@ export function viewEvents(previous: WatchedView | null, next: WatchedView, ops?
   const after = liveDoc(next);
   if (!before.run && after.run) events.push({ type: "run_start" });
 
+  const wasCompacting = (before.compactions?.length ?? 0) > 0;
+  const nowCompacting = (after.compactions?.length ?? 0) > 0;
+  if (!wasCompacting && nowCompacting) events.push({ type: "compaction_start" });
+
+  let compactionAppended = false;
+  let assistantAppended = false;
   const known = new Set((previous?.entries ?? []).map(entryId));
   for (const entry of next.entries) {
     if (known.has(entryId(entry))) continue;
     events.push({ type: "entry_appended", entry });
-    if (entry.kind === "pi.compaction") events.push({ type: "compaction_end" });
+    if (entry.kind === "pi.compaction") {
+      compactionAppended = true;
+      events.push({ type: "compaction_end" });
+    }
+    if (Array.isArray(entry.model) && (entry.model as Array<{ role?: unknown }>).some((message) => message.role === "assistant")) {
+      assistantAppended = true;
+    }
+  }
+  if (wasCompacting && !nowCompacting && !compactionAppended) {
+    const error = after.compactionFailure && after.compactionFailure !== before.compactionFailure ? after.compactionFailure.error || "failed" : "aborted";
+    events.push({ type: "compaction_end", error });
   }
 
   const partial = after.generation?.message;
   if (partial && partial !== before.generation?.message) {
     const deltas = before.generation?.message ? streamDeltas(ops, next) : null;
     events.push({ type: "message_update", changes: deltas ?? [{ type: "message", message: partial }] });
+  } else if (before.generation?.message && !partial && !assistantAppended) {
+    events.push({ type: "partial_cleared" });
   }
 
   const outputs = new Map((before.tools ?? []).map((tool) => [tool.callId, tool.output]));

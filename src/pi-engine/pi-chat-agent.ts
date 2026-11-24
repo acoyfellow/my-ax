@@ -3,7 +3,7 @@ import { applySessionEvent } from "../fsm/session-status";
 import { createRegistry, Harness, type EntryRecord } from "@earendil-works/pi-durable";
 import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { ConversationWatch, Report } from "@earendil-works/pi-durable";
-import { agentModel, inboxLength, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
+import { agentModel, inboxLength, isCompacting, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
 import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
@@ -73,6 +73,7 @@ export type PiChatSubmitResult = { operationId: string; accepted: boolean };
 export type PiChatWaitResult = { status: string; text?: string; reason?: string };
 export type PiChatLiveView = {
   busy: boolean;
+  compacting?: boolean;
   model: string;
   entries: unknown[];
   partial: unknown | null;
@@ -221,6 +222,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }
     if (frame.type === "pi_ping") {
       connection.send(JSON.stringify({ type: "pi_pong" }));
+      return;
+    }
+    if (frame.type === "my_ax_ping") {
+      connection.send(JSON.stringify({ type: "my_ax_pong", at: frame.at }));
       return;
     }
     if (frame.type === "pi_abort") {
@@ -543,6 +548,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const live = liveDoc(view);
     return {
       busy: live.run !== undefined,
+      compacting: isCompacting(view),
       model: agentModel(view),
       entries: [...entries],
       partial: live.generation?.message ?? null,

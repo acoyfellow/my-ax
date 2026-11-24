@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -6,7 +7,7 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@ear
 import { createRegistry, defineExtension, defineTool, Harness, MemoryStorage } from "@earendil-works/pi-durable";
 import { obj, str } from "@earendil-works/pi-schema";
 import { PiTranscript, type PiEntry } from "../ui/pi-transcript";
-import { runFailureText, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
+import { isCompacting, runFailureText, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
 
 async function run(responses: Parameters<ReturnType<typeof fauxProvider>["setResponses"]>[0]) {
   const context = BACKGROUND_CONTEXT;
@@ -114,4 +115,25 @@ test("stop during a hanging tool ends the run and the browser goes idle", async 
   assert.notEqual(transcript.messages().at(-1)?.role, "error");
   await watch.stop();
   await harness.close(context);
+});
+
+test("blocking compaction emits compaction_start and compaction_end so the UI does not sit silent", () => {
+  const idle: WatchedView = { entries: [], docs: { "pi.live": { run: { taskId: 1 } } } };
+  const compacting: WatchedView = { entries: [], docs: { "pi.live": { run: { taskId: 1 }, compactions: [{ taskId: 2, reason: "threshold", blocking: true }] } } };
+  const done: WatchedView = { entries: [{ id: 10, kind: "pi.compaction" }], docs: { "pi.live": { run: { taskId: 1 } } } };
+  const aborted: WatchedView = { entries: [], docs: { "pi.live": { run: { taskId: 1 } } } };
+
+  assert.equal(isCompacting(idle), false);
+  assert.equal(isCompacting(compacting), true);
+  assert.deepEqual(viewEvents(idle, compacting), [{ type: "compaction_start" }]);
+  assert.deepEqual(viewEvents(compacting, done), [{ type: "entry_appended", entry: { id: 10, kind: "pi.compaction" } }, { type: "compaction_end" }]);
+  assert.deepEqual(viewEvents(compacting, aborted), [{ type: "compaction_end", error: "aborted" }]);
+});
+
+test("PiChatAgent answers both pi_ping and my_ax_ping so slow model turns never drop the socket", () => {
+  const agent = readFileSync(new URL("./pi-chat-agent.ts", import.meta.url), "utf8");
+  const chat = readFileSync(new URL("../ui/Chat.svelte", import.meta.url), "utf8");
+  assert.match(agent, /frame\.type === "pi_ping"/);
+  assert.match(agent, /frame\.type === "my_ax_ping"/);
+  assert.match(chat, /piTranscript \? \{ type: "pi_ping"/);
 });

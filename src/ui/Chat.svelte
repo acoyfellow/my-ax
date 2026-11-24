@@ -1400,10 +1400,12 @@
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     savingSnapshots = false;
     piOlderCount = 0;
+    piCompacting = false;
     piTranscript = new PiTranscript();
     return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
   }
   let piBusy = $state(false);
+  let piCompacting = $state(false);
   const localQueue = new LocalMessageQueue(() => `queued-${crypto.randomUUID()}`);
   let queuedMessages = $state<readonly QueuedMessage[]>([]);
   let flushingQueue = false;
@@ -1467,6 +1469,7 @@
     if (!piTranscript) return;
     const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();
     piBusy = piTranscript.busy;
+    piCompacting = piTranscript.compacting;
     piOlderCount = piTranscript.olderCount;
     const sessionId = currentSessionId();
     const optimistic = messages.filter((message) => message.pending && message.role === "user");
@@ -1529,7 +1532,7 @@
       return true;
     }
     if (frame.type === "pi_aborted") return true;
-    return frame.type === "pi_receipt" || frame.type === "pi_pong";
+    return frame.type === "pi_receipt" || frame.type === "pi_pong" || frame.type === "my_ax_pong";
   }
   function sendPiMessage(text: string, attachments: Attachment[], clientMsgId: string) {
     ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, model: modelState.current }));
@@ -2949,7 +2952,7 @@
       if ((ws as any).readyState === WebSocket.OPEN && age > 30_000) {
         (ws as any).forceReconnect?.();
       } else if ((ws as any).readyState === WebSocket.OPEN && age > 10_000) {
-        (ws as any).send(JSON.stringify({ type: "my_ax_ping", at: Date.now() }));
+        (ws as any).send(JSON.stringify(piTranscript ? { type: "pi_ping", at: Date.now() } : { type: "my_ax_ping", at: Date.now() }));
       }
       if (responseRecoveryPending && age > 15_000) responseRecoveryPending = false;
       // FR-2: silently-stalled turn. The socket is OPEN and recently active (so
@@ -3477,9 +3480,9 @@
         {/each}
 
         {#if (turnIsLive && taskElapsedText) || thinkingVisible}
-          <div class="msg msg-duration msg-duration--running" data-task-timer role="status" aria-label={taskElapsedText ? `Running for ${taskElapsedText}` : "Agent is thinking"} aria-live="off">
+          <div class="msg msg-duration msg-duration--running" data-task-timer role="status" aria-label={piCompacting ? (taskElapsedText ? `Compacting conversation for ${taskElapsedText}` : "Compacting conversation") : (taskElapsedText ? `Running for ${taskElapsedText}` : "Agent is thinking")} aria-live="off">
             <span class="agent-thinking" aria-hidden="true"><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span><span class="agent-thinking__dot"></span></span>
-            {#if taskElapsedText}<span>Running for {taskElapsedText}</span>{/if}
+            {#if piCompacting}<span>{taskElapsedText ? `Compacting conversation · ${taskElapsedText}` : "Compacting conversation…"}</span>{:else if taskElapsedText}<span>Running for {taskElapsedText}</span>{/if}
             {#if turnIsLive}<button type="button" class="msg-duration__stop" data-stop-turn onclick={confirmStopTurn}>Stop</button>{/if}
           </div>
         {/if}
