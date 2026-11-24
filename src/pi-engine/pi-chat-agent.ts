@@ -4,6 +4,8 @@ import { createRegistry, Harness, type EntryRecord } from "@earendil-works/pi-du
 import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { ConversationWatch, Report } from "@earendil-works/pi-durable";
 import { agentModel, inboxLength, isCompacting, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
+import { sanitizeLayerIds } from "../model-layers";
+import { LayerTurnController, type LayerAiBinding, type LayerFrame } from "./model-layers-runner";
 import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
 import type { Attachment } from "../types";
@@ -143,6 +145,12 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private watchedView: WatchedView | null = null;
 
+  private activeLayerTurn: LayerTurnController | null = null;
+
+  private emitLayerFrame = (frame: LayerFrame): void => {
+    this.broadcast(JSON.stringify(frame));
+  };
+
   private publishedRunning: boolean | null = null;
 
   private async publishRunStatus(running: boolean, entries?: readonly unknown[]): Promise<void> {
@@ -184,6 +192,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.ctx.waitUntil(this.publishCurrentRunStatus());
       const entryTimes = this.recordEntryTimes(events);
       this.broadcast(JSON.stringify({ type: "pi_events", events: events.map(slimEvent), entryTimes }));
+      if (this.activeLayerTurn?.onViewEvents(events, this.emitLayerFrame)) this.activeLayerTurn = null;
       if (events.some((event) => (event as { entry?: unknown }).entry)) this.ctx.waitUntil(this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) })));
       if (compactionFinished(events)) this.ctx.waitUntil(this.keepAliveWhile(() => this.saveWorkspaceAt("compaction")));
     });
@@ -235,9 +244,22 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     if (frame.type === "pi_submit") {
       try {
         if (frame.model) await this.applyModelChoice(frame.model);
+        const layers = sanitizeLayerIds(frame.layers);
+        const turnId = typeof frame.operationId === "string" && frame.operationId ? frame.operationId : crypto.randomUUID();
+        this.activeLayerTurn?.stop();
+        if (layers.length > 0) {
+          const controller = new LayerTurnController(turnId, layers);
+          this.activeLayerTurn = controller;
+          const aiBinding = this.env.AI as unknown as LayerAiBinding | undefined;
+          this.ctx.waitUntil(controller.start(aiBinding, frame.text ?? "", this.emitLayerFrame).catch(() => {}));
+        } else {
+          this.activeLayerTurn = null;
+        }
         const receipt = await this.submitInput(frame.text ?? "", frame.attachments ?? [], frame.operationId);
         connection.send(JSON.stringify({ type: "pi_receipt", operationId: receipt.operationId, accepted: receipt.accepted }));
       } catch (error) {
+        this.activeLayerTurn?.stop();
+        this.activeLayerTurn = null;
         connection.send(JSON.stringify({ type: "pi_error", operationId: frame.operationId, message: error instanceof Error ? error.message : String(error) }));
       }
     }
@@ -572,6 +594,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   async abortAll(): Promise<void> {
+    this.activeLayerTurn?.stop();
+    this.activeLayerTurn = null;
     await this.harness.abort();
     this.progressSample = undefined;
     this.broadcast(JSON.stringify({ type: "pi_aborted" }));

@@ -2,6 +2,12 @@ import { readTabSession, writeTabSession } from "./tab-session";
 export { readTabSession, writeTabSession } from "./tab-session";
 import { clarifyOwnerError } from "./owner-error";
 import { buildClientErrorReport } from "./client-error-report";
+import {
+  defaultModelLayersConfig,
+  MODEL_LAYERS_STORAGE_KEY,
+  sanitizeModelLayersConfig,
+  type ModelLayersConfig,
+} from "../model-layers";
 
 // Shared Svelte 5 store for my-ax.
 //
@@ -152,6 +158,51 @@ export function setReasoning(v: Reasoning) {
   try {
     localStorage.setItem("reasoning", v);
   } catch {}
+}
+
+function initialModelLayers(): ModelLayersConfig {
+  if (typeof localStorage === "undefined") return defaultModelLayersConfig();
+  try {
+    const raw = localStorage.getItem(MODEL_LAYERS_STORAGE_KEY);
+    return raw ? sanitizeModelLayersConfig(JSON.parse(raw)) : defaultModelLayersConfig();
+  } catch {
+    return defaultModelLayersConfig();
+  }
+}
+
+export const modelLayersState = $state<ModelLayersConfig>(initialModelLayers());
+
+function persistModelLayers() {
+  try {
+    localStorage.setItem(
+      MODEL_LAYERS_STORAGE_KEY,
+      JSON.stringify({
+        count: modelLayersState.count,
+        layers: [...modelLayersState.layers],
+        showMetrics: modelLayersState.showMetrics,
+      }),
+    );
+  } catch {}
+}
+
+export function setModelLayerCount(count: number) {
+  const next = sanitizeModelLayersConfig({ ...modelLayersState, count });
+  modelLayersState.count = next.count;
+  modelLayersState.layers = next.layers;
+  persistModelLayers();
+}
+
+export function setModelLayerModel(index: number, modelId: string) {
+  const copy = [...modelLayersState.layers];
+  copy[index] = modelId;
+  const next = sanitizeModelLayersConfig({ ...modelLayersState, layers: copy });
+  modelLayersState.layers = next.layers;
+  persistModelLayers();
+}
+
+export function setShowLayerMetrics(show: boolean) {
+  modelLayersState.showMetrics = show;
+  persistModelLayers();
 }
 
 // ─── Connection + agent status ─────────────────────────────────────────────

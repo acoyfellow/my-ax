@@ -81,6 +81,7 @@
     wsState as pageWsState,
     modelState,
     setModel,
+    modelLayersState,
     pushSystem,
     pushError,
     toastBus,
@@ -104,6 +105,7 @@
   import { TOOL_ROW_STATUS_LABEL, formatToolResult, toolArgFields, toolArgSummary, toolRowState, unescapeIfEscaped, type ToolRowState } from "./tool-row";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
+  import { activeLayerIds, formatTurnLayerMetrics, type TurnLayerMetrics } from "../model-layers";
   import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
   import SlashMenu from "./SlashMenu.svelte";
   import CommandPalette from "./CommandPalette.svelte";
@@ -1401,11 +1403,83 @@
     savingSnapshots = false;
     piOlderCount = 0;
     piCompacting = false;
+    liveLayerLine = null;
+    liveLayerSource = "";
+    activeTurnMetric = null;
+    turnMetricsByMsg = {};
     piTranscript = new PiTranscript();
     return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
   }
   let piBusy = $state(false);
   let piCompacting = $state(false);
+  let liveLayerLine = $state<string | null>(null);
+  let liveLayerSource = $state("");
+  type ClientTurnMetric = { startedAt: number; layers: string[]; firstResponseMs: number | null; firstReasoningMs: number | null; approvalMs: number | null; finishMs: number | null };
+  let activeTurnMetric: ClientTurnMetric | null = null;
+  let turnMetricsByMsg = $state<Record<string, TurnLayerMetrics>>({});
+  const showTurnMetrics = $derived(modelLayersState.count > 0 || modelLayersState.showMetrics);
+
+  function noteTurnEventsForMetrics(events: ReadonlyArray<Record<string, unknown>>) {
+    if (!activeTurnMetric) return;
+    const elapsed = Math.max(0, Date.now() - activeTurnMetric.startedAt);
+    for (const event of events) {
+      if (event.type === "message_update") {
+        for (const change of (event.changes as Array<Record<string, unknown>>) ?? []) {
+          if (change.type === "thinking_delta" && activeTurnMetric.firstReasoningMs === null) activeTurnMetric.firstReasoningMs = elapsed;
+          if (change.type === "text_delta" && typeof change.delta === "string" && change.delta.trim() && activeTurnMetric.firstResponseMs === null) {
+            activeTurnMetric.firstResponseMs = elapsed;
+            liveLayerLine = null;
+          }
+          if (change.type === "message" && change.message && typeof change.message === "object") {
+            const content = Array.isArray((change.message as { content?: unknown }).content) ? ((change.message as { content: Array<Record<string, unknown>> }).content) : [];
+            for (const block of content) {
+              if (block.type === "thinking" && activeTurnMetric.firstReasoningMs === null) activeTurnMetric.firstReasoningMs = elapsed;
+              if (block.type === "text" && typeof block.text === "string" && block.text.trim() && activeTurnMetric.firstResponseMs === null) {
+                activeTurnMetric.firstResponseMs = elapsed;
+                liveLayerLine = null;
+              }
+              if (block.type === "toolCall") {
+                if (activeTurnMetric.firstReasoningMs === null) activeTurnMetric.firstReasoningMs = elapsed;
+                if (block.name === "ask_user" && activeTurnMetric.approvalMs === null) activeTurnMetric.approvalMs = elapsed;
+              }
+            }
+          }
+        }
+      }
+      if (event.type === "entry_appended") {
+        const entry = event.entry as { model?: Array<{ role?: string; content?: Array<Record<string, unknown>> }> } | undefined;
+        for (const msg of entry?.model ?? []) {
+          if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
+          for (const block of msg.content) {
+            if (block.type === "thinking" && activeTurnMetric.firstReasoningMs === null) activeTurnMetric.firstReasoningMs = elapsed;
+            if (block.type === "text" && typeof block.text === "string" && block.text.trim() && activeTurnMetric.firstResponseMs === null) {
+              activeTurnMetric.firstResponseMs = elapsed;
+              liveLayerLine = null;
+            }
+            if (block.type === "toolCall") {
+              if (activeTurnMetric.firstReasoningMs === null) activeTurnMetric.firstReasoningMs = elapsed;
+              if (block.name === "ask_user" && activeTurnMetric.approvalMs === null) activeTurnMetric.approvalMs = elapsed;
+            }
+          }
+        }
+      }
+      if (event.type === "run_end") {
+        activeTurnMetric.finishMs = elapsed;
+        liveLayerLine = null;
+        liveLayerSource = "";
+        const finished: TurnLayerMetrics = {
+          layers: [...activeTurnMetric.layers],
+          firstResponseMs: activeTurnMetric.firstResponseMs,
+          firstReasoningMs: activeTurnMetric.firstReasoningMs,
+          approvalMs: activeTurnMetric.approvalMs,
+          finishMs: activeTurnMetric.finishMs,
+        };
+        const lastAssistant = [...messages].reverse().find((item) => item.role === "assistant");
+        if (lastAssistant) turnMetricsByMsg = { ...turnMetricsByMsg, [lastAssistant.id]: finished };
+        activeTurnMetric = null;
+      }
+    }
+  }
   const localQueue = new LocalMessageQueue(() => `queued-${crypto.randomUUID()}`);
   let queuedMessages = $state<readonly QueuedMessage[]>([]);
   let flushingQueue = false;
@@ -1525,17 +1599,50 @@
       piTranscript.recordEntryTimes(frame.entryTimes);
       piTranscript.applyEvents(frame.events ?? []);
       renderPiTranscript();
+      noteTurnEventsForMetrics(frame.events ?? []);
+      return true;
+    }
+    if (frame.type === "pi_layer") {
+      if (frame.kind === "opener" || frame.kind === "status") {
+        const text = typeof frame.text === "string" ? frame.text.trim() : "";
+        if (text) {
+          liveLayerLine = text;
+          liveLayerSource = frame.kind === "opener" ? `L${frame.layerIndex ?? 1} · ${frame.layerId ?? "layer"}` : String(frame.toolName ?? "status");
+          if (activeTurnMetric) {
+            const elapsed = Math.max(0, Date.now() - activeTurnMetric.startedAt);
+            if (activeTurnMetric.firstResponseMs === null) activeTurnMetric.firstResponseMs = elapsed;
+            if (frame.kind === "status" && activeTurnMetric.firstReasoningMs === null) activeTurnMetric.firstReasoningMs = elapsed;
+            if (frame.approval && activeTurnMetric.approvalMs === null) activeTurnMetric.approvalMs = elapsed;
+          }
+        }
+      } else if (frame.kind === "metrics" && frame.metrics && typeof frame.metrics === "object") {
+        liveLayerLine = null;
+        liveLayerSource = "";
+        const lastAssistant = [...messages].reverse().find((item) => item.role === "assistant");
+        if (lastAssistant) turnMetricsByMsg = { ...turnMetricsByMsg, [lastAssistant.id]: frame.metrics as TurnLayerMetrics };
+        activeTurnMetric = null;
+      }
       return true;
     }
     if (frame.type === "pi_error") {
+      liveLayerLine = null;
+      activeTurnMetric = null;
       pushError(String(frame.message ?? "Message failed"));
       return true;
     }
-    if (frame.type === "pi_aborted") return true;
+    if (frame.type === "pi_aborted") {
+      liveLayerLine = null;
+      activeTurnMetric = null;
+      return true;
+    }
     return frame.type === "pi_receipt" || frame.type === "pi_pong" || frame.type === "my_ax_pong";
   }
   function sendPiMessage(text: string, attachments: Attachment[], clientMsgId: string) {
-    ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, model: modelState.current }));
+    const layers = activeLayerIds(modelLayersState);
+    liveLayerLine = null;
+    liveLayerSource = "";
+    activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: null, firstReasoningMs: null, approvalMs: null, finishMs: null };
+    ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, ...(layers.length ? { layers } : {}), model: modelState.current }));
   }
   let activeRequestId: string | null = null;
   let thinkMessages: any[] = [];
@@ -3464,6 +3571,9 @@
             {#if showsTurnDuration(m, mIdx)}
               <div class="msg-duration" title="Time from your message to the end of this turn">Ran for {formatTurnDuration(m.durationMs)}</div>
             {/if}
+            {#if showTurnMetrics && turnMetricsByMsg[m.id]}
+              <div class="text-[11px] font-mono text-fg-mut mt-1" data-layer-metrics>{formatTurnLayerMetrics(turnMetricsByMsg[m.id])}</div>
+            {/if}
           </article>
         {/each}
 
@@ -3478,6 +3588,14 @@
             <div class="msg-body">{t.text}</div>
           </article>
         {/each}
+
+        {#if turnIsLive && liveLayerLine}
+          <div class="msg text-sm text-fg flex items-center gap-2 py-1" data-layer-voice role="status" aria-live="polite">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-brand shrink-0"></span>
+            <span>{liveLayerLine}</span>
+            {#if liveLayerSource}<span class="text-[11px] font-mono text-fg-mut">{liveLayerSource}</span>{/if}
+          </div>
+        {/if}
 
         {#if (turnIsLive && taskElapsedText) || thinkingVisible}
           <div class="msg msg-duration msg-duration--running" data-task-timer role="status" aria-label={piCompacting ? (taskElapsedText ? `Compacting conversation for ${taskElapsedText}` : "Compacting conversation") : (taskElapsedText ? `Running for ${taskElapsedText}` : "Agent is thinking")} aria-live="off">
