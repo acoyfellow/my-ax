@@ -97,16 +97,18 @@ test("Google requests authenticate with cf-access-token only; a Bearer or api ke
   assert.deepEqual(googleGatewayHeaders({ "CF-Access-Client-Id": "id", "CF-Access-Client-Secret": "s" }), { "CF-Access-Client-Id": "id", "CF-Access-Client-Secret": "s" });
 });
 
-test("Gemini 4 Neon and Hydrogen are Pi engine choices on their own Google gateway provider, and Settings maps to them", async () => {
+test("all four Gemini 4 models are Pi engine choices on their own Google gateway provider, and Settings maps to them", async () => {
   const { PI_GOOGLE_GATEWAY_PROVIDER_ID, resolvePiModelChoice, gatewayModelWindows } = await import("./gateway-models");
   assert.deepEqual(resolvePiModelChoice("gemini-4-neon"), { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-neon", label: "Gemini 4 Neon" });
   assert.equal(resolvePiModelChoice("gemini-4-hydrogen")?.provider, PI_GOOGLE_GATEWAY_PROVIDER_ID);
-  assert.equal(resolvePiModelChoice("gemini-4-carbon"), undefined);
+  assert.equal(resolvePiModelChoice("gemini-4-argon")?.label, "Gemini 4 Argon");
+  assert.equal(resolvePiModelChoice("gemini-4-carbon")?.label, "Gemini 4 Carbon");
+  assert.equal(resolvePiModelChoice("gemini-4-krypton"), undefined);
   const windows = gatewayModelWindows().filter((model) => model.provider === PI_GOOGLE_GATEWAY_PROVIDER_ID);
-  assert.deepEqual(windows.map((model) => model.id).sort(), ["gemini-4-hydrogen", "gemini-4-neon"]);
+  assert.deepEqual(windows.map((model) => model.id).sort(), ["gemini-4-argon", "gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-neon"]);
   assert.ok(windows.every((model) => model.contextWindow >= 1_000_000));
   const { MODELS } = await import("../models");
-  assert.equal(MODELS.find((model) => model.id === "gemini-4-neon")?.label, "Gemini 4 Neon");
+  for (const name of ["Neon", "Hydrogen", "Argon", "Carbon"]) assert.equal(MODELS.find((model) => model.id === `gemini-4-${name.toLowerCase()}`)?.label, `Gemini 4 ${name}`);
 });
 
 test("installing gateway models registers a Google provider whose requests go to the gateway with cf-access-token and a placeholder key", async () => {
