@@ -25,6 +25,8 @@
   import { planKeyboardStep, planReorder, reorderAnnouncement, splitPinned } from "./pinned-reorder";
   import { groupByTime, matchesTitle, runStateOf } from "./session-groups";
   import { PIN_SIZES, PIN_SIZE_LABEL, pinSizeOf, type PinSize } from "../session-pin-size";
+  import type { SeismoPulse } from "../seismograph";
+  import Seismograph from "./Seismograph.svelte";
   import { COMMAND_EVENT, type CommandEventDetail } from "./command-runner";
   import { DEFAULT_LAYOUT, LAYOUT_STORAGE_KEY, PANEL_DEFAULT_WIDTH, canDock, clampPanelWidth, parseLayout } from "./side-panel-layout";
 
@@ -38,6 +40,8 @@
     pin_size?: string | null;
     engine?: string | null;
     active_jobs?: number | null;
+    amber?: number | null;
+    pulse?: SeismoPulse | null;
   };
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
@@ -758,6 +762,12 @@
             }}
           >
             <span class="session-row__title">{title}</span>
+            {#if pinnedGroup}
+              {@const tileSize = pinSizeOf(row.pin_size)}
+              <span class="session-tile__trace" data-size={tileSize}>
+                <Seismograph pulse={row.pulse ?? null} running={signal === "running"} blocked={row.amber === 1} size={tileSize} />
+              </span>
+            {/if}
             <span class="session-row__meta">{shortSessionTime(row.updated_at)}</span>
           </div>
           {@render rowMenu(row, title, pinnedGroup, indexInGroup, groupTotal)}
@@ -907,6 +917,12 @@
   :global(.session-tile .session-row__status) { position: absolute; top: 9px; right: 9px; }
   :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 30px; }
   :global(.session-tile .session-row__actions) { position: absolute; right: 4px; bottom: 4px; }
+  :global(.session-tile__trace) { display: block; width: 100%; min-width: 0; margin-top: auto; }
+  :global(.session-tile[data-size="small"] .session-row__meta),
+  :global(.session-tile[data-size="medium"] .session-row__meta) { display: none; }
+  :global(.session-tile[data-size="small"]:hover .session-tile__trace),
+  :global(.session-tile[data-size="medium"]:hover .session-tile__trace) { opacity: 0.45; }
+  :global(.session-tile[data-size="large"] .session-tile__trace) { margin: 4px 0 2px; }
 
   
   :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
