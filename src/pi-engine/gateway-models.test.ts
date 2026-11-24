@@ -85,7 +85,7 @@ test("a reply refused after it already streamed some text is retried on the next
 
 test("the Google route is derived from the OpenAI gateway URL, like the Anthropic one", async () => {
   const { googleGatewayBaseUrl } = await import("./gateway-models");
-  assert.equal(googleGatewayBaseUrl("https://gateway.opencode.cloudflare.dev/openai"), "https://gateway.opencode.cloudflare.dev/google-ai-studio/v1beta");
+  assert.equal(googleGatewayBaseUrl("https://agent.example.com/openai"), "https://agent.example.com/google-ai-studio/v1beta");
   assert.equal(googleGatewayBaseUrl("https://gw.example/openai/"), "https://gw.example/google-ai-studio/v1beta");
   assert.equal(googleGatewayBaseUrl("https://gw.example/"), "https://gw.example/google-ai-studio/v1beta");
 });
