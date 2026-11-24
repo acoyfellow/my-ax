@@ -1,6 +1,7 @@
 import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { CODE_MODE_EXECUTION_TIMEOUT_MS, createCodemodeWorkRuntime, type CodemodeWorkSource, type CodemodeSnippetHook } from "./code-mode-runtime";
 import { createMachineWorkProvider } from "./routes/machinectl";
+import { codeUsesMachine, machineChoiceSummary, requestedMachine } from "./machine-choice";
 import { resolveWorkCodeExecutionState } from "./computer-work-budget";
 import { capWorkCodeCollection, capWorkCodeCollectionWithMetadata, capWorkCodeValue, instrumentWorkCodeFunctions, mergeWorkCodeLogs, raceWorkCodeExecution, WorkCodeLogMirror, WORK_CODE_TIMEOUT_GRACE_MS, WorkCodeCallCollector, WORK_CODE_CALLS_MAX_BYTES, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES, WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_RESULT_MAX_BYTES } from "./work-code-output";
 import { isSandboxMutationWorkCodeCall } from "./workspace-snapshot-classification";
@@ -116,11 +117,12 @@ function catalogEntry(where: WorkCall["where"] | "codemode" | "snippet", name: s
 export const WORK_SEARCH_TOOL: ToolDef = {
   name: "work_search",
   description: WORK_SEARCH_DESCRIPTION,
-  parameters: { type: "object", properties: { query: { type: "string", description: "What capability or kind of work is needed." } } },
+  parameters: { type: "object", properties: { query: { type: "string", description: "What capability or kind of work is needed." }, machine: { type: "string", description: "Which machine to use, by name or title from Settings > Connections. Leave out when only one machine is online." } } },
   execute: async (args, ctx) => {
     checkedWorkspaceProvider(ctx);
     const sandboxOnly = ctx.sandboxOnly === true;
-    const machine = sandboxOnly ? { catalog: [] as Array<{ name: string; description: string; inputSchema?: unknown }>, connected: false } : await createMachineWorkProvider(ctx);
+    const machine = sandboxOnly ? { catalog: [] as Array<{ name: string; description: string; inputSchema?: unknown }>, connected: false } : await createMachineWorkProvider(ctx, requestedMachine(args.machine));
+    const machineChoice = !sandboxOnly && "target" in machine ? machineChoiceSummary(machine.target) : undefined;
     const snippets = ctx.listSavedRecipes ? await ctx.listSavedRecipes().catch(() => []) : [];
     const pageCatalog = sandboxOnly ? FACTORY_PAGE_METHODS : PAGE_WORK_METHODS;
     const catalog = [
@@ -132,7 +134,7 @@ export const WORK_SEARCH_TOOL: ToolDef = {
     ];
     const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
     const filtered = query ? catalog.filter((entry) => `${entry.method} ${entry.description} ${entry.where}`.toLowerCase().includes(query)) : catalog;
-    return JSON.stringify({ ok: true, places: { workspace: "My AX Workspace (persistent Sandbox files, shell, processes, and previews)", ...(sandboxOnly ? {} : { machine: "My Machine", page: "My AX Page (live browser UI)" }) }, matches: filtered.length ? filtered : catalog });
+    return JSON.stringify({ ok: true, ...(machineChoice ? { machineChoice } : {}), places: { workspace: "My AX Workspace (persistent Sandbox files, shell, processes, and previews)", ...(sandboxOnly ? {} : { machine: "My Machine", page: "My AX Page (live browser UI)" }) }, matches: filtered.length ? filtered : catalog });
   },
 };
 
@@ -156,7 +158,7 @@ function buildSnippetHook(ctx: ToolContext): CodemodeSnippetHook | undefined {
   };
 }
 
-export async function executeWorkCode(code: string, ctx: ToolContext) {
+export async function executeWorkCode(code: string, ctx: ToolContext, machineName?: string) {
   if (!code || new TextEncoder().encode(code).byteLength > 32_000) return { ok: false, error: "code is required and must be <= 32000 bytes" };
   const executionState = resolveWorkCodeExecutionState(ctx.workCodeExecutionState);
   const sandboxOnly = ctx.sandboxOnly === true;
@@ -168,7 +170,10 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
       : ctx.allowedWorkCapabilities,
     callPage: ctx.callPage,
   };
-  const machine = sandboxOnly ? { catalog: [] as Awaited<ReturnType<typeof createMachineWorkProvider>>["catalog"], fns: {} as Record<string, (input: any) => Promise<unknown>>, connected: false } : await createMachineWorkProvider(executionContext);
+  const machine = sandboxOnly ? { catalog: [] as Awaited<ReturnType<typeof createMachineWorkProvider>>["catalog"], fns: {} as Record<string, (input: any) => Promise<unknown>>, connected: false } : await createMachineWorkProvider(executionContext, machineName);
+  if (!sandboxOnly && "target" in machine && !machine.target.ok && (machineName || machine.target.reason === "ambiguous") && codeUsesMachine(code)) {
+    return { ok: false, error: machine.target.message, machineChoice: machineChoiceSummary(machine.target) };
+  }
   const calls = new WorkCodeCallCollector<WorkCall["where"]>();
   const workspaceFns = instrument("workspace", restrictByCapabilities("workspace", checkedWorkspaceProvider(executionContext), executionContext.allowedWorkCapabilities), calls);
   const machineFns = instrument("machine", restrictByCapabilities("machine", machine.fns, executionContext.allowedWorkCapabilities), calls);
@@ -294,6 +299,6 @@ export async function executeWorkCode(code: string, ctx: ToolContext) {
 export const WORK_CODE_TOOL: ToolDef = {
   name: "work_code",
   description: WORK_CODE_DESCRIPTION,
-  parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, page, and/or codemode namespaces." } }, required: ["code"] },
-  execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx)),
+  parameters: { type: "object", properties: { code: { type: "string", description: "Async arrow function using workspace, machine, page, and/or codemode namespaces." }, machine: { type: "string", description: "Which machine to use, by name or title from Settings > Connections. Leave out when only one machine is online." } }, required: ["code"] },
+  execute: async (args, ctx) => JSON.stringify(await executeWorkCode(typeof args.code === "string" ? args.code : "", ctx, requestedMachine(args.machine))),
 };
