@@ -12,7 +12,7 @@ export const PI_GATEWAY_PROVIDER_ID = "myax-gateway";
 export const PI_GATEWAY_MODEL_IDS = ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"] as const;
 export const PI_ENGINE_GATEWAY_DEFAULT_MODEL = "claude-opus-5-5";
 export const PI_GOOGLE_GATEWAY_PROVIDER_ID = "myax-gateway-google";
-export const PI_GOOGLE_GATEWAY_MODEL_IDS = ["gemini-4-neon", "gemini-4-hydrogen"] as const;
+export const PI_GOOGLE_GATEWAY_MODEL_IDS = ["gemini-4-neon", "gemini-4-hydrogen", "gemini-4-argon", "gemini-4-carbon"] as const;
 export const GOOGLE_GATEWAY_API_KEY_PLACEHOLDER = "gateway";
 
 export function googleGatewayBaseUrl(baseURL: string): string {
@@ -96,6 +96,8 @@ export const PI_ENGINE_MODEL_CHOICES: readonly PiModelChoice[] = [
   { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
   { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-neon", label: "Gemini 4 Neon" },
   { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen" },
+  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-argon", label: "Gemini 4 Argon" },
+  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-carbon", label: "Gemini 4 Carbon" },
   { provider: "cloudflare", id: "@cf/zai-org/glm-5.3", label: "GLM 5.3" },
 ];
 
