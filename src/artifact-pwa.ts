@@ -100,6 +100,79 @@ export function artifactPwaShellHtml(input: ArtifactPwaInput): string {
   });}
   if(dismissBtn&&bar){dismissBtn.addEventListener('click',function(){bar.hidden=true;if(help)help.hidden=true;});}
   if(copyBtn){copyBtn.addEventListener('click',function(){if(navigator.clipboard){navigator.clipboard.writeText(location.href).then(function(){copyBtn.textContent='Copied';setTimeout(function(){copyBtn.textContent='Copy link';},1500);}).catch(function(){});}});}
+  var frame=document.querySelector('iframe[data-artifact-pwa-frame]');
+  var appId=frame?frame.getAttribute('data-artifact-pwa-frame'):'';
+  var prefix='my-ax:app:'+appId+':';
+  function detectMode(){var ms=['window-controls-overlay','standalone','minimal-ui','fullscreen','browser'];for(var i=0;i<ms.length;i++){if(window.matchMedia&&window.matchMedia('(display-mode: '+ms[i]+')').matches)return ms[i];}return 'unknown';}
+  function pushEnv(){
+    if(!frame||!frame.contentWindow)return;
+    var dm=detectMode();
+    var isStandalone=dm==='standalone'||dm==='window-controls-overlay'||window.navigator.standalone===true;
+    var swCtrl=Boolean(navigator.serviceWorker&&navigator.serviceWorker.controller);
+    frame.contentWindow.postMessage({type:'my-ax:app-env',appId:appId,standalone:isStandalone,displayMode:dm,online:Boolean(navigator.onLine),swControlled:swCtrl,origin:location.origin},'*');
+  }
+  if(frame){frame.addEventListener('load',pushEnv);}
+  window.addEventListener('online',pushEnv);
+  window.addEventListener('offline',pushEnv);
+  window.addEventListener('message',function(e){
+    if(!frame||!frame.contentWindow||e.source!==frame.contentWindow)return;
+    var d=e.data;if(!d||typeof d!=='object')return;
+    if(d.type==='my-ax:app-env-request'){pushEnv();return;}
+    if(d.type==='my-ax:app-storage'){
+      var cid=d.callId;
+      try{
+        var op=d.op;
+        if(op==='get'){
+          var k=String(d.key||'');
+          frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:true,value:localStorage.getItem(prefix+k)},'*');
+        }else if(op==='set'){
+          var k2=String(d.key||'');var v2=String(d.value==null?'':d.value);
+          if(k2.length>128||v2.length>262144)throw new Error('quota exceeded');
+          localStorage.setItem(prefix+k2,v2);
+          frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:true},'*');
+        }else if(op==='remove'){
+          localStorage.removeItem(prefix+String(d.key||''));
+          frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:true},'*');
+        }else if(op==='keys'){
+          var ks=[];for(var j=0;j<localStorage.length;j++){var lk=localStorage.key(j);if(lk&&lk.indexOf(prefix)===0)ks.push(lk.slice(prefix.length));}
+          frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:true,keys:ks},'*');
+        }else if(op==='clear'){
+          var rm=[];for(var j2=0;j2<localStorage.length;j2++){var lk2=localStorage.key(j2);if(lk2&&lk2.indexOf(prefix)===0)rm.push(lk2);}
+          for(var r=0;r<rm.length;r++)localStorage.removeItem(rm[r]);
+          frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:true},'*');
+        }else{
+          frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:false,error:'unknown op'},'*');
+        }
+      }catch(err){
+        frame.contentWindow.postMessage({type:'my-ax:app-storage-result',callId:cid,ok:false,error:String(err&&err.message||err)},'*');
+      }
+      return;
+    }
+    if(d.type==='my-ax:app-notify'){
+      var ncid=d.callId;
+      if(typeof Notification==='undefined'){frame.contentWindow.postMessage({type:'my-ax:app-notify-result',callId:ncid,ok:false,permission:'unsupported',error:'Notification API unavailable'},'*');return;}
+      var fire=function(perm){
+        if(perm==='granted'){
+          try{new Notification(String(d.title||'My AX App').slice(0,120),{body:String(d.body||'').slice(0,400),icon:'/apps/'+appId+'/icon.svg'});frame.contentWindow.postMessage({type:'my-ax:app-notify-result',callId:ncid,ok:true,permission:perm},'*');}
+          catch(err){frame.contentWindow.postMessage({type:'my-ax:app-notify-result',callId:ncid,ok:false,permission:perm,error:String(err&&err.message||err)},'*');}
+        }else{
+          frame.contentWindow.postMessage({type:'my-ax:app-notify-result',callId:ncid,ok:false,permission:perm,error:'permission: '+perm},'*');
+        }
+      };
+      if(Notification.permission==='default'){Notification.requestPermission().then(fire).catch(function(err){frame.contentWindow.postMessage({type:'my-ax:app-notify-result',callId:ncid,ok:false,permission:'denied',error:String(err&&err.message||err)},'*');});}
+      else{fire(Notification.permission);}
+      return;
+    }
+    if(d.type==='my-ax:app-share'){
+      var scid=d.callId;
+      if(!navigator.share){frame.contentWindow.postMessage({type:'my-ax:app-share-result',callId:scid,ok:false,error:'navigator.share unsupported'},'*');return;}
+      navigator.share({title:String(d.title||document.title).slice(0,120),text:String(d.text||'').slice(0,500),url:String(d.url||location.href)}).then(function(){
+        frame.contentWindow.postMessage({type:'my-ax:app-share-result',callId:scid,ok:true},'*');
+      }).catch(function(err){
+        frame.contentWindow.postMessage({type:'my-ax:app-share-result',callId:scid,ok:false,error:String(err&&err.message||err)},'*');
+      });
+    }
+  });
 })();`;
 
   return `<!doctype html>
@@ -143,7 +216,7 @@ iframe{flex:1;width:100%;height:100%;border:0;display:block;background:#0b1118}
   <div id="pwa-help-text"></div>
   <div id="pwa-help-actions"><button id="pwa-copy" type="button">Copy link</button></div>
 </div>
-<iframe src="${previewPath}" title="${title}" sandbox="allow-scripts" allow="fullscreen" allowfullscreen referrerpolicy="no-referrer" data-artifact-pwa-frame="${encodedId}"></iframe>
+<iframe src="${previewPath}" title="${title}" sandbox="allow-scripts allow-downloads allow-forms allow-popups allow-popups-to-escape-sandbox" allow="fullscreen; clipboard-write; clipboard-read; screen-wake-lock; web-share; autoplay" allowfullscreen referrerpolicy="no-referrer" data-artifact-pwa-frame="${encodedId}"></iframe>
 <script>${boot}</script>
 </body>
 </html>`;
