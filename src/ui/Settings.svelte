@@ -1410,6 +1410,7 @@
                     <button type="button" class="job-action-button hover:border-brand/60" onclick={() => promoteArtifact(artifact)} title={deskArtifactId ? "Put this on the desk and take down the app that is there" : "Put this on the desk"}>Put on desk</button>
                   {/if}
                   <button type="button" class="job-action-button text-brand hover:border-brand/60" onclick={() => openArtifact(artifact)}>Open</button>
+                  <a class="job-action-button hover:border-brand/60" href={"/apps/" + encodeURIComponent(artifact.id)} target="_blank" rel="noopener" data-install-artifact-app>Install app</a>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => openArtifactConversation(artifact)}>Conversation</button>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => renameArtifact(artifact)}>Rename</button>
                   <button type="button" class="job-action-button hover:border-brand/60" onclick={() => editArtifactSource(artifact)}>Edit</button>

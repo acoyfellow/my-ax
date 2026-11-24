@@ -4,6 +4,7 @@ import type { ApiResponse } from "../types";
 import { deleteOwnedArtifact, listOwnedArtifacts, readOwnedSvelteArtifact, renameOwnedArtifact, updateOwnedArtifactSource } from "../artifacts";
 import { ARTIFACT_RUNTIME_JS } from "../artifact-runtime";
 import { ARTIFACT_THEME_CSS } from "../artifact-theme";
+import { artifactPwaIconSvg, artifactPwaShellHtml, artifactWebManifest } from "../artifact-pwa";
 import { VERSION as SVELTE_COMPILER_VERSION } from "svelte/compiler";
 
 export const ARTIFACT_SVELTE_RUNTIME = `https://esm.sh/svelte@${SVELTE_COMPILER_VERSION}`;
@@ -63,6 +64,39 @@ export function registerArtifactRoutes(app: Hono<AppEnv>) {
     return c.html(artifactPreview(manifest, { inline: c.req.query("inline") === "1" }), 200, {
       ...cacheHeaders,
       "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline' data: https://esm.sh; style-src 'unsafe-inline'; connect-src https://esm.sh; img-src data:; font-src 'none'; object-src 'none'; frame-ancestors *; base-uri 'none'; form-action 'none'; navigate-to 'none'",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    });
+  });
+
+  app.get("/apps/:id/manifest.webmanifest", async (c) => {
+    const manifest = await readOwnedSvelteArtifact(c.env, c.get("identity"), c.req.param("id"));
+    if (!manifest) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+    const origin = new URL(c.req.url).origin;
+    return c.body(JSON.stringify(artifactWebManifest({ id: manifest.id, title: manifest.title, origin })), 200, {
+      "Content-Type": "application/manifest+json; charset=utf-8",
+      "Cache-Control": "private, no-cache",
+      "X-Content-Type-Options": "nosniff",
+    });
+  });
+
+  app.get("/apps/:id/icon.svg", async (c) => {
+    const manifest = await readOwnedSvelteArtifact(c.env, c.get("identity"), c.req.param("id"));
+    if (!manifest) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+    return c.body(artifactPwaIconSvg(manifest.id, manifest.title), 200, {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "private, no-cache",
+      "X-Content-Type-Options": "nosniff",
+    });
+  });
+
+  app.get("/apps/:id", async (c) => {
+    const manifest = await readOwnedSvelteArtifact(c.env, c.get("identity"), c.req.param("id"));
+    if (!manifest) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "Artifact not found" }, next_actions: [] }, 404);
+    const origin = new URL(c.req.url).origin;
+    return c.html(artifactPwaShellHtml({ id: manifest.id, title: manifest.title, origin }), 200, {
+      "Cache-Control": "private, no-cache",
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });

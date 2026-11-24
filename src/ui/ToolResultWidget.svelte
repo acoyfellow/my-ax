@@ -125,6 +125,7 @@
     <div class="tool-call__result tool-call__browser-summary" data-tool-widget="svelte-artifact">
       <strong>{widget.title}</strong>
       <span>Interactive widget</span>
+      <a class="text-xs text-brand hover:underline ml-auto" href={`/apps/${encodeURIComponent(widget.artifactId)}`} target="_blank" rel="noopener" data-install-artifact-app>Install app ↗</a>
     </div>
     <div class="svelte-artifact-stage">
       {#if fullscreen}
