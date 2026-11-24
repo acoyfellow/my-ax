@@ -17,6 +17,7 @@ import { deleteSessionArtifacts } from "../artifacts";
 import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { parsePinSize } from "../session-pin-size";
+import { buildSeismographMap, type SpanSample } from "../seismograph";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { databaseLayer } from "../effect/database";
 import { PinLimitError } from "../session-pinning";
@@ -109,6 +110,22 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
         : c.env.DB.prepare(query).bind(email, limit);
       const result = await stmt.all();
       const unpinned = (result.results ?? []) as Array<{ updated_at: string }>;
+      if (pinned.length > 0) {
+        try {
+          const ids = pinned.map((r) => String(r.id));
+          const placeholders = ids.map(() => "?").join(", ");
+          const sinceMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+          const spanResult = await c.env.DB.prepare(
+            `SELECT chat_id, tool_name, phase, status, error, started_ms, dur_ms, output_tokens FROM pi_spans WHERE owner_email = ? AND chat_id IN (${placeholders}) AND started_ms >= ? ORDER BY started_ms DESC LIMIT 400`,
+          ).bind(email, ...ids, sinceMs).all();
+          const pulseMap = buildSeismographMap((spanResult.results ?? []) as unknown as SpanSample[], 16);
+          for (const row of pinned) {
+            row.pulse = pulseMap.get(String(row.id)) ?? null;
+          }
+        } catch {
+          // pi_spans is optional telemetry; never block session listing.
+        }
+      }
       const sessions = [...pinned, ...unpinned];
       // Cursor tracks the UNPINNED tail only, so pinned rows never affect paging.
       const nextCursor =
