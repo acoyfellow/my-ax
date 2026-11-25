@@ -1,8 +1,9 @@
 import { createReconnectingSocket, type ReconnectingSocket } from "./reconnecting-socket";
 
 export const MACHINES_CHANGED = "machines.changed";
+export const SESSION_TILE_CHANGED = "session.tile";
 
-type Listener = () => void;
+type Listener = (payload?: Record<string, unknown>) => void;
 
 const listeners = new Map<string, Set<Listener>>();
 let socket: ReconnectingSocket | null = null;
@@ -20,8 +21,8 @@ export function frameType(data: string): string | null {
   }
 }
 
-function notify(type: string) {
-  for (const listener of listeners.get(type) ?? []) listener();
+function notify(type: string, payload?: Record<string, unknown>) {
+  for (const listener of listeners.get(type) ?? []) listener(payload);
 }
 
 function ensureSocket() {
@@ -31,8 +32,10 @@ function ensureSocket() {
     onClose: () => {},
     onError: () => {},
     onMessage: (data) => {
-      const type = frameType(data);
-      if (type) notify(type);
+      try {
+        const parsed = JSON.parse(data) as Record<string, unknown>;
+        if (typeof parsed?.type === "string") notify(parsed.type, parsed);
+      } catch {}
     },
   });
 }

@@ -1,5 +1,6 @@
 import { Agent } from "agents";
 import { deskAppFrame, deskBoardFrame, filterLiveDeskTargets, LIVE_CHAT_KEY_PREFIX, LIVE_CHAT_TTL_MS } from "./desk-live";
+import { SESSION_TILE_FRAME, type TileStateObject } from "./tile-panel";
 import type { DeskBoard } from "./desk-board";
 import type { DeskApp } from "./desk-app";
 import type { Env } from "./types";
@@ -34,6 +35,10 @@ export class UserAgent extends Agent<Env> {
 
   async announceMachinesChanged(): Promise<void> {
     this.broadcast(JSON.stringify({ type: MACHINES_CHANGED_FRAME }));
+  }
+
+  async announceSessionTile(sessionId: string, tileArtifactId: string | null, tileState: TileStateObject): Promise<void> {
+    this.broadcast(JSON.stringify({ type: SESSION_TILE_FRAME, sessionId, tileArtifactId, tileState }));
   }
 
   async registerChatSocket(chatId: string, connected: boolean): Promise<void> {

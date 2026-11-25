@@ -36,6 +36,8 @@ export const SESSION_SQL = {
   S14_PIN: { sql: "UPDATE sessions SET pinned = 1, pin_rank = ?, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ?", kind: "pin", id: 1, owner: 2, name: null },
   S15_PIN: { sql: "UPDATE sessions SET pinned = 0, pin_rank = NULL, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ?", kind: "pin", id: 0, owner: 1, name: null },
   S16_PIN: { sql: "UPDATE sessions SET pin_rank = ?, pin_updated_at = datetime('now') WHERE id = ? AND owner_email = ? AND pinned = 1", kind: "pin", id: 1, owner: 2, name: null },
+  S17_TILE: { sql: "UPDATE sessions SET tile_artifact_id = ?, tile_state_json = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?", kind: "pin", id: 2, owner: 3, name: null },
+  S18_TILE_STATE: { sql: "UPDATE sessions SET tile_state_json = ?, updated_at = datetime('now') WHERE id = ? AND owner_email = ?", kind: "pin", id: 1, owner: 2, name: null },
 } as const satisfies Record<string, SessionSqlEntry>;
 
 const stageOf = (status: string): SessionStage => (status.charAt(0).toUpperCase() + status.slice(1)) as SessionStage;

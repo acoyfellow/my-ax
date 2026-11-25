@@ -1,10 +1,12 @@
 export type SeismoKind = "mac" | "box" | "web" | "llm" | "err" | "wait";
 
 export interface SeismoBar {
-  /** Normalized bar height in 10..100 */
   v: number;
-  /** Telemetry channel driving bar color */
   k: SeismoKind;
+  l?: string;
+  d?: number;
+  t?: number;
+  o?: number;
 }
 
 export interface SeismoPulse {
@@ -72,10 +74,22 @@ export function buildSeismographMap(
   for (const [chatId, list] of grouped) {
     list.sort((a, b) => a.started_ms - b.started_ms);
     const tail = list.slice(-maxBars);
-    const bars: SeismoBar[] = tail.map((s) => ({
-      v: normalizeSpanHeight(s),
-      k: classifySpanKind(s),
-    }));
+    const bars: SeismoBar[] = tail.map((s) => {
+      const k = classifySpanKind(s);
+      const tool = (s.tool_name ?? "").trim();
+      const l = tool || (k === "llm" ? "model" : k);
+      const d = typeof s.dur_ms === "number" && s.dur_ms > 0 ? Math.round(s.dur_ms) : undefined;
+      const t = typeof s.started_ms === "number" && s.started_ms > 0 ? Math.round(s.started_ms) : undefined;
+      const o = typeof s.output_tokens === "number" && s.output_tokens > 0 ? Math.round(s.output_tokens) : undefined;
+      return {
+        v: normalizeSpanHeight(s),
+        k,
+        l,
+        ...(d !== undefined ? { d } : {}),
+        ...(t !== undefined ? { t } : {}),
+        ...(o !== undefined ? { o } : {}),
+      };
+    });
     const last = bars[bars.length - 1];
     const blocked = last ? last.k === "wait" || last.k === "err" : false;
     out.set(chatId, { bars, blocked });

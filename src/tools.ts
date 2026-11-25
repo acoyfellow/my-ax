@@ -24,6 +24,7 @@ import { databaseLayer } from "./effect/database";
 import { PUBLIC_WEB_SEARCH_TOOL } from "./web-search";
 import { createCmuxObserveTool, type CmuxReader } from "./cmux-observer";
 import { SPAWN_CHILD_TOOL, WAIT_CHILD_TOOL } from "./agent-tree-tools";
+import { READ_TILE_PANEL_TOOL, SET_TILE_PANEL_TOOL, UPDATE_TILE_STATE_TOOL } from "./tile-panel-tools";
 
 export const DESK_UPSERT_TOOL: ToolDef = {
   name: "desk_upsert",
@@ -306,6 +307,9 @@ export const TOOLS: ToolDef[] = [
   OPEN_ISSUE_SESSION_TOOL,
   SPAWN_CHILD_TOOL,
   WAIT_CHILD_TOOL,
+  SET_TILE_PANEL_TOOL,
+  UPDATE_TILE_STATE_TOOL,
+  READ_TILE_PANEL_TOOL,
   CREATE_COMPUTER_TOOL,
   SNAPSHOT_COMPUTER_TOOL,
   MANAGE_COMPUTERS_TOOL,

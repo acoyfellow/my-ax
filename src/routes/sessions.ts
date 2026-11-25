@@ -18,6 +18,8 @@ import { deleteSessionAudioMessages } from "../audio-messages";
 import { cancelJobSchedule, type JobRow } from "../jobs";
 import { parsePinSize } from "../session-pin-size";
 import { buildSeismographMap, type SpanSample } from "../seismograph";
+import { clearSessionTilePanel, patchSessionTileState, readSessionTilePanel, saveSessionTilePanel } from "../tile-panel-tools";
+import { parseTileState } from "../tile-panel";
 import { requireOwnedSession, SessionOwnershipCheckError } from "../session-ownership";
 import { databaseLayer } from "../effect/database";
 import { PinLimitError } from "../session-pinning";
@@ -100,11 +102,11 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       const pinned = before
         ? []
         : ((await c.env.DB.prepare(
-            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
+            `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, tile_artifact_id, tile_state_json, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 1 AND ${archiveFilter} ORDER BY pin_rank ASC, updated_at DESC LIMIT 100`,
           ).bind(email).all()).results ?? []) as Array<Record<string, unknown>>;
       const query = before
-        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
-        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
+        ? `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, tile_artifact_id, tile_state_json, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} AND updated_at < ? ORDER BY updated_at DESC LIMIT ?`
+        : `SELECT id, name, status, created_at, updated_at, pinned, pin_rank, pin_size, engine, amber, tile_artifact_id, tile_state_json, (SELECT COUNT(*) FROM jobs WHERE jobs.session_id = sessions.id AND jobs.owner_email = sessions.owner_email AND jobs.status = 'active') AS active_jobs FROM sessions WHERE owner_email = ? AND pinned = 0 AND ${archiveFilter} ORDER BY updated_at DESC LIMIT ?`;
       const stmt = before
         ? c.env.DB.prepare(query).bind(email, before, limit)
         : c.env.DB.prepare(query).bind(email, limit);
@@ -127,6 +129,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
         }
       }
       const sessions = [...pinned, ...unpinned];
+      for (const row of sessions as Array<Record<string, unknown>>) {
+        row.tile_state = parseTileState(row.tile_state_json);
+      }
       // Cursor tracks the UNPINNED tail only, so pinned rows never affect paging.
       const nextCursor =
         unpinned.length === limit ? unpinned[unpinned.length - 1]?.updated_at ?? null : null;
@@ -207,6 +212,49 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
   // POST /api/sessions/:id/pin  { pinned: boolean }
   // Pin (to the top of the pinned group) or unpin a conversation. Server holds
   // the authoritative pinned flag + fractional rank so it syncs across devices.
+  app.get("/api/sessions/:id/tile", async (c) => {
+    const panel = await readSessionTilePanel(c.env, c.get("identity"), c.req.param("id"));
+    if (!panel) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: panel, next_actions: [] });
+  });
+
+  app.put("/api/sessions/:id/tile", async (c) => {
+    const body = (await c.req.json<{ source?: string; title?: string; state?: unknown; pin?: boolean; size?: string }>().catch(() => ({}))) as { source?: string; title?: string; state?: unknown; pin?: boolean; size?: string };
+    if (typeof body.source !== "string" || !body.source.trim()) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: "source is required" }, next_actions: [] }, 400);
+    }
+    try {
+      const saved = await saveSessionTilePanel(c.env, c.get("identity"), c.req.param("id"), {
+        source: body.source,
+        title: body.title,
+        state: body.state,
+        pin: body.pin,
+        size: body.size,
+      });
+      if (!saved) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: saved, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 400);
+    }
+  });
+
+  app.patch("/api/sessions/:id/tile/state", async (c) => {
+    const body = (await c.req.json<{ patch?: unknown }>().catch(() => ({}))) as { patch?: unknown };
+    try {
+      const updated = await patchSessionTileState(c.env, c.get("identity"), c.req.param("id"), body.patch ?? body);
+      if (!updated) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+      return c.json<ApiResponse>({ ok: true, command: c.req.path, result: updated, next_actions: [] });
+    } catch (error) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: error instanceof Error ? error.message : String(error) }, next_actions: [] }, 400);
+    }
+  });
+
+  app.delete("/api/sessions/:id/tile", async (c) => {
+    const cleared = await clearSessionTilePanel(c.env, c.get("identity"), c.req.param("id"));
+    if (!cleared) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { cleared: true }, next_actions: [] });
+  });
+
   app.post("/api/sessions/:id/pin", async (c) => {
     const id = c.req.param("id");
     const command = `POST /api/sessions/${id}/pin`;

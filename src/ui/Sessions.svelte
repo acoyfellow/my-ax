@@ -27,6 +27,11 @@
   import { PIN_SIZES, PIN_SIZE_LABEL, pinSizeOf, type PinSize } from "../session-pin-size";
   import type { SeismoPulse } from "../seismograph";
   import Seismograph from "./Seismograph.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
+  import type { ContextMenuItem } from "./context-menu";
+  import TilePanelFrame from "./TilePanelFrame.svelte";
+  import { onOwnerEvent, SESSION_TILE_CHANGED } from "./owner-live";
+  import type { TileStateObject } from "../tile-panel";
   import { COMMAND_EVENT, type CommandEventDetail } from "./command-runner";
   import { DEFAULT_LAYOUT, LAYOUT_STORAGE_KEY, PANEL_DEFAULT_WIDTH, canDock, clampPanelWidth, parseLayout } from "./side-panel-layout";
 
@@ -42,7 +47,125 @@
     active_jobs?: number | null;
     amber?: number | null;
     pulse?: SeismoPulse | null;
+    tile_artifact_id?: string | null;
+    tile_state?: TileStateObject | null;
   };
+
+  let contextMenu = $state<{ open: boolean; x: number; y: number; row: SessionRow | null }>({ open: false, x: 0, y: 0, row: null });
+
+  function closeContextMenu() {
+    contextMenu = { open: false, x: 0, y: 0, row: null };
+  }
+
+  function openRowContextMenu(event: MouseEvent, row: SessionRow) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeMenu();
+    contextMenu = { open: true, x: event.clientX, y: event.clientY, row };
+  }
+
+  async function sendToSession(sessionId: string, content: string) {
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/inject`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    }).catch(() => undefined);
+  }
+
+  async function editTileSource(row: SessionRow) {
+    const title = row.name || "Untitled";
+    const res = await fetch(`/api/sessions/${encodeURIComponent(row.id)}/tile`, { credentials: "include" }).catch(() => null);
+    const body = res?.ok ? await res.json().catch(() => null) : null;
+    const starter = `<script>\n  let state = $state(window.myAxTile?.state ?? {});\n  $effect(() => window.myAxTile?.onUpdate((s) => { state = s; }));\n<` + `/script>\n<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--fg-mut)">\n  <span>{state.label ?? "Live panel"}</span>\n  <strong style="color:var(--brand)">{state.value ?? "ready"}</strong>\n</div>`;
+    const current = typeof body?.result?.source === "string" && body.result.source ? body.result.source : starter;
+    const next = await promptDialog({ title: `Tile panel for “${title}”`, value: current, multiline: true, confirmLabel: "Save panel" });
+    if (!next || !next.trim()) return;
+    await fetch(`/api/sessions/${encodeURIComponent(row.id)}/tile`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: next, pin: true }),
+    });
+    void refreshQuietly();
+  }
+
+  async function askAgentToDesignTile(row: SessionRow) {
+    const idea = await promptDialog({ title: `Design panel for “${row.name || "Untitled"}”`, placeholder: "e.g. live loss curve + GPU temp, or PR diff + check status", confirmLabel: "Send to agent" });
+    if (!idea || !idea.trim()) return;
+    await sendToSession(row.id, `Use set_tile_panel (with pin: true) to build a compact live Svelte 5 sidebar panel for this conversation that shows: ${idea.trim()}. Update its state with update_tile_state whenever progress changes.`);
+  }
+
+  async function resetTilePanel(row: SessionRow) {
+    await fetch(`/api/sessions/${encodeURIComponent(row.id)}/tile`, { method: "DELETE", credentials: "include" });
+    sessions = sessions.map((item) => item.id === row.id ? { ...item, tile_artifact_id: null, tile_state: {} } : item);
+  }
+
+  function menuItemsForRow(row: SessionRow): ContextMenuItem[] {
+    const title = row.name || "Untitled";
+    const items: ContextMenuItem[] = [
+      { kind: "header", label: title },
+      {
+        kind: "action",
+        id: "pin",
+        icon: row.pinned === 1 ? "unpin" : "pin",
+        label: row.pinned === 1 ? "Unpin" : "Pin to top",
+        onSelect: () => { void togglePin(row); },
+      },
+    ];
+    if (row.pinned === 1) {
+      const currentSize = pinSizeOf(row.pin_size);
+      items.push({
+        kind: "submenu",
+        id: "tile-size",
+        icon: "size",
+        label: "Tile size",
+        hint: PIN_SIZE_LABEL[currentSize],
+        items: PIN_SIZES.map((size) => ({
+          kind: "action" as const,
+          id: `size-${size}`,
+          label: PIN_SIZE_LABEL[size],
+          checked: currentSize === size,
+          onSelect: () => { void setPinSize(row, size); },
+        })),
+      });
+    }
+    items.push({
+      kind: "submenu",
+      id: "tile-panel",
+      icon: "sparkles",
+      label: "Tile panel",
+      hint: row.tile_artifact_id ? "Custom" : "Bars",
+      items: [
+        { kind: "action", id: "tile-ask", icon: "sparkles", label: "Ask agent to design…", onSelect: () => { void askAgentToDesignTile(row); } },
+        { kind: "action", id: "tile-edit", icon: "rename", label: "Edit Svelte source…", onSelect: () => { void editTileSource(row); } },
+        ...(row.tile_artifact_id ? [{ kind: "action" as const, id: "tile-reset", icon: "sliders" as const, label: "Reset to default bars", onSelect: () => { void resetTilePanel(row); } }] : []),
+      ],
+    });
+    items.push(
+      { kind: "action", id: "rename", icon: "rename", label: "Rename", onSelect: () => { void rename(row); } },
+      {
+        kind: "submenu",
+        id: "export",
+        icon: "export",
+        label: "Export",
+        items: [
+          { kind: "action", id: "export-md", icon: "export", label: "Markdown (.md)", href: `/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown` },
+          { kind: "action", id: "export-json", icon: "export", label: "JSON (.json)", href: `/api/sessions/${encodeURIComponent(row.id)}/export?format=json` },
+        ],
+      },
+      {
+        kind: "action",
+        id: "archive",
+        icon: row.status === "archived" ? "unarchive" : "archive",
+        label: row.status === "archived" ? "Unarchive" : "Archive",
+        onSelect: () => { void setArchived(row, row.status !== "archived"); },
+      },
+      { kind: "separator" },
+      { kind: "action", id: "delete", icon: "delete", label: "Delete", tone: "danger", onSelect: () => { void del(row); } },
+    );
+    return items;
+  }
 
   const START_FRESH_ONCE_KEY = "my-ax-start-fresh-once";
   const PAGE_SIZE = 50;
@@ -578,9 +701,23 @@
     window.addEventListener("my-ax:sessions-close", close);
     window.addEventListener("my-ax:sessions-toggle", toggle);
     window.addEventListener("my-ax:sessions-refresh", refresh);
+    const stopTileLive = onOwnerEvent(SESSION_TILE_CHANGED, (payload) => {
+      const sid = typeof payload?.sessionId === "string" ? payload.sessionId : "";
+      if (!sid) return;
+      const nextArtifact = typeof payload?.tileArtifactId === "string" ? payload.tileArtifactId : null;
+      const nextState = payload?.tileState && typeof payload.tileState === "object" ? (payload.tileState as TileStateObject) : {};
+      let matched = false;
+      sessions = sessions.map((item) => {
+        if (item.id !== sid) return item;
+        matched = true;
+        return { ...item, tile_artifact_id: nextArtifact, tile_state: nextState };
+      });
+      if (!matched) void refreshQuietly();
+    });
     const statusPoll = setInterval(() => { if (shown && document.visibilityState === "visible") void refreshQuietly(); }, 4000);
     document.addEventListener("keydown", handleKeydown);
     return () => {
+      stopTileLive();
       window.removeEventListener("my-ax:sessions-open", openSidebar);
       window.removeEventListener("my-ax:sessions-close", close);
       window.removeEventListener("my-ax:sessions-toggle", toggle);
@@ -703,7 +840,7 @@
                 aria-pressed={row.pinned === 1}
                 aria-label={row.pinned === 1 ? `Unpin ${title}` : `Pin ${title}`}
                 onclick={(e) => { e.stopPropagation(); closeMenu(); togglePin(row); }}
-              >{row.pinned === 1 ? "Unpin" : "Pin"}</button>
+              >{@render sessionMenuIcon(row.pinned === 1 ? "unpin" : "pin")}<span>{row.pinned === 1 ? "Unpin" : "Pin"}</span></button>
               {#if row.pinned === 1}
                 <div class="session-menu__sizes" role="group" aria-label={`Tile size for ${title}`}>
                   {#each PIN_SIZES as size (size)}
@@ -711,11 +848,11 @@
                   {/each}
                 </div>
               {/if}
-              <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>Rename</button>
-              <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>Export markdown</a>
-              <button type="button" role="menuitem" aria-label={row.status === "archived" ? `Unarchive ${title}` : `Archive ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); setArchived(row, row.status !== "archived"); }}>{row.status === "archived" ? "Unarchive" : "Archive"}</button>
+              <button type="button" role="menuitem" aria-label={`Rename ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); rename(row); }}>{@render sessionMenuIcon("rename")}<span>Rename</span></button>
+              <a role="menuitem" href={`/api/sessions/${encodeURIComponent(row.id)}/export?format=markdown`} aria-label={`Export ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); }}>{@render sessionMenuIcon("export")}<span>Export markdown</span></a>
+              <button type="button" role="menuitem" aria-label={row.status === "archived" ? `Unarchive ${title}` : `Archive ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); setArchived(row, row.status !== "archived"); }}>{@render sessionMenuIcon(row.status === "archived" ? "unarchive" : "archive")}<span>{row.status === "archived" ? "Unarchive" : "Archive"}</span></button>
               <hr />
-              <button type="button" role="menuitem" class="danger" aria-label={`Delete ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); del(row); }}>Delete</button>
+              <button type="button" role="menuitem" class="danger" aria-label={`Delete ${title}`} onclick={(e) => { e.stopPropagation(); closeMenu(); del(row); }}>{@render sessionMenuIcon("delete")}<span>Delete</span></button>
             </div>
           {/if}
         </div>
@@ -729,13 +866,15 @@
         <li
           class={pinnedGroup ? "session-row session-tile" : "session-row"}
           data-size={pinnedGroup ? pinSizeOf(row.pin_size) : undefined}
+          data-custom-panel={pinnedGroup && row.tile_artifact_id ? "1" : "0"}
           data-session-id={row.id}
           data-active={active ? "1" : "0"}
           data-pinned={row.pinned === 1 ? "1" : "0"}
-          data-menu-open={menuFor === row.id ? "1" : "0"}
+          data-menu-open={menuFor === row.id || (contextMenu.open && contextMenu.row?.id === row.id) ? "1" : "0"}
           data-drag-over={pinnedGroup && dragOverId === row.id ? "1" : "0"}
           data-dragging={pinnedGroup && dragId === row.id ? "1" : "0"}
           draggable={pinnedGroup ? true : undefined}
+          oncontextmenu={(e) => openRowContextMenu(e, row)}
           ondragstart={pinnedGroup ? (e) => onPinDragStart(e, row) : undefined}
           ondragover={pinnedGroup ? (e) => onPinDragOver(e, row) : undefined}
           ondrop={pinnedGroup ? (e) => onPinDrop(e, row) : undefined}
@@ -764,8 +903,26 @@
             <span class="session-row__title">{title}</span>
             {#if pinnedGroup}
               {@const tileSize = pinSizeOf(row.pin_size)}
-              <span class="session-tile__trace" data-size={tileSize}>
-                <Seismograph pulse={row.pulse ?? null} running={signal === "running"} blocked={row.amber === 1} size={tileSize} />
+              <span class="session-tile__trace" data-size={tileSize} data-custom-panel={row.tile_artifact_id ? "1" : "0"}>
+                {#if row.tile_artifact_id}
+                  <TilePanelFrame
+                    sessionId={row.id}
+                    {title}
+                    artifactId={row.tile_artifact_id}
+                    tileState={row.tile_state ?? {}}
+                    running={signal === "running"}
+                    blocked={row.amber === 1}
+                    size={tileSize}
+                    updatedAt={shortSessionTime(row.updated_at)}
+                    pulse={row.pulse ?? null}
+                    dragging={dragId !== null}
+                    onSend={(text) => { void sendToSession(row.id, text); }}
+                    onSelect={() => switchTo(row.id)}
+                    onContextMenu={(x, y) => { closeMenu(); contextMenu = { open: true, x, y, row }; }}
+                  />
+                {:else}
+                  <Seismograph pulse={row.pulse ?? null} running={signal === "running"} blocked={row.amber === 1} size={tileSize} />
+                {/if}
               </span>
             {/if}
             <span class="session-row__meta">{shortSessionTime(row.updated_at)}</span>
@@ -845,6 +1002,35 @@
 
 <svelte:window onclick={closeMenu} />
 
+<ContextMenu
+  open={contextMenu.open}
+  x={contextMenu.x}
+  y={contextMenu.y}
+  items={contextMenu.row ? menuItemsForRow(contextMenu.row) : []}
+  label={contextMenu.row ? `Actions for ${contextMenu.row.name || "Untitled"}` : "Conversation actions"}
+  onClose={closeContextMenu}
+/>
+
+{#snippet sessionMenuIcon(icon: "pin" | "unpin" | "rename" | "export" | "archive" | "unarchive" | "delete")}
+  <svg class="session-menu__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {#if icon === "pin"}
+      <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
+    {:else if icon === "unpin"}
+      <path d="M2 2l20 20"/><path d="M12 17v5"/><path d="M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11"/><path d="M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89"/>
+    {:else if icon === "rename"}
+      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+    {:else if icon === "export"}
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    {:else if icon === "archive"}
+      <rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>
+    {:else if icon === "unarchive"}
+      <rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M12 17v-6"/><path d="m9 14 3-3 3 3"/>
+    {:else}
+      <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    {/if}
+  </svg>
+{/snippet}
+
 {#snippet pinSizeIcon(size: PinSize)}
   <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
     {#if size === "small"}
@@ -890,9 +1076,9 @@
   .sessions-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; font-size: 13px; color: var(--fg); appearance: none; }
   .sessions-search input::placeholder { color: var(--fg-mut); }
   .session-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: var(--rail-gap); padding: 0 0 8px; }
-  :global(.session-tile[data-size="medium"]) { grid-column: span 2; }
-  :global(.session-tile[data-size="large"]) { grid-column: span 2; height: 112px; padding: 14px; }
-  :global(.session-tile[data-size="large"] .session-row__title) { font-size: 16px; font-weight: 600; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  :global(.session-tile[data-size="medium"]) { grid-column: span 2; height: 74px; }
+  :global(.session-tile[data-size="large"]) { grid-column: span 2; height: 128px; padding: 12px 14px; }
+  :global(.session-tile[data-size="large"] .session-row__title) { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   :global(.session-menu__sizes) { display: flex; gap: 2px; padding: 2px; margin-bottom: 4px; border-radius: 7px; background: var(--color-surface-1); }
   :global(.session-menu__sizes > button) { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; height: 26px; border-radius: 5px; font-size: 12px; color: var(--fg-mut); }
   :global(.session-menu__sizes > button[aria-checked="true"]) { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
@@ -909,20 +1095,21 @@
   :global(.session-row__meta) { font-size: 11.5px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
   :global(.session-row__main:focus-visible) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 6px; }
 
-  :global(.session-tile) { min-width: 0; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0; height: 56px; padding: 8px 10px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); box-shadow: none; }
+  :global(.session-tile) { min-width: 0; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0; height: 68px; padding: 10px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); box-shadow: none; }
   :global(.session-tile:hover) { background: var(--bg); border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
   :global(.session-tile[data-active="1"]) { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
-  :global(.session-tile .session-row__main) { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 2px; }
-  :global(.session-tile .session-row__title) { flex: none; width: 100%; font-weight: 500; font-size: 13px; padding-right: 14px; }
-  :global(.session-tile .session-row__status) { position: absolute; top: 9px; right: 9px; }
-  :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 30px; }
-  :global(.session-tile .session-row__actions) { position: absolute; right: 4px; bottom: 4px; }
-  :global(.session-tile__trace) { display: block; width: 100%; min-width: 0; margin-top: auto; }
+  :global(.session-tile .session-row__main) { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 6px; min-height: 0; overflow: hidden; }
+  :global(.session-tile .session-row__title) { flex: none; width: 100%; font-weight: 500; font-size: 13px; line-height: 1.25; padding-right: 18px; }
+  :global(.session-tile .session-row__status) { position: absolute; top: 11px; right: 11px; transition: opacity 100ms ease; }
+  :global(.session-tile:hover .session-row__status), :global(.session-tile:focus-within .session-row__status), :global(.session-tile[data-menu-open="1"] .session-row__status) { opacity: 0; pointer-events: none; }
+  :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 34px; }
+  :global(.session-tile .session-row__actions) { position: absolute; right: 6px; top: 6px; }
+  :global(.session-tile__trace) { flex: 1; min-height: 0; display: flex; align-items: flex-end; width: 100%; min-width: 0; overflow: hidden; }
+  :global(.session-tile__trace[data-custom-panel="1"]) { align-items: stretch; }
+  :global(.session-tile .session-row__meta) { flex: none; line-height: 1.2; }
   :global(.session-tile[data-size="small"] .session-row__meta),
-  :global(.session-tile[data-size="medium"] .session-row__meta) { display: none; }
-  :global(.session-tile[data-size="small"]:hover .session-tile__trace),
-  :global(.session-tile[data-size="medium"]:hover .session-tile__trace) { opacity: 0.45; }
-  :global(.session-tile[data-size="large"] .session-tile__trace) { margin: 4px 0 2px; }
+  :global(.session-tile[data-size="medium"] .session-row__meta),
+  :global(.session-tile[data-custom-panel="1"] .session-row__meta) { display: none; }
 
   
   :global(.session-row__actions) { flex: none; display: flex; align-items: center; }
@@ -937,7 +1124,9 @@
 
   :global(.session-row[data-menu-open="1"]), :global(.session-tiles > li:has(.session-row[data-menu-open="1"])) { z-index: 30; }
   :global(.session-menu) { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: max-content; min-width: 172px; max-width: min(260px, calc(100vw - 24px)); padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.28); cursor: default; }
-  :global(.session-menu > button), :global(.session-menu > a) { display: flex; align-items: center; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--fg); text-decoration: none; text-align: left; }
+  :global(.session-menu > button), :global(.session-menu > a) { display: flex; align-items: center; gap: 7px; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--fg); text-decoration: none; text-align: left; }
+  :global(.session-menu__icon) { flex: none; color: var(--fg-mut); }
+  :global(.session-menu > .danger .session-menu__icon) { color: var(--bad); }
   :global(.session-menu > button:hover), :global(.session-menu > a:hover) { background: var(--color-surface-1); }
   :global(.session-menu > .danger) { color: var(--bad); }
   :global(.session-menu > hr) { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
