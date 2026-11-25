@@ -92,13 +92,15 @@ const hljsJs = new TextDecoder().decode(hljsOutput.outputFiles[0].contents);
 const hljsHash = createHash("sha256").update(hljsJs).digest("hex").slice(0, 8);
 writeFileSync(here(`build/hljs.${hljsHash}.js`), hljsJs);
 
+const pierreBundle = JSON.stringify({ js: pierreJs, css: "", hash: pierreHash });
+const hljsBundle = JSON.stringify({ js: hljsJs, css: "", hash: hljsHash });
 const bundlesPath = here("bundles.generated.ts");
 const generatedBundles = readFileSync(bundlesPath, "utf8");
 const bundleEnd = generatedBundles.lastIndexOf("\n};");
 if (bundleEnd < 0) throw new Error("Svelte bundle registry was not generated");
 writeFileSync(
   bundlesPath,
-  `${generatedBundles.slice(0, bundleEnd)},\n  "pierre-diffs": ${JSON.stringify({ js: pierreJs, css: "", hash: pierreHash })},\n  "hljs": ${JSON.stringify({ js: hljsJs, css: "", hash: hljsHash })}\n};\n`,
+  `${generatedBundles.slice(0, bundleEnd)},\n  "pierre-diffs": ${pierreBundle},\n  "hljs": ${hljsBundle}\n};\n`,
 );
 
 console.log("✓ svelte-hono spike client artifacts");
