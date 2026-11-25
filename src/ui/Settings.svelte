@@ -19,10 +19,6 @@
     setModel,
     setReasoning,
     type Reasoning,
-    modelLayersState,
-    setModelLayerCount,
-    setModelLayerModel,
-    setShowLayerMetrics,
     themeState,
     applyTheme,
     SESSION_KEY,
@@ -30,7 +26,6 @@
     writeTabSession,
   } from "@my-ax/store";
   import { MODELS } from "../../src/models";
-  import { MAX_MODEL_LAYERS, VERIFIED_LAYER_OPTIONS } from "../../src/model-layers";
   import { classifyJobHealth, jobResultAttr } from "./job-health";
 
   interface Props {
@@ -1259,68 +1254,6 @@
       </div>
       <p class="mt-2 text-xs text-fg-mut">{pushStatus}</p>
     </section>
-
-    <details class="rounded-md border border-line bg-bg px-3 py-3" data-experiments-panel>
-      <summary class="flex cursor-pointer items-center justify-between text-xs font-medium text-fg-mut select-none">
-        <span>Experiments</span>
-        <span class="text-[11px] text-fg-mut">{modelLayersState.count > 0 ? `${modelLayersState.count} front ${modelLayersState.count === 1 ? "layer" : "layers"}` : "Off"}</span>
-      </summary>
-      <div class="mt-3 space-y-3 border-t border-line pt-3">
-        <div>
-          <span class="block text-xs font-medium text-fg mb-1">Model layers</span>
-          <p class="text-[11px] leading-relaxed text-fg-mut mb-2">Put 0 to {MAX_MODEL_LAYERS} fast voice models in front of the agent. Front layers only speak an opener and narrate tool steps; they never call tools, state facts, or approve.</p>
-          <div class="grid grid-cols-4 gap-1 rounded-md bg-bg-alt border border-line p-1" role="group" aria-label="Model layer count">
-            {#each [0, 1, 2, 3] as n}
-              <button
-                type="button"
-                onclick={() => setModelLayerCount(n)}
-                data-layer-count={n}
-                data-active={modelLayersState.count === n ? "1" : "0"}
-                class="py-1.5 rounded text-xs font-medium text-fg-mut hover:text-fg data-[active='1']:bg-bg data-[active='1']:text-fg data-[active='1']:shadow-raise transition-colors"
-              >
-                {n === 0 ? "0 (off)" : String(n)}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        {#if modelLayersState.count > 0}
-          <div class="space-y-2.5">
-            {#each Array.from({ length: modelLayersState.count }, (_, idx) => idx) as idx (idx)}
-              <div>
-                <label for={`layer-model-${idx}`} class="block text-[11px] font-medium text-fg-mut mb-1">
-                  Layer {idx + 1} {idx === 0 ? "(first word)" : "(behind layer " + idx + ")"}
-                </label>
-                <select
-                  id={`layer-model-${idx}`}
-                  data-layer-select={idx}
-                  value={modelLayersState.layers[idx]}
-                  onchange={(e) => setModelLayerModel(idx, (e.target as HTMLSelectElement).value)}
-                  class="w-full rounded-md bg-bg-alt border border-line text-fg text-xs px-2.5 py-2 min-h-[38px] focus:outline-none focus:border-brand/60"
-                >
-                  {#each VERIFIED_LAYER_OPTIONS as opt (opt.id)}
-                    <option value={opt.id}>{opt.label}</option>
-                  {/each}
-                </select>
-              </div>
-            {/each}
-            <p class="text-[11px] text-fg-mut">Layer 0 (worker): <strong class="text-fg">{shortName(modelState.current)}</strong> — does all tool calls and final answers.</p>
-          </div>
-        {/if}
-
-        <label class="flex items-center gap-2 text-xs text-fg-mut cursor-pointer">
-          <input
-            type="checkbox"
-            data-layer-metrics-toggle
-            checked={modelLayersState.showMetrics || modelLayersState.count > 0}
-            disabled={modelLayersState.count > 0}
-            onchange={(e) => setShowLayerMetrics((e.target as HTMLInputElement).checked)}
-            class="rounded border-line"
-          />
-          <span>Show 4 turn metrics (first response, reasoning, approval, finish)</span>
-        </label>
-      </div>
-    </details>
 
       </div>
 

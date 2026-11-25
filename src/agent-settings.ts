@@ -11,6 +11,7 @@ export type AgentSettings = {
   reasoning: ThinkingLevel | null;
   layers: string[] | null;
   instructions: string | null;
+  showMetrics: boolean;
 };
 
 export type GlobalSettings = {
@@ -27,7 +28,7 @@ export type EffectiveSettings = {
 };
 
 export function defaultAgentSettings(): AgentSettings {
-  return { model: null, reasoning: null, layers: null, instructions: null };
+  return { model: null, reasoning: null, layers: null, instructions: null, showMetrics: false };
 }
 
 function sanitizeModel(raw: unknown): string | null {
@@ -49,11 +50,12 @@ export function sanitizeAgentSettings(raw: unknown): AgentSettings {
     reasoning: sanitizeThinkingLevel(source.reasoning) ?? null,
     layers: Array.isArray(source.layers) ? sanitizeLayerIds(source.layers) : null,
     instructions: sanitizeInstructions(source.instructions),
+    showMetrics: source.showMetrics === true,
   };
 }
 
 export function hasAgentOverrides(settings: AgentSettings): boolean {
-  return settings.model !== null || settings.reasoning !== null || settings.layers !== null || settings.instructions !== null;
+  return settings.model !== null || settings.reasoning !== null || settings.layers !== null || settings.instructions !== null || settings.showMetrics;
 }
 
 export function resolveEffectiveSettings(agent: AgentSettings, global: GlobalSettings): EffectiveSettings {

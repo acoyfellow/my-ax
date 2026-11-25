@@ -1118,10 +1118,12 @@
   :global(.session-tile:hover) { background: var(--bg); border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
   :global(.session-tile[data-active="1"]) { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 16%, transparent); }
   :global(.session-tile .session-row__main) { flex-direction: column; align-items: stretch; justify-content: space-between; gap: 6px; min-height: 0; overflow: hidden; }
-  :global(.session-tile .session-row__title) { flex: none; width: 100%; font-weight: 500; font-size: 13px; line-height: 1.25; padding-right: 18px; }
-  :global(.session-tile .session-row__status) { position: absolute; top: 11px; right: 11px; transition: opacity 100ms ease; }
-  :global(.session-tile:hover .session-row__status), :global(.session-tile:focus-within .session-row__status), :global(.session-tile[data-menu-open="1"] .session-row__status) { opacity: 0; pointer-events: none; }
+  :global(.session-tile .session-row__title) { flex: none; width: 100%; font-weight: 500; font-size: 13px; line-height: 1.25; padding-right: 20px; }
+  :global(.session-tile .session-row__status) { position: absolute; top: 11px; right: 11px; transition: right 120ms ease; pointer-events: none; }
+  :global(.session-tile:hover .session-row__status), :global(.session-tile:focus-within .session-row__status), :global(.session-tile[data-menu-open="1"] .session-row__status) { right: 32px; }
+  :global(.session-tile:has(.session-row__status):hover .session-row__title), :global(.session-tile:has(.session-row__status):focus-within .session-row__title), :global(.session-tile:has(.session-row__status)[data-menu-open="1"] .session-row__title) { padding-right: 46px; }
   :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 34px; }
+  :global(.session-tile:has(.session-row__job):hover .session-row__title), :global(.session-tile:has(.session-row__job):focus-within .session-row__title), :global(.session-tile:has(.session-row__job)[data-menu-open="1"] .session-row__title) { padding-right: 60px; }
   :global(.session-tile .session-row__actions) { position: absolute; right: 6px; top: 6px; }
   :global(.session-tile__trace) { flex: 1; min-height: 0; display: flex; align-items: flex-end; width: 100%; min-width: 0; overflow: hidden; }
   :global(.session-tile__trace[data-custom-panel="1"]) { align-items: stretch; }
@@ -1156,6 +1158,10 @@
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   @media (max-width: 767px) {
     :global(.session-row__more) { opacity: 1; }
+    :global(.session-tile .session-row__status) { right: 32px; }
+    :global(.session-tile .session-row__title) { padding-right: 28px; }
+    :global(.session-tile:has(.session-row__status) .session-row__title) { padding-right: 46px; }
+    :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 60px; }
     :global(.session-row:not(.session-tile) .session-row__meta) { visibility: hidden; }
   }
 </style>

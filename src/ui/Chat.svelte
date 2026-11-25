@@ -671,12 +671,12 @@
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sessionId, layers: activeLayerIds(modelLayersState) }),
+      body: JSON.stringify({ sessionId, layers: agentSettings?.layers ?? [] }),
     }).catch(() => undefined);
   }
 
   $effect(() => {
-    const layers = activeLayerIds(modelLayersState).join(",");
+    const layers = (agentSettings?.layers ?? []).join(",");
     const sessionId = readTabSession();
     if (!voiceEnabled && !voiceClient) return;
     if (!sessionId || layers === undefined) return;
@@ -1413,7 +1413,7 @@
   type ClientTurnMetric = { startedAt: number; layers: string[]; firstResponseMs: number | null; firstReasoningMs: number | null; approvalMs: number | null; finishMs: number | null; routedModel?: string | null };
   let activeTurnMetric: ClientTurnMetric | null = null;
   let turnMetricsByMsg = $state<Record<string, TurnLayerMetrics>>({});
-  const showTurnMetrics = $derived(modelLayersState.count > 0 || modelLayersState.showMetrics);
+  const showTurnMetrics = $derived(Boolean(agentSettings?.showMetrics || (agentSettings?.layers?.length ?? 0) > 0));
 
   function setLatestUserReaction(emoji: string, label?: string) {
     activeUserReaction = { emoji, label };
@@ -1602,6 +1602,7 @@
       savingSnapshots = true;
       whenIdle(() => void prefetchRecentChats());
       piTranscript.applySnapshot(frame.view as PiSnapshot);
+      applyAgentSettings(frame.view?.agentSettings);
       renderPiTranscript();
       return true;
     }
@@ -1655,7 +1656,7 @@
     return frame.type === "pi_receipt" || frame.type === "pi_pong" || frame.type === "my_ax_pong";
   }
   function sendPiMessage(text: string, attachments: Attachment[], clientMsgId: string) {
-    const layers = activeLayerIds(modelLayersState);
+    const layers = agentSettings?.layers ?? [];
     liveLayerLine = null;
     liveLayerSource = "";
     activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: 0, firstReasoningMs: null, approvalMs: null, finishMs: null };
@@ -1692,29 +1693,33 @@
   let connectionWatchdogId: ReturnType<typeof setInterval> | null = null;
   const ACTIVE_TURN_KEY_PREFIX = "my-ax-active-turn:";
 
-  let agentOverridesActive = $state(false);
+  type AgentSettingsView = { model: string | null; reasoning: string | null; layers: string[] | null; instructions: string | null; showMetrics: boolean };
+  let agentSettings = $state<AgentSettingsView | null>(null);
 
-  async function refreshAgentOverrides() {
+  function applyAgentSettings(settings: AgentSettingsView | null | undefined) {
+    agentSettings = settings ?? null;
+    const active = Boolean(settings && Object.values(settings).some((value) => value !== null && value !== false));
+    window.dispatchEvent(new CustomEvent("my-ax:agent-settings-overrides", { detail: { sessionId: readTabSession(), active } }));
+  }
+
+  async function refreshAgentSettings() {
     const id = readTabSession();
-    if (!id) { agentOverridesActive = false; return; }
+    if (!id) { applyAgentSettings(null); return; }
     try {
       const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/agent-settings`, { credentials: "include" });
       const body = await response.json();
-      const settings = body?.result?.settings;
-      agentOverridesActive = Boolean(settings && Object.values(settings).some((value) => value !== null));
+      applyAgentSettings(body?.result?.settings);
     } catch {}
   }
 
-  function openAgentSettings() {
-    const id = readTabSession();
-    if (!id) return;
-    window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: id, title: document.title } }));
-  }
-
   onMount(() => {
-    void refreshAgentOverrides();
-    window.addEventListener("my-ax:agent-settings-changed", refreshAgentOverrides);
-    return () => window.removeEventListener("my-ax:agent-settings-changed", refreshAgentOverrides);
+    const onSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId: string; settings: AgentSettingsView }>).detail;
+      if (detail?.sessionId === readTabSession()) applyAgentSettings(detail.settings);
+    };
+    void refreshAgentSettings();
+    window.addEventListener("my-ax:agent-settings-saved", onSaved);
+    return () => window.removeEventListener("my-ax:agent-settings-saved", onSaved);
   });
 
   function currentSessionId() { return readTabSession() || "unknown"; }
@@ -3442,14 +3447,6 @@
           <span class="session-resume-spinner" aria-hidden="true"></span>
         </div>
       {/if}
-      {#if readTabSession()}
-        <div class="agent-settings-trigger">
-          <button type="button" aria-label="Agent settings" title="Agent settings" data-agent-settings-trigger onclick={openAgentSettings}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
-            {#if agentOverridesActive}<span class="agent-settings-trigger__dot" aria-hidden="true"></span>{/if}
-          </button>
-        </div>
-      {/if}
       <main
         bind:this={logEl}
         class="relative flex-1 min-w-0 overflow-x-hidden overflow-y-auto overscroll-x-none touch-pan-y px-3 sm:px-6 lg:px-8 py-4 sm:py-6"
@@ -3932,8 +3929,4 @@
 {/snippet}
 
 <style>
-  .agent-settings-trigger { position: absolute; top: 6px; right: 10px; z-index: 5; }
-  .agent-settings-trigger > button { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--fg-mut); }
-  .agent-settings-trigger > button:hover { color: var(--fg); background: var(--color-surface-1); }
-  .agent-settings-trigger__dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--color-brand, currentColor); }
 </style>

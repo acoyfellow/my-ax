@@ -55,6 +55,20 @@
     else if (event.key === "Escape") { event.preventDefault(); cancelRename(); }
   }
 
+  let hasAgentOverrides = $state(false);
+  function openAgentSettings() {
+    if (!sessionState.id) return;
+    window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: sessionState.id, title: sessionState.title } }));
+  }
+  function onOverrides(event: Event) {
+    const detail = (event as CustomEvent<{ active?: boolean }>).detail;
+    hasAgentOverrides = Boolean(detail?.active);
+  }
+  function onSaved(event: Event) {
+    const settings = (event as CustomEvent<{ settings?: Record<string, unknown> }>).detail?.settings;
+    hasAgentOverrides = Boolean(settings && Object.values(settings).some((value) => value !== null && value !== false));
+  }
+
   let appBarHeight = $state(52);
   $effect(() => {
     document.documentElement.style.setProperty("--appbar-height", `${appBarHeight}px`);
@@ -63,6 +77,12 @@
   onMount(() => {
     startKeyboardInset();
     startTabLeader();
+    window.addEventListener("my-ax:agent-settings-overrides", onOverrides);
+    window.addEventListener("my-ax:agent-settings-saved", onSaved);
+    return () => {
+      window.removeEventListener("my-ax:agent-settings-overrides", onOverrides);
+      window.removeEventListener("my-ax:agent-settings-saved", onSaved);
+    };
   });
 </script>
 
@@ -90,6 +110,13 @@
 
 
   <VoiceListen />
+
+  {#if sessionState.id}
+    <NavIconButton label="Agent settings" title="Agent settings" data-agent-settings-trigger onclick={openAgentSettings} class="relative">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
+      {#if hasAgentOverrides}<span class="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-brand" aria-hidden="true"></span>{/if}
+    </NavIconButton>
+  {/if}
 
   <AppPopOut />
 

@@ -17,6 +17,11 @@
   let layerMode = $state<LayerMode>("default");
   let layerIds = $state<string[]>([...DEFAULT_LAYER_IDS]);
   let instructions = $state("");
+  let showMetrics = $state(false);
+  type Hook = { id: string; label: string; baseUrl: string };
+  let hooks = $state<Hook[]>([]);
+  let hookLabel = $state("");
+  let createdHook = $state<{ baseUrl: string; token: string } | null>(null);
   let saving = $state(false);
   let error = $state("");
 
@@ -25,7 +30,8 @@
   );
   const sessionUrl = $derived(`/api/sessions/${encodeURIComponent(sessionId)}`);
 
-  function applySettings(settings: { model: string | null; reasoning: string | null; layers: string[] | null; instructions: string | null }) {
+  function applySettings(settings: { model: string | null; reasoning: string | null; layers: string[] | null; instructions: string | null; showMetrics: boolean }) {
+    showMetrics = settings.showMetrics;
     model = settings.model ?? "";
     reasoning = settings.reasoning ?? "";
     instructions = settings.instructions ?? "";
@@ -44,6 +50,7 @@
       reasoning: reasoning || null,
       layers: count === null ? null : layerIds.slice(0, count),
       instructions: instructions.trim() || null,
+      showMetrics,
     };
   }
 
@@ -51,7 +58,11 @@
     sessionId = detail.sessionId;
     title = detail.title || "Untitled";
     error = "";
+    createdHook = null;
+    hookLabel = "";
+    hooks = [];
     dialog?.showModal();
+    void loadHooks();
     try {
       const response = await fetch(`${sessionUrl}/agent-settings`, { credentials: "include" });
       const body = await response.json();
@@ -79,7 +90,7 @@
       const json = await response.json();
       if (!response.ok || !json?.ok) throw new Error(json?.error?.message ?? `HTTP ${response.status}`);
       applySettings(json.result.settings);
-      window.dispatchEvent(new CustomEvent("my-ax:agent-settings-changed", { detail: { sessionId, settings: json.result.settings } }));
+      window.dispatchEvent(new CustomEvent("my-ax:agent-settings-saved", { detail: { sessionId, settings: json.result.settings } }));
       return true;
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
@@ -94,7 +105,45 @@
   }
 
   async function resetAll() {
-    if (await persist({ model: null, reasoning: null, layers: null, instructions: null })) close();
+    if (await persist({ model: null, reasoning: null, layers: null, instructions: null, showMetrics: false })) close();
+  }
+
+  async function loadHooks() {
+    try {
+      const response = await fetch(`${sessionUrl}/hooks`, { credentials: "include" });
+      const body = await response.json();
+      if (response.ok && body?.ok) hooks = body.hooks;
+    } catch {}
+  }
+
+  async function createHook() {
+    error = "";
+    try {
+      const response = await fetch(`${sessionUrl}/hooks`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: hookLabel.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body?.ok) throw new Error(body?.error?.message ?? `HTTP ${response.status}`);
+      createdHook = { baseUrl: body.baseUrl, token: body.token };
+      hookLabel = "";
+      await loadHooks();
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  async function revokeHook(hookId: string) {
+    error = "";
+    const response = await fetch(`${sessionUrl}/hooks/${encodeURIComponent(hookId)}`, { method: "DELETE", credentials: "include" });
+    if (!response.ok) error = `Revoke failed (HTTP ${response.status})`;
+    await loadHooks();
+  }
+
+  function copy(text: string) {
+    void navigator.clipboard?.writeText(text);
   }
 
   async function editTileSource() {
@@ -151,6 +200,22 @@
       </div>
     </div>
 
+    <label class="agent-settings__field">
+      <span>Agent instructions</span>
+      <textarea rows="5" maxlength={MAX_AGENT_INSTRUCTIONS_LENGTH} placeholder="Extra role, persona, or rules just for this agent..." bind:value={instructions}></textarea>
+      <small>{instructions.length}/{MAX_AGENT_INSTRUCTIONS_LENGTH}</small>
+    </label>
+
+    <div class="agent-settings__field">
+      <span>Tile panel</span>
+      <div class="agent-settings__row">
+        <button type="button" onclick={editTileSource}>Edit tile source…</button>
+        <button type="button" onclick={resetTile}>Reset to bars</button>
+      </div>
+    </div>
+
+    <details class="agent-settings__section" data-agent-experiments>
+      <summary>Experiments</summary>
     <div class="agent-settings__field">
       <span>Model layers</span>
       <div class="agent-settings__seg" role="radiogroup" aria-label="Model layers">
@@ -171,19 +236,39 @@
       {/if}
     </div>
 
-    <label class="agent-settings__field">
-      <span>Agent instructions</span>
-      <textarea rows="5" maxlength={MAX_AGENT_INSTRUCTIONS_LENGTH} placeholder="Extra role, persona, or rules just for this agent..." bind:value={instructions}></textarea>
-      <small>{instructions.length}/{MAX_AGENT_INSTRUCTIONS_LENGTH}</small>
-    </label>
+      <label class="agent-settings__check">
+        <input type="checkbox" bind:checked={showMetrics} />
+        <span>Show 4 turn metrics (first response, reasoning, approval, finish)</span>
+      </label>
+    </details>
 
-    <div class="agent-settings__field">
-      <span>Tile panel</span>
+    <details class="agent-settings__section" data-agent-hooks>
+      <summary>HTTP Hook{hooks.length ? ` (${hooks.length})` : ""}</summary>
+      {#each hooks as hook (hook.id)}
+        <div class="agent-settings__hook">
+          <div>
+            <strong>{hook.label}</strong>
+            <code>{hook.baseUrl}</code>
+          </div>
+          <button type="button" onclick={() => revokeHook(hook.id)}>Revoke</button>
+        </div>
+      {/each}
       <div class="agent-settings__row">
-        <button type="button" onclick={editTileSource}>Edit tile source…</button>
-        <button type="button" onclick={resetTile}>Reset to bars</button>
+        <input type="text" placeholder="Cloudflare OS" aria-label="Hook label" bind:value={hookLabel} />
+        <button type="button" onclick={createHook}>Create hook</button>
       </div>
-    </div>
+      {#if createdHook}
+        <div class="agent-settings__hook agent-settings__hook--new">
+          <code>{createdHook.baseUrl}</code>
+          <code>{createdHook.token}</code>
+          <div class="agent-settings__row">
+            <button type="button" onclick={() => copy(createdHook!.baseUrl)}>Copy URL</button>
+            <button type="button" onclick={() => copy(createdHook!.token)}>Copy token</button>
+          </div>
+          <small>Token is shown once. Send as Authorization: Bearer &lt;token&gt;.</small>
+        </div>
+      {/if}
+    </details>
 
     {#if error}<p class="agent-settings__error" role="alert">{error}</p>{/if}
 
@@ -213,5 +298,13 @@
   .agent-settings__row > button, .agent-settings__foot > button { height: 30px; padding: 0 12px; font-size: 13px; border: 1px solid var(--line); border-radius: 7px; }
   .agent-settings__foot { display: flex; justify-content: space-between; }
   .agent-settings__save { background: var(--fg); color: var(--bg); }
+  .agent-settings__section { display: flex; flex-direction: column; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+  .agent-settings__section > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--fg-mut); }
+  .agent-settings__section[open] > summary { margin-bottom: 8px; }
+  .agent-settings__check { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--fg-mut); }
+  .agent-settings input[type="text"] { flex: 1; min-width: 0; padding: 6px 8px; font-size: 13px; background: var(--color-surface-1); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; }
+  .agent-settings__hook { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+  .agent-settings__hook code { font-size: 11px; word-break: break-all; color: var(--fg-mut); }
+  .agent-settings__hook > button { align-self: flex-start; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; }
   .agent-settings__error { font-size: 12px; color: var(--color-danger, #d33); }
 </style>

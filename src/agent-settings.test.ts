@@ -7,7 +7,7 @@ import { PI_ENGINE_MODEL_CHOICES } from "./pi-engine/gateway-models";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 test("defaults inherit everything", () => {
-  assert.deepEqual(defaultAgentSettings(), { model: null, reasoning: null, layers: null, instructions: null });
+  assert.deepEqual(defaultAgentSettings(), { model: null, reasoning: null, layers: null, instructions: null, showMetrics: false });
 });
 
 test("sanitize drops invalid values and keeps valid ones", () => {
@@ -70,4 +70,25 @@ test("modal is wired into Sessions and Chat", () => {
   const chat = read("./ui/Chat.svelte");
   assert.match(chat, /<AgentSettingsModal \/>/);
   assert.match(chat, /model: modelState\.current \}\)\);/);
+});
+
+test("showMetrics sanitizes to a boolean defaulting to false", () => {
+  assert.equal(sanitizeAgentSettings({ showMetrics: true }).showMetrics, true);
+  assert.equal(sanitizeAgentSettings({ showMetrics: "yes" }).showMetrics, false);
+  assert.equal(defaultAgentSettings().showMetrics, false);
+});
+
+test("experiments and hooks live in per-agent settings UI", () => {
+  assert.equal(read("./ui/Settings.svelte").includes("data-experiments-panel"), false);
+  const shell = read("./ui/AppShell.svelte");
+  assert.ok(shell.includes("data-agent-settings-trigger"));
+  assert.ok(shell.includes("my-ax:agent-settings-open"));
+  const modal = read("./ui/AgentSettingsModal.svelte");
+  assert.ok(modal.includes("data-agent-experiments"));
+  assert.ok(modal.includes("data-agent-hooks"));
+  assert.ok(modal.includes("/hooks"));
+  const chat = read("./ui/Chat.svelte");
+  assert.ok(chat.includes("/api/voice/layers"));
+  assert.ok(chat.includes("agentSettings?.layers ?? []"));
+  assert.equal(chat.includes("data-agent-settings-trigger"), false);
 });
