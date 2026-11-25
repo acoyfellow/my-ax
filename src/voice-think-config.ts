@@ -1,4 +1,5 @@
 import type { AccessIdentity } from "./auth";
+import { sanitizeLayerIds } from "./model-layers";
 
 export const VOICE_STT_KEYTERMS = [
   "Workers",
@@ -21,12 +22,12 @@ export const VOICE_STT_KEYTERMS = [
 
 export const VOICE_CALL_GREETING = "Hi, I'm ready to help.";
 
-export type VoiceThinkConfig = { identity?: AccessIdentity; sessionId?: string };
+export type VoiceThinkConfig = { identity?: AccessIdentity; sessionId?: string; layers?: string[] };
 
 export function lockVoiceThinkConfig(
   existing: VoiceThinkConfig | undefined,
   incoming: VoiceThinkConfig,
-): Required<VoiceThinkConfig> {
+): Required<Omit<VoiceThinkConfig, "layers">> & { layers?: string[] } {
   const identity = incoming.identity;
   const sessionId = incoming.sessionId?.trim();
   if (!identity?.email || !identity.sub || !sessionId) {
@@ -35,6 +36,7 @@ export function lockVoiceThinkConfig(
   const normalized = {
     identity: { ...identity, email: identity.email.toLowerCase() },
     sessionId,
+    ...(incoming.layers !== undefined ? { layers: sanitizeLayerIds(incoming.layers) } : {}),
   };
   if (!existing?.identity || !existing.sessionId) return normalized;
   if (

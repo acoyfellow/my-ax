@@ -2,9 +2,28 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { ownerDeskGet, ownerDeskRemove, ownerDeskUpsert } from "./desk";
+import { getAgentByName } from "agents";
+import { sanitizeLayerIds } from "../model-layers";
+import { resolveOwnedVoiceTarget } from "../voice-session-ownership";
 import { parseVoiceDeskRequest, planVoiceDeskAction } from "../voice-command";
 
 export function registerVoiceRoutes(app: Hono<AppEnv>) {
+  app.post("/api/voice/layers", async (c) => {
+    const command = "POST /api/voice/layers";
+    const body = (await c.req.json().catch(() => null)) as { sessionId?: unknown; layers?: unknown } | null;
+    if (!body || typeof body.sessionId !== "string" || !body.sessionId || !Array.isArray(body.layers)) {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "BAD_VOICE_LAYERS", message: "sessionId and layers are required" }, next_actions: [] }, 400);
+    }
+    const layers = sanitizeLayerIds(body.layers);
+    try {
+      const voiceName = await resolveOwnedVoiceTarget(c.env.DB, c.get("identity"), body.sessionId);
+      await (await getAgentByName(c.env.VoiceThinkAgent, voiceName)).setLayers(layers);
+    } catch {
+      return c.json<ApiResponse>({ ok: false, command, error: { code: "NOT_FOUND", message: "Session not found or not owned" }, next_actions: [] }, 404);
+    }
+    return c.json<ApiResponse>({ ok: true, command, result: { layers }, next_actions: [] });
+  });
+
   app.post("/api/voice/desk", async (c) => {
     const command = "POST /api/voice/desk";
     const request = parseVoiceDeskRequest(await c.req.json().catch(() => null));

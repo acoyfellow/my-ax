@@ -666,8 +666,26 @@
     return client;
   }
 
+  function syncVoiceLayers(sessionId: string) {
+    void fetch("/api/voice/layers", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, layers: activeLayerIds(modelLayersState) }),
+    }).catch(() => undefined);
+  }
+
+  $effect(() => {
+    const layers = activeLayerIds(modelLayersState).join(",");
+    const sessionId = readTabSession();
+    if (!voiceEnabled && !voiceClient) return;
+    if (!sessionId || layers === undefined) return;
+    syncVoiceLayers(sessionId);
+  });
+
   function prepareVoiceClientForSession(sessionId: string): VoiceClient | null {
     if (readTabSession() !== sessionId) return null;
+    syncVoiceLayers(sessionId);
     const client = voiceActivation.prepare(sessionId, createVoiceClientForSession);
     voiceClient = client;
     voiceReady = client.connected;

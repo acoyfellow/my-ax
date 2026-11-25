@@ -59,6 +59,7 @@ import { onlineMachines } from "./machine-target";
 import { getUserAgent } from "./agent-stub";
 import { registerRigRoutes } from "./routes/rig";
 import { registerDeskRoutes } from "./routes/desk";
+import { sanitizeLayerIds } from "./model-layers";
 import { registerVoiceRoutes } from "./routes/voice";
 import { registerTerminalRoutes } from "./routes/terminal";
 import { registerWorkspaceDirectoryRoutes } from "./routes/workspaces";
@@ -500,7 +501,9 @@ app.all("/agents/*", async (c) => {
     try {
       // Resolve ownership and the direct actor name in one fail-closed step.
       const voiceName = await resolveOwnedVoiceTarget(c.env.DB, identity, sessionId);
-      await rpc.command("VoiceThinkAgent.seedSession", async () => (await getAgentByName(c.env.VoiceThinkAgent, voiceName)).seedSession(identity, sessionId));
+      const layersParam = new URL(c.req.url).searchParams.get("layers");
+      const layers = layersParam === null ? undefined : sanitizeLayerIds(layersParam.split(",").filter(Boolean));
+      await rpc.command("VoiceThinkAgent.seedSession", async () => (await getAgentByName(c.env.VoiceThinkAgent, voiceName)).seedSession(identity, sessionId, layers));
       const routedUrl = new URL(c.req.url);
       // CRITICAL: route with the RAW voiceName, not encodeURIComponent(voiceName).
       // routeAgentRequest/routePartykitRequest resolve the target DO with

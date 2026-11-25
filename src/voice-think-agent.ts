@@ -15,6 +15,9 @@ import {
   type VoiceThinkConfig,
 } from "./voice-think-config";
 import { checkVoicePrompt } from "./voice-check-prompt";
+import type { LayerAiBinding } from "./pi-engine/model-layers-runner";
+import { runLayeredVoiceTurn } from "./voice-layers";
+import { sanitizeLayerIds } from "./model-layers";
 import { StillWorkingTimer, WORK_ACK, VOICE_ACK_THRESHOLD_MS } from "./voice-narration";
 
 // If the turn resolves within this window, stay terse (just the reply). Only
@@ -85,9 +88,13 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
 
   /** Seeded by the route before the socket opens: which owner + Think session
    *  this voice call delegates into. */
-  async seedSession(identity: AccessIdentity, sessionId: string) {
-    const linked = lockVoiceThinkConfig(this.state as VoiceThinkConfig | undefined, { identity, sessionId });
+  async seedSession(identity: AccessIdentity, sessionId: string, layers?: string[]) {
+    const linked = lockVoiceThinkConfig(this.state as VoiceThinkConfig | undefined, { identity, sessionId, layers });
     this.setState({ ...(this.state as VoiceThinkConfig), ...linked } as VoiceThinkConfig);
+  }
+
+  async setLayers(layers: string[]) {
+    this.setState({ ...(this.state as VoiceThinkConfig), layers: sanitizeLayerIds(layers) } as VoiceThinkConfig);
   }
 
   async onCallStart(connection: Connection): Promise<void> {
@@ -138,6 +145,19 @@ export class VoiceThinkAgent extends VoiceAgent<Env> {
       } catch (error) {
         console.error("voice_prompt_check_failed", { err: error instanceof Error ? error.message : String(error) });
         yield "I can't help with that.";
+        return;
+      }
+
+      const layers = sanitizeLayerIds(cfg.layers);
+      if (layers.length > 0) {
+        if (await sessionEngine(env, cfg.identity.email, cfg.sessionId) !== "pi") { yield "Voice needs a conversation on the pi engine."; return; }
+        const chat = await openPiChat(env, cfg.identity.email, cfg.sessionId);
+        try {
+          yield* runLayeredVoiceTurn({ layers, transcript, chat, ai: env.AI as unknown as LayerAiBinding, signal });
+        } catch (e) {
+          console.error("voice_turn_failed", { err: e instanceof Error ? e.message : String(e) });
+          yield "Voice turn error: " + (e instanceof Error ? e.message : String(e));
+        }
         return;
       }
 

@@ -589,6 +589,18 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     this.broadcast(frame);
   }
 
+  async voiceTurnProgress(sinceEntryId: number): Promise<{ busy: boolean; lastEntryId: number; entries: Array<{ id: number; model?: unknown[] }>; partial: unknown | null }> {
+    const view = await this.live();
+    const entries = view.entries as Array<{ id: number; model?: unknown[] }>;
+    const lastEntryId = entries.reduce((max, entry) => Math.max(max, entry.id), -1);
+    return {
+      busy: view.busy,
+      lastEntryId,
+      entries: entries.filter((entry) => entry.id > sinceEntryId).map((entry) => ({ id: entry.id, model: entry.model })),
+      partial: view.partial,
+    };
+  }
+
   async isBusy(): Promise<boolean> {
     return this.harness.session().busy();
   }
