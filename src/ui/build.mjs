@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { VERSION as SVELTE_VERSION } from "svelte/compiler";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const here = (p) => join(__dirname, p);
@@ -31,7 +32,7 @@ const here = (p) => join(__dirname, p);
 // smoke tests or future archaeology.
 rmSync(here("build"), { recursive: true, force: true });
 for (const name of readdirSync(__dirname)) {
-  if (/\.ssr\.(?:mjs|css)$/.test(name) || name === "bundles.generated.ts") {
+  if (/\.ssr\.(?:mjs|css)$/.test(name) || name === "bundles.generated.ts" || name === "artifact-svelte-runtime.generated.ts") {
     rmSync(here(name), { force: true });
   }
 }
@@ -113,3 +114,46 @@ for (const name of ["Connectors", "Sessions", "Settings", "AppShell", "CheckIn",
   });
   console.log(`✓ ${name}.ssr.mjs ready for worker import`);
 }
+
+const ARTIFACT_SVELTE_SPECS = [
+  "svelte",
+  "svelte/internal/client",
+  "svelte/internal/disclose-version",
+  "svelte/reactivity",
+  "svelte/store",
+  "svelte/transition",
+  "svelte/easing",
+  "svelte/animate",
+  "svelte/motion",
+];
+const artifactSvelteResult = await build({
+  entryPoints: Object.fromEntries(ARTIFACT_SVELTE_SPECS.map((spec, index) => [`e${index}`, spec])),
+  bundle: true,
+  splitting: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  write: false,
+  outdir: "/virtual",
+  conditions: ["browser", "svelte", "import", "default"],
+  logLevel: "silent",
+});
+const artifactImportMap = {};
+const fileMap = new Map(artifactSvelteResult.outputFiles.map((file) => [file.path.replace(/^\/virtual\//, ""), file.text]));
+const rewriteChunks = (source) => source.replace(/(["'])\.\/(chunk-[A-Za-z0-9_-]+\.js)\1/g, '$1__myax_svelte_$2$1');
+for (const [name, source] of fileMap.entries()) {
+  const rewritten = rewriteChunks(source);
+  const dataUrl = `data:application/javascript;base64,${Buffer.from(rewritten, "utf8").toString("base64")}`;
+  if (name.startsWith("chunk-")) {
+    artifactImportMap[`__myax_svelte_${name}`] = dataUrl;
+  } else {
+    const match = /^e(\d+)\.js$/.exec(name);
+    if (match) artifactImportMap[ARTIFACT_SVELTE_SPECS[Number(match[1])]] = dataUrl;
+  }
+}
+writeFileSync(
+  here("artifact-svelte-runtime.generated.ts"),
+  `export const ARTIFACT_SVELTE_VERSION = ${JSON.stringify(SVELTE_VERSION)};\nexport const ARTIFACT_SVELTE_IMPORT_MAP: Record<string, string> = ${JSON.stringify(artifactImportMap)};\n`,
+);
+console.log(`✓ artifact-svelte-runtime.generated.ts ready (${Object.keys(artifactImportMap).length} self-hosted modules, svelte@${SVELTE_VERSION})`);

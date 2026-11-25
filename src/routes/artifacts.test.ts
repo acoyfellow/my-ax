@@ -45,11 +45,14 @@ function appWith(state: { sourceHash: string }) {
 }
 
 test("the preview runtime is the same svelte version the widgets are compiled with", async () => {
-  assert.equal(ARTIFACT_SVELTE_RUNTIME, `https://esm.sh/svelte@${VERSION}`);
+  assert.equal(ARTIFACT_SVELTE_RUNTIME, `self-hosted:svelte@${VERSION}`);
   const response = await appWith({ sourceHash: "a" }).request(`/api/artifacts/${ID}/preview`);
   const html = await response.text();
-  const runtimes = [...html.matchAll(/https:\/\/esm\.sh\/svelte@([0-9][^"/]*)/g)].map((match) => match[1]);
-  assert.ok(runtimes.length > 0, "preview names a runtime");
+  const csp = response.headers.get("Content-Security-Policy") ?? "";
+  assert.doesNotMatch(html, /esm\.sh/i, "preview must not depend on external esm.sh CDN");
+  assert.match(csp, /connect-src 'none'/, "preview CSP must block outbound connections");
+  const runtimes = [...html.matchAll(/self-hosted:svelte@([0-9][^"/]*)/g)].map((match) => match[1]);
+  assert.ok(runtimes.length > 0, "preview names a self-hosted runtime");
   assert.deepEqual([...new Set(runtimes)], [VERSION]);
 });
 

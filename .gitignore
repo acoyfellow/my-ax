@@ -32,6 +32,7 @@ public/static/brand/og.png
 public/favicon.ico
 public/.DS_Store
 src/ui/bundles.generated.ts
+src/ui/artifact-svelte-runtime.generated.ts
 src/docs-content.generated.ts
 src/ui/build/
 src/ui/*.ssr.mjs

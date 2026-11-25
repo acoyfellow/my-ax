@@ -6,24 +6,25 @@ import { ARTIFACT_RUNTIME_JS } from "../artifact-runtime";
 import { ARTIFACT_THEME_CSS } from "../artifact-theme";
 import { artifactPwaIconSvg, artifactPwaShellHtml, artifactWebManifest } from "../artifact-pwa";
 import { TILE_BASE_CSS, TILE_RUNTIME_JS } from "../tile-panel";
+import { ARTIFACT_SVELTE_IMPORT_MAP, ARTIFACT_SVELTE_VERSION } from "../ui/artifact-svelte-runtime.generated";
 import { VERSION as SVELTE_COMPILER_VERSION } from "svelte/compiler";
 
-export const ARTIFACT_SVELTE_RUNTIME = `https://esm.sh/svelte@${SVELTE_COMPILER_VERSION}`;
+export const ARTIFACT_SVELTE_RUNTIME = `self-hosted:svelte@${ARTIFACT_SVELTE_VERSION || SVELTE_COMPILER_VERSION}`;
+
+const ARTIFACT_IMPORT_MAP_JSON = JSON.stringify({ imports: ARTIFACT_SVELTE_IMPORT_MAP });
 
 function artifactPreview(manifest: { title: string; clientJs: string; css: string }, options: { inline?: boolean } = {}): string {
   const css = manifest.css.replace(/<\/style/gi, "<\\/style");
   const moduleUrl = `data:application/javascript;charset=utf-8,${encodeURIComponent(manifest.clientJs)}`;
   const title = manifest.title.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
-  const runtime = ARTIFACT_SVELTE_RUNTIME;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><script type="importmap">{"imports":{"svelte":"${runtime}","svelte/":"${runtime}/"}}</script><style>${ARTIFACT_THEME_CSS}${options.inline ? "html,body{width:100%;overflow:auto}#app{width:100%}" : "html,body{width:100%;min-height:100%;overflow:auto}body{display:flex;align-items:stretch;justify-content:stretch;min-height:100dvh}#app{width:100%;min-height:100dvh}"}${css}</style></head><body><div id="app"></div><script>${ARTIFACT_RUNTIME_JS}</script><script type="module">import Component from ${JSON.stringify(moduleUrl)}; import { mount } from "svelte"; mount(Component,{target:document.getElementById("app")});</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="my-ax-svelte-runtime" content="${ARTIFACT_SVELTE_RUNTIME}"><title>${title}</title><script type="importmap">${ARTIFACT_IMPORT_MAP_JSON}</script><style>${ARTIFACT_THEME_CSS}${options.inline ? "html,body{width:100%;overflow:auto}#app{width:100%}" : "html,body{width:100%;min-height:100%;overflow:auto}body{display:flex;align-items:stretch;justify-content:stretch;min-height:100dvh}#app{width:100%;min-height:100dvh}"}${css}</style></head><body><div id="app"></div><script>${ARTIFACT_RUNTIME_JS}</script><script type="module">import Component from ${JSON.stringify(moduleUrl)}; import { mount } from "svelte"; mount(Component,{target:document.getElementById("app")});</script></body></html>`;
 }
 
 function tilePreview(manifest: { title: string; clientJs: string; css: string }): string {
   const css = manifest.css.replace(/<\/style/gi, "<\\/style");
   const moduleUrl = `data:application/javascript;charset=utf-8,${encodeURIComponent(manifest.clientJs)}`;
   const title = manifest.title.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
-  const runtime = ARTIFACT_SVELTE_RUNTIME;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><script type="importmap">{"imports":{"svelte":"${runtime}","svelte/":"${runtime}/"}}</script><style>${TILE_BASE_CSS}${css}</style></head><body><div id="app"></div><script>${TILE_RUNTIME_JS}</script><script type="module">import Component from ${JSON.stringify(moduleUrl)}; import { mount } from "svelte"; mount(Component,{target:document.getElementById("app")});</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="my-ax-svelte-runtime" content="${ARTIFACT_SVELTE_RUNTIME}"><title>${title}</title><script type="importmap">${ARTIFACT_IMPORT_MAP_JSON}</script><style>${TILE_BASE_CSS}${css}</style></head><body><div id="app"></div><script>${TILE_RUNTIME_JS}</script><script type="module">import Component from ${JSON.stringify(moduleUrl)}; import { mount } from "svelte"; mount(Component,{target:document.getElementById("app")});</script></body></html>`;
 }
 
 export function registerArtifactRoutes(app: Hono<AppEnv>) {
@@ -73,7 +74,7 @@ export function registerArtifactRoutes(app: Hono<AppEnv>) {
     const html = c.req.query("tile") === "1" ? tilePreview(manifest) : artifactPreview(manifest, { inline: c.req.query("inline") === "1" });
     return c.html(html, 200, {
       ...cacheHeaders,
-      "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline' data: https://esm.sh; style-src 'unsafe-inline'; connect-src https://esm.sh; img-src data:; font-src 'none'; object-src 'none'; frame-ancestors *; base-uri 'none'; form-action 'none'; navigate-to 'none'",
+      "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline' data:; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; font-src 'none'; object-src 'none'; frame-ancestors *; base-uri 'none'; form-action 'none'; navigate-to 'none'",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });
