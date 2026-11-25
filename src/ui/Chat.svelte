@@ -117,42 +117,10 @@
   // be parsed immediately. Syntax highlighting remains a lazy enhancement.
   marked.setOptions({ gfm: true, breaks: true });
   let hljs: any = null;
+  const hljsSpecifier = "@my-ax/hljs";
   async function ensureMarkedHljs() {
     if (hljs) return;
-    const hljsMod = await import("https://esm.sh/highlight.js@11.10.0/lib/core");
-    const langs = await Promise.all([
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/javascript"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/typescript"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/python"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/bash"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/json"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/xml"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/css"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/yaml"),
-      import("https://esm.sh/highlight.js@11.10.0/lib/languages/markdown"),
-    ]);
-    hljs = hljsMod.default;
-    const reg = (name: string, mod: any) => hljs.registerLanguage(name, mod.default);
-    reg("javascript", langs[0]);
-    reg("typescript", langs[1]);
-    reg("python", langs[2]);
-    reg("bash", langs[3]);
-    reg("sh", langs[3]);
-    reg("shell", langs[3]);
-    reg("json", langs[4]);
-    reg("xml", langs[5]);
-    reg("html", langs[5]);
-    reg("css", langs[6]);
-    reg("yaml", langs[7]);
-    reg("yml", langs[7]);
-    reg("md", langs[8]);
-    reg("markdown", langs[8]);
-    // hljs github-dark theme stylesheet — Chrome forbids MIME-mismatched CSS
-    // ES imports, so we use a <link> tag.
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://esm.sh/highlight.js@11.10.0/styles/github-dark.css";
-    document.head.appendChild(link);
+    hljs = (await import(hljsSpecifier)).default;
   }
 
   // ── State ──────────────────────────────────────────────────────────

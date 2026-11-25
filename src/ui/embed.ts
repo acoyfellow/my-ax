@@ -65,6 +65,7 @@ export function svelteHeadTags(buildId?: string): string {
       "svelte/internal/client": runtime,
       "svelte/internal/disclose-version": runtime,
       ...(bundles["pierre-diffs"] ? { "@my-ax/pierre-diffs": withBuildId(assetUrl("pierre-diffs", "js"), buildId) } : {}),
+      ...(bundles.hljs ? { "@my-ax/hljs": withBuildId(assetUrl("hljs", "js"), buildId) } : {}),
       ...sharedEntries,
     },
   });

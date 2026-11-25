@@ -79,7 +79,7 @@
   "unsafe": { "bindings": [{ "type": "websearch", "name": "WEBSEARCH" }] },
   // Browser Run: hosted headless Chrome sessions for visual tool calls.
   "browser": { "binding": "BROWSER" },
-  // Dynamic Worker loader for native Think Agent Skills script execution.
+  // Dynamic Worker loader for Work Code Mode and MCP Code Mode.
   // Runner defaults remain bounded: no network/tools and read-only workspace.
   "worker_loaders": [{ "binding": "LOADER" }],
   "services": [{ "binding": "RADAR", "service": "arxiv-radar", "entrypoint": "RadarTools" }],

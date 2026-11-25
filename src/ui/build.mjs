@@ -75,20 +75,38 @@ const pierreOutput = await build({
 });
 const pierreJs = new TextDecoder().decode(pierreOutput.outputFiles[0].contents);
 const pierreHash = createHash("sha256").update(pierreJs).digest("hex").slice(0, 8);
-const pierreFilename = `pierre-diffs.${pierreHash}.js`;
-writeFileSync(here(`build/${pierreFilename}`), pierreJs);
+writeFileSync(here(`build/pierre-diffs.${pierreHash}.js`), pierreJs);
+
+const hljsOutput = await build({
+  entryPoints: [here("hljs-client.ts")],
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  write: false,
+  logLevel: "silent",
+  loader: { ".css": "text" },
+});
+const hljsJs = new TextDecoder().decode(hljsOutput.outputFiles[0].contents);
+const hljsHash = createHash("sha256").update(hljsJs).digest("hex").slice(0, 8);
+writeFileSync(here(`build/hljs.${hljsHash}.js`), hljsJs);
+
 const bundlesPath = here("bundles.generated.ts");
 const generatedBundles = readFileSync(bundlesPath, "utf8");
-const pierreBundle = JSON.stringify({ js: pierreJs, css: "", hash: pierreHash });
 const bundleEnd = generatedBundles.lastIndexOf("\n};");
 if (bundleEnd < 0) throw new Error("Svelte bundle registry was not generated");
-writeFileSync(bundlesPath, `${generatedBundles.slice(0, bundleEnd)},\n  "pierre-diffs": ${pierreBundle}\n};\n`);
+writeFileSync(
+  bundlesPath,
+  `${generatedBundles.slice(0, bundleEnd)},\n  "pierre-diffs": ${JSON.stringify({ js: pierreJs, css: "", hash: pierreHash })},\n  "hljs": ${JSON.stringify({ js: hljsJs, css: "", hash: hljsHash })}\n};\n`,
+);
 
 console.log("✓ svelte-hono spike client artifacts");
 for (const [id, sz] of Object.entries(result.bundleSizes)) {
   console.log(`    ${id.padEnd(10)}  ${(sz.js / 1024).toFixed(1)} KB JS + ${(sz.css / 1024).toFixed(2)} KB CSS`);
 }
 console.log(`    pierre-diffs  ${(pierreJs.length / 1024).toFixed(1)} KB JS lazy`);
+console.log(`    hljs          ${(hljsJs.length / 1024).toFixed(1)} KB JS lazy`);
 
 // ── 2. Pre-compiled <Name>.ssr.mjs modules for each component, imported ──
 // Wrangler's bundler doesn't know how to load .svelte files; we hand it a
