@@ -33,5 +33,7 @@ test("Chat.svelte sends reasoning on pi_submit and the agent applies it", () => 
   const chat = readFileSync("src/ui/Chat.svelte", "utf8");
   assert.match(chat, /reasoning: modelState\.reasoning, model: modelState\.current \}/);
   const agent = readFileSync("src/pi-engine/pi-chat-agent.ts", "utf8");
-  assert.match(agent, /applyThinkingLevel\(sanitizeThinkingLevel\(frame\.reasoning\)\)/);
+  assert.match(agent, /resolveEffectiveSettings\(/);
+  assert.match(agent, /reasoning: frame\.reasoning/);
+  assert.match(agent, /applyThinkingLevel\(effective\.reasoning\)/);
 });
