@@ -113,7 +113,22 @@ export async function* runLayeredVoiceTurn(options: VoiceLayerTurnOptions): Asyn
   const { layers, chat, signal } = options;
   if (layers.length === 0) return;
   const now = options.now ?? Date.now;
-  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const sleep = options.sleep;
+  const waitPoll = async (ms: number, done: Promise<unknown>): Promise<void> => {
+    if (sleep) {
+      await Promise.race([sleep(ms), done.catch(() => undefined)]);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); }),
+        done.catch(() => undefined),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  };
   const pollMs = options.pollMs ?? VOICE_LAYER_POLL_MS;
   const startedAt = now();
   const elapsed = () => Math.max(0, now() - startedAt);
@@ -180,7 +195,7 @@ export async function* runLayeredVoiceTurn(options: VoiceLayerTurnOptions): Asyn
 
     while (!settled && !signal?.aborted) {
       yield* drain(false);
-      await Promise.race([sleep(pollMs), donePromise.catch(() => undefined)]);
+      await waitPoll(pollMs, donePromise);
     }
     if (signal?.aborted) return;
     const outcome = await donePromise.catch((error: unknown) => ({ receipt: { operationId: crypto.randomUUID() }, result: { status: "error", text: undefined, reason: error instanceof Error ? error.message : String(error) } }));

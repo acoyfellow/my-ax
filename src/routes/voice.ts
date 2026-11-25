@@ -3,6 +3,7 @@ import type { AppEnv } from "../app-env";
 import type { ApiResponse } from "../types";
 import { ownerDeskGet, ownerDeskRemove, ownerDeskUpsert } from "./desk";
 import { getAgentByName } from "agents";
+import * as rpc from "../rpc/contract";
 import { sanitizeLayerIds } from "../model-layers";
 import { resolveOwnedVoiceTarget } from "../voice-session-ownership";
 import { parseVoiceDeskRequest, planVoiceDeskAction } from "../voice-command";
@@ -17,7 +18,7 @@ export function registerVoiceRoutes(app: Hono<AppEnv>) {
     const layers = sanitizeLayerIds(body.layers);
     try {
       const voiceName = await resolveOwnedVoiceTarget(c.env.DB, c.get("identity"), body.sessionId);
-      await (await getAgentByName(c.env.VoiceThinkAgent, voiceName)).setLayers(layers);
+      await rpc.command("VoiceThinkAgent.setLayers", async () => (await getAgentByName(c.env.VoiceThinkAgent, voiceName)).setLayers(layers));
     } catch {
       return c.json<ApiResponse>({ ok: false, command, error: { code: "NOT_FOUND", message: "Session not found or not owned" }, next_actions: [] }, 404);
     }
