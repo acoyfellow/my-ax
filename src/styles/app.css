@@ -159,6 +159,12 @@
   --good: var(--color-good);
   --warn: var(--color-warn);
   --bad: var(--color-bad);
+  --seismo-empty: rgba(155, 170, 186, 0.18);
+  --seismo-llm: rgba(155, 170, 186, 0.56);
+  --seismo-box: #60a5fa;
+  --seismo-mac: var(--color-brand);
+  --seismo-web: #2dd4bf;
+  --seismo-alert: var(--color-bad);
 }
 
 .light {
@@ -195,6 +201,12 @@
   --good: var(--color-good);
   --warn: var(--color-warn);
   --bad: var(--color-bad);
+  --seismo-empty: rgba(90, 90, 98, 0.14);
+  --seismo-llm: rgba(90, 90, 98, 0.44);
+  --seismo-box: #2563eb;
+  --seismo-mac: var(--color-brand);
+  --seismo-web: #0d9488;
+  --seismo-alert: var(--color-bad);
 }
 
 /* System mode (no class on <html>) — defer to OS preference. We only
@@ -228,6 +240,12 @@
     --good: var(--color-good);
     --warn: var(--color-warn);
     --bad: var(--color-bad);
+    --seismo-empty: rgba(90, 90, 98, 0.14);
+    --seismo-llm: rgba(90, 90, 98, 0.44);
+    --seismo-box: #2563eb;
+    --seismo-mac: var(--color-brand);
+    --seismo-web: #0d9488;
+    --seismo-alert: var(--color-bad);
   }
 }
 

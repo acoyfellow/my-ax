@@ -24,6 +24,24 @@
 
   let isBlocked = $derived(blocked || Boolean(pulse?.blocked));
 
+  const KIND_LABELS: Record<string, string> = {
+    llm: "model",
+    box: "sandbox",
+    mac: "Mac",
+    web: "web",
+    err: "error",
+    wait: "needs input",
+  };
+
+  let summary = $derived.by(() => {
+    const bars = pulse?.bars ?? [];
+    if (!bars.length) return isBlocked ? "Waiting on your input" : "No recent activity";
+    const counts = new Map<string, number>();
+    for (const bar of bars) counts.set(bar.k, (counts.get(bar.k) ?? 0) + 1);
+    const parts = [...counts.entries()].map(([k, n]) => `${n} ${KIND_LABELS[k] ?? k}`);
+    return `${isBlocked ? "Needs input · " : ""}Recent: ${parts.join(" · ")}`;
+  });
+
   function barHeight(bar: SeismoBar | null): number {
     if (!bar) return 2;
     return Math.max(4, Math.round((bar.v / 100) * 28));
@@ -37,8 +55,10 @@
   data-size={size}
   viewBox="0 0 160 32"
   preserveAspectRatio="none"
-  aria-hidden="true"
+  role="img"
+  aria-label={summary}
 >
+  <title>{summary}</title>
   <line class="seismo__base" x1="0" y1="31" x2="160" y2="31" />
   {#if isBlocked}
     <line class="seismo__crack" x1="0" y1="16" x2="160" y2="16" />
@@ -77,35 +97,35 @@
     stroke-width: 1;
   }
   .seismo__crack {
-    stroke: var(--bad, #ef4444);
+    stroke: var(--seismo-alert, var(--bad));
     stroke-width: 1.25;
     stroke-dasharray: 3 2.5;
     opacity: 0.85;
   }
   .seismo__bar {
     transition: height 180ms ease, y 180ms ease, opacity 180ms ease;
-    opacity: 0.78;
+    opacity: 0.85;
   }
   .seismo__bar[data-kind="empty"] {
-    fill: color-mix(in srgb, var(--fg-mut) 22%, transparent);
-    opacity: 0.55;
+    fill: var(--seismo-empty);
+    opacity: 0.7;
   }
   .seismo__bar[data-kind="llm"] {
-    fill: color-mix(in srgb, var(--brand) 60%, var(--fg-mut));
+    fill: var(--seismo-llm);
   }
   .seismo__bar[data-kind="box"] {
-    fill: #38bdf8;
+    fill: var(--seismo-box);
   }
   .seismo__bar[data-kind="mac"] {
-    fill: #f59e0b;
+    fill: var(--seismo-mac);
   }
   .seismo__bar[data-kind="web"] {
-    fill: #a78bfa;
+    fill: var(--seismo-web);
   }
   .seismo__bar[data-kind="err"],
   .seismo__bar[data-kind="wait"] {
-    fill: var(--bad, #ef4444);
-    opacity: 0.92;
+    fill: var(--seismo-alert, var(--bad));
+    opacity: 0.94;
   }
   .seismo--running .seismo__bar {
     opacity: 0.92;

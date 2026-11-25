@@ -281,25 +281,30 @@
   let savingSnapshots = false;
   let piOlderCount = $state(0);
   let loadingOlderEntries = $state(false);
-  async function loadOlderPiEntries() {
+  async function loadOlderPiEntries(): Promise<boolean> {
     const transcript = piTranscript;
     const sessionId = currentSessionId();
     const before = transcript?.oldestEntryId();
-    if (!transcript || !sessionId || before === null || before === undefined || loadingOlderEntries) return;
+    if (!transcript || !sessionId || before === null || before === undefined || loadingOlderEntries || piOlderCount <= 0) return false;
     loadingOlderEntries = true;
     try {
       const response = await fetch(`/api/pi/chats/${encodeURIComponent(sessionId)}/entries?before=${before}&limit=80`, { credentials: "include" });
       const body = await response.json().catch(() => null);
-      if (piTranscript !== transcript || !Array.isArray(body?.result?.entries)) return;
+      if (piTranscript !== transcript || !Array.isArray(body?.result?.entries) || body.result.entries.length === 0) return false;
       const log = logEl;
       const fromBottom = log ? log.scrollHeight - log.scrollTop : 0;
       transcript.prependEntries(body.result.entries, Number(body.result.olderCount ?? 0));
       renderPiTranscript();
       await tick();
-      if (log) log.scrollTop = log.scrollHeight - fromBottom;
+      if (log) log.scrollTop = Math.max(0, log.scrollHeight - fromBottom);
+      return true;
     } finally {
       loadingOlderEntries = false;
     }
+  }
+
+  function decisionFocusEnv() {
+    return browserDecisionFocusEnv({ loadOlder: loadOlderPiEntries });
   }
 
   type StepRun = { kind: "steps"; blocks: RenderBlock[]; start: number };
@@ -3052,7 +3057,7 @@
       const url = new URL(location.href);
       url.searchParams.delete("decision");
       history.replaceState(history.state, "", url.pathname + url.search + url.hash);
-      void focusDecision(launchDecisionId, browserDecisionFocusEnv());
+      void focusDecision(launchDecisionId, decisionFocusEnv());
     }
     const removeLocationBridge = typeof window === "undefined" ? () => {} : installLocationBridge(window, { enabled: () => webFeatures.location, pushSystem, receipt: (text) => recordWebReceipt("location", text) });
     ensureMarkedHljs().then(async () => {
@@ -3391,9 +3396,9 @@
   {#if pendingDecision && dismissedDecisionId !== pendingDecision.id}
     <div class="decision-banner relative" data-decision-banner>
     <button type="button" class="decision-banner__close" aria-label="Dismiss question" data-decision-banner-close onclick={() => { if (!pendingDecision) return; const id = pendingDecision.id; dismissedDecisionId = id; pendingDecision = null; void dismissDecisionOnServer(id, fetch); }}>×</button>
-    <a href={pendingDecision.href} onclick={(event) => { if (!pendingDecision) return; event.preventDefault(); dismissedDecisionId = pendingDecision.id; void focusDecision(pendingDecision.id, browserDecisionFocusEnv()); }} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
+    <a href={pendingDecision.href} onclick={(event) => { if (!pendingDecision) return; const href = pendingDecision.href; event.preventDefault(); dismissedDecisionId = pendingDecision.id; void focusDecision(pendingDecision.id, decisionFocusEnv()).then((found) => { if (!found && href.startsWith("/")) location.assign(href); }); }} class="mx-3 sm:mx-4 mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand/35 bg-brand/10 px-3 py-2 text-sm text-fg hover:bg-brand/15" aria-label="Reopen pending decision">
       <span class="min-w-0"><strong class="text-brand">Needs your input</strong><span class="ml-2 text-fg-mut">{pendingDecision.question}</span></span>
-      <span class="flex-none text-brand font-semibold pr-6">Go to decision ↓</span>
+      <span class="flex-none text-brand font-semibold pr-6">Go to decision</span>
     </a>
     </div>
   {/if}
