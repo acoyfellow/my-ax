@@ -477,6 +477,9 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
       if (!choice) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "UNKNOWN_MODEL", message: `unknown model ${model}` }, next_actions: [] }, 400);
       const { openPiChat } = await import("../pi-engine/routes");
       await rpc.command("PiChat.setModel", async () => (await openPiChat(c.env, identity.email, id)).setModel(choice.provider, choice.id));
+      const { sanitizeThinkingLevel } = await import("../pi-engine/thinking-level");
+      const reasoning = sanitizeThinkingLevel(body.reasoningEffort);
+      if (reasoning) await rpc.command("PiChat.applyThinkingLevel", async () => (await openPiChat(c.env, identity.email, id)).applyThinkingLevel(reasoning));
       const result = { ok: true, model: choice.id };
       return c.json<ApiResponse>({ ok: result.ok, command: c.req.path, result, next_actions: [] }, result.ok ? 200 : 400);
     } catch (err) {

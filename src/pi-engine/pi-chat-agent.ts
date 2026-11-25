@@ -5,6 +5,7 @@ import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { ConversationWatch, Report } from "@earendil-works/pi-durable";
 import { agentModel, inboxLength, isCompacting, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
 import { sanitizeLayerIds } from "../model-layers";
+import { sanitizeThinkingLevel, type ThinkingLevel } from "./thinking-level";
 import { LayerTurnController, runClefJointRouter, type LayerAiBinding, type LayerFrame } from "./model-layers-runner";
 import { readUploadBytes } from "../uploads";
 import { judgeTurn, turnLimitsFromEnv, nextProgressSample, STUCK_TURN_NOTE, TURN_WATCHDOG_INTERVAL_SECONDS, type ProgressSample } from "../turn-watchdog";
@@ -109,6 +110,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     this.spanBuffer.add(record);
   };
 
+  private rawHarness: Promise<Harness> | undefined;
+
   harness = new PiHarness({
     harness: ({ storage, context, onWake }) => {
       const models = createModels();
@@ -124,7 +127,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
       this.registry.install(createToolSearchExtension());
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
-      return Harness.open(storage, { models, registry: this.registry, settings: PI_HARNESS_SETTINGS, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
+      const opened = Harness.open(storage, { models, registry: this.registry, settings: PI_HARNESS_SETTINGS, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
+      this.rawHarness = opened;
+      return opened;
     },
     defaults: hasGatewayModels(this.env)
       ? { model: { provider: PI_GATEWAY_PROVIDER_ID, id: PI_ENGINE_GATEWAY_DEFAULT_MODEL }, thinkingLevel: "medium" }
@@ -286,6 +291,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
         } else {
           this.activeLayerTurn = null;
         }
+        await this.applyThinkingLevel(sanitizeThinkingLevel(frame.reasoning));
         const receipt = await this.submitInput(frame.text ?? "", frame.attachments ?? [], frame.operationId);
         connection.send(JSON.stringify({ type: "pi_receipt", operationId: receipt.operationId, accepted: receipt.accepted }));
       } catch (error) {
@@ -450,6 +456,16 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     const token = this.env.GITHUB_TOKEN?.trim();
     const home = { HOME: WORKSPACE_HOME };
     return token ? { ...home, GH_TOKEN: token, GITHUB_TOKEN: token } : home;
+  }
+
+  async applyThinkingLevel(level: ThinkingLevel | undefined): Promise<void> {
+    if (!level || this.ctx.storage.kv.get<string>("thinking-level") === level) return;
+    await this.harness.session();
+    const raw = await this.rawHarness;
+    if (!raw) return;
+    const conversation = await raw.root(BACKGROUND_CONTEXT);
+    await conversation.configure({ thinkingLevel: level }, BACKGROUND_CONTEXT);
+    this.ctx.storage.kv.put("thinking-level", level);
   }
 
   async setModel(provider: string, id: string): Promise<void> {

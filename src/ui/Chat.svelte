@@ -1641,7 +1641,7 @@
     liveLayerSource = "";
     activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: 0, firstReasoningMs: null, approvalMs: null, finishMs: null };
     setLatestUserReaction("👀", "seen");
-    ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, ...(layers.length ? { layers } : {}), model: modelState.current }));
+    ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, ...(layers.length ? { layers } : {}), reasoning: modelState.reasoning, model: modelState.current }));
   }
   let activeRequestId: string | null = null;
   let thinkMessages: any[] = [];
