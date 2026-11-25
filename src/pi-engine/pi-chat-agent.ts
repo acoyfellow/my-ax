@@ -42,6 +42,7 @@ import { SpanLogContext, consoleSpanSink, type SpanRecord } from "./span-log";
 import { brainToolsExtension } from "./brain-tools";
 import { SpanBuffer } from "./span-store";
 import { piCompactionSettings } from "./compaction-policy";
+import { compactionQualityExtension } from "./compaction-guard";
 import { publishWorkspaceChange } from "../workspace-hub-client";
 import { lastTurnFailed } from "./last-turn-failed";
 import { slimEntries, slimEntry, slimEvent, type SlimmableEntry } from "./slim-entries";
@@ -126,6 +127,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(mcpToolsExtension([], () => this.connectorRunner()));
       this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
       this.registry.install(createToolSearchExtension());
+      this.registry.install(compactionQualityExtension());
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
       const opened = Harness.open(storage, { models, registry: this.registry, settings: PI_HARNESS_SETTINGS, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
       this.rawHarness = opened;
