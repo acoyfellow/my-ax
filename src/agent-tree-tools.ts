@@ -1,8 +1,24 @@
 import { SESSION_SQL, sessionWrite, type SessionStoreDb } from "./domain/Session/Session.store";
 import type { ToolContext, ToolDef } from "./types";
 import { childTaskMessage, parseSpawnArgs, waitOutcome, waitSeconds } from "./agent-tree";
+import { formatKilledByOwner } from "./killable-shell";
 
 const POLL_MS = 2000;
+
+function sleepPoll(ms: number, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve(false);
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 async function ownedChild(ctx: ToolContext, childId: string): Promise<{ id: string; name: string } | null> {
   return ctx.env.DB.prepare("SELECT id, name FROM sessions WHERE id = ? AND owner_email = ? AND parent_id = ?")
@@ -59,11 +75,16 @@ export const WAIT_CHILD_TOOL: ToolDef = {
     const seconds = waitSeconds(args.seconds);
     const { sessionControl } = await import("./session-control");
     const control = await sessionControl(ctx.env, ctx.identity, childId);
-    const deadline = Date.now() + seconds * 1000;
+    const startedAt = Date.now();
+    const deadline = startedAt + seconds * 1000;
     let running = (await control.state()).sessionStatus === "running";
-    while (running && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    while (running && Date.now() < deadline && !ctx.signal?.aborted) {
+      const aborted = await sleepPoll(POLL_MS, ctx.signal);
+      if (aborted) break;
       running = (await control.state()).sessionStatus === "running";
+    }
+    if (ctx.signal?.aborted) {
+      return formatKilledByOwner({ tool: "wait_child", elapsedMs: Date.now() - startedAt, terminated: true });
     }
     const outcome = waitOutcome(child.name, running, await lastAssistantText(ctx, childId), seconds);
     return JSON.stringify({ ok: true, childId, ...outcome });

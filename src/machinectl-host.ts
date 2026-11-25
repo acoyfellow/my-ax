@@ -31,6 +31,7 @@ type PendingCall = {
   resolve: (result: ToolResult) => void;
   timer: ReturnType<typeof setTimeout>;
   tool: string;
+  opId: string;
   dispatchedAt: number;
 };
 type ToolResult = { ok: true; content: string } | { ok: false; error: string };
@@ -146,6 +147,7 @@ export class MachineHost extends DurableObject<HostEnv> {
     if (url.pathname === "/connect") return this.acceptLaptopConnection(request);
     if (url.pathname === "/mcp") return this.mcp(request);
     if (url.pathname === "/invoke") return this.invoke(request);
+    if (url.pathname === "/cancel" && request.method === "POST") return this.cancelByOpId(request);
     if (url.pathname === "/disconnect" && request.method === "POST") return this.disconnectAll();
     if (url.pathname === "/status") {
       const connected = this.socket() !== null;
@@ -153,6 +155,23 @@ export class MachineHost extends DurableObject<HostEnv> {
       return Response.json({ connected, machineName, tools });
     }
     return new Response("not found", { status: 404 });
+  }
+
+  private async cancelByOpId(request: Request): Promise<Response> {
+    const body = (await request.json<{ opId?: string }>().catch(() => ({}))) as { opId?: string };
+    const opId = typeof body.opId === "string" ? body.opId.trim() : "";
+    if (!opId) return Response.json({ ok: false, cancelled: false }, { status: 400 });
+    const socket = this.socket();
+    let cancelled = false;
+    for (const [id, entry] of this.pending.entries()) {
+      if (entry.opId !== opId) continue;
+      clearTimeout(entry.timer);
+      this.pending.delete(id);
+      if (socket) cancelLaptopCall(socket, id);
+      entry.resolve({ ok: false, error: `Killed by owner (${entry.tool}). Cancel sent to laptop; verify side effects before retrying.` });
+      cancelled = true;
+    }
+    return Response.json({ ok: true, cancelled });
   }
 
   private async disconnectAll(): Promise<Response> {
@@ -324,7 +343,7 @@ export class MachineHost extends DurableObject<HostEnv> {
         cancelLaptopCall(socket, id);
         resolve({ ok: false, error: timedOutCallError(tool, CALL_TIMEOUT_MS) });
       }, CALL_TIMEOUT_MS);
-      this.pending.set(id, { resolve, timer, tool, dispatchedAt: Date.now() });
+      this.pending.set(id, { resolve, timer, tool, opId, dispatchedAt: Date.now() });
       try {
         socket.send(JSON.stringify({ type: "call", id, opId, tool, args }));
       } catch (err) {

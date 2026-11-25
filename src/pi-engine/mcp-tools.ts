@@ -58,7 +58,24 @@ export function mcpToolsExtension(catalog: readonly CatalogTool[], runner: () =>
     description: `${mcpServerName(tool)} (MCP): ${tool.description}`.slice(0, 1024),
     parameters: unsafe<Record<string, unknown>>(mcpInputSchema(tool.inputSchema) as never),
     deferred: true,
-    execute: async (args, _api, context) => textResult(await awaitWithContext(runner().call(tool.serverId, tool.toolName, (args ?? {}) as Record<string, unknown>), context)),
+    execute: async (args, api, context) => {
+      const startedAt = Date.now();
+      const callId = crypto.randomUUID();
+      const activeRunner = runner();
+      const onAbort = () => { void activeRunner.cancel?.(callId).catch(() => undefined); };
+      context.abortSignal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        return textResult(await awaitWithContext(activeRunner.call(tool.serverId, tool.toolName, (args ?? {}) as Record<string, unknown>, { callId }), context));
+      } catch (error) {
+        if (context.abortSignal?.aborted) {
+          const note = `Killed by owner after ${((Date.now() - startedAt) / 1000).toFixed(1)}s (${name}). Cancel sent to MCP server; verify side effects before retrying.`;
+          api.output(`${note}\n`);
+        }
+        throw error;
+      } finally {
+        context.abortSignal?.removeEventListener("abort", onAbort);
+      }
+    },
   }));
   return defineExtension({ name: MCP_EXTENSION_NAME, sections: tools.length ? [section("myax-mcp", () => PI_MCP_INSTRUCTIONS)] : [], tools });
 }

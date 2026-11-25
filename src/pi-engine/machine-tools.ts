@@ -14,8 +14,8 @@ import { clipToolOutput } from "./workspace-tools";
  * Pi chats the same two tools, backed by the same implementation.
  */
 export type MachineToolRunner = {
-  call(args: { tool: string; arguments?: Record<string, unknown>; machine?: string }): Promise<string>;
-  code(args: { code: string; machine?: string }): Promise<string>;
+  call(args: { tool: string; arguments?: Record<string, unknown>; machine?: string }, signal?: AbortSignal): Promise<string>;
+  code(args: { code: string; machine?: string }, signal?: AbortSignal): Promise<string>;
 };
 
 export const PI_MACHINE_INSTRUCTIONS = [
@@ -38,7 +38,14 @@ export function machineToolsExtension(runner: () => MachineToolRunner) {
       arguments: opt(map(unknown(), { description: "Arguments for the machine tool." })),
       machine: machineField(),
     }),
-    execute: async (args, _api, context) => textResult(await awaitWithContext(runner().call(args), context)),
+    execute: async (args, api, context) => {
+      const out = await runner().call(args, context.abortSignal);
+      if (context.abortSignal?.aborted) {
+        api.output(`${out}\n`);
+        throw new DOMException(out || "Killed by owner (machinectl_call)", "AbortError");
+      }
+      return textResult(out);
+    },
   });
   const code = defineTool({
     name: "machinectl_code",
@@ -47,7 +54,14 @@ export function machineToolsExtension(runner: () => MachineToolRunner) {
       code: str({ description: "JavaScript async arrow function using codemode.<machine_tool>(args)." }),
       machine: machineField(),
     }),
-    execute: async (args, _api, context) => textResult(await awaitWithContext(runner().code(args), context)),
+    execute: async (args, api, context) => {
+      const out = await runner().code(args, context.abortSignal);
+      if (context.abortSignal?.aborted) {
+        api.output(`${out}\n`);
+        throw new DOMException(out || "Killed by owner (machinectl_code)", "AbortError");
+      }
+      return textResult(out);
+    },
   });
   return defineExtension({ name: "myax.machine", sections: [section("myax-machine", () => PI_MACHINE_INSTRUCTIONS)], tools: [call, code] });
 }

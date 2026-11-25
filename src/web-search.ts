@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { ToolDef } from "./types";
 import { MAX_RESULTS, performWebSearch, type PublicWebSearchFetch } from "./web-search-program";
+import { formatKilledByOwner } from "./killable-shell";
 
 export * from "./web-search-program";
 
@@ -23,11 +24,19 @@ export function createPublicWebSearchTool(options: PublicWebSearchToolOptions = 
       required: ["query"],
     },
     execute: async (args, ctx) => {
+      const startedAt = Date.now();
+      if (ctx.signal?.aborted) return formatKilledByOwner({ tool: "web_search", elapsedMs: 0, terminated: true });
       const query = typeof args.query === "string" ? args.query.trim() : "";
       if (!query) return JSON.stringify({ results: [], truncated: false, error: "web_search_empty_query" });
       const fetch = options.fetch ?? searchFetchFor(ctx.env);
       const maxResults = typeof args.maxResults === "number" ? args.maxResults : options.maxResults;
-      return JSON.stringify(await Effect.runPromise(performWebSearch(query, { fetch, maxResults })));
+      const run = Effect.runPromise(performWebSearch(query, { fetch, maxResults }), ctx.signal ? { signal: ctx.signal } : undefined);
+      try {
+        return JSON.stringify(await run);
+      } catch (error) {
+        if (ctx.signal?.aborted) return formatKilledByOwner({ tool: "web_search", elapsedMs: Date.now() - startedAt, terminated: true });
+        throw error;
+      }
     },
   };
 }

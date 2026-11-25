@@ -166,6 +166,7 @@ export interface ToolDef {
 
 export interface ToolContext {
   workingDirectory: string;
+  signal?: AbortSignal;
   /** Deliver a same-owner attention notification to subscribed installed apps. */
   notifyOwner: (input: { kind: "session.update" | "job.complete" | "job.needs_input" | "watch.fired" | "deploy.gate" | "recipe.approval"; title: string; body: string; href?: string; decision?: { id: string; options: string[] }; progressTag?: string; progressTerminal?: boolean }) => Promise<{ delivered: number; expired: number; failed: number; devices: number; failures?: { host: string; status?: number; reason: string }[] }>;
   shellExec: (cmd: string, opts?: ShellExecOpts) => Promise<ShellResult>;

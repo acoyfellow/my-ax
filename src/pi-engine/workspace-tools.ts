@@ -3,7 +3,7 @@ import { defineExtension, defineTool, section } from "@earendil-works/pi-durable
 import { awaitWithContext } from "@earendil-works/chord/context";
 
 export type ChatWorkspace = {
-  exec(command: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  exec(command: string, timeoutMs: number, signal?: AbortSignal): Promise<{ stdout: string; stderr: string; exitCode: number; killedByOwner?: true; killMessage?: string }>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
   listFiles(path: string): Promise<string[]>;
@@ -35,8 +35,13 @@ export function chatWorkspaceExtension(workspace: () => Promise<ChatWorkspace>, 
       command: str(),
       timeoutMs: opt(num()),
     }),
-    execute: async (args, _api, context) => {
-      const result = await awaitWithContext((await workspace()).exec(args.command, boundedExecTimeout(args.timeoutMs)), context);
+    execute: async (args, api, context) => {
+      const result = await (await workspace()).exec(args.command, boundedExecTimeout(args.timeoutMs), context.abortSignal);
+      if (result.killedByOwner || context.abortSignal?.aborted) {
+        const note = result.killMessage ?? "Killed by owner (exec). Underlying process terminated. Do not automatically retry unless the owner asks.";
+        api.output(`${note}\n`);
+        throw new DOMException(note, "AbortError");
+      }
       return textResult(`exit ${result.exitCode}\n--- stdout ---\n${result.stdout}\n--- stderr ---\n${result.stderr}`);
     },
   });

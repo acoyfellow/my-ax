@@ -15,7 +15,7 @@ import { forkEntriesUpTo, type ForkEntry } from "./fork";
 import { transferEntries, type TransferEntry } from "./chat-transfer";
 import { indexRowsFor, type ConversationMemory } from "./conversation-index";
 import { chatMemoryExtension, memoryToolsExtension } from "./memory-tools";
-import { sharedToolsExtension } from "./legacy-tools";
+import { sharedToolsExtension } from "./shared-tools";
 import { ownerInstructionsExtension } from "./owner-instructions-tools";
 import type { ConnectorRunner } from "./connector-tools";
 import { mcpToolsExtension } from "./mcp-tools";
@@ -25,10 +25,9 @@ import { createToolContext } from "../tool-context";
 import { PUBLIC_SYSTEM } from "../system-prompt";
 import { widgetWording } from "../widget-names";
 import { selectLivePageConnection, type PageConnectionState } from "../page-connection";
-import { createMyAxBrowserTools } from "../browser-tools";
 import { DEFAULT_OWNER_INSTRUCTIONS, getOwnerInstructions } from "../owner-instructions";
 import { Effect } from "effect";
-import type { ToolSet } from "ai";
+import { runKillableWorkspaceShell } from "../killable-shell";
 import { buildConversationSearchQuery } from "../conversation-search";
 import { createAI } from "agents-pi/models/pi-ai";
 import type { AccessIdentity } from "../auth";
@@ -119,7 +118,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(siblingWorkspaceExtension(() => createWorkspaceDirectory(this.env, this.identity().email, { openChat: openPiChat, forkChat: forkPiChat, workspace: workspaceFor, publish: (change) => publishWorkspaceChange(this.env, this.identity().email, change) }), () => this.chatId()));
       this.registry.install(machineToolsExtension(() => this.machineRunner()));
       this.registry.install(memoryToolsExtension(() => this.conversationMemory()));
-      this.registry.install(sharedToolsExtension({ context: () => this.sharedToolContext(), extra: () => this.sharedExtraTools(), instructions: widgetWording(PUBLIC_SYSTEM) }));
+      this.registry.install(sharedToolsExtension({ context: (signal) => this.sharedToolContext(signal), instructions: widgetWording(PUBLIC_SYSTEM) }));
       this.registry.install(ownerInstructionsExtension(() => this.ownerInstructions()));
       this.registry.install(mcpToolsExtension([], () => this.connectorRunner()));
       this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
@@ -350,7 +349,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     });
   }
 
-  private sharedToolContext(): ToolContext {
+  private sharedToolContext(signal?: AbortSignal): ToolContext {
     const identity = this.identity();
     const chatId = this.chatId();
     return createToolContext({
@@ -359,11 +358,12 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       sessionId: chatId,
       scope: { kind: "chat", chatId },
       sandboxOnly: false,
+      signal,
       broadcast: (message) => this.broadcast(message),
       callPage: (verb, args, opts) => this.callPage(verb, args, opts),
       runSavedRecipe: async (body) => {
         const { runSavedRecipe } = await import("../saved-recipe-run");
-        return runSavedRecipe({ env: this.env, identity, sessionId: chatId, context: this.sharedToolContext() }, body);
+        return runSavedRecipe({ env: this.env, identity, sessionId: chatId, context: this.sharedToolContext(signal) }, body);
       },
     });
   }
@@ -389,14 +389,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   private connectorRunner(): ConnectorRunner {
     return withRadar({
       list: async () => (await this.connectorAgent()).connectorCatalog(),
-      call: async (serverId, toolName, args) => (await this.connectorAgent()).connectorCall(serverId, toolName, args),
+      call: async (serverId, toolName, args, options) => (await this.connectorAgent()).connectorCall(serverId, toolName, args, options?.callId),
+      cancel: async (callId) => (await this.connectorAgent()).cancelConnectorCall(callId),
     }, this.env.RADAR);
-  }
-
-  private sharedExtraTools(): ToolSet {
-    return {
-      ...createMyAxBrowserTools(this.env, () => this.identity(), () => this.chatId()),
-    };
   }
 
   private async ownerInstructions(): Promise<string> {
@@ -404,12 +399,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   private machineRunner(): MachineToolRunner {
-    // machinectl tools only read env and identity from their context (same as
-    // the /api/machinectl/code route), and scope everything to the owner.
-    const context = { env: this.env, identity: this.identity() } as unknown as ToolContext;
+    const context = (signal?: AbortSignal) => ({ env: this.env, identity: this.identity(), signal }) as unknown as ToolContext;
     return {
-      call: (args) => MACHINECTL_TOOL.execute(args, context),
-      code: (args) => MACHINECTL_CODE_TOOL.execute(args, context),
+      call: (args, signal) => MACHINECTL_TOOL.execute(args, context(signal)),
+      code: (args, signal) => MACHINECTL_CODE_TOOL.execute(args, context(signal)),
     };
   }
 
@@ -423,8 +416,10 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
 
   private async chatWorkspace(): Promise<ChatWorkspace> {
     return {
-      exec: async (command, timeoutMs) => {
-        const result = await (await this.chatWorkspaceObject()).shell(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() });
+      exec: async (command, timeoutMs, signal) => {
+        const ws = await this.chatWorkspaceObject();
+        if (signal) return runKillableWorkspaceShell(ws, command, { cwd: WORKSPACE_HOME, timeoutMs, env: this.toolEnv(), signal });
+        const result = await ws.shell(command, { cwd: WORKSPACE_HOME, timeout: timeoutMs, env: this.toolEnv() });
         return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
       },
       readFile: async (path) => (await this.chatWorkspaceObject()).read(resolveWorkspacePath(path)),

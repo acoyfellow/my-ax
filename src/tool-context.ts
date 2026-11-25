@@ -6,6 +6,7 @@ import { observeSessionTurns } from "./observe";
 import { recentObserveEvents } from "./observe-events";
 import { buildConversationSearchQuery } from "./conversation-search";
 import { workspaceShellExec } from "./workspace-exec";
+import { runKillableWorkspaceShell } from "./killable-shell";
 import { SandboxThinkWorkspace } from "./think-workspace";
 import { workspaceFor, WORKSPACE_HOME } from "./workspace";
 import { readBoundedWorkspaceFile } from "./workspace-read";
@@ -22,6 +23,7 @@ export type ToolContextHost = {
   sessionId: string;
   scope: WorkspaceScope;
   sandboxOnly: boolean;
+  signal?: AbortSignal;
   broadcast: (message: string) => void;
   callPage?: (verb: string, args?: Record<string, unknown>, opts?: { timeoutMs?: number }) => Promise<unknown>;
   runSavedRecipe: (body: { recipeId: string; input: Record<string, unknown>; callerCapabilities?: string[]; workCodeExecutionState?: WorkCodeExecutionState }) => Promise<unknown>;
@@ -29,15 +31,22 @@ export type ToolContextHost = {
 };
 
 export function createToolContext(host: ToolContextHost): ToolContext {
-  const { env, identity, sessionId, scope, sandboxOnly } = host;
+  const { env, identity, sessionId, scope, sandboxOnly, signal } = host;
   const workingDirectory = WORKSPACE_HOME;
   const workspace = () => workspaceFor(env, identity, scope);
   const toolEnv = (extra?: Record<string, string>) => ({ ACCESS_EMAIL: identity.email, XDG_CONFIG_HOME: "/home/user/.config", ...extra });
   return {
       workingDirectory,
+      signal,
       sandboxOnly,
       notifyOwner: (input) => notifyOwner(env, identity.email, { ...input, sessionId }),
-      shellExec: (cmd, opts) => workspaceShellExec(workspace, cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout ?? 30_000, env: toolEnv(opts?.env) }),
+      shellExec: async (cmd, opts) => {
+        const cwd = opts?.cwd ?? workingDirectory;
+        const timeout = opts?.timeout ?? 30_000;
+        const envVars = toolEnv(opts?.env);
+        if (signal) return runKillableWorkspaceShell(await workspace(), cmd, { cwd, timeoutMs: timeout, env: envVars, signal });
+        return workspaceShellExec(workspace, cmd, { cwd, timeout, env: envVars });
+      },
       processStart: async (cmd, opts) => (await workspace()).spawn(cmd, { cwd: opts?.cwd ?? workingDirectory, timeout: opts?.timeout, processId: opts?.processId, autoCleanup: false, env: toolEnv(opts?.env) }),
       processStatus: async (id) => (await workspace()).processInfo(id),
       processLogs: async (id) => (await workspace()).processOutput(id),

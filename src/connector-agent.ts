@@ -12,6 +12,7 @@ type ConnectorAgentState = { identity?: AccessIdentity };
 
 export class ConnectorAgent extends Agent<Env, ConnectorAgentState> {
   initialState: ConnectorAgentState = {};
+  private readonly activeCalls = new Map<string, AbortController>();
 
   async seedIdentity(identity: AccessIdentity): Promise<void> {
     if (this.state.identity?.email !== identity.email) this.setState({ identity });
@@ -123,10 +124,25 @@ export class ConnectorAgent extends Agent<Env, ConnectorAgentState> {
     return this.connectorCall(serverId, toolName, args);
   }
 
-  async connectorCall(serverId: string, toolName: string, args: Record<string, unknown>): Promise<string> {
+  async connectorCall(serverId: string, toolName: string, args: Record<string, unknown>, callId?: string): Promise<string> {
     await this.ensureNativeMcp();
-    const result = await this.mcp.callTool({ serverId, name: toolName, arguments: args });
-    return JSON.stringify(result);
+    const id = callId ?? crypto.randomUUID();
+    const controller = new AbortController();
+    this.activeCalls.set(id, controller);
+    try {
+      const result = await this.mcp.callTool({ serverId, name: toolName, arguments: args }, { signal: controller.signal });
+      return JSON.stringify(result);
+    } finally {
+      this.activeCalls.delete(id);
+    }
+  }
+
+  async cancelConnectorCall(callId: string): Promise<boolean> {
+    const controller = this.activeCalls.get(callId);
+    if (!controller) return false;
+    this.activeCalls.delete(callId);
+    controller.abort(new DOMException("Killed by owner", "AbortError"));
+    return true;
   }
 
 }

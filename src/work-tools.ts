@@ -216,13 +216,27 @@ export async function executeWorkCode(code: string, ctx: ToolContext, machineNam
   }, calls, false);
 
   const logMirror = new WorkCodeLogMirror();
-  const bridgeFns = {
+  const activeHostCalls = new Set<Promise<unknown>>();
+  const guardHostCall = (fn: (input: unknown) => Promise<unknown>) => async (input: unknown) => {
+    if (ctx.signal?.aborted) throw new Error("Killed by owner");
+    const call = Promise.resolve().then(() => fn(input));
+    activeHostCalls.add(call);
+    try {
+      return await call;
+    } finally {
+      activeHostCalls.delete(call);
+    }
+  };
+  const rawBridgeFns: Record<string, (input: unknown) => Promise<unknown>> = {
     ...Object.fromEntries(Object.entries(workspaceFns).map(([name, fn]) => [`workspace_${name}`, fn])),
     ...Object.fromEntries(Object.entries(machineFns).map(([name, fn]) => [`machine_${name}`, fn])),
     ...Object.fromEntries(Object.entries(pageFns).map(([name, fn]) => [`page_${name}`, fn])),
     codemode__search: instrumentedCodemodeBridge.search,
     codemode__describe: instrumentedCodemodeBridge.describe,
     codemode__run: instrumentedCodemodeBridge.run,
+  };
+  const bridgeFns = {
+    ...Object.fromEntries(Object.entries(rawBridgeFns).map(([name, fn]) => [name, guardHostCall(fn)])),
     work_code_log: logMirror.record,
   };
   const namespace = (name: string, methods: string[]) =>
@@ -239,10 +253,30 @@ export async function executeWorkCode(code: string, ctx: ToolContext, machineNam
   const submittedCode = code.trim().replace(/;+$/, "");
   const executableCode = `async () => await (${submittedCode})(globalThis.ctx)`;
   const executor = new DynamicWorkerExecutor({ loader: ctx.env.LOADER, globalOutbound: null, timeout: CODE_MODE_EXECUTION_TIMEOUT_MS });
-  const execution = await raceWorkCodeExecution(
+  const runPromise = raceWorkCodeExecution(
     executor.execute(executableCode, [{ name: "bridge", fns: bridgeFns, prelude }]),
     CODE_MODE_EXECUTION_TIMEOUT_MS + WORK_CODE_TIMEOUT_GRACE_MS,
   );
+  const execution = ctx.signal
+    ? await new Promise<Awaited<typeof runPromise>>((resolve) => {
+        const startedAt = Date.now();
+        let done = false;
+        const finish = (value: Awaited<typeof runPromise>) => {
+          if (done) return;
+          done = true;
+          ctx.signal?.removeEventListener("abort", onAbort);
+          resolve(value);
+        };
+        const onAbort = () => {
+          void Promise.allSettled([...activeHostCalls]).then(() => {
+            finish({ result: undefined, logs: [], timedOut: false, error: `Killed by owner after ${((Date.now() - startedAt) / 1000).toFixed(1)}s (work_code). Active host work terminated. Do not automatically retry unless the owner asks.` });
+          });
+        };
+        if (ctx.signal!.aborted) { onAbort(); return; }
+        ctx.signal!.addEventListener("abort", onAbort, { once: true });
+        void runPromise.then(finish);
+      })
+    : await runPromise;
   const serializedCalls = capWorkCodeCollectionWithMetadata(calls.calls, WORK_CODE_CALLS_MAX_ENTRIES, WORK_CODE_CALLS_MAX_BYTES);
   const serializedLogs = capWorkCodeCollection([...mergeWorkCodeLogs(execution.logs, logMirror.logs)], WORK_CODE_LOGS_MAX_ENTRIES, WORK_CODE_LOGS_MAX_BYTES);
   const serializedResult = capWorkCodeValue(execution.result, WORK_CODE_RESULT_MAX_BYTES);

@@ -140,7 +140,8 @@ export async function createMachineWorkProvider(ctx: ToolContext, requested?: st
   const fns: Record<string, (input: unknown) => Promise<unknown>> = {};
   for (const published of catalog) {
     fns[published.name] = async (input) => {
-      const result: MachineResult = await invokeMachineTool<MachineResult>(ctx.env.MACHINE_HOST, ctx.identity.email, published.name, (input && typeof input === "object" ? input : {}) as Record<string, unknown>, undefined, undefined, slot);
+      if (ctx.signal?.aborted) throw new Error("Killed by owner");
+      const result: MachineResult = await invokeMachineTool<MachineResult>(ctx.env.MACHINE_HOST, ctx.identity.email, published.name, (input && typeof input === "object" ? input : {}) as Record<string, unknown>, undefined, undefined, slot, ctx.signal);
       const busy = machineBusyOutcome(result);
       if (busy) return busy;
       if (!result.ok) throw new Error(result.error ?? `Laptop tool failed: ${published.name}`);
@@ -223,7 +224,7 @@ export const MACHINECTL_TOOL: ToolDef = {
         return JSON.stringify({ ok: false, verified: false, reason: error instanceof Error ? error.message : String(error) });
       }
     }
-    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {}, undefined, typeof args.opId === "string" && args.opId.length > 0 ? args.opId : undefined, target.machine.slot);
+    const result = await invokeMachineTool<{ ok?: boolean; content?: string; error?: string }>(env.MACHINE_HOST, identity.email, tool, (args.arguments as Record<string, unknown> | undefined) ?? {}, undefined, typeof args.opId === "string" && args.opId.length > 0 ? args.opId : undefined, target.machine.slot, ctx.signal);
     if ((tool === "screenshot" || tool === "screen_record") && result.ok && typeof result.content === "string") {
       const artifact = await storeInlineMediaArtifact(env, identity, result.content);
       if (artifact) {

@@ -68,8 +68,8 @@ export function withRadar(base: ConnectorRunner, radar: RadarService | undefined
 
   return {
     list: async () => [...RADAR_TOOLS, ...(await base.list().catch(() => []))],
-    call: async (serverId, toolName, args) => {
-      if (serverId !== RADAR_SERVER_ID) return base.call(serverId, toolName, args);
+    call: async (serverId, toolName, args, options) => {
+      if (serverId !== RADAR_SERVER_ID) return base.call(serverId, toolName, args, options);
 
       try {
         return JSON.stringify(await callRadar(radar, toolName, args));
@@ -77,5 +77,6 @@ export function withRadar(base: ConnectorRunner, radar: RadarService | undefined
         return JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) });
       }
     },
+    ...(base.cancel ? { cancel: (callId: string) => base.cancel!(callId) } : {}),
   };
 }
