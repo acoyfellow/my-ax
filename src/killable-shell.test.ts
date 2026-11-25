@@ -1,62 +1,57 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { formatKilledByOwner, processGroupWrappedCommand, runKillableWorkspaceShell, type KillableShellWorkspace } from "./killable-shell";
+import { formatKilledByOwner, pgidKillCommand, processGroupWrappedCommand, runKillableWorkspaceShell, type KillableShellWorkspace } from "./killable-shell";
 import { invokeMachineTool } from "./rpc/machine-host-client";
 
-test("processGroupWrappedCommand wraps with setsid and bounded timeout", () => {
-  const wrapped = processGroupWrappedCommand("sleep 30", 5_000);
-  assert.match(wrapped.command, /setsid/);
+test("processGroupWrappedCommand writes a PGID file inside GNU timeout without setsid", () => {
+  const wrapped = processGroupWrappedCommand("sleep 30", 5_000, "job1");
   assert.match(wrapped.command, /timeout -k 2 5 bash -c/);
+  assert.match(wrapped.command, /\/tmp\/myax-pgid-job1/);
+  assert.doesNotMatch(wrapped.command, /\bsetsid\b/);
   assert.equal(wrapped.sandboxTimeoutMs, 10_000);
+  const killCmd = pgidKillCommand(wrapped.pgidFile);
+  assert.match(killCmd, /kill -TERM -"\$pg"/);
+  assert.match(killCmd, /kill -KILL -"\$pg"/);
+  assert.match(killCmd, /"\$pg" != "\$mypg"/);
 });
 
-test("runKillableWorkspaceShell terminates process group on AbortSignal and returns Killed by owner with partial stdout", async () => {
-  const signalsSent: string[] = [];
-  const killCommands: string[] = [];
+test("runKillableWorkspaceShell kills process group via PGID file on AbortSignal and returns Killed by owner with partial stdout", async () => {
+  const calls: string[] = [];
+  let releaseMain!: (res: { stdout: string; stderr: string; exitCode: number }) => void;
   const controller = new AbortController();
   const ws: KillableShellWorkspace = {
-    async spawn() {
-      return { id: "proc-1", pid: 4242, status: "running" };
-    },
-    async processInfo() {
-      return { id: "proc-1", pid: 4242, status: "running" };
-    },
-    async processOutput() {
-      return { stdout: "step 1 done\n", stderr: "" };
-    },
-    async stopProcess(_id, sig) {
-      signalsSent.push(sig);
-      return true;
-    },
     async shell(cmd) {
-      killCommands.push(cmd);
-      return { stdout: "", stderr: "", exitCode: 0 };
+      calls.push(cmd);
+      if (cmd.includes("kill -KILL")) {
+        releaseMain({ stdout: "step 1 done\n", stderr: "", exitCode: 137 });
+        return { stdout: "KILLED:4242\n", stderr: "", exitCode: 0 };
+      }
+      return new Promise((resolve) => { releaseMain = resolve; });
     },
   };
-  setTimeout(() => controller.abort(), 30);
-  const result = await runKillableWorkspaceShell(ws, "sleep 30", { timeoutMs: 10_000, signal: controller.signal, pollMs: 15 });
+  setTimeout(() => controller.abort(), 20);
+  const result = await runKillableWorkspaceShell(ws, "sleep 30", { timeoutMs: 10_000, signal: controller.signal, tag: "t1" });
   assert.equal(result.killedByOwner, true);
   assert.equal(result.exitCode, 137);
-  assert.ok(signalsSent.includes("SIGTERM"));
-  assert.ok(signalsSent.includes("SIGKILL"));
-  assert.ok(killCommands.some((cmd) => cmd.includes("-4242")));
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /\/tmp\/myax-pgid-t1/);
+  assert.match(calls[1], /kill -TERM/);
+  assert.match(calls[1], /kill -KILL/);
   assert.match(result.killMessage ?? "", /Killed by owner/);
+  assert.match(result.killMessage ?? "", /Underlying process terminated \(SIGKILL\)/);
   assert.match(result.killMessage ?? "", /Partial stdout: step 1 done/);
   assert.match(result.killMessage ?? "", /Do not automatically retry/);
 });
 
-test("runKillableWorkspaceShell returns stdout, stderr, and exitCode on normal completion", async () => {
-  let polls = 0;
+test("runKillableWorkspaceShell returns stdout, stderr, and exitCode directly on normal completion", async () => {
   const ws: KillableShellWorkspace = {
-    async spawn() { return { id: "proc-2", pid: 100, status: "running" }; },
-    async processInfo() { polls++; return { id: "proc-2", pid: 100, status: polls > 1 ? "completed" : "running", exitCode: 0 }; },
-    async processOutput() { return { stdout: "ok\n", stderr: "" }; },
-    async stopProcess() { return false; },
-    async shell() { return { stdout: "", stderr: "", exitCode: 0 }; },
+    async shell() {
+      return { stdout: "ok\n", stderr: "", exitCode: 0 };
+    },
   };
   const controller = new AbortController();
-  const result = await runKillableWorkspaceShell(ws, "echo ok", { timeoutMs: 10_000, signal: controller.signal, pollMs: 5 });
+  const result = await runKillableWorkspaceShell(ws, "echo ok", { timeoutMs: 10_000, signal: controller.signal, tag: "t2" });
   assert.equal(result.killedByOwner, undefined);
   assert.equal(result.exitCode, 0);
   assert.equal(result.stdout, "ok\n");

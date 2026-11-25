@@ -1,17 +1,6 @@
 import { shellBoundedCommand } from "./workspace-exec";
 
-export type KillableShellProcess = {
-  id: string;
-  pid?: number;
-  status: string;
-  exitCode?: number;
-};
-
 export type KillableShellWorkspace = {
-  spawn(command: string, options: { cwd?: string; timeout?: number; autoCleanup?: boolean; env?: Record<string, string> }): Promise<KillableShellProcess>;
-  processInfo(id: string): Promise<KillableShellProcess | null>;
-  processOutput(id: string): Promise<{ stdout: string; stderr: string } | null>;
-  stopProcess(id: string, signal: string): Promise<boolean>;
   shell(command: string, options: { cwd?: string; timeout?: number; env?: Record<string, string> }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 };
 
@@ -45,55 +34,33 @@ export function formatKilledByOwner(options: {
   return parts.join("\n");
 }
 
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
+function safeTag(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48) || "run";
 }
 
-export function processGroupWrappedCommand(command: string, timeoutMs: number): { command: string; sandboxTimeoutMs: number } {
-  const bounded = shellBoundedCommand(command, timeoutMs);
+export function pgidFileFor(tag: string): string {
+  return `/tmp/myax-pgid-${safeTag(tag)}`;
+}
+
+export function processGroupWrappedCommand(command: string, timeoutMs: number, tag = "run"): { command: string; sandboxTimeoutMs: number; pgidFile: string } {
+  const pgidFile = pgidFileFor(tag);
+  const inner = `pg=$(ps -o pgid= -p $$ 2>/dev/null | tr -dc '0-9'); [ -n "$pg" ] && printf '%s' "$pg" > ${pgidFile}; trap 'rm -f ${pgidFile}' EXIT; ${command}`;
+  const bounded = shellBoundedCommand(inner, timeoutMs);
   return {
-    command: `if command -v setsid >/dev/null 2>&1; then exec setsid bash -c ${shellSingleQuote(bounded.command)}; else exec ${bounded.command}; fi`,
+    command: bounded.command,
     sandboxTimeoutMs: bounded.sandboxTimeoutMs,
+    pgidFile,
   };
 }
 
-function waitOrAbort(ms: number, signal?: AbortSignal): Promise<boolean> {
-  if (signal?.aborted) return Promise.resolve(true);
-  return new Promise<boolean>((resolve) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve(true);
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve(false);
-    }, ms);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-async function terminateProcessGroup(workspace: KillableShellWorkspace, proc: KillableShellProcess): Promise<boolean> {
-  let killed = false;
-  try {
-    if (await workspace.stopProcess(proc.id, "SIGTERM")) killed = true;
-  } catch {}
-  if (typeof proc.pid === "number" && proc.pid > 1) {
-    const pid = Math.trunc(proc.pid);
-    try {
-      await workspace.shell(`kill -TERM -${pid} ${pid} 2>/dev/null; sleep 0.2; kill -KILL -${pid} ${pid} 2>/dev/null || true`, { cwd: "/", timeout: 5_000 });
-      killed = true;
-    } catch {}
-  }
-  try {
-    if (await workspace.stopProcess(proc.id, "SIGKILL")) killed = true;
-  } catch {}
-  return killed;
+export function pgidKillCommand(pgidFile: string): string {
+  return `pg=$(cat ${pgidFile} 2>/dev/null | tr -dc '0-9'); rm -f ${pgidFile}; mypg=$(ps -o pgid= -p $$ 2>/dev/null | tr -dc '0-9'); if [ -n "$pg" ] && [ "$pg" -gt 1 ] && [ "$pg" != "$mypg" ]; then kill -TERM -"$pg" 2>/dev/null; sleep 0.2; kill -KILL -"$pg" 2>/dev/null; echo KILLED:$pg; else echo NO_PGID; fi`;
 }
 
 export async function runKillableWorkspaceShell(
   workspace: KillableShellWorkspace,
   command: string,
-  options: { cwd?: string; timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal; pollMs?: number },
+  options: { cwd?: string; timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal; tag?: string },
 ): Promise<KillableShellResult> {
   const startedAt = Date.now();
   const signal = options.signal;
@@ -107,43 +74,63 @@ export async function runKillableWorkspaceShell(
     };
   }
   const timeoutMs = options.timeoutMs ?? 120_000;
-  const wrapped = processGroupWrappedCommand(command, timeoutMs);
-  const proc = await workspace.spawn(wrapped.command, {
+  const tag = options.tag ?? crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  const wrapped = processGroupWrappedCommand(command, timeoutMs, tag);
+  const runPromise = workspace.shell(wrapped.command, {
     cwd: options.cwd,
     timeout: wrapped.sandboxTimeoutMs,
-    autoCleanup: false,
     env: options.env,
   });
 
-  const killNow = async (): Promise<KillableShellResult> => {
-    const terminated = await terminateProcessGroup(workspace, proc);
-    const logs = await workspace.processOutput(proc.id).catch(() => null);
-    const stdout = logs?.stdout ?? "";
-    const stderr = logs?.stderr ?? "";
-    const killMessage = formatKilledByOwner({
-      tool: "exec",
-      elapsedMs: Date.now() - startedAt,
-      terminated,
-      stdout,
-      stderr,
-    });
-    return { stdout, stderr, exitCode: 137, killedByOwner: true, killMessage };
-  };
+  if (!signal) return runPromise;
 
-  if (signal?.aborted) return killNow();
-
-  const hardDeadline = startedAt + wrapped.sandboxTimeoutMs + 5_000;
-  let delay = options.pollMs ?? 100;
-  while (Date.now() < hardDeadline) {
-    const info = await workspace.processInfo(proc.id).catch(() => null);
-    if (signal?.aborted) return killNow();
-    if (!info || (info.status !== "running" && info.status !== "starting")) {
-      const logs = await workspace.processOutput(proc.id).catch(() => null);
-      return { stdout: logs?.stdout ?? "", stderr: logs?.stderr ?? "", exitCode: info?.exitCode ?? 0 };
-    }
-    const aborted = await waitOrAbort(delay, signal);
-    if (aborted) return killNow();
-    delay = Math.min(delay * 2, 500);
-  }
-  return killNow();
+  return new Promise<KillableShellResult>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      fn();
+    };
+    const onAbort = () => {
+      void (async () => {
+        let terminated = false;
+        try {
+          const killed = await workspace.shell(pgidKillCommand(wrapped.pgidFile), { cwd: "/", timeout: 5_000 });
+          terminated = killed.stdout.includes("KILLED:");
+        } catch {}
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let partial: { stdout: string; stderr: string; exitCode: number } | null = null;
+        try {
+          partial = await Promise.race([
+            runPromise.catch(() => null),
+            new Promise<null>((r) => {
+              timer = setTimeout(() => r(null), 1_000);
+            }),
+          ]);
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+        }
+        const killMessage = formatKilledByOwner({
+          tool: "exec",
+          elapsedMs: Date.now() - startedAt,
+          terminated,
+          stdout: partial?.stdout,
+          stderr: partial?.stderr,
+        });
+        finish(() => resolve({
+          stdout: partial?.stdout ?? "",
+          stderr: partial?.stderr ?? "",
+          exitCode: 137,
+          killedByOwner: true,
+          killMessage,
+        }));
+      })();
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    runPromise.then(
+      (result) => { if (!signal.aborted) finish(() => resolve(result)); },
+      (error) => { if (!signal.aborted) finish(() => reject(error)); },
+    );
+  });
 }
