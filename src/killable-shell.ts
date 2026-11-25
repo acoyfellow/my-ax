@@ -2,6 +2,7 @@ import { shellBoundedCommand } from "./workspace-exec";
 
 export type KillableShellWorkspace = {
   shell(command: string, options: { cwd?: string; timeout?: number; env?: Record<string, string> }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  spawn?(command: string, options: { cwd?: string; timeout?: number; autoCleanup?: boolean }): Promise<{ id: string }>;
 };
 
 export type KillableShellResult = {
@@ -53,8 +54,12 @@ export function processGroupWrappedCommand(command: string, timeoutMs: number, t
   };
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export function pgidKillCommand(pgidFile: string): string {
-  return `pg=$(cat ${pgidFile} 2>/dev/null | tr -dc '0-9'); rm -f ${pgidFile}; mypg=$(ps -o pgid= -p $$ 2>/dev/null | tr -dc '0-9'); if [ -n "$pg" ] && [ "$pg" -gt 1 ] && [ "$pg" != "$mypg" ]; then kill -TERM -"$pg" 2>/dev/null; sleep 0.2; kill -KILL -"$pg" 2>/dev/null; echo KILLED:$pg; else echo NO_PGID; fi`;
+  return `pg=$(cat ${pgidFile} 2>/dev/null | tr -dc '0-9'); rm -f ${pgidFile}; mypg=$(ps -o pgid= -p $$ 2>/dev/null | tr -dc '0-9'); if [ -n "$pg" ] && [ "$pg" -gt 1 ] && [ "$pg" != "$mypg" ]; then kill -TERM -"$pg" "$pg" 2>/dev/null; sleep 0.2; kill -KILL -"$pg" "$pg" 2>/dev/null; echo KILLED:$pg; else echo NO_PGID; fi`;
 }
 
 export async function runKillableWorkspaceShell(
@@ -95,9 +100,15 @@ export async function runKillableWorkspaceShell(
     const onAbort = () => {
       void (async () => {
         let terminated = false;
+        const killScript = pgidKillCommand(wrapped.pgidFile);
         try {
-          const killed = await workspace.shell(pgidKillCommand(wrapped.pgidFile), { cwd: "/", timeout: 5_000 });
-          terminated = killed.stdout.includes("KILLED:");
+          if (typeof workspace.spawn === "function") {
+            await workspace.spawn(`bash -c ${shellQuote(killScript)}`, { cwd: "/", timeout: 5_000, autoCleanup: true });
+            terminated = true;
+          } else {
+            const killed = await workspace.shell(killScript, { cwd: "/", timeout: 5_000 });
+            terminated = killed.stdout.includes("KILLED:");
+          }
         } catch {}
         let timer: ReturnType<typeof setTimeout> | undefined;
         let partial: { stdout: string; stderr: string; exitCode: number } | null = null;
@@ -105,7 +116,7 @@ export async function runKillableWorkspaceShell(
           partial = await Promise.race([
             runPromise.catch(() => null),
             new Promise<null>((r) => {
-              timer = setTimeout(() => r(null), 1_000);
+              timer = setTimeout(() => r(null), 1_500);
             }),
           ]);
         } finally {
