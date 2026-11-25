@@ -7,6 +7,7 @@ import { googleGenerativeAIApi } from "@earendil-works/pi-ai/api/google-generati
 import { googleProvider } from "@earendil-works/pi-ai/providers/google";
 import { gatewayConfig } from "../llm";
 import type { Env } from "../types";
+import { PI_ENGINE_MODEL_CHOICES, type PiModelChoice } from "./pi-model-choices";
 
 export const PI_GATEWAY_PROVIDER_ID = "myax-gateway";
 export const PI_GATEWAY_MODEL_IDS = ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"] as const;
@@ -88,18 +89,7 @@ export function gatewayModelWindows(): Array<{ provider: string; id: string; con
   ];
 }
 
-export type PiModelChoice = { provider: string; id: string; label: string };
-
-export const PI_ENGINE_MODEL_CHOICES: readonly PiModelChoice[] = [
-  { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-opus-5-5", label: "Opus 5.5" },
-  { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-opus-5", label: "Opus 5" },
-  { provider: PI_GATEWAY_PROVIDER_ID, id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
-  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-neon", label: "Gemini 4 Neon" },
-  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen" },
-  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-argon", label: "Gemini 4 Argon" },
-  { provider: PI_GOOGLE_GATEWAY_PROVIDER_ID, id: "gemini-4-carbon", label: "Gemini 4 Carbon" },
-  { provider: "cloudflare", id: "@cf/zai-org/glm-5.3", label: "GLM 5.3" },
-];
+export { PI_ENGINE_MODEL_CHOICES, type PiModelChoice };
 
 export const PI_REFUSAL_FALLBACK_CHAIN: Readonly<Record<string, string>> = {
   "claude-opus-5-5": "claude-opus-5",

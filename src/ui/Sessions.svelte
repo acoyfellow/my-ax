@@ -101,6 +101,10 @@
     sessions = sessions.map((item) => item.id === row.id ? { ...item, tile_artifact_id: null, tile_state: {} } : item);
   }
 
+  function openAgentSettings(row: SessionRow) {
+    window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: row.id, title: row.name || "Untitled" } }));
+  }
+
   function menuItemsForRow(row: SessionRow): ContextMenuItem[] {
     const title = row.name || "Untitled";
     const items: ContextMenuItem[] = [
@@ -130,6 +134,7 @@
         })),
       });
     }
+    items.push({ kind: "action", id: "agent-settings", icon: "sliders", label: "Agent settings…", onSelect: () => openAgentSettings(row) });
     items.push({
       kind: "submenu",
       id: "tile-panel",
@@ -701,6 +706,11 @@
     window.addEventListener("my-ax:sessions-close", close);
     window.addEventListener("my-ax:sessions-toggle", toggle);
     window.addEventListener("my-ax:sessions-refresh", refresh);
+    const rowForEvent = (event: Event) => sessions.find((row) => row.id === (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId);
+    const onTileEdit = (event: Event) => { const row = rowForEvent(event); if (row) void editTileSource(row); };
+    const onTileReset = () => { void refreshQuietly(); };
+    window.addEventListener("my-ax:tile-edit", onTileEdit);
+    window.addEventListener("my-ax:tile-reset", onTileReset);
     const stopTileLive = onOwnerEvent(SESSION_TILE_CHANGED, (payload) => {
       const sid = typeof payload?.sessionId === "string" ? payload.sessionId : "";
       if (!sid) return;
@@ -718,6 +728,8 @@
     document.addEventListener("keydown", handleKeydown);
     return () => {
       stopTileLive();
+      window.removeEventListener("my-ax:tile-edit", onTileEdit);
+      window.removeEventListener("my-ax:tile-reset", onTileReset);
       window.removeEventListener("my-ax:sessions-open", openSidebar);
       window.removeEventListener("my-ax:sessions-close", close);
       window.removeEventListener("my-ax:sessions-toggle", toggle);
@@ -841,6 +853,11 @@
                 aria-label={row.pinned === 1 ? `Unpin ${title}` : `Pin ${title}`}
                 onclick={(e) => { e.stopPropagation(); closeMenu(); togglePin(row); }}
               >{@render sessionMenuIcon(row.pinned === 1 ? "unpin" : "pin")}<span>{row.pinned === 1 ? "Unpin" : "Pin"}</span></button>
+              <button
+                type="button"
+                role="menuitem"
+                onclick={(e) => { e.stopPropagation(); closeMenu(); openAgentSettings(row); }}
+              >{@render sessionMenuIcon("sliders")}<span>Agent settings…</span></button>
               {#if row.pinned === 1}
                 <div class="session-menu__sizes" role="group" aria-label={`Tile size for ${title}`}>
                   {#each PIN_SIZES as size (size)}
@@ -1011,12 +1028,14 @@
   onClose={closeContextMenu}
 />
 
-{#snippet sessionMenuIcon(icon: "pin" | "unpin" | "rename" | "export" | "archive" | "unarchive" | "delete")}
+{#snippet sessionMenuIcon(icon: "pin" | "unpin" | "rename" | "export" | "archive" | "unarchive" | "delete" | "sliders")}
   <svg class="session-menu__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     {#if icon === "pin"}
       <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
     {:else if icon === "unpin"}
       <path d="M2 2l20 20"/><path d="M12 17v5"/><path d="M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11"/><path d="M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89"/>
+    {:else if icon === "sliders"}
+      <path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>
     {:else if icon === "rename"}
       <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
     {:else if icon === "export"}

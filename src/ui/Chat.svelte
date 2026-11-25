@@ -107,6 +107,7 @@
   import { PiTranscript, type PiSnapshot } from "./pi-transcript";
   import { activeLayerIds, formatTurnLayerMetrics, type TurnLayerMetrics } from "../model-layers";
   import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
+  import AgentSettingsModal from "./AgentSettingsModal.svelte";
   import SlashMenu from "./SlashMenu.svelte";
   import CommandPalette from "./CommandPalette.svelte";
   import { COMMAND_EVENT, runCommand, type CommandEventDetail } from "./command-runner";
@@ -1672,6 +1673,31 @@
   }
   let connectionWatchdogId: ReturnType<typeof setInterval> | null = null;
   const ACTIVE_TURN_KEY_PREFIX = "my-ax-active-turn:";
+
+  let agentOverridesActive = $state(false);
+
+  async function refreshAgentOverrides() {
+    const id = readTabSession();
+    if (!id) { agentOverridesActive = false; return; }
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/agent-settings`, { credentials: "include" });
+      const body = await response.json();
+      const settings = body?.result?.settings;
+      agentOverridesActive = Boolean(settings && Object.values(settings).some((value) => value !== null));
+    } catch {}
+  }
+
+  function openAgentSettings() {
+    const id = readTabSession();
+    if (!id) return;
+    window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: id, title: document.title } }));
+  }
+
+  onMount(() => {
+    void refreshAgentOverrides();
+    window.addEventListener("my-ax:agent-settings-changed", refreshAgentOverrides);
+    return () => window.removeEventListener("my-ax:agent-settings-changed", refreshAgentOverrides);
+  });
 
   function currentSessionId() { return readTabSession() || "unknown"; }
   function activeTurnKeyFor(sessionId: string) { return ACTIVE_TURN_KEY_PREFIX + sessionId; }
@@ -3304,6 +3330,7 @@
 </script>
 
 <CommandPalette />
+<AgentSettingsModal />
 <div class="h-full flex flex-col">
   {#if authenticationRecovery.accessRequired}
     <div class="connector-banner" data-show="1" data-state="needs-auth" role="alert">
@@ -3395,6 +3422,14 @@
           aria-label="Resuming conversation"
         >
           <span class="session-resume-spinner" aria-hidden="true"></span>
+        </div>
+      {/if}
+      {#if readTabSession()}
+        <div class="agent-settings-trigger">
+          <button type="button" aria-label="Agent settings" title="Agent settings" data-agent-settings-trigger onclick={openAgentSettings}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
+            {#if agentOverridesActive}<span class="agent-settings-trigger__dot" aria-hidden="true"></span>{/if}
+          </button>
         </div>
       {/if}
       <main
@@ -3877,3 +3912,10 @@
                           {block.text}
                         {/if}
 {/snippet}
+
+<style>
+  .agent-settings-trigger { position: absolute; top: 6px; right: 10px; z-index: 5; }
+  .agent-settings-trigger > button { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--fg-mut); }
+  .agent-settings-trigger > button:hover { color: var(--fg); background: var(--color-surface-1); }
+  .agent-settings-trigger__dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--color-brand, currentColor); }
+</style>

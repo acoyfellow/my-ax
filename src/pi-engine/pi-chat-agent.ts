@@ -5,6 +5,7 @@ import { Agent, type Connection, type WSMessage } from "agents-pi";
 import type { ConversationWatch, Report } from "@earendil-works/pi-durable";
 import { agentModel, inboxLength, isCompacting, liveDoc, viewEvents, type ViewEvent, type WatchedView } from "./view-events";
 import { sanitizeLayerIds } from "../model-layers";
+import { combineInstructions, defaultAgentSettings, resolveEffectiveSettings, sanitizeAgentSettings, type AgentSettings } from "../agent-settings";
 import { sanitizeThinkingLevel, type ThinkingLevel } from "./thinking-level";
 import { LayerTurnController, runClefJointRouter, type LayerAiBinding, type LayerFrame } from "./model-layers-runner";
 import { readUploadBytes } from "../uploads";
@@ -84,6 +85,7 @@ export type PiChatLiveView = {
   queued: number;
   retry: { at: number; error: string } | null;
   entryTimes: Record<number, number>;
+  agentSettings: AgentSettings;
 };
 
 export type PiChatSlimView = PiChatLiveView & { olderCount: number };
@@ -264,13 +266,14 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }
     if (frame.type === "pi_submit") {
       try {
-        const layers = sanitizeLayerIds(frame.layers);
+        const effective = resolveEffectiveSettings(this.readAgentSettings(), { model: frame.model as string | undefined, reasoning: frame.reasoning as string | undefined, layers: frame.layers });
+        const layers = effective.layers;
         const turnId = typeof frame.operationId === "string" && frame.operationId ? frame.operationId : crypto.randomUUID();
         const aiBinding = this.env.AI as unknown as LayerAiBinding | undefined;
         const routerIdx = layers.indexOf("clef-router");
-        const requestedModel = typeof frame.model === "string" && frame.model ? frame.model : (await this.live()).model;
+        const requestedModel = effective.model ? effective.model : (await this.live()).model;
         this.activeLayerTurn?.stop();
-        let targetModel = frame.model;
+        let targetModel = effective.model;
         let routedModel: string | null = null;
         let routerDecision: Awaited<ReturnType<typeof runClefJointRouter>> | null = null;
         if (routerIdx >= 0) {
@@ -293,7 +296,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
         } else {
           this.activeLayerTurn = null;
         }
-        await this.applyThinkingLevel(sanitizeThinkingLevel(frame.reasoning));
+        await this.applyThinkingLevel(effective.reasoning);
         const receipt = await this.submitInput(frame.text ?? "", frame.attachments ?? [], frame.operationId);
         connection.send(JSON.stringify({ type: "pi_receipt", operationId: receipt.operationId, accepted: receipt.accepted }));
       } catch (error) {
@@ -418,7 +421,23 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   private async ownerInstructions(): Promise<string> {
-    return Effect.runPromise(getOwnerInstructions(this.env, this.identity().email)).catch(() => DEFAULT_OWNER_INSTRUCTIONS);
+    const owner = await Effect.runPromise(getOwnerInstructions(this.env, this.identity().email)).catch(() => DEFAULT_OWNER_INSTRUCTIONS);
+    return combineInstructions(owner, this.readAgentSettings());
+  }
+
+  private readAgentSettings(): AgentSettings {
+    return sanitizeAgentSettings(this.ctx.storage.kv.get<unknown>("agent-settings") ?? defaultAgentSettings());
+  }
+
+  async getAgentSettings(): Promise<AgentSettings> {
+    return this.readAgentSettings();
+  }
+
+  async setAgentSettings(patch: unknown): Promise<AgentSettings> {
+    const merged = sanitizeAgentSettings({ ...this.readAgentSettings(), ...(patch && typeof patch === "object" ? patch : {}) });
+    this.ctx.storage.kv.put("agent-settings", merged);
+    this.cachedSlimView = null;
+    return merged;
   }
 
   private machineRunner(): MachineToolRunner {
@@ -623,6 +642,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       queued: inboxLength(view),
       retry: live.generation?.retry ?? null,
       entryTimes: this.entryTimes(),
+      agentSettings: this.readAgentSettings(),
     };
   }
 

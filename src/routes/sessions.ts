@@ -212,6 +212,32 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
   // POST /api/sessions/:id/pin  { pinned: boolean }
   // Pin (to the top of the pinned group) or unpin a conversation. Server holds
   // the authoritative pinned flag + fractional rank so it syncs across devices.
+  app.get("/api/sessions/:id/agent-settings", async (c) => {
+    const id = c.req.param("id");
+    const identity = c.get("identity");
+    if (!(await requireOwnedSession(c.env, id, identity.email))) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    const { openPiChat } = await import("../pi-engine/routes");
+    const settings = await (await openPiChat(c.env, identity.email, id)).getAgentSettings();
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { settings }, next_actions: [] });
+  });
+
+  app.put("/api/sessions/:id/agent-settings", async (c) => {
+    const id = c.req.param("id");
+    const identity = c.get("identity");
+    if (!(await requireOwnedSession(c.env, id, identity.email))) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    const body = await c.req.json<unknown>().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "BAD_REQUEST", message: "settings object is required" }, next_actions: [] }, 400);
+    }
+    const { openPiChat } = await import("../pi-engine/routes");
+    const settings = await (await openPiChat(c.env, identity.email, id)).setAgentSettings(body);
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { settings }, next_actions: [] });
+  });
+
   app.get("/api/sessions/:id/tile", async (c) => {
     const panel = await readSessionTilePanel(c.env, c.get("identity"), c.req.param("id"));
     if (!panel) return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
