@@ -2,7 +2,7 @@ import { shellBoundedCommand } from "./workspace-exec";
 
 export type KillableShellWorkspace = {
   shell(command: string, options: { cwd?: string; timeout?: number; env?: Record<string, string> }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
-  spawn?(command: string, options: { cwd?: string; timeout?: number; autoCleanup?: boolean }): Promise<{ id: string }>;
+  killProcessGroup?(pgidFile: string): Promise<boolean>;
 };
 
 export type KillableShellResult = {
@@ -54,10 +54,6 @@ export function processGroupWrappedCommand(command: string, timeoutMs: number, t
   };
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 export function pgidKillCommand(pgidFile: string): string {
   return `pg=$(cat ${pgidFile} 2>/dev/null | tr -dc '0-9'); rm -f ${pgidFile}; mypg=$(ps -o pgid= -p $$ 2>/dev/null | tr -dc '0-9'); if [ -n "$pg" ] && [ "$pg" -gt 1 ] && [ "$pg" != "$mypg" ]; then kill -TERM -"$pg" "$pg" 2>/dev/null; sleep 0.2; kill -KILL -"$pg" "$pg" 2>/dev/null; echo KILLED:$pg; else echo NO_PGID; fi`;
 }
@@ -100,13 +96,11 @@ export async function runKillableWorkspaceShell(
     const onAbort = () => {
       void (async () => {
         let terminated = false;
-        const killScript = pgidKillCommand(wrapped.pgidFile);
         try {
-          if (typeof workspace.spawn === "function") {
-            await workspace.spawn(`bash -c ${shellQuote(killScript)}`, { cwd: "/", timeout: 5_000, autoCleanup: true });
-            terminated = true;
+          if (typeof workspace.killProcessGroup === "function") {
+            terminated = await workspace.killProcessGroup(wrapped.pgidFile);
           } else {
-            const killed = await workspace.shell(killScript, { cwd: "/", timeout: 5_000 });
+            const killed = await workspace.shell(pgidKillCommand(wrapped.pgidFile), { cwd: "/", timeout: 5_000 });
             terminated = killed.stdout.includes("KILLED:");
           }
         } catch {}

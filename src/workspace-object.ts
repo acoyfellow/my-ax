@@ -3,6 +3,7 @@ import { DiskSandbox } from "./disk-sandbox";
 import { bootWorkspace, measureHomeBytes, type WorkspaceBinding } from "./workspace-boot";
 import { createWorkspaceLifecycle, LOST_MID_COMMAND_NOTE, WorkspaceLost, type OperationKind, type WorkspaceLifecycle } from "./workspace-lifecycle";
 import { execTreatingShellExitAsResult } from "./workspace-exec";
+import { pgidKillCommand } from "./killable-shell";
 import { createSaveQueue, type SaveBoundary } from "./workspace-save-policy";
 import { recordObserveEvent } from "./observe-events";
 import { publishWorkspaceChange } from "./workspace-hub-client";
@@ -183,6 +184,11 @@ export class WorkspaceObject extends DiskSandbox {
       await this.killProcess(id, signal);
       return true;
     });
+  }
+
+  async killProcessGroup(pgidFile: string): Promise<boolean> {
+    const result = await this.execWithSessionToken(pgidKillCommand(pgidFile), "__DISABLE_SESSION__", { cwd: "/", timeout: 5_000, origin: "internal" } as ExecOptions);
+    return (result.stdout ?? "").includes("KILLED:");
   }
 
   async code(source: string, options: { language: "python" | "javascript" | "typescript"; cwd: string; run: RunCodeOptions }): Promise<unknown> {
