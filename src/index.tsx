@@ -36,6 +36,7 @@ import { registerPushRoutes } from "./routes/push";
 import { registerJobRoutes } from "./routes/jobs";
 import { registerMcpRoutes } from "./routes/mcp";
 import { registerBrowserRoutes } from "./routes/browser";
+import { registerHookCallerRoutes, registerHookOwnerRoutes } from "./routes/hooks";
 import { registerAttentionRoutes } from "./routes/attention";
 import { registerCheckInRoutes } from "./routes/check-in";
 import { registerSystemRoutes } from "./routes/system";
@@ -207,6 +208,8 @@ app.get("/api/version", (c) => deploymentVersionResponse(
   c.req.header("If-None-Match"),
 ));
 
+registerHookCallerRoutes(app);
+
 // Cloudflare Access in front of EVERYTHING that matters.
 app.use("/api/*", accessMiddleware());
 app.use("/agents/*", accessMiddleware());
@@ -322,6 +325,7 @@ registerJobRoutes(app);
 registerMcpRoutes(app);
 registerBrowserRoutes(app);
 registerAttentionRoutes(app);
+registerHookOwnerRoutes(app);
 registerCheckInRoutes(app);
 registerSystemRoutes(app);
 registerModelRoutes(app);

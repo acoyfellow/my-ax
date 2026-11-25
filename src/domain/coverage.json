@@ -120,6 +120,13 @@
       "aggregate": "BrowserRecording",
       "state": []
     },
+    "conversation_hooks": {
+      "kind": "credential",
+      "aggregate": null,
+      "state": [
+        "revoked_at"
+      ]
+    },
     "conversation_entries": {
       "kind": "log",
       "aggregate": null,

@@ -121,6 +121,40 @@ export function verifyAccessRequestEffect(req: Request, env: AuthEnv): Effect.Ef
   }));
 }
 
+export interface HookAccessIdentity {
+  kind: "user" | "service";
+  subject: string;
+  email?: string;
+}
+
+export function verifyAccessForHookEffect(req: Request, env: AuthEnv): Effect.Effect<HookAccessIdentity, AccessError> {
+  if (isLocalDevBypassAllowed(req, env)) {
+    const email = (env.DEV_USER_EMAIL ?? "").toLowerCase();
+    return Effect.succeed({ kind: "user", subject: `dev-${email}`, email });
+  }
+  const token = req.headers.get("Cf-Access-Jwt-Assertion");
+  if (!token) return Effect.fail(new AccessError("NoAccessJwt", "Missing Cf-Access-Jwt-Assertion header"));
+  const issuer = resolveAccessIssuerForTest(token, env.CF_ACCESS_ISS);
+  if (!issuer) return Effect.fail(new AccessError("InvalidAccessIssuer", "Cloudflare Access issuer is not configured and token issuer is invalid"));
+  return Effect.tryPromise({
+    try: () => jwtVerify(token, getJWKS(issuer), { issuer, audience: env.CF_ACCESS_AUD }),
+    catch: (cause) => new AccessError("InvalidAccessJwt", `JWT verification failed: ${(cause as Error).message}`),
+  }).pipe(Effect.flatMap(({ payload }) => {
+    if (typeof payload.email === "string" && payload.email.trim()) {
+      const email = payload.email.trim().toLowerCase();
+      return Effect.succeed<HookAccessIdentity>({ kind: "user", subject: typeof payload.sub === "string" && payload.sub ? payload.sub : email, email });
+    }
+    if (typeof payload.common_name === "string" && payload.common_name.trim()) {
+      return Effect.succeed<HookAccessIdentity>({ kind: "service", subject: payload.common_name.trim() });
+    }
+    return Effect.fail(new AccessError("NoAccessPrincipal", "JWT has neither an email nor a service token common_name"));
+  }));
+}
+
+export function verifyAccessForHook(req: Request, env: AuthEnv): Promise<HookAccessIdentity> {
+  return Effect.runPromise(verifyAccessForHookEffect(req, env));
+}
+
 export function verifyAccessRequest(req: Request, env: AuthEnv): Promise<AccessIdentity> {
   return Effect.runPromise(verifyAccessRequestEffect(req, env));
 }
