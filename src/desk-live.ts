@@ -3,6 +3,26 @@ import { parseDeskApp, type DeskApp } from "./desk-app";
 
 export const DESK_BOARD_FRAME = "desk.board";
 export const DESK_APP_FRAME = "desk.app";
+export const LIVE_CHAT_KEY_PREFIX = "live-chat:";
+export const LIVE_CHAT_TTL_MS = 30 * 60 * 1000;
+
+export function filterLiveDeskTargets(
+  sessionIds: readonly string[],
+  liveByChat: ReadonlyMap<string, number>,
+  now: number,
+  ttlMs = LIVE_CHAT_TTL_MS,
+): string[] {
+  const seen = new Set<string>();
+  const targets: string[] = [];
+  for (const sessionId of sessionIds) {
+    if (!sessionId || seen.has(sessionId)) continue;
+    const touchedAt = liveByChat.get(sessionId);
+    if (touchedAt === undefined || now - touchedAt > ttlMs) continue;
+    seen.add(sessionId);
+    targets.push(sessionId);
+  }
+  return targets;
+}
 
 export function deskAppFrame(app: DeskApp): string {
   return JSON.stringify({ type: DESK_APP_FRAME, app });

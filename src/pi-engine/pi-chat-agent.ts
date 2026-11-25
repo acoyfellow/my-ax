@@ -201,10 +201,25 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     });
   }
 
+  private notifyUserAgentSocket(connected: boolean): void {
+    const ownerEmail = this.state?.ownerEmail;
+    const chatId = this.state?.chatId;
+    if (!ownerEmail || !chatId) return;
+    this.ctx.waitUntil((async () => {
+      const { getUserAgent } = await import("../agent-stub");
+      await (await getUserAgent(this.env, ownerEmail)).registerChatSocket(chatId, connected);
+    })().catch(() => undefined));
+  }
+
   async onConnect(connection: Connection): Promise<void> {
     await this.ensureEventStream();
+    this.notifyUserAgentSocket(true);
     const view = await this.slimLive();
     connection.send(JSON.stringify({ type: "pi_snapshot", view }));
+  }
+
+  async onClose(): Promise<void> {
+    if ([...this.getConnections()].length === 0) this.notifyUserAgentSocket(false);
   }
 
   async onMessage(connection: Connection, message: WSMessage): Promise<void> {

@@ -29,7 +29,7 @@ export type LayerFrame =
   | { type: "pi_layer"; kind: "metrics"; turnId: string; metrics: TurnLayerMetrics };
 
 type ChatReply = { readonly response?: string; readonly choices?: ReadonlyArray<{ readonly message?: { readonly content?: string | null } }> };
-type ClefReply = { readonly answers?: Record<string, { readonly choice?: string; readonly value?: boolean }> };
+type ClefReply = { readonly answers?: Record<string, { readonly choice?: string; readonly value?: boolean; readonly noul?: number }> };
 type ClairicReply = { readonly answers?: Record<string, { readonly value?: unknown }> };
 
 const OPENER_SYSTEM_PROMPT =
@@ -101,7 +101,10 @@ export async function runClefJointRouter(
     if (!reply?.answers) return { ...fallback, ms };
     const rawTopic = reply.answers.topic?.choice ?? "other";
     const topic = rawTopic in MYAX_OPENER_TOPICS ? rawTopic : "other";
-    const needsWorker = reply.answers.needs_worker?.value !== false;
+    const needsAnswer = reply.answers.needs_worker;
+    const needsWorker = typeof needsAnswer?.noul === "number"
+      ? needsAnswer.noul >= 0.35
+      : needsAnswer?.value !== false;
     const useFast = canFastRoute && !needsWorker && topic === "other";
     return {
       topic,

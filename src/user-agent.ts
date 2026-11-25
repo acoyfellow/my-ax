@@ -1,5 +1,5 @@
 import { Agent } from "agents";
-import { deskAppFrame, deskBoardFrame } from "./desk-live";
+import { deskAppFrame, deskBoardFrame, filterLiveDeskTargets, LIVE_CHAT_KEY_PREFIX, LIVE_CHAT_TTL_MS } from "./desk-live";
 import type { DeskBoard } from "./desk-board";
 import type { DeskApp } from "./desk-app";
 import type { Env } from "./types";
@@ -36,8 +36,27 @@ export class UserAgent extends Agent<Env> {
     this.broadcast(JSON.stringify({ type: MACHINES_CHANGED_FRAME }));
   }
 
+  async registerChatSocket(chatId: string, connected: boolean): Promise<void> {
+    if (!chatId) return;
+    const key = `${LIVE_CHAT_KEY_PREFIX}${chatId}`;
+    if (connected) this.ctx.storage.kv.put(key, Date.now());
+    else this.ctx.storage.kv.delete(key);
+  }
+
+  private liveChats(now: number): Map<string, number> {
+    const live = new Map<string, number>();
+    for (const [key, value] of this.ctx.storage.kv.list<number>({ prefix: LIVE_CHAT_KEY_PREFIX })) {
+      const chatId = key.slice(LIVE_CHAT_KEY_PREFIX.length);
+      if (typeof value === "number" && now - value <= LIVE_CHAT_TTL_MS) live.set(chatId, value);
+      else this.ctx.storage.kv.delete(key);
+    }
+    return live;
+  }
+
   async broadcastDeskBoard(sessionIds: string[], board: DeskBoard): Promise<void> {
-    await this.sendToSessionSockets(sessionIds, deskBoardFrame(board));
+    const frame = deskBoardFrame(board);
+    this.broadcast(frame);
+    await this.sendToSessionSockets(sessionIds, frame);
   }
 
   async broadcastDeskApp(sessionIds: string[], app: DeskApp): Promise<void> {
@@ -47,9 +66,11 @@ export class UserAgent extends Agent<Env> {
   }
 
   private async sendToSessionSockets(sessionIds: string[], frame: string): Promise<void> {
+    const targets = filterLiveDeskTargets(sessionIds, this.liveChats(Date.now()), Date.now());
+    if (!targets.length) return;
     const { openPiChat } = await import("./pi-engine/routes");
     const owner = this.name;
-    await Promise.allSettled(sessionIds.filter(Boolean).map(async (sessionId) => (await openPiChat(this.env, owner, sessionId)).broadcastFrame(frame)));
+    await Promise.allSettled(targets.map(async (sessionId) => (await openPiChat(this.env, owner, sessionId)).broadcastFrame(frame)));
   }
 }
 
