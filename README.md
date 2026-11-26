@@ -1,183 +1,147 @@
 # My AX
 
-**My AX is a single-operator agent. It acts with your authority. It works in a container, on a machine you connect, and in bounded cloud runs. You deploy it into your own Cloudflare account. You put it behind your own Access login.**
-
-You approve the agent. It is not a remote-access tool. It takes no inbound connection. You configure each path it uses. You gate each path with Cloudflare Access. You can stop each path.
-
-The agent does these tasks:
-
-- It writes files in a container workspace.
-- It runs commands through a companion. You install the companion on a machine you choose.
-- It starts bounded agent runs in the cloud.
-- It opens public web pages in a headless browser.
-
-The agent records the result when work finishes or needs a decision. You return to a check-in page. The page shows what needs you, what runs now, and what finished.
-
-The agent acts with the authority you already hold. You approve the work. You direct the work. You stop the work. Each action writes a receipt you can read.
-
-> **Security posture.** My AX is single-operator. One verified Access identity owns every conversation, record, and tool call. The machine companion connects outbound only. It checks every caller at the Worker boundary. It runs as an OS account you choose. See the [security posture](./SECURITY.md) for the trust model, the identity and network boundaries, and what My AX does not do.
+**A single-operator personal agent on Cloudflare.** You deploy it in your own Cloudflare account behind your own Cloudflare Access login. It runs in a persistent container, on machines you connect outbound, in a headless browser, and in sandboxed UI artifacts — and every action leaves a receipt you can inspect or stop.
 
 [![Demo: the agent writes a workspace file and runs a command on a connected machine](./docs/media/my-ax-kitchen-sink.gif)](./docs/media/my-ax-kitchen-sink.mp4)
 
-In this 3.4s clip the agent writes a workspace file and runs a command on a connected machine. This is one configured path. It is not proof of every boundary. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).
+*3.4s clip: writing a workspace file and running a command on a connected machine. [Open the MP4](./docs/media/my-ax-kitchen-sink.mp4).*
 
-> **Verify before you trust.** `npm run check` covers the local build, the types, and the unit tests only. The [deployment proof](./proof/README.md) proves Access, containers, models, voice, push, and workspace restoration. A green local run does not prove them.
+> **Security posture.** One verified Access identity owns every chat, record, and tool call. No inbound ports are opened on your machines; the companion connects outbound only. Every action is stoppable. Read [SECURITY.md](./SECURITY.md) for the trust model and boundaries.
+
+---
 
 ## Where The Agent Acts
 
-The agent uses more than one place. It picks the place for each task. Each place returns output you can read.
-
-| Place | Mechanism | Authority | What you can read back |
+| Surface | Mechanism | Isolation & Authority | What you get back |
 |---|---|---|---|
-| Persistent Sandbox | container-backed `/home/user`, snapshotted to R2 | isolated per owner | files, command output, process state |
-| A machine you connect | `machine.*` over an outbound companion ([machinectl](https://github.com/acoyfellow/machinectl)) | the companion's OS account, which you choose | the exact command, its output |
-| A public web page | `browser_open` in a headless browser | no local cookies; public URLs only | rendered title, text, an rrweb replay |
-| Your own live UI | `page.*` over the chat WebSocket | only while your chat tab is open | session list, health, transcript tail |
-| An artifact it builds | `create_svelte_artifact` + tools the artifact registers | sandboxed iframe, no same-origin access | the artifact, driven in place |
+| **Persistent Sandbox** | Container `/home/user`, snapshotted to R2 | Isolated per owner; survives without your laptop | Files, stdout/stderr, process state |
+| **Connected Machines** | Outbound companion ([`machinectl`](https://github.com/acoyfellow/machinectl)), targeted by `machine` | Runs as the OS account you choose; no inbound ports | Exact command, output, live cancel |
+| **Public Web** | `browser_open` in Cloudflare Browser Rendering | Public HTTP(S) URLs only; no local browser cookies | Rendered title, text, rrweb replay |
+| **Live UI (`page.*`)** | Chat WebSocket | Only while your chat tab is open | Sessions, health, transcript tail |
+| **Artifacts & PWAs** | `create_svelte_artifact` + `/apps/:id` | Sandboxed iframe, self-hosted Svelte 5 runtime (`connect-src 'none'`), zero external CDN | Interactive widget or installable home-screen PWA |
+| **Sidebar Tile Panels** | `set_tile_panel`, `update_tile_state`, `read_tile_panel` | Sandboxed Svelte 5 micro-panel per pinned tile | Live mini-dashboards in your sidebar |
 
-The Sandbox does not need you or your machine present. The machine companion is the highest-authority path. It runs as a real OS account. Give it a dedicated account with least privilege. See the [security posture](./SECURITY.md) for the boundary on each place.
+---
 
-The [feature tour](./docs/feature-tour.md) shows each capability with a real transcript or receipt.
+## Core Capabilities
 
-## The Owner Loop
+- **Async owner loop.** You do not babysit turns — you return to **Check-in** (`GET /api/check-in` or MCP `my_ax_check_in`), **Attention** (`/attention` + Web Push), **Desk** (`/?action=desk` cards via `desk_upsert`), **Runs** (`/runs`), and **Jobs** (`/jobs`).
+- **Real killable tools.** Clicking **Stop** (or `/abort`) cancels the live Sandbox process group (`SIGKILL`), `machinectl` child tree, MCP request, browser session, or child wait — not just the UI spinner.
+- **Per-agent settings, experiments & HTTP hooks.** Open **Agent settings** from any chat's app bar or sidebar menu to pin a model, reasoning effort, custom instructions, **Model layers** (fast `<0.5s` front-layer openers and voice narration), or mint a scoped 1-way **HTTP Hook** (`/api/hook/:hookId/message` + SSE, Access-verified).
+- **Recurring jobs & reusable procedures.** Schedule native per-session alarms (D1-backed state + receipts) and promote any proven `work_code` script into an owner-approved reusable tool that runs unchanged.
+- **Parallel delegation.** Spawn up to 1,000 read-only child tasks in one call (adaptive window of 32, automatic backoff on rate limits, depth 1, 120s per child, 10-minute batch cap).
+- **Voice mode.** Full-duplex voice session linked to your chat, with optional per-agent Model layers for fast openers, tool narration, and streamed spoken replies.
+- **Human-in-the-loop approvals.** `ask_user` pauses work, posts an owner-scoped decision card to Attention/Desk/Push, and resumes the chat once you answer.
+- **Live error triage.** Client and server errors can `POST /api/errors` to file deduplicated issues (one per fingerprint per 24h), add a Desk card, and open a PR for your review — never auto-merging.
 
-You do not watch the agent work. You return to it.
+<details>
+<summary>Owner page proof markers (checked by automated smoke tests)</summary>
 
-- **Check-in** is the front door. `GET /api/check-in` and MCP `my_ax_check_in` build one response from Attention, jobs, and run receipts. The response shows what needs you, what runs now, what finished or failed, and a next step. The authenticated shell shows these as owner pages at `/attention`, `/runs`, and `/jobs`. Each rendered page keeps the raw API receipt href for proof: `/attention` exposes `data-attention-api-receipt-href`, `/runs` exposes `data-runs-api-receipt-href`, and `/jobs` exposes `data-jobs-api-receipt-href`. The `/attention` page also has a same-origin `data-attention-seen-form` you use to mark the current filtered view seen.
-- **Attention** holds owner-scoped items with unread state. A finished job, an ended recovery attempt, or a question from the agent lands here. Web Push sends it when you are away. The item stays if push fails.
-- **Desk** is the durable board at `/?action=desk`. Agents upsert cards with `desk_upsert` instead of starting a new conversation or flattening Approve/Reject into a push body. `desk_remove` and `DELETE /api/desk/:cardId` remove one card without changing the others. Open source stays a real GitLab or GitHub URL. Decide stays a same-origin decision link. `desk_clear` and `DELETE /api/desk` empty the board. A second open desk tab can stay stale until it reloads. A push that only wakes you should use href `/?action=desk`.
-- **Live error issues** file, classify, and open a ready PR. A client `pushError` or a server chat error may `POST /api/errors`. One fingerprint is one issue for 24 hours. Desk gets a card. The hook labels and writes one loop board. A 15-minute sweep closes same-fingerprint duplicates and queues missed issues. If `bot/issue-<n>` exists, the Worker opens a ready PR. Review and audit never approve or merge. You merge.
-- **Run receipts** record events the agent adds. A recurring job run, a saved-recipe run, and a delegated batch each write a start event and a terminal event you can open.
+Each authenticated owner page keeps its raw API receipt link: `/attention` exposes `data-attention-api-receipt-href` plus a same-origin `data-attention-seen-form` to mark the current filtered view seen, `/runs` exposes `data-runs-api-receipt-href`, and `/jobs` exposes `data-jobs-api-receipt-href`.
 
-## What The Agent Can Do
+</details>
 
-- **Schedule recurring work.** Native per-session alarms run saved prompts. HTTP routes, agent tools, Code Mode, and MCP share one owner-scoped job service. D1 holds the job state and the durable history.
-- **Delegate in parallel.** A parent sends up to 1000 read-only child tasks in one call. They run at the same time by default, inside an adaptive window of 32. Work runs one step after another only when a later task needs an earlier result. A shared rate limit (3021) halves the window and retries the task after a backoff. It does not stop the batch. Each child runs at depth 1 for 120 seconds. Children get no application, MCP, browser, machine, or delegation tools. The parent keeps their results and writes the summary.
-- **Reuse a proven procedure.** You approve a successful `work_code` run as a named reusable tool. Reuse runs the exact saved code. The code does not change between runs. Each run records a receipt and shows in Check-in.
-- **Ask you a question.** `ask_user` writes an owner-scoped decision and an Attention item. It waits. It then puts your approved answer back into the source conversation.
-- **Put work on the desk.** `desk_upsert` writes a card the owner can open later at `/?action=desk`. Pair it with `ask_user` or MCP `ask_owner` when a decision is required. Do not flatten the choice into `notify_owner` text.
-- **Build a UI.** `create_svelte_artifact` compiles a self-contained Svelte 5 component. It stores the component. It shows the component in a sandboxed iframe. The artifact can register its own tools. The agent calls those tools to direct the artifact on a later turn.
+---
 
-## Important Limits
+## Quick Start (Deploy)
 
-The hard bounds, so you know what the agent cannot do.
-
-| Surface | Boundary |
-|---|---|
-| Delegation | At most 1000 children per call, run in parallel inside an adaptive window (32, halved on 3021). Depth 1, 8 model or tool steps each, 120s per child, 10-minute batch deadline. A child that cannot start before the deadline, or that hits 3021 more than 4 times, is returned as `deferred`. Children make model-provider calls and create records that stay. The UI shows a final snapshot. It does not show live progress and has no cancel. |
-| Recurring jobs | At most 10 active jobs per owner. Cadence 60 seconds to 30 days. Names 200 characters, prompts 4,000. D1 drives the UI. The native scheduler drives execution. The two can disagree. There is no automatic repair. If the state drifts, pause, delete, and create the job again. |
-| Work Code Mode | The generated source has a limit of 32,000 bytes. Each run has a 60-second wall-clock limit and no ambient network. The limit does not reduce the authority of an allowlisted callback. |
-| Workspace | All conversations for one owner share `/home/user`. My AX snapshots it to R2 and refuses a requested recycle if snapshot publication fails. Two conversations can edit the same files with no merge. |
-| Machine | Commands run as the OS account that hosts the companion, with that account's permissions. My AX adds no privilege separation. |
-| Page (live UI) | Works only while an owner chat tab is connected. Each verb returns `page_unavailable` at other times. Artifact-registered tools are per-artifact and capped. They are bound to the source window. They are checked against their schema. |
-| Browser | `browser_open` accepts HTTP(S) URLs that pass public-address checks. It receives no local browser cookies. Authenticated local browsing works only when a connected machine gives access to it. |
-| Voice and push | Need explicit browser permission and provider availability. A failed push does not remove its Attention record. |
-
-[Feature Status and Limits](./docs/feature-matrix.md) is the current-state inventory: what is real, where it lives, and the known limits.
-
-## Deploy
-
-Requirements:
-
-- Node.js 22 and npm 11
-- Docker with Colima, Docker Desktop, or WSL2; native Windows shells are not tested
-- Python 3, Bash, and OpenSSL
-- A Cloudflare account authorized to create Workers, Containers, D1, KV, R2, Workers AI, Browser Rendering, and Dynamic Worker Loader resources; paid usage or product enablement may apply
-
-`setup.sh` creates infrastructure. It does not make a verified service. Read [Deploying My AX](./docs/deploy.md) before you run it against an existing account or make the hostname public.
+**Requirements:** Node.js 22, npm 11, Docker (Colima, Docker Desktop, or WSL2), Python 3, Bash, OpenSSL, and a Cloudflare account with Workers, Containers, D1, KV, R2, Workers AI, Browser Rendering, and Dynamic Worker Loader enabled.
 
 ```bash
 git clone https://github.com/acoyfellow/my-ax
 cd my-ax
 npm ci
 npx wrangler login
-npx wrangler whoami
-# If more than one account is listed:
+# Optional if wrangler whoami lists multiple accounts:
 export MY_AX_ACCOUNT_ID=your_target_account_id
 bash scripts/setup.sh
 ```
 
-The script does these steps:
+`setup.sh` creates missing resources, binds existing ones, generates missing bridge/encryption secrets, applies remote D1 migrations, and deploys.
 
-- It creates missing named resources.
-- It binds existing resources you configured.
-- It creates bridge and encryption secrets that are absent.
-- It applies pending remote D1 migrations.
-- It deploys.
+**Before your first real turn:**
+1. Put your hostname behind a **Cloudflare Access** self-hosted application.
+2. Set `CF_ACCESS_ISS`, `CF_ACCESS_AUD`, `BRIDGE_BASE_URL`, and `CLOUDFLARE_ACCOUNT_ID`.
+3. Add bucket-scoped `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` if you want `/home/user` snapshots to survive container replacement.
+4. Redeploy, confirm anonymous requests are blocked, confirm `GET /api/health` returns `ok: true`, and complete one turn.
 
-On a fresh Worker the script replaces the historical Durable Object migration chain with one baseline. Existing deployments keep their append-only history. The script reuses keys when the secret source is still available. It does not rotate them. It cannot recover deleted keys.
+See [Deploying My AX](./docs/deploy.md) for full configuration (including Web Push VAPID keys and OAuth connectors), [Machine-Free Deploy](./docs/deploy-machine-free.md) for CI deploys, and [Deployment Proof](./proof/README.md) for end-to-end verification (`npm run check` covers local build, types, and unit tests only). Each installation must own isolated Worker, D1, KV, R2, Durable Object, Access, and secret state.
 
-Before you send a real turn:
+---
 
-1. Put the hostname behind a Cloudflare Access self-hosted application.
-2. Set `CF_ACCESS_ISS`, `CF_ACCESS_AUD`, `BRIDGE_BASE_URL`, and `CLOUDFLARE_ACCOUNT_ID` as the deployment guide describes.
-3. Add bucket-scoped `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` so workspace snapshots survive a container replacement. Without them, treat workspace files as disposable.
-4. Confirm the default Workers AI model is available to the account.
-5. Redeploy, verify anonymous access is rejected, and verify authenticated `GET /api/health` returns `ok: true`.
-6. Open the hostname through Access and complete one model turn. Health proves routing and bindings only; run the documented snapshot and restore proof when workspace persistence matters.
+## Terminal CLI
 
-Push needs VAPID secrets. Managed OAuth callbacks need an Access-gated HTTPS hostname. Loopback cannot complete that flow. [Deploying My AX](./docs/deploy.md) has copy-paste configuration, verification, and troubleshooting. Each installation must own separate Worker, D1, KV, R2, Durable Object, Access, and secret state. Installations can share a source revision. They must never share runtime resources.
+Attach to any chat from your terminal — messages, approvals, and aborts stay live in sync with the web UI over Cloudflare Access (`cloudflared access token`):
 
-## Connect Tools
-
-Open **Settings, then Connectors, then Add**. Enter an HTTPS MCP endpoint the Worker can reach. For OAuth-enabled servers, My AX tries metadata discovery. It stores grants encrypted with owner-bound context under the deployment-wide `MASTER_KEY`. A server with incompatible metadata or callback configuration will not connect. If you replace the key and do not keep the old value, you can never decrypt existing grants.
-
-My AX checks connector URLs for embedded credentials and disallowed destinations. The operator allowlists exact MCP method identifiers for Code Mode. My AX does not prove that an allowlisted method has no side effect.
-
-Optional providers:
-
-- **My Machine** runs [`machinectl`](https://github.com/acoyfellow/machinectl). This gives terminal-equivalent access as the companion's OS user. Use a dedicated account with least privilege.
-- **Web Push** needs VAPID keys and browser notification permission.
-
-## Terminal
-
-Join any pi chat from a terminal. The terminal and the web app share one chat: a turn typed in either place appears in both, and a reconnect prints any turns that were missed.
-
-```sh
+```bash
 export MYAX_URL=https://agent.example.com
 node bin/my-ax.mjs chats
 node bin/my-ax.mjs attach <chat id, id prefix, or name>
 ```
 
-`/image <path> [message]` sends a PNG, JPEG, WebP or GIF. When the agent asks a question with `ask_user`, the terminal shows numbered options; type a number to answer.
+- `/image <path> [message]` attaches PNG, JPEG, WebP, or GIF.
+- Numbered prompts let you answer `ask_user` decisions inline; `/abort` stops a turn; `/quit` or `Ctrl-D` exits.
+- `node bin/my-ax.mjs sync-pi [--days N]` uploads local Pi timing/cost/tool-name telemetry (`source: "pi-local"`) — never prompts, replies, arguments, or tool output.
 
-`node bin/my-ax.mjs sync-pi [--days N]` sends local Pi session traces to the same store `brain_query` reads, as `source: "pi-local"`. It sends timings, model names, token counts, cost and tool names. It never sends prompts, replies, tool arguments or tool output. Re-running it sends only new lines.
+---
 
-The client uses your Cloudflare Access login (`cloudflared access token`) and the chat's normal WebSocket. It runs no agent itself. `/abort` stops a turn, and `/quit` or Ctrl-D leaves.
+## Connect Tools & Machines
 
-## Who Owns What
+- **MCP Connectors:** Open **Settings → Connectors → Add** with any Worker-reachable HTTPS MCP URL. OAuth grants are encrypted under `MASTER_KEY` (keep backups before rotating keys). Code Mode callbacks are explicitly allowlisted by method name.
+- **Machines (`machinectl`):** Pair one or more machines via [`machinectl`](https://github.com/acoyfellow/machinectl) under a dedicated least-privilege OS account. Target specific machines with `machine` in `work_code` / `work_search`.
+
+---
+
+## Architecture & Hard Limits
 
 | Layer | Responsibility |
 |---|---|
-| Agents SDK | Durable identity, WebSockets, schedules, MCP connections, RPC, and child runs. |
-| pi-durable harness | Model and tool turns, message history, turn recovery, and compaction for every chat. Each chat is one `PiChatAgent` Durable Object. |
-| My AX | Single-operator authorization, UI, product policy, jobs, Attention, receipts, and work providers. |
+| **Cloudflare Agents SDK** | Durable identity, WebSockets, schedules, MCP connections, RPC, child runs |
+| **`pi-durable` harness** | Authoritative turn execution, message history, recovery, and 250K compaction per `PiChatAgent` DO (pinned in `package.json`; do not downgrade after deploying) |
+| **My AX** | Single-operator auth, Svelte 5 UI, per-agent settings, Model layers, tile panels, PWAs, hooks, jobs, Attention, Desk, receipts |
 
-The pi-durable harness is authoritative for conversation execution and history. The earlier Think engine is retired. D1 stores application records, derived indexes, and turn traces. R2 stores object bytes and workspace snapshots. Snapshots are not continuous backups. Code Mode has no direct database, secret, or network bindings. Its allowlisted server-side callbacks keep their normal authority.
+### Known Boundaries
 
-The harness version is pinned in `package.json`. Data written by a newer harness version cannot be read by an older one, so do not roll the harness back after a deploy.
+| Surface | Boundary |
+|---|---|
+| **Delegation** | Max 1,000 children/call, adaptive window 32 (halves on 3021), depth 1, 8 steps & 120s/child, 10-minute batch cap; unstarted children return `deferred`. |
+| **Recurring jobs** | Max 10 active jobs/owner; cadence 60s–30d; names 200 chars, prompts 4,000 chars. |
+| **Work Code Mode** | 32 KB source cap, 60s wall-clock cap, no ambient network (allowlisted server callbacks keep their authority). |
+| **Workspace** | One shared `/home/user` per owner across chats, snapshotted to R2 (not continuous backup; concurrent edits do not merge). |
+| **Machine** | Runs as the companion's OS user with no added privilege separation. |
+| **Browser** | Public HTTP(S) only; no local cookies. |
+| **Voice & Push** | Require browser permission and provider availability; failed push keeps its Attention item. |
+
+See [Feature Status and Limits](./docs/feature-matrix.md) for the full inventory.
+
+---
 
 ## Repository Map
 
 ```text
-src/pi-engine/           pi chat Durable Object, harness wiring, chat tools, MCP tools, traces
-src/user-agent.ts        owner root: job alarms and desk fan-out
-src/agent-tree.ts        spawn_child and wait_child child chats
-src/connector-agent.ts   owner MCP connections used by chats and the MCP explorer
-src/named-computer.ts    named persistent computers with a viewable screen
-src/check-in.ts          owner-scoped check-in read model
-src/jobs.ts              native recurring schedules
-src/job-service.ts       owner-scoped job CRUD and evidence
-src/saved-recipes.ts     owner-approved reusable work_code tools
-src/work-tools.ts        workspace, machine, page, and codemode catalog
-src/routes/              authenticated HTTP adapters
-src/ui/                  product UI and allowlisted result widgets
+src/pi-engine/           PiChatAgent DO, harness wiring, shared/MCP/workspace tools, model layers, compaction guard
+src/agent-settings.ts    per-chat model, reasoning, layers, instructions, and metrics overrides
+src/model-layers.ts      fast front-layer openers, Clef router, and narration catalog
+src/voice-layers.ts      layered voice turns (opener, tool narration, streamed sentences, metrics)
+src/killable-shell.ts    cancellable Sandbox PGID execution and cleanup
+src/tile-panel.ts        programmable sidebar Svelte 5 tile panels
+src/artifact-pwa.ts      owner-gated installable artifact PWAs (/apps/:id)
+src/conversation-hooks.ts scoped 1-way HTTP hook API (/api/hook/:hookId/*)
+src/user-agent.ts        owner root DO: job alarms, live desk presence, fan-out
+src/agent-tree.ts        spawn_child / wait_child and parallel delegation
+src/connector-agent.ts   owner MCP connections and OAuth grant handling
+src/check-in.ts          owner-scoped Check-in read model
+src/jobs.ts              native recurring schedules & job-service.ts CRUD
+src/saved-recipes.ts     owner-approved reusable work_code procedures
+src/work-tools.ts        workspace, machine, page, and Code Mode tools
+src/routes/              authenticated Hono HTTP routes
+src/ui/                  Svelte 5 UI, self-hosted artifact/hljs bundles, allowlisted widgets
 migrations/              D1 application and projection schemas
 ```
 
-State ownership and request flow are in [Architecture](./docs/architecture.md).
+---
 
-## Development
+## Local Development
 
 ```bash
 npm ci
@@ -185,23 +149,11 @@ npm run check
 npm run dev
 ```
 
-[Local Development](./docs/local-development.md) documents loopback mode and the Access-gated tunnel needed for OAuth callbacks.
+See [Local Development](./docs/local-development.md) for loopback mode and Access tunnels for OAuth callbacks.
 
 ## Documentation
 
-- [Feature Tour](./docs/feature-tour.md)
-- [Architecture](./docs/architecture.md)
-- [Feature Status and Limits](./docs/feature-matrix.md)
-- [Deploying My AX](./docs/deploy.md)
-- [Deployment Proof](./proof/README.md)
-- [Security Policy](./SECURITY.md)
-- [Contributing](./CONTRIBUTING.md)
-- [Changelog](./CHANGELOG.md)
-
-Report bugs and feature requests in [GitHub Issues](https://github.com/acoyfellow/my-ax/issues). Put one checkable receipt in the issue (command output, file:line, or URL). The [factory](./docs/factory.md) is a recurring My AX job that opens one chat per issue and proposes PRs. It never merges. You merge after you read the receipt. Hunt-only ticks follow [docs/hunt.md](./docs/hunt.md): one new issue, then stop. Report vulnerabilities through the [Security Policy](./SECURITY.md), not a public issue.
-
-See [Contributing](./CONTRIBUTING.md) and [the factory](./docs/factory.md).
-
-## License
-
-MIT
+- [Feature Tour](./docs/feature-tour.md) · [Feature Status and Limits](./docs/feature-matrix.md)
+- [Architecture](./docs/architecture.md) · [Principles](./docs/principles.md) · [Patterns](./docs/patterns.md)
+- [Deploying My AX](./docs/deploy.md) · [Machine-Free Deploy](./docs/deploy-machine-free.md) · [Deployment Proof](./proof/README.md)
+- [Security Policy](./SECURITY.md) · [Contributing](./CONTRIBUTING.md) · [Changelog](./CHANGELOG.md)
