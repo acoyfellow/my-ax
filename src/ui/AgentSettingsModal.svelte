@@ -120,10 +120,11 @@
     if (!snapshot) return "";
     const count = snapshot.topEntries.length;
     if (count === 0) return "Empty window";
+    const countWord = count === 1 ? "1 item" : `${count} items`;
     const dominant = [...bucketRows].sort((a, b) => b.tokens - a.tokens)[0];
-    if (!dominant || snapshot.activeTokens <= 0) return `${count} items`;
+    if (!dominant || snapshot.activeTokens <= 0) return countWord;
     const pct = Math.round((dominant.tokens / snapshot.activeTokens) * 100);
-    return `${count} items · ${pct}% ${dominant.label.toLowerCase()}`;
+    return `${countWord} · ${pct}% ${dominant.label.toLowerCase()}`;
   });
   const barScale = $derived(snapshot ? Math.max(snapshot.compactAtTokens, snapshot.activeTokens, 1) : 1);
 
@@ -762,4 +763,18 @@
   .ctx-summary summary { cursor: pointer; font-size: 12px; color: var(--fg-mut); }
   .ctx-summary pre { margin-top: 6px; max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: 11px; }
   .agent-settings__error { font-size: 12px; color: var(--color-danger, #d33); }
+  @media (max-width: 320px), (max-height: 260px) {
+    .agent-settings__body { gap: 8px; padding: 8px 10px; }
+    .agent-settings__tabs { overflow-x: auto; scrollbar-width: none; }
+    .agent-settings__tabs::-webkit-scrollbar { display: none; }
+    .agent-settings__tabs > button { flex: none; height: 24px; font-size: 11px; padding: 0 8px; white-space: nowrap; }
+    .ctx-hero__big { font-size: 16px; }
+    .ctx-hero__of { font-size: 11.5px; }
+    .ctx-actions { flex-wrap: wrap; gap: 6px; }
+    .ctx-btn { height: 26px; padding: 0 8px; font-size: 11.5px; }
+    .ctx-preset-hint { display: none; }
+    .agent-settings__seg > button { height: 24px; font-size: 11px; padding: 0 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .agent-settings__foot { flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+    .agent-settings__foot > button { height: 26px; padding: 0 8px; font-size: 11.5px; }
+  }
 </style>

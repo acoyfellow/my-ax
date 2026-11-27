@@ -1164,4 +1164,8 @@
     :global(.session-tile:has(.session-row__job) .session-row__title) { padding-right: 60px; }
     :global(.session-row:not(.session-tile) .session-row__meta) { visibility: hidden; }
   }
+  @media (max-width: 280px) {
+    .session-tiles { grid-template-columns: minmax(0, 1fr); }
+    :global(.session-tile[data-size="medium"]), :global(.session-tile[data-size="large"]) { grid-column: span 1; }
+  }
 </style>

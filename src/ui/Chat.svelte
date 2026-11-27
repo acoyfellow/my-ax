@@ -3997,4 +3997,15 @@
   .ctx-chat-note__details summary { cursor: pointer; font-size: 11.5px; color: var(--fg-mut); }
   .ctx-chat-note__details pre { margin-top: 6px; max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 11.5px; color: var(--fg-mut); padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
   @keyframes ctx-banner-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
+  @media (max-width: 360px) {
+    .ctx-chat-banner__sub { display: none; }
+    .ctx-chat-note, .ctx-chat-banner { padding: 7px 9px; font-size: 12px; }
+  }
+  @media (max-width: 280px), (max-height: 260px) {
+    :global(.safe-area-composer) { padding: 4px 6px !important; gap: 4px !important; }
+    :global(.safe-area-composer .voice-mode-button) { display: none !important; }
+    :global(.safe-area-composer textarea) { min-height: 30px !important; padding: 5px 8px !important; font-size: 12.5px !important; }
+    :global(.safe-area-composer button) { width: 30px !important; height: 30px !important; min-width: 30px !important; min-height: 30px !important; }
+    :global(.msg-head__ts) { display: none; }
+  }
 </style>

@@ -144,21 +144,21 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
     </NavIconButton>
 
-  {#if sessionState.id}<ActivitySignal />{/if}
+  {#if sessionState.id}<span class="appbar-signal"><ActivitySignal /></span>{/if}
 
-  <div class="flex-1 min-w-0">
+  <div class="flex-1 min-w-0 overflow-hidden">
     {#if editingTitle}
       <input bind:this={titleInput} bind:value={titleDraft} onkeydown={renameKeydown} onblur={saveRename} maxlength={200} class="w-full min-w-0 rounded border border-brand/40 bg-bg px-2 py-1 text-sm text-fg outline-none" aria-label="Rename active conversation" />
     {:else}
-      <button type="button" onclick={beginRename} disabled={!sessionState.id} class="group block max-w-full min-w-0 text-left disabled:cursor-default" aria-label={sessionState.id ? "Rename active conversation" : "New conversation"} title={sessionState.id ? "Rename active conversation" : "New conversation"}>
+      <button type="button" onclick={beginRename} disabled={!sessionState.id} class="group block w-full max-w-full min-w-0 overflow-hidden text-left disabled:cursor-default" aria-label={sessionState.id ? "Rename active conversation" : "New conversation"} title={sessionState.id ? "Rename active conversation" : "New conversation"}>
         <span class="flex items-center gap-1.5 min-w-0">{#if sessionState.id}<span class="block truncate text-sm font-semibold text-fg">{sessionState.title}</span>{/if}{#if sessionState.id}<span class="hidden sm:inline text-sm text-fg-mut opacity-0 group-hover:opacity-70">✎</span>{/if}</span>
-        {#if sessionState.id}<span data-active-session-id={sessionState.id} class="block font-mono text-[0.8em] leading-tight text-fg-mut/70">{sessionState.id.slice(0, 8)}</span>{/if}
+        {#if sessionState.id}<span data-active-session-id={sessionState.id} class="appbar-session-id block truncate font-mono text-[0.8em] leading-tight text-fg-mut/70">{sessionState.id.slice(0, 8)}</span>{/if}
       </button>
     {/if}
   </div>
 
 
-  <VoiceListen />
+  <span class="appbar-voice"><VoiceListen /></span>
 
   {#if sessionState.id && contextSummary}
     <button type="button" data-context-pill data-tone={contextSummary.compacting ? "compacting" : contextTone} onclick={openContext} class="context-pill" title="Context window: click to manage" aria-label={contextSummary.compacting ? "Compacting context" : `Context ${formatTokens(contextSummary.activeTokens)} of ${formatTokens(contextSummary.compactAtTokens)} tokens`}>
@@ -175,12 +175,11 @@
     </NavIconButton>
   {/if}
 
-  <AppPopOut />
+  <span class="appbar-pip"><AppPopOut /></span>
 
+  <span class="appbar-desk"><Desk /></span>
 
-  <Desk />
-
-  <Attention />
+  <span class="appbar-bell"><Attention /></span>
   <Alert />
 
   <NavIconButton id="settings-button" label="Settings" onclick={openSettings} aria-haspopup="dialog">
@@ -198,7 +197,8 @@
 {/if}
 
 <style>
-  .context-pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .appbar-signal, .appbar-voice, .appbar-pip, .appbar-desk, .appbar-bell { display: contents; }
+  .context-pill { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .context-pill:hover { color: var(--fg); }
   .context-pill__dot { width: 6px; height: 6px; border-radius: 999px; background: #5fae7e; }
   .context-pill[data-tone="warm"] .context-pill__dot { background: #d9a441; }
@@ -207,5 +207,26 @@
   .context-pill__bar { display: none; width: 28px; height: 3px; border-radius: 2px; background: var(--color-surface-1); overflow: hidden; }
   .context-pill__bar > span { display: block; height: 100%; background: currentColor; opacity: 0.55; }
   @media (min-width: 640px) { .context-pill__bar { display: inline-block; } }
+  @media (max-width: 559px) {
+    .context-pill { display: none; }
+    .safe-area-appbar { gap: 4px; padding-inline: 8px; }
+    .safe-area-appbar :global(.nav-icon-button),
+    .safe-area-appbar :global([data-attention-button]),
+    .safe-area-appbar :global([aria-label="Open desk"]),
+    .safe-area-appbar :global(.appbar-bell > *) { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+  }
+  @media (max-width: 359px) {
+    .appbar-pip, .appbar-desk, .appbar-session-id { display: none; }
+    .safe-area-appbar { min-height: 44px; padding: 4px 6px; gap: 3px; }
+    .safe-area-appbar :global(.nav-icon-button),
+    .safe-area-appbar :global([data-attention-button]),
+    .safe-area-appbar :global(.appbar-bell > *) { width: 30px; height: 30px; }
+  }
+  @media (max-width: 260px), (max-height: 260px) {
+    .appbar-signal, .appbar-voice, .appbar-pip, .appbar-desk, .appbar-bell, .appbar-session-id, .context-pill { display: none; }
+    .safe-area-appbar { min-height: 34px; padding: 2px 4px; gap: 2px; }
+    .safe-area-appbar :global(.nav-icon-button) { width: 26px; height: 26px; }
+    .safe-area-appbar :global(.nav-icon-button svg) { width: 15px; height: 15px; }
+  }
   @keyframes context-pulse { 50% { opacity: 0.25; } }
 </style>
