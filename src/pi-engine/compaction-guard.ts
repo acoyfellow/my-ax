@@ -1,6 +1,7 @@
 import type { Message } from "@earendil-works/pi-ai";
 import { AgentDoc, CompactionTask, defineExtension, hook, type HookApi } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord/context";
+import type { ContextPolicySettings } from "../context-management";
 import { SUMMARY_MAX_TOKENS } from "./compaction-policy";
 
 export const FIRST_MESSAGE_CAP = 800;
@@ -125,15 +126,24 @@ async function summarize(compaction: CompactionInput, api: HookApi, context: Con
   return text.length === 0 ? undefined : text;
 }
 
-export function compactionQualityExtension() {
+function joinInstructions(existing: string | undefined, notes: string | null | undefined): string | undefined {
+  const parts = [existing?.trim(), notes?.trim()].filter((part): part is string => Boolean(part));
+  return parts.length === 0 ? undefined : parts.join("\n\n");
+}
+
+export function compactionQualityExtension(loadPolicy?: () => ContextPolicySettings | undefined) {
   return defineExtension({
     name: "myax.compaction-quality",
     hooks: [
       hook(CompactionTask, {
         beforeCompact: async (compaction, api, context) => {
-          const first = findFirstUserMessage(compaction.messages);
-          if (first === undefined) return undefined;
-          const instructions = buildCompactionInstructions(first, compaction.instructions);
+          const policy = loadPolicy?.();
+          const extra = joinInstructions(compaction.instructions, policy?.compactionNotes);
+          const preserve = policy?.preserveFirstMessage !== false;
+          const first = preserve ? findFirstUserMessage(compaction.messages) : undefined;
+          if (preserve && first === undefined) return undefined;
+          const instructions = preserve ? buildCompactionInstructions(first, extra) : extra;
+          if (instructions === undefined) return undefined;
           const summary = await summarize(compaction, api, context, instructions);
           if (summary === undefined) return undefined;
           return { summary: guardSummary(summary, first) };

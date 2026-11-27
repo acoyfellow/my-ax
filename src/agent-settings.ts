@@ -2,6 +2,7 @@ import { sanitizeLayerIds } from "./model-layers";
 import { resolvePiModelChoice } from "./pi-engine/gateway-models";
 import { sanitizeThinkingLevel, type ThinkingLevel } from "./pi-engine/thinking-level";
 
+import { defaultContextPolicy, hasContextOverrides, sanitizeContextPolicy, type ContextPolicySettings } from "./context-management";
 import { MAX_AGENT_INSTRUCTIONS_LENGTH } from "./agent-settings-limits";
 
 export { MAX_AGENT_INSTRUCTIONS_LENGTH };
@@ -12,6 +13,7 @@ export type AgentSettings = {
   layers: string[] | null;
   instructions: string | null;
   showMetrics: boolean;
+  context: ContextPolicySettings;
 };
 
 export type GlobalSettings = {
@@ -28,7 +30,7 @@ export type EffectiveSettings = {
 };
 
 export function defaultAgentSettings(): AgentSettings {
-  return { model: null, reasoning: null, layers: null, instructions: null, showMetrics: false };
+  return { model: null, reasoning: null, layers: null, instructions: null, showMetrics: false, context: defaultContextPolicy() };
 }
 
 function sanitizeModel(raw: unknown): string | null {
@@ -51,11 +53,12 @@ export function sanitizeAgentSettings(raw: unknown): AgentSettings {
     layers: Array.isArray(source.layers) ? sanitizeLayerIds(source.layers) : null,
     instructions: sanitizeInstructions(source.instructions),
     showMetrics: source.showMetrics === true,
+    context: sanitizeContextPolicy(source.context),
   };
 }
 
 export function hasAgentOverrides(settings: AgentSettings): boolean {
-  return settings.model !== null || settings.reasoning !== null || settings.layers !== null || settings.instructions !== null || settings.showMetrics;
+  return settings.model !== null || settings.reasoning !== null || settings.layers !== null || settings.instructions !== null || settings.showMetrics || hasContextOverrides(settings.context);
 }
 
 export function resolveEffectiveSettings(agent: AgentSettings, global: GlobalSettings): EffectiveSettings {

@@ -7,15 +7,22 @@ export type PiChatPart =
   | { kind: "thinking"; text: string }
   | { kind: "tool"; tool: { id: string; name: string; arguments: Record<string, unknown>; state: PiToolState; result?: string; isError?: boolean } };
 
+export type PiCompactionNote = {
+  kind: "compacted" | "reset";
+  entriesCount: number;
+  summaryTokens: number;
+  summaryText: string;
+};
+
 export type PiChatMessage = {
   id: string;
-  role: "user" | "assistant" | "error";
+  role: "user" | "assistant" | "system" | "error";
   content: string;
   parts: PiChatPart[];
   reasoning?: string;
   attachments?: Array<{ key: string; mime?: string }>;
-  /** Images the user sent; uploadKey is missing for images sent before it was recorded. */
   images?: Array<{ uploadKey?: string; mime?: string }>;
+  compaction?: PiCompactionNote;
   timestamp?: number;
   endedAt?: number;
   streaming: boolean;
@@ -39,6 +46,16 @@ function textOf(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.map((block) => (block && typeof block === "object" && (block as { type?: string }).type === "text" ? String((block as { text?: unknown }).text ?? "") : "")).join("");
+}
+
+function extractSummaryBody(raw: string): string {
+  const match = /<summary>([\s\S]*?)<\/summary>/i.exec(raw);
+  return (match ? match[1] : raw).trim();
+}
+
+function estimateRoughTokens(text: string): number {
+  const trimmed = text.trim();
+  return trimmed ? Math.ceil(trimmed.length / 4) : 0;
 }
 
 function imagesOf(content: unknown): Array<{ uploadKey?: string; mime?: string }> {
@@ -212,8 +229,52 @@ export class PiTranscript {
     const out: PiChatMessage[] = [];
     const tools = new Map<string, Extract<PiChatPart, { kind: "tool" }>["tool"]>();
     const ordered = [...this.entries.values()].sort((a, b) => a.id - b.id);
+    let entriesSinceBoundary = 0;
     for (const entry of ordered) {
       const writtenAt = this.entryTimes.get(entry.id);
+      if (entry.kind === "pi.compaction" || entry.kind === "pi.summary") {
+        const firstModel = entry.model?.[0];
+        const raw = firstModel ? textOf(firstModel.content) : "";
+        const ts = writtenAt ?? (typeof firstModel?.timestamp === "number" ? firstModel.timestamp : undefined);
+        out.push({
+          id: `pi-${entry.id}-compaction`,
+          role: "system",
+          content: raw,
+          parts: [],
+          timestamp: ts,
+          streaming: false,
+          compaction: {
+            kind: "compacted",
+            entriesCount: entriesSinceBoundary,
+            summaryTokens: estimateRoughTokens(raw),
+            summaryText: extractSummaryBody(raw),
+          },
+        });
+        entriesSinceBoundary = 0;
+        continue;
+      }
+      if (entry.kind === "pi.reset") {
+        const firstModel = entry.model?.[0];
+        const raw = firstModel ? textOf(firstModel.content).trim() : "";
+        const ts = writtenAt ?? (typeof firstModel?.timestamp === "number" ? firstModel.timestamp : undefined);
+        out.push({
+          id: `pi-${entry.id}-reset`,
+          role: "system",
+          content: raw,
+          parts: [],
+          timestamp: ts,
+          streaming: false,
+          compaction: {
+            kind: "reset",
+            entriesCount: entriesSinceBoundary,
+            summaryTokens: 0,
+            summaryText: raw,
+          },
+        });
+        entriesSinceBoundary = 0;
+        continue;
+      }
+      entriesSinceBoundary += 1;
       for (const [index, message] of (entry.model ?? []).entries()) {
         const id = `pi-${entry.id}-${index}`;
         const timestamp = typeof message.timestamp === "number" ? message.timestamp : undefined;

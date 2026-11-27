@@ -104,7 +104,7 @@
   import { annotateTurnDurations, formatTurnDuration } from "./turn-duration";
   import { TOOL_ROW_STATUS_LABEL, formatToolResult, toolArgFields, toolArgSummary, toolRowState, unescapeIfEscaped, type ToolRowState } from "./tool-row";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
-  import { PiTranscript, type PiSnapshot } from "./pi-transcript";
+  import { PiTranscript, type PiCompactionNote, type PiSnapshot } from "./pi-transcript";
   import { activeLayerIds, formatTurnLayerMetrics, type TurnLayerMetrics } from "../model-layers";
   import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
   import AgentSettingsModal from "./AgentSettingsModal.svelte";
@@ -340,6 +340,7 @@
     sourceId?: string;
     clientMsgId?: string;
     role: Role;
+    compaction?: PiCompactionNote;
     /** Plain text concatenation — used for user/system/error messages and
      *  for the optimistic display before any parts are populated. */
     content: string;
@@ -1470,6 +1471,7 @@
         liveLayerLine = null;
         liveLayerSource = "";
         setLatestUserReaction("✅", "done");
+        window.dispatchEvent(new Event("my-ax:context-refresh"));
         const finished: TurnLayerMetrics = {
           layers: [...activeTurnMetric.layers],
           firstResponseMs: activeTurnMetric.firstResponseMs,
@@ -1547,7 +1549,12 @@
     if (!piTranscript) return;
     const followLatest = bootstrapPending || resumingExistingSession || sessionResumeVisible || isLogPinned();
     piBusy = piTranscript.busy;
+    const wasCompacting = piCompacting;
     piCompacting = piTranscript.compacting;
+    if (piCompacting !== wasCompacting) {
+      window.dispatchEvent(new CustomEvent("my-ax:context-compacting", { detail: { sessionId: currentSessionId(), compacting: piCompacting } }));
+      window.dispatchEvent(new Event("my-ax:context-refresh"));
+    }
     piOlderCount = piTranscript.olderCount;
     const sessionId = currentSessionId();
     const optimistic = messages.filter((message) => message.pending && message.role === "user");
@@ -1561,6 +1568,7 @@
         ? { kind: "thinking" as const, text: part.text }
         : { kind: "tool" as const, tool: { id: part.tool.id, name: part.tool.name, arguments: part.tool.arguments, state: part.tool.state, startedAt: piToolStart(part.tool.id), elapsedText: piToolElapsed(part.tool.id, part.tool.state), result: part.tool.result, isError: part.tool.isError } }),
       reasoning: message.reasoning,
+      compaction: message.compaction,
       attachments: piImageAttachments(message.images),
       imageCount: message.images?.length,
       timestamp: message.timestamp,
@@ -1718,8 +1726,18 @@
       if (detail?.sessionId === readTabSession()) applyAgentSettings(detail.settings);
     };
     void refreshAgentSettings();
+    const onCompacting = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string; compacting?: boolean }>).detail;
+      if (detail?.sessionId === currentSessionId()) {
+        piCompacting = Boolean(detail.compacting);
+      }
+    };
     window.addEventListener("my-ax:agent-settings-saved", onSaved);
-    return () => window.removeEventListener("my-ax:agent-settings-saved", onSaved);
+    window.addEventListener("my-ax:context-compacting", onCompacting);
+    return () => {
+      window.removeEventListener("my-ax:context-compacting", onCompacting);
+      window.removeEventListener("my-ax:agent-settings-saved", onSaved);
+    };
   });
 
   function currentSessionId() { return readTabSession() || "unknown"; }
@@ -3487,6 +3505,31 @@
           </div>
         {/if}
         {#each messages as m, mIdx (m.id)}
+          {#if m.compaction}
+            {@const c = m.compaction}
+            {@const cTime = m.timestamp ? formatMsgTime(new Date(m.timestamp)) : ""}
+            <article class="msg ctx-chat-note" data-id={m.id} data-compaction-note={c.kind}>
+              <div class="ctx-chat-note__row">
+                <span class="ctx-chat-note__icon" aria-hidden="true">{c.kind === "compacted" ? "✓" : "↺"}</span>
+                <span class="ctx-chat-note__label">
+                  {#if c.kind === "compacted"}
+                    Compacted earlier history{c.summaryTokens > 0 ? ` to ~${c.summaryTokens >= 1000 ? `${+(c.summaryTokens / 1000).toFixed(1)}K` : c.summaryTokens} tok` : ""}{cTime ? ` at ${cTime}` : ""}
+                  {:else}
+                    Started fresh context{cTime ? ` at ${cTime}` : ""}
+                  {/if}
+                </span>
+                <button type="button" class="ctx-chat-banner__link" onclick={() => { const id = currentSessionId(); if (id) window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: id, title: sessionState.title, section: "context" } })); }}>
+                  Inspect
+                </button>
+              </div>
+              {#if c.summaryText}
+                <details class="ctx-chat-note__details">
+                  <summary>{c.kind === "compacted" ? "View summary" : "View handoff note"}</summary>
+                  <pre>{c.summaryText}</pre>
+                </details>
+              {/if}
+            </article>
+          {:else}
           <article
             class={`msg msg-${m.role} min-w-0 overflow-x-hidden` + (m.role === "tool" ? " msg-tool-compact" : "")}
             data-id={m.id}
@@ -3636,6 +3679,7 @@
               <div class="text-[11px] font-mono text-fg-mut mt-1" data-layer-metrics>{formatTurnLayerMetrics(turnMetricsByMsg[m.id])}</div>
             {/if}
           </article>
+          {/if}
         {/each}
 
         <!-- Toasts (system / error) render AFTER messages so a transient
@@ -3655,6 +3699,17 @@
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-brand shrink-0"></span>
             <span>{liveLayerLine}</span>
             {#if liveLayerSource}<span class="text-[11px] font-mono text-fg-mut">{liveLayerSource}</span>{/if}
+          </div>
+        {/if}
+
+        {#if piCompacting}
+          <div class="msg ctx-chat-banner" data-compacting-banner role="status" aria-live="polite">
+            <span class="ctx-chat-banner__dot" aria-hidden="true"></span>
+            <span class="ctx-chat-banner__text">Compacting conversation{taskElapsedText ? ` · ${taskElapsedText}` : "…"}</span>
+            <span class="ctx-chat-banner__sub">Summarizing older turns, keeping recent context</span>
+            <button type="button" class="ctx-chat-banner__link" onclick={() => { const id = currentSessionId(); if (id) window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: id, title: sessionState.title, section: "context" } })); }}>
+              Inspect
+            </button>
           </div>
         {/if}
 
@@ -3929,4 +3984,17 @@
 {/snippet}
 
 <style>
+  .ctx-chat-banner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 12px; margin-block: 6px; border-radius: 9px; border: 1px solid color-mix(in srgb, #d9a441 35%, var(--line)); background: color-mix(in srgb, #d9a441 8%, var(--bg)); font-size: 12.5px; color: var(--fg); }
+  .ctx-chat-banner__dot { width: 7px; height: 7px; border-radius: 999px; background: #d9a441; flex: none; animation: ctx-banner-pulse 1.1s ease-in-out infinite; }
+  .ctx-chat-banner__text { font-weight: 500; }
+  .ctx-chat-banner__sub { font-size: 12px; color: var(--fg-mut); }
+  .ctx-chat-banner__link { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--fg-mut); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+  .ctx-chat-banner__link:hover { color: var(--fg); }
+  .ctx-chat-note { display: flex; flex-direction: column; gap: 6px; padding: 9px 12px; margin-block: 6px; border-radius: 9px; border: 1px solid var(--line); background: var(--color-surface-1); font-size: 12.5px; color: var(--fg); }
+  .ctx-chat-note__row { display: flex; align-items: center; gap: 8px; }
+  .ctx-chat-note__icon { font-size: 12px; font-weight: 600; color: #5fae7e; flex: none; }
+  .ctx-chat-note__label { flex: 1; min-width: 0; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .ctx-chat-note__details summary { cursor: pointer; font-size: 11.5px; color: var(--fg-mut); }
+  .ctx-chat-note__details pre { margin-top: 6px; max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 11.5px; color: var(--fg-mut); padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+  @keyframes ctx-banner-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
 </style>

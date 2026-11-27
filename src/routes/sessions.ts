@@ -223,6 +223,50 @@ export function registerSessionRoutes(app: Hono<AppEnv>) {
     return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { settings }, next_actions: [] });
   });
 
+  app.get("/api/sessions/:id/context", async (c) => {
+    const id = c.req.param("id");
+    const identity = c.get("identity");
+    if (!(await requireOwnedSession(c.env, id, identity.email))) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    const { openPiChat } = await import("../pi-engine/routes");
+    const result = await rpc.query("PiChat.getContextSnapshot", async () => (await openPiChat(c.env, identity.email, id)).getContextSnapshot());
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result, next_actions: [] });
+  });
+
+  app.post("/api/sessions/:id/context/compact", async (c) => {
+    const id = c.req.param("id");
+    const identity = c.get("identity");
+    if (!(await requireOwnedSession(c.env, id, identity.email))) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    const body = await c.req.json<{ instructions?: unknown }>().catch(() => ({}) as { instructions?: unknown });
+    const instructions = typeof body.instructions === "string" ? body.instructions : undefined;
+    const { openPiChat } = await import("../pi-engine/routes");
+    const result = await rpc.command("PiChat.compactNow", async () => (await openPiChat(c.env, identity.email, id)).compactNow(instructions));
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result, next_actions: [] });
+  });
+
+  app.post("/api/sessions/:id/context/reset", async (c) => {
+    const id = c.req.param("id");
+    const identity = c.get("identity");
+    if (!(await requireOwnedSession(c.env, id, identity.email))) {
+      return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "NOT_FOUND", message: "session not found or not owned" }, next_actions: [] }, 404);
+    }
+    const body = await c.req.json<{ handoff?: unknown }>().catch(() => ({}) as { handoff?: unknown });
+    const handoff = typeof body.handoff === "string" ? body.handoff : undefined;
+    const { openPiChat } = await import("../pi-engine/routes");
+    try {
+      await rpc.command("PiChat.resetContext", async () => (await openPiChat(c.env, identity.email, id)).resetContext(handoff));
+    } catch (error) {
+      if (String(error).includes("TURN_RUNNING")) {
+        return c.json<ApiResponse>({ ok: false, command: c.req.path, error: { code: "TURN_RUNNING", message: "wait for the current turn to finish" }, next_actions: [] }, 409);
+      }
+      throw error;
+    }
+    return c.json<ApiResponse>({ ok: true, command: c.req.path, result: { reset: true }, next_actions: [] });
+  });
+
   app.put("/api/sessions/:id/agent-settings", async (c) => {
     const id = c.req.param("id");
     const identity = c.get("identity");

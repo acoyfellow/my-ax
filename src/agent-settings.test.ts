@@ -7,7 +7,7 @@ import { PI_ENGINE_MODEL_CHOICES } from "./pi-engine/gateway-models";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 test("defaults inherit everything", () => {
-  assert.deepEqual(defaultAgentSettings(), { model: null, reasoning: null, layers: null, instructions: null, showMetrics: false });
+  assert.deepEqual(defaultAgentSettings(), { model: null, reasoning: null, layers: null, instructions: null, showMetrics: false, context: { autoCompact: null, compactAtTokens: null, keepRecentTokens: null, preserveFirstMessage: null, compactionNotes: null } });
 });
 
 test("sanitize drops invalid values and keeps valid ones", () => {

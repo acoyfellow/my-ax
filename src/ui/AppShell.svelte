@@ -60,13 +60,56 @@
     if (!sessionState.id) return;
     window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: sessionState.id, title: sessionState.title } }));
   }
+  type ContextSummary = { activeTokens: number; compactAtTokens: number; percentOfCompact: number; compacting: boolean; compactionCount: number };
+  let contextSummary = $state<ContextSummary | null>(null);
+  const formatTokens = (tokens: number) => (tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : tokens >= 1000 ? `${(tokens / 1000).toFixed(tokens >= 100_000 ? 0 : 1)}K` : String(tokens));
+  const contextTone = $derived(!contextSummary ? "ok" : contextSummary.percentOfCompact > 85 ? "hot" : contextSummary.percentOfCompact >= 65 ? "warm" : "ok");
+  function openContext() {
+    if (!sessionState.id) return;
+    window.dispatchEvent(new CustomEvent("my-ax:agent-settings-open", { detail: { sessionId: sessionState.id, title: sessionState.title, section: "context" } }));
+  }
+  function onContextSummary(event: Event) {
+    const detail = (event as CustomEvent<{ sessionId?: string; summary?: ContextSummary }>).detail;
+    if (detail?.sessionId === sessionState.id && detail.summary) contextSummary = detail.summary;
+  }
+  async function fetchContextSummary(id: string) {
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/context`);
+      if (!response.ok || sessionState.id !== id) return;
+      const body = await response.json().catch(() => null);
+      const r = body?.result;
+      if (!r || typeof r.activeTokens !== "number") return;
+      contextSummary = {
+        activeTokens: r.activeTokens,
+        compactAtTokens: r.compactAtTokens,
+        percentOfCompact: r.percentOfCompact,
+        compacting: Boolean(r.compacting),
+        compactionCount: Number(r.compactionCount ?? 0),
+      };
+    } catch {}
+  }
+  function onContextRefresh() {
+    if (sessionState.id) void fetchContextSummary(sessionState.id);
+  }
+  function onCompactingEvent(event: Event) {
+    const detail = (event as CustomEvent<{ sessionId?: string; compacting?: boolean }>).detail;
+    if (detail?.sessionId === sessionState.id && contextSummary) {
+      contextSummary = { ...contextSummary, compacting: Boolean(detail.compacting) };
+    }
+  }
+  $effect(() => {
+    const id = sessionState.id;
+    contextSummary = null;
+    if (id) void fetchContextSummary(id);
+  });
   function onOverrides(event: Event) {
     const detail = (event as CustomEvent<{ active?: boolean }>).detail;
     hasAgentOverrides = Boolean(detail?.active);
   }
   function onSaved(event: Event) {
     const settings = (event as CustomEvent<{ settings?: Record<string, unknown> }>).detail?.settings;
-    hasAgentOverrides = Boolean(settings && Object.values(settings).some((value) => value !== null && value !== false));
+    hasAgentOverrides = Boolean(settings && Object.entries(settings).some(([key, value]) => (key === "context" ? Object.values((value as Record<string, unknown>) ?? {}).some((inner) => inner !== null) : value !== null && value !== false)));
+    if (sessionState.id) void fetchContextSummary(sessionState.id);
   }
 
   let appBarHeight = $state(52);
@@ -79,7 +122,13 @@
     startTabLeader();
     window.addEventListener("my-ax:agent-settings-overrides", onOverrides);
     window.addEventListener("my-ax:agent-settings-saved", onSaved);
+    window.addEventListener("my-ax:context-summary", onContextSummary);
+    window.addEventListener("my-ax:context-refresh", onContextRefresh);
+    window.addEventListener("my-ax:context-compacting", onCompactingEvent);
     return () => {
+      window.removeEventListener("my-ax:context-compacting", onCompactingEvent);
+      window.removeEventListener("my-ax:context-refresh", onContextRefresh);
+      window.removeEventListener("my-ax:context-summary", onContextSummary);
       window.removeEventListener("my-ax:agent-settings-overrides", onOverrides);
       window.removeEventListener("my-ax:agent-settings-saved", onSaved);
     };
@@ -111,6 +160,14 @@
 
   <VoiceListen />
 
+  {#if sessionState.id && contextSummary}
+    <button type="button" data-context-pill data-tone={contextSummary.compacting ? "compacting" : contextTone} onclick={openContext} class="context-pill" title="Context window: click to manage" aria-label={contextSummary.compacting ? "Compacting context" : `Context ${formatTokens(contextSummary.activeTokens)} of ${formatTokens(contextSummary.compactAtTokens)} tokens`}>
+      <span class="context-pill__dot" aria-hidden="true"></span>
+      <span class="context-pill__text">{contextSummary.compacting ? "Compacting…" : `${formatTokens(contextSummary.activeTokens)} / ${formatTokens(contextSummary.compactAtTokens)}`}</span>
+      <span class="context-pill__bar" aria-hidden="true"><span style:width={`${contextSummary.percentOfCompact}%`}></span></span>
+    </button>
+  {/if}
+
   {#if sessionState.id}
     <NavIconButton label="Agent settings" title="Agent settings" data-agent-settings-trigger onclick={openAgentSettings} class="relative">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
@@ -139,3 +196,16 @@
 {#if typeof localStorage !== "undefined" && localStorage.getItem("my-ax-miniplayer") === "1"}
   <Miniplayer />
 {/if}
+
+<style>
+  .context-pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; color: var(--fg-mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .context-pill:hover { color: var(--fg); }
+  .context-pill__dot { width: 6px; height: 6px; border-radius: 999px; background: #5fae7e; }
+  .context-pill[data-tone="warm"] .context-pill__dot { background: #d9a441; }
+  .context-pill[data-tone="hot"] .context-pill__dot { background: #d45c5c; }
+  .context-pill[data-tone="compacting"] .context-pill__dot { background: #d9a441; animation: context-pulse 1s ease-in-out infinite; }
+  .context-pill__bar { display: none; width: 28px; height: 3px; border-radius: 2px; background: var(--color-surface-1); overflow: hidden; }
+  .context-pill__bar > span { display: block; height: 100%; background: currentColor; opacity: 0.55; }
+  @media (min-width: 640px) { .context-pill__bar { display: inline-block; } }
+  @keyframes context-pulse { 50% { opacity: 0.25; } }
+</style>

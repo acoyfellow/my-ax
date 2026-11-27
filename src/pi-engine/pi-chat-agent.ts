@@ -42,7 +42,7 @@ import { compactionFinished } from "../workspace-save-policy";
 import { SpanLogContext, consoleSpanSink, type SpanRecord } from "./span-log";
 import { brainToolsExtension } from "./brain-tools";
 import { SpanBuffer } from "./span-store";
-import { piCompactionSettings } from "./compaction-policy";
+import { compactionSettingsWithOverride, buildContextSnapshot, type ContextSnapshot } from "../context-management";
 import { compactionQualityExtension } from "./compaction-guard";
 import { publishWorkspaceChange } from "../workspace-hub-client";
 import { lastTurnFailed } from "./last-turn-failed";
@@ -100,7 +100,7 @@ function logHarnessReport(report: Report): void {
 }
 
 const MCP_CATALOG_TIMEOUT_MS = 8_000;
-const PI_HARNESS_SETTINGS = { compaction: piCompactionSettings(gatewayModelWindows()) };
+const PI_MODEL_WINDOWS = gatewayModelWindows();
 
 export class PiChatAgent extends Agent<Env, PiChatState> {
   static options = { sendIdentityOnConnect: false };
@@ -114,6 +114,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   };
 
   private rawHarness: Promise<Harness> | undefined;
+
+  private cachedAgentSettings: AgentSettings | null = null;
 
   harness = new PiHarness({
     harness: ({ storage, context, onWake }) => {
@@ -129,9 +131,9 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
       this.registry.install(mcpToolsExtension([], () => this.connectorRunner()));
       this.registry.install(brainToolsExtension(() => this.env.DB, () => this.identity().email));
       this.registry.install(createToolSearchExtension());
-      this.registry.install(compactionQualityExtension());
+      this.registry.install(compactionQualityExtension(() => this.readAgentSettings().context));
       this.registry.install(chatMemoryExtension(() => ({ read: () => this.ctx.storage.kv.get<string>("chat-memory") ?? "", write: (text) => this.ctx.storage.kv.put("chat-memory", text) })));
-      const opened = Harness.open(storage, { models, registry: this.registry, settings: PI_HARNESS_SETTINGS, onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
+      const opened = Harness.open(storage, { models, registry: this.registry, settings: () => ({ compaction: compactionSettingsWithOverride(PI_MODEL_WINDOWS, this.readAgentSettings().context) }), onWake, onReport: logHarnessReport, telemetry: new SpanLogContext(() => this.chatId(), this.recordSpan) }, context);
       this.rawHarness = opened;
       return opened;
     },
@@ -426,7 +428,8 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   }
 
   private readAgentSettings(): AgentSettings {
-    return sanitizeAgentSettings(this.ctx.storage.kv.get<unknown>("agent-settings") ?? defaultAgentSettings());
+    this.cachedAgentSettings ??= sanitizeAgentSettings(this.ctx.storage.kv.get<unknown>("agent-settings") ?? defaultAgentSettings());
+    return this.cachedAgentSettings;
   }
 
   async getAgentSettings(): Promise<AgentSettings> {
@@ -436,6 +439,7 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
   async setAgentSettings(patch: unknown): Promise<AgentSettings> {
     const merged = sanitizeAgentSettings({ ...this.readAgentSettings(), ...(patch && typeof patch === "object" ? patch : {}) });
     this.ctx.storage.kv.put("agent-settings", merged);
+    this.cachedAgentSettings = merged;
     this.cachedSlimView = null;
     return merged;
   }
@@ -547,6 +551,35 @@ export class PiChatAgent extends Agent<Env, PiChatState> {
     }, BACKGROUND_CONTEXT);
     await this.indexConversation().catch((error) => console.error("pi_conversation_index_failed", { err: String(error) }));
     return entries.length;
+  }
+
+  async getContextSnapshot(): Promise<ContextSnapshot> {
+    await this.harness.session();
+    const raw = await this.rawHarness;
+    if (!raw) throw new Error("harness unavailable");
+    const conversation = await raw.root(BACKGROUND_CONTEXT);
+    const [contextView, entries, view] = await Promise.all([conversation.context(BACKGROUND_CONTEXT), this.harness.messages(), this.currentView()]);
+    const modelId = agentModel(view);
+    const contextWindow = PI_MODEL_WINDOWS.find((model) => model.id === modelId)?.contextWindow ?? 200_000;
+    const compactionCount = (entries as ReadonlyArray<{ kind?: string }>).filter((entry) => entry.kind === "pi.compaction").length;
+    return buildContextSnapshot({ model: modelId, contextWindow, policy: this.readAgentSettings().context, contextView, totalEntries: entries.length, compactionCount, compacting: isCompacting(view) });
+  }
+
+  async compactNow(instructions?: string): Promise<{ taskId: string }> {
+    const raw = await this.rawHarness ?? (await this.harness.session(), await this.rawHarness);
+    if (!raw) throw new Error("harness unavailable");
+    const conversation = await raw.root(BACKGROUND_CONTEXT);
+    const taskId = await conversation.compact(instructions?.trim() || undefined, BACKGROUND_CONTEXT);
+    return { taskId: String(taskId) };
+  }
+
+  async resetContext(handoff?: string): Promise<{ ok: true }> {
+    if (await this.isBusy()) throw new Error("TURN_RUNNING");
+    const raw = await this.rawHarness ?? (await this.harness.session(), await this.rawHarness);
+    if (!raw) throw new Error("harness unavailable");
+    const conversation = await raw.root(BACKGROUND_CONTEXT);
+    await conversation.reset(handoff?.trim() || undefined, BACKGROUND_CONTEXT);
+    return { ok: true };
   }
 
   async clearContext(): Promise<{ cleared: boolean }> {

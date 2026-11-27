@@ -89,7 +89,7 @@
 
 <div class="h-full flex flex-col">
   <AppShell {identityEmail} />
-  <div class="flex-1 min-h-0 flex flex-col" class:sessions-content-motion={true} style="padding-left: var(--sessions-dock-width, 0px); padding-right: var(--attention-dock-width, 0px)">
+  <div class="flex-1 min-h-0 flex flex-col" class:sessions-content-motion={true} style="padding-left: var(--sessions-dock-width, 0px); padding-right: calc(var(--attention-dock-width, 0px) + var(--inspector-dock-width, 0px))">
     <Chat />
   </div>
 </div>

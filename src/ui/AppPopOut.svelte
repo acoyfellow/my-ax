@@ -4,7 +4,7 @@
   import { APP_PIP_OPTIONS, copiedStyles, documentPip, mirroredAttributes } from "./root-pip";
 
   const APP_MOUNT_ID = "svelte-hono-beta-root";
-  const PIP_RESET_PROPERTIES = ["--sessions-dock-width", "--attention-dock-width"] as const;
+  const PIP_RESET_PROPERTIES = ["--sessions-dock-width", "--attention-dock-width", "--inspector-dock-width"] as const;
 
   let supported = $state(false);
   let popped = $state(false);
