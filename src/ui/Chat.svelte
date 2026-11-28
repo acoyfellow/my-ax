@@ -105,7 +105,7 @@
   import { TOOL_ROW_STATUS_LABEL, formatToolResult, toolArgFields, toolArgSummary, toolRowState, unescapeIfEscaped, type ToolRowState } from "./tool-row";
   import { classifyLookup, isOfflineFailure, planResume, type LookupOutcome } from "./bootstrap-resume";
   import { PiTranscript, type PiCompactionNote, type PiSnapshot } from "./pi-transcript";
-  import { activeLayerIds, formatTurnLayerMetrics, type TurnLayerMetrics } from "../model-layers";
+  import { activeLayerIds, formatTurnLayerMetrics, reactionAckDelayMs, reactionForPrompt, type TurnLayerMetrics } from "../model-layers";
   import { LocalMessageQueue, shouldRecallQueue, type QueuedMessage } from "./local-queue";
   import AgentSettingsModal from "./AgentSettingsModal.svelte";
   import SlashMenu from "./SlashMenu.svelte";
@@ -1401,6 +1401,7 @@
     activeTurnMetric = null;
     turnMetricsByMsg = {};
     reactionsByMsg = {};
+    clearPendingReaction();
     activeUserReaction = null;
     piTranscript = new PiTranscript();
     return `${proto}//${location.host}/agents/pi-chat/${encodeURIComponent(sessionId)}`;
@@ -1411,15 +1412,38 @@
   let liveLayerSource = $state("");
   let reactionsByMsg = $state<Record<string, { emoji: string; label?: string }>>({});
   let activeUserReaction = $state<{ emoji: string; label?: string } | null>(null);
+  let pendingReactionTimer: ReturnType<typeof setTimeout> | null = null;
   type ClientTurnMetric = { startedAt: number; layers: string[]; firstResponseMs: number | null; firstReasoningMs: number | null; approvalMs: number | null; finishMs: number | null; routedModel?: string | null };
   let activeTurnMetric: ClientTurnMetric | null = null;
   let turnMetricsByMsg = $state<Record<string, TurnLayerMetrics>>({});
   const showTurnMetrics = $derived(Boolean(agentSettings?.showMetrics || (agentSettings?.layers?.length ?? 0) > 0));
 
+  function clearPendingReaction() {
+    if (pendingReactionTimer !== null) {
+      clearTimeout(pendingReactionTimer);
+      pendingReactionTimer = null;
+    }
+  }
+
   function setLatestUserReaction(emoji: string, label?: string) {
+    clearPendingReaction();
     activeUserReaction = { emoji, label };
     const lastUser = [...messages].reverse().find((item) => item.role === "user");
     if (lastUser) reactionsByMsg = { ...reactionsByMsg, [lastUser.id]: { emoji, label } };
+  }
+
+  function scheduleInitialReaction(text: string, hasAttachments: boolean) {
+    clearPendingReaction();
+    activeUserReaction = null;
+    const picked = reactionForPrompt(text, hasAttachments);
+    const delay = reactionAckDelayMs();
+    pendingReactionTimer = setTimeout(() => {
+      pendingReactionTimer = null;
+      if (activeTurnMetric && activeTurnMetric.firstResponseMs === null) {
+        activeTurnMetric.firstResponseMs = Math.max(0, Date.now() - activeTurnMetric.startedAt);
+      }
+      setLatestUserReaction(picked.emoji, picked.label);
+    }, delay);
   }
 
   function noteTurnEventsForMetrics(events: ReadonlyArray<Record<string, unknown>>) {
@@ -1667,8 +1691,8 @@
     const layers = agentSettings?.layers ?? [];
     liveLayerLine = null;
     liveLayerSource = "";
-    activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: 0, firstReasoningMs: null, approvalMs: null, finishMs: null };
-    setLatestUserReaction("👀", "seen");
+    activeTurnMetric = { startedAt: Date.now(), layers, firstResponseMs: null, firstReasoningMs: null, approvalMs: null, finishMs: null };
+    scheduleInitialReaction(text, attachments.length > 0);
     ws!.send(JSON.stringify({ type: "pi_submit", text, attachments, operationId: clientMsgId, ...(layers.length ? { layers } : {}), reasoning: modelState.reasoning, model: modelState.current }));
   }
   let activeRequestId: string | null = null;
@@ -3598,14 +3622,16 @@
                   {/if}<div class="msg-user-content">{#each [userTextBlock(m.content)] as block}{@render textBlock(block)}{/each}</div></div>
                 {#if reactionsByMsg[m.id]}
                   <div class="mt-1 flex justify-end">
+                    {#key reactionsByMsg[m.id].emoji}
                     <span
-                      class="inline-flex items-center gap-1 rounded-full border border-line bg-bg px-2 py-0.5 text-xs shadow-sm"
+                      class="msg-reaction-pop inline-flex items-center gap-1 rounded-full border border-line bg-bg px-2 py-0.5 text-xs shadow-sm"
                       data-msg-reaction={reactionsByMsg[m.id].emoji}
                       title={reactionsByMsg[m.id].label ?? "Agent reaction"}
                       aria-label={`Agent reacted ${reactionsByMsg[m.id].emoji}`}
                     >
                       <span>{reactionsByMsg[m.id].emoji}</span>
                     </span>
+                    {/key}
                   </div>
                 {/if}
               {:else if m.role === "assistant"}
@@ -3997,6 +4023,8 @@
   .ctx-chat-note__details summary { cursor: pointer; font-size: 11.5px; color: var(--fg-mut); }
   .ctx-chat-note__details pre { margin-top: 6px; max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 11.5px; color: var(--fg-mut); padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
   @keyframes ctx-banner-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
+  .msg-reaction-pop { animation: reaction-pop 160ms cubic-bezier(0.22, 1.4, 0.36, 1) both; transform-origin: right center; }
+  @keyframes reaction-pop { from { opacity: 0; transform: scale(0.55) translateY(3px); } to { opacity: 1; transform: scale(1) translateY(0); } }
   @media (max-width: 360px) {
     .ctx-chat-banner__sub { display: none; }
     .ctx-chat-note, .ctx-chat-banner { padding: 7px 9px; font-size: 12px; }

@@ -121,6 +121,40 @@ export function reactionForTool(toolName: string): string {
   return "🔧";
 }
 
+export const REACTION_ACK_MIN_MS = 50;
+export const REACTION_ACK_MAX_MS = 150;
+
+export function reactionAckDelayMs(random: () => number = Math.random): number {
+  const unit = Math.max(0, Math.min(0.999999, Number.isFinite(random()) ? random() : 0.5));
+  return REACTION_ACK_MIN_MS + Math.floor(unit * (REACTION_ACK_MAX_MS - REACTION_ACK_MIN_MS + 1));
+}
+
+const PROMPT_REACTIONS: ReadonlyArray<{ pattern: RegExp; emoji: string; label: string }> = [
+  { pattern: /\b(ship|deploy|push|publish|release|rollout|prod)\b/i, emoji: "🚀", label: "shipping" },
+  { pattern: /\b(fix|bug|error|broken|crash|fail|debug|overlap|clip|bleed|issue)\b/i, emoji: "🔧", label: "fixing" },
+  { pattern: /\b(design|ui|css|layout|style|theme|color|icon|widget|tile|sidebar|modal|responsive|emoji)\b/i, emoji: "🎨", label: "designing" },
+  { pattern: /\b(test|verify|benchmark|measure|eval|speed|latency|audit|proof)\b/i, emoji: "🧪", label: "testing" },
+  { pattern: /\b(search|find|lookup|grep|inspect|check|dig|scan|where)\b/i, emoji: "🔍", label: "looking" },
+  { pattern: /\b(delete|remove|clean|prune|clear|wipe|reset|teardown)\b/i, emoji: "🧹", label: "cleaning" },
+  { pattern: /\b(schedule|cron|recurring|remind|daily|weekly|alarm|timer)\b/i, emoji: "📅", label: "scheduling" },
+  { pattern: /\b(email|notify|send|call|voice|speak|audio|mic)\b/i, emoji: "📣", label: "sending" },
+  { pattern: /\b(run|shell|terminal|command|restart|kill|stop|laptop|machine|cmux|dev)\b/i, emoji: "💻", label: "running" },
+  { pattern: /\b(build|create|implement|add|write|refactor|code|script|branch|feature|upgrade)\b/i, emoji: "🛠️", label: "building" },
+  { pattern: /\b(readme|docs?|explain|eli5|how|why|summar|compact|context|memory|think|plan)\b/i, emoji: "🧠", label: "thinking" },
+  { pattern: /^(hi|hey|hello|yo|sup|good morning|morning)\b/i, emoji: "👋", label: "hey" },
+  { pattern: /^(go|yup|yep|ye|yes|ok|okay|sure|nice|thanks|thx|cool|awesome|love|do it)\b/i, emoji: "👍", label: "on it" },
+];
+
+export function reactionForPrompt(prompt: string, hasAttachments = false): { emoji: string; label: string } {
+  const trimmed = (prompt || "").trim();
+  if (!trimmed) return hasAttachments ? { emoji: "🖼️", label: "looking" } : { emoji: "👀", label: "seen" };
+  for (const rule of PROMPT_REACTIONS) {
+    if (rule.pattern.test(trimmed)) return { emoji: rule.emoji, label: rule.label };
+  }
+  if (hasAttachments) return { emoji: "🖼️", label: "looking" };
+  return { emoji: "👀", label: "seen" };
+}
+
 export const CLAIRIC_OPENER_ACTIONS = ["Checking", "Writing", "Building", "Fixing", "Running", "Searching"] as const;
 
 const UNSAFE_OPENER_PATTERN =
